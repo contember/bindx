@@ -43,6 +43,8 @@ export class EntityListAccessorImpl<TData extends object> implements EntityListA
 	private _items: EntityListItemImpl<TData>[] = []
 	private _serverItems: Set<string> = new Set()
 	private _removedKeys: Set<string> = new Set()
+	private _serverOrder: string[] = []
+	private _orderChanged: boolean = false
 
 	constructor(
 		private readonly entityType: string,
@@ -55,6 +57,7 @@ export class EntityListAccessorImpl<TData extends object> implements EntityListA
 		this._items = initialData.map((data, index) => this.createItem(data, index))
 		// Track which items came from server
 		this._serverItems = new Set(this._items.map(item => item.key))
+		this._serverOrder = this._items.map(item => item.key)
 	}
 
 	/**
@@ -114,8 +117,9 @@ export class EntityListAccessorImpl<TData extends object> implements EntityListA
 	}
 
 	get isDirty(): boolean {
-		// Dirty if any item was added, removed, or modified
+		// Dirty if any item was added, removed, modified, or reordered
 		if (this._removedKeys.size > 0) return true
+		if (this._orderChanged) return true
 
 		for (const item of this._items) {
 			// New item (not from server)
@@ -159,8 +163,21 @@ export class EntityListAccessorImpl<TData extends object> implements EntityListA
 		const [item] = this._items.splice(fromIndex, 1)
 		if (item) {
 			this._items.splice(toIndex, 0, item)
+			this._orderChanged = this.hasOrderChanged()
 			this.onChange()
 		}
+	}
+
+	/**
+	 * Checks if the current order differs from server order
+	 */
+	private hasOrderChanged(): boolean {
+		const currentOrder = this._items.map(item => item.key)
+		if (currentOrder.length !== this._serverOrder.length) return true
+		for (let i = 0; i < currentOrder.length; i++) {
+			if (currentOrder[i] !== this._serverOrder[i]) return true
+		}
+		return false
 	}
 
 	/**
@@ -182,6 +199,8 @@ export class EntityListAccessorImpl<TData extends object> implements EntityListA
 	 */
 	commitChanges(): void {
 		this._serverItems = new Set(this._items.map(item => item.key))
+		this._serverOrder = this._items.map(item => item.key)
 		this._removedKeys.clear()
+		this._orderChanged = false
 	}
 }

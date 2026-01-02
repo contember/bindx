@@ -44,6 +44,13 @@ export function createModelProxy<T>(path: string[] = []): ModelProxy<T> {
 			const newPath = [...path, prop]
 			return createModelProxy<unknown>(newPath)
 		},
+		has(_target, prop: string | symbol) {
+			// Support 'in' operator for PROXY_META check
+			if (prop === PROXY_META) {
+				return true
+			}
+			return false
+		},
 	}
 
 	return new Proxy({}, handler) as ModelProxy<T>

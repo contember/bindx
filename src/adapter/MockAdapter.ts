@@ -164,26 +164,33 @@ export class MockAdapter implements BackendAdapter {
 
 	/**
 	 * Projects only the requested fields from source data
+	 * @param source The source object to project from
+	 * @param fields The field specs to project
+	 * @param basePath The current base path (for nested objects, paths are relative to this)
 	 */
 	private projectFields(
 		source: Record<string, unknown>,
 		fields: QueryFieldSpec[],
+		basePath: string[] = [],
 	): Record<string, unknown> {
 		const result: Record<string, unknown> = {}
 
 		for (const field of fields) {
-			const value = this.getNestedValue(source, field.sourcePath)
+			// Get relative path by removing the base path prefix
+			const relativePath = field.sourcePath.slice(basePath.length)
+			const value = this.getNestedValue(source, relativePath)
 
 			if (field.isArray && Array.isArray(value) && field.nested) {
-				// Project each item in array
+				// Project each item in array - items have paths relative to array
 				result[field.name] = value.map(item =>
-					this.projectFields(item as Record<string, unknown>, field.nested!.fields),
+					this.projectFields(item as Record<string, unknown>, field.nested!.fields, []),
 				)
 			} else if (field.nested && value && typeof value === 'object') {
-				// Project nested object
+				// Project nested object - use field.sourcePath as new basePath
 				result[field.name] = this.projectFields(
 					value as Record<string, unknown>,
 					field.nested.fields,
+					field.sourcePath,
 				)
 			} else {
 				// Scalar or leaf value

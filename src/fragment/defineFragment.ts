@@ -92,8 +92,14 @@ export function extractFragmentMeta(obj: object): FragmentMeta {
 		if (isArrayMapResult(value)) {
 			const path = getProxyPath(value)
 			const arrayResult = getArrayMapResult(value)
-			const arrayItemMeta =
-				arrayResult && typeof arrayResult === 'object' ? extractFragmentMeta(arrayResult) : undefined
+
+			let arrayItemMeta: FragmentMeta | undefined
+			if (isFragmentComposition(arrayResult)) {
+				// If the map callback returns a fragment composition, use its metadata directly
+				arrayItemMeta = arrayResult.__fragmentMeta
+			} else if (arrayResult && typeof arrayResult === 'object') {
+				arrayItemMeta = extractFragmentMeta(arrayResult)
+			}
 
 			fields.set(key, {
 				path,
