@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { createSelectionBuilder, SELECTION_META, buildQueryFromSelection } from '../selection/index.js'
-import type { SelectionBuilder, FluentFragment, SelectionMeta } from '../selection/types.js'
+import { useRef } from 'react'
+import type { SelectionMeta, FluentFragment, SelectionBuilder } from '../selection/types.js'
 import { EntityAccessorImpl } from '../accessors/EntityAccessor.js'
 import type { EntityAccessor, EntityListAccessor } from '../accessors/types.js'
 import { EntityListAccessorImpl } from '../accessors/EntityListAccessor.js'
-import { useBackendAdapter, useIdentityMap } from './BackendAdapterContext.js'
+import { useEntityData, useEntityListData } from './useEntityData.js'
+import { resolveSelectionMeta, type SelectionInput } from '../core/SelectionResolver.js'
 
 /**
  * Options for useEntity hook
@@ -100,8 +100,6 @@ function createLoadingListAccessor<TData>(): LoadingEntityListAccessor<TData> {
 
 /**
  * Schema type constraint - maps entity names to their model types.
- * Define your schema as an interface where keys are entity names
- * and values are the corresponding model types.
  */
 export interface EntitySchema {
 	[entityName: string]: object
@@ -127,7 +125,7 @@ type FluentDefiner<TModel, TResult extends object> = (
  * }
  *
  * // Create typed hooks
- * export const { useEntity } = createBindx<Schema>()
+ * export const { useEntity, useEntityList } = createBindx<Schema>()
  *
  * // Usage with fluent builder
  * const article = useEntity('Article', { id }, e =>
@@ -143,119 +141,46 @@ export function createBindx<TSchema extends { [K in keyof TSchema]: object }>() 
 	 *
 	 * @param entityType - Name of the entity (autocompleted from schema)
 	 * @param options - Options including the entity ID and cache behavior
-	 * @param definer - Fluent builder function defining which fields to fetch
+	 * @param definer - Fluent builder function or fragment defining which fields to fetch
 	 */
 	function useEntity<TEntityName extends keyof TSchema & string, TResult extends object>(
 		entityType: TEntityName,
 		options: UseEntityOptions,
-		definer: FluentDefiner<TSchema[TEntityName], TResult> | FluentFragment<TSchema[TEntityName], TResult>,
+		definer: SelectionInput<TSchema[TEntityName], TResult>,
 	): EntityAccessor<TResult> | LoadingEntityAccessor<TResult> {
-		type TModel = TSchema[TEntityName]
-
-		const adapter = useBackendAdapter()
-		const identityMap = useIdentityMap()
-
-		// Force re-render when accessor notifies changes
-		const [, forceUpdate] = useReducer((x: number) => x + 1, 0)
-
 		// Track accessor for cleanup
 		const accessorRef = useRef<EntityAccessorImpl<TResult> | null>(null)
 
-		// Extract selection metadata - memoize to prevent re-creation
-		const selectionMeta = useMemo((): SelectionMeta => {
-			if (typeof definer === 'function') {
-				// It's a fluent definer function
-				const builder = createSelectionBuilder<TModel>()
-				const resultBuilder = definer(builder)
-				return resultBuilder[SELECTION_META]
-			}
-			// It's a FluentFragment
-			return definer.__meta
-		}, []) // Empty deps - selection definition shouldn't change
+		// Use shared data loading hook
+		const { state, notifyChange, selectionMeta, identityMap, adapter } = useEntityData(
+			{ entityType, id: options.id, useCache: options.cache },
+			definer,
+		)
 
-		// Accessor state
-		const [accessor, setAccessor] = useState<EntityAccessorImpl<TResult> | null>(null)
-		const [isLoading, setIsLoading] = useState(true)
-
-		// Fetch entity on mount and when ID changes
-		useEffect(() => {
-			let cancelled = false
-
-			// Cleanup previous accessor
-			if (accessorRef.current) {
-				accessorRef.current._dispose()
-				accessorRef.current = null
-			}
-
-			// Check if we should use cached data
-			if (options.cache && identityMap.has(entityType, options.id)) {
-				const cachedRecord = identityMap.get(entityType, options.id)
-				if (cachedRecord) {
-					const newAccessor = new EntityAccessorImpl<TResult>(
-						options.id,
-						entityType,
-						selectionMeta,
-						adapter,
-						identityMap,
-						cachedRecord.data as TResult,
-						forceUpdate,
-					)
-
-					accessorRef.current = newAccessor
-					setAccessor(newAccessor)
-					setIsLoading(false)
-					return
-				}
-			}
-
-			setIsLoading(true)
-
-			async function load() {
-				try {
-					const query = buildQueryFromSelection(selectionMeta)
-					const data = await adapter.fetchOne(entityType, options.id, query)
-
-					if (cancelled) return
-
-					// Create accessor with the fetched data
-					const newAccessor = new EntityAccessorImpl<TResult>(
-						options.id,
-						entityType,
-						selectionMeta,
-						adapter,
-						identityMap,
-						data as TResult,
-						forceUpdate,
-					)
-
-					accessorRef.current = newAccessor
-					setAccessor(newAccessor)
-					setIsLoading(false)
-				} catch (error) {
-					if (cancelled) return
-					console.error(`Failed to fetch ${entityType}:${options.id}:`, error)
-					setIsLoading(false)
-				}
-			}
-
-			load()
-
-			return () => {
-				cancelled = true
-				// Cleanup accessor on unmount
-				if (accessorRef.current) {
-					accessorRef.current._dispose()
-					accessorRef.current = null
-				}
-			}
-		}, [entityType, options.id, options.cache, adapter, identityMap, selectionMeta])
-
-		// Return loading state or accessor
-		if (isLoading || !accessor) {
+		// Return loading state
+		if (state.status === 'loading' || state.status === 'not_found') {
 			return createLoadingAccessor<TResult>(options.id)
 		}
 
-		return accessor as EntityAccessor<TResult>
+		if (state.status === 'error') {
+			console.error(`Failed to fetch ${entityType}:${options.id}:`, state.error)
+			return createLoadingAccessor<TResult>(options.id)
+		}
+
+		// Create or update accessor
+		if (!accessorRef.current) {
+			accessorRef.current = new EntityAccessorImpl<TResult>(
+				options.id,
+				entityType,
+				selectionMeta,
+				adapter,
+				identityMap,
+				state.data,
+				notifyChange,
+			)
+		}
+
+		return accessorRef.current as EntityAccessor<TResult>
 	}
 
 	/**
@@ -263,98 +188,47 @@ export function createBindx<TSchema extends { [K in keyof TSchema]: object }>() 
 	 *
 	 * @param entityType - Name of the entity (autocompleted from schema)
 	 * @param options - Options including filter criteria
-	 * @param definer - Fluent builder function defining which fields to fetch for each entity
+	 * @param definer - Fluent builder function or fragment defining which fields to fetch
 	 */
 	function useEntityList<TEntityName extends keyof TSchema & string, TResult extends object>(
 		entityType: TEntityName,
 		options: UseEntityListOptions,
-		definer: FluentDefiner<TSchema[TEntityName], TResult> | FluentFragment<TSchema[TEntityName], TResult>,
+		definer: SelectionInput<TSchema[TEntityName], TResult>,
 	): EntityListAccessor<TResult> | LoadingEntityListAccessor<TResult> {
-		type TModel = TSchema[TEntityName]
-
-		const adapter = useBackendAdapter()
-		const identityMap = useIdentityMap()
-
-		// Force re-render when accessor notifies changes
-		const [, forceUpdate] = useReducer((x: number) => x + 1, 0)
-
 		// Track accessor for cleanup
 		const accessorRef = useRef<EntityListAccessorImpl<TResult> | null>(null)
 
-		// Extract selection metadata - memoize to prevent re-creation
-		const selectionMeta = useMemo((): SelectionMeta => {
-			if (typeof definer === 'function') {
-				const builder = createSelectionBuilder<TModel>()
-				const resultBuilder = definer(builder)
-				return resultBuilder[SELECTION_META]
-			}
-			return definer.__meta
-		}, [])
+		// Use shared data loading hook
+		const { state, notifyChange, selectionMeta, identityMap, adapter } = useEntityListData(
+			{ entityType, filter: options.filter },
+			definer,
+		)
 
-		// Stringify filter for dependency tracking
-		const filterKey = useMemo(() => JSON.stringify(options.filter ?? {}), [options.filter])
-
-		// Accessor state
-		const [accessor, setAccessor] = useState<EntityListAccessorImpl<TResult> | null>(null)
-		const [isLoading, setIsLoading] = useState(true)
-
-		// Fetch entities on mount and when filter changes
-		useEffect(() => {
-			let cancelled = false
-
-			// Cleanup previous accessor
-			if (accessorRef.current) {
-				accessorRef.current = null
-			}
-
-			setIsLoading(true)
-
-			async function load() {
-				try {
-					if (!adapter.fetchMany) {
-						throw new Error('Backend adapter does not support fetchMany')
-					}
-
-					const query = buildQueryFromSelection(selectionMeta)
-					const data = await adapter.fetchMany(entityType, query, options.filter)
-
-					if (cancelled) return
-
-					// Create accessor with the fetched data
-					const newAccessor = new EntityListAccessorImpl<TResult>(
-						entityType,
-						selectionMeta,
-						adapter,
-						identityMap,
-						data as TResult[],
-						forceUpdate,
-					)
-
-					accessorRef.current = newAccessor
-					setAccessor(newAccessor)
-					setIsLoading(false)
-				} catch (error) {
-					if (cancelled) return
-					console.error(`Failed to fetch ${entityType} list:`, error)
-					setIsLoading(false)
-				}
-			}
-
-			load()
-
-			return () => {
-				cancelled = true
-				accessorRef.current = null
-			}
-		}, [entityType, filterKey, adapter, identityMap, selectionMeta, options.filter])
-
-		// Return loading state or accessor
-		if (isLoading || !accessor) {
+		// Return loading state
+		if (state.status === 'loading') {
 			return createLoadingListAccessor<TResult>()
 		}
 
-		return accessor as EntityListAccessor<TResult>
+		if (state.status === 'error') {
+			console.error(`Failed to fetch ${entityType} list:`, state.error)
+			return createLoadingListAccessor<TResult>()
+		}
+
+		// Create or update accessor
+		if (!accessorRef.current) {
+			accessorRef.current = new EntityListAccessorImpl<TResult>(
+				entityType,
+				selectionMeta,
+				adapter,
+				identityMap,
+				state.data,
+				notifyChange,
+			)
+		}
+
+		return accessorRef.current as EntityListAccessor<TResult>
 	}
+
 	return {
 		useEntity,
 		useEntityList,

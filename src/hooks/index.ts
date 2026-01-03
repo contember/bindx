@@ -14,3 +14,14 @@ export {
 	type LoadingEntityAccessor,
 	type LoadingEntityListAccessor,
 } from './createBindx.js'
+
+export {
+	useEntityData,
+	useEntityListData,
+	type EntityDataState,
+	type EntityListDataState,
+	type UseEntityDataOptions,
+	type UseEntityDataResult,
+	type UseEntityListDataOptions,
+	type UseEntityListDataResult,
+} from './useEntityData.js'

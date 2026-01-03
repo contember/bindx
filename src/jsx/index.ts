@@ -23,6 +23,8 @@ export {
 	SelectionMetaCollector,
 	mergeSelections,
 	createEmptySelection,
+	toSelectionMeta,
+	fromSelectionMeta,
 } from './SelectionMeta.js'
 
 // Proxy creation
@@ -40,14 +42,9 @@ export {
 } from './analyzer.js'
 
 // Components
-export {
-	Field,
-	HasMany,
-	HasOne,
-	If,
-	Show,
-	type ShowProps,
-} from './components.js'
-
-// Entity component
-export { Entity, type EntityProps } from './Entity.js'
+export { Field, FieldWithMeta } from './components/Field.js'
+export { HasMany, HasManyWithMeta } from './components/HasMany.js'
+export { HasOne, HasOneWithMeta } from './components/HasOne.js'
+export { If, IfWithMeta } from './components/If.js'
+export { Show, ShowWithMeta, type ShowProps } from './components/Show.js'
+export { Entity, type EntityProps } from './components/Entity.js'

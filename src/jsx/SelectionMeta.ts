@@ -1,4 +1,5 @@
 import type { JsxSelectionMeta, JsxSelectionFieldMeta } from './types.js'
+import type { SelectionMeta, SelectionFieldMeta } from '../selection/types.js'
 
 /**
  * Class for collecting field selection metadata during collection phase
@@ -71,4 +72,55 @@ export function mergeSelections(target: JsxSelectionMeta, source: JsxSelectionMe
  */
 export function createEmptySelection(): JsxSelectionMeta {
 	return { fields: new Map() }
+}
+
+/**
+ * Converts JsxSelectionMeta to SelectionMeta (standard selection format).
+ * This allows JSX-collected selection to be used with the standard query building pipeline.
+ */
+export function toSelectionMeta(jsxMeta: JsxSelectionMeta): SelectionMeta {
+	const fields = new Map<string, SelectionFieldMeta>()
+
+	for (const [key, jsxField] of jsxMeta.fields) {
+		// Only include root-level fields (path length 1)
+		if (jsxField.path.length !== 1) continue
+
+		const field: SelectionFieldMeta = {
+			fieldName: jsxField.fieldName,
+			alias: jsxField.fieldName, // Use field name as alias
+			isArray: jsxField.isArray,
+			...(jsxField.nested && { nested: toSelectionMeta(jsxField.nested) }),
+			...(jsxField.hasManyParams && { hasManyParams: jsxField.hasManyParams }),
+		}
+
+		fields.set(jsxField.fieldName, field)
+	}
+
+	return { fields }
+}
+
+/**
+ * Converts SelectionMeta to JsxSelectionMeta.
+ * Used for interoperability between systems.
+ */
+export function fromSelectionMeta(meta: SelectionMeta, basePath: string[] = []): JsxSelectionMeta {
+	const fields = new Map<string, JsxSelectionFieldMeta>()
+
+	for (const [alias, field] of meta.fields) {
+		const path = [...basePath, field.fieldName]
+		const isRelation = !!field.nested
+
+		const jsxField: JsxSelectionFieldMeta = {
+			fieldName: field.fieldName,
+			path,
+			isArray: field.isArray,
+			isRelation,
+			...(field.nested && { nested: fromSelectionMeta(field.nested, path) }),
+			...(field.hasManyParams && { hasManyParams: field.hasManyParams }),
+		}
+
+		fields.set(path.join('.'), jsxField)
+	}
+
+	return { fields }
 }

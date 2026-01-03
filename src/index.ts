@@ -60,6 +60,20 @@ export {
 // Adapter - backend interface
 export { type BackendAdapter, MockAdapter, type MockDataStore, type MockAdapterOptions } from './adapter/index.js'
 
+// Core - non-React services
+export {
+	EntityLoader,
+	createEntityLoader,
+	resolveSelectionMeta,
+	buildQuery,
+	type EntityLoadResult,
+	type EntityListLoadResult,
+	type LoadEntityOptions,
+	type LoadEntityListOptions,
+	type SelectionInput,
+	type FluentDefiner as CoreFluentDefiner,
+} from './core/index.js'
+
 // JSX Components - two-pass type-safe approach
 export {
 	// Types
@@ -84,6 +98,8 @@ export {
 	SelectionMetaCollector,
 	mergeSelections,
 	createEmptySelection,
+	toSelectionMeta,
+	fromSelectionMeta,
 	// Proxy
 	createCollectorProxy,
 	createRuntimeAccessor,
