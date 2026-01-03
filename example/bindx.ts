@@ -1,6 +1,10 @@
 import { createBindx } from '../src/index.js'
 import type { Article, Author, Tag, Location } from './types.js'
 
+// Re-export JSX components for examples
+export { Entity, Field, HasMany, HasOne, If, Show } from '../src/index.js'
+export type { EntityRef, FieldRef, HasManyRef, HasOneRef } from '../src/index.js'
+
 /**
  * Schema mapping entity names to their types.
  * This enables type-safe entity name autocomplete and automatic model inference.

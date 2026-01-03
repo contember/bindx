@@ -59,3 +59,45 @@ export {
 
 // Adapter - backend interface
 export { type BackendAdapter, MockAdapter, type MockDataStore, type MockAdapterOptions } from './adapter/index.js'
+
+// JSX Components - two-pass type-safe approach
+export {
+	// Types
+	BINDX_COMPONENT,
+	FIELD_REF_META,
+	type FieldRefMeta,
+	type FieldRef,
+	type HasManyRef,
+	type HasOneRef,
+	type EntityRef,
+	type EntityFields,
+	type FieldProps,
+	type HasManyProps,
+	type HasOneProps,
+	type IfProps,
+	type EntityComponentProps,
+	type JsxSelectionMeta,
+	type JsxSelectionFieldMeta,
+	type HasManyComponentOptions,
+	type ShowProps,
+	// Selection
+	SelectionMetaCollector,
+	mergeSelections,
+	createEmptySelection,
+	// Proxy
+	createCollectorProxy,
+	createRuntimeAccessor,
+	// Analyzer
+	analyzeJsx,
+	collectSelection,
+	convertToQuerySelection,
+	debugSelection,
+	// Components
+	Field,
+	HasMany,
+	HasOne,
+	If,
+	Show,
+	Entity,
+	type EntityProps,
+} from './jsx/index.js'
