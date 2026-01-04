@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useMemo, type ReactElement } from 'react'
-import { useEntityData, type EntityDataState } from '../../hooks/useEntityData.js'
+import React, { useState, useEffect, useMemo, useCallback, useSyncExternalStore, memo, type ReactElement } from 'react'
+import { useBindxContext } from '../../hooks/BackendAdapterContext.js'
 import { createCollectorProxy, createRuntimeAccessor } from '../proxy.js'
 import { collectSelection, debugSelection } from '../analyzer.js'
 import { SelectionMetaCollector, mergeSelections, toSelectionMeta } from '../SelectionMeta.js'
 import type { EntityRef, JsxSelectionMeta } from '../types.js'
 import type { SelectionMeta } from '../../selection/types.js'
+import { buildQueryFromSelection } from '../../selection/buildQuery.js'
+import { setEntityData, setLoadState } from '../../core/actions.js'
 
 /**
  * Props for Entity component
@@ -55,7 +57,7 @@ type EntityPhase =
  * </Entity>
  * ```
  */
-export function Entity<TSchema, K extends keyof TSchema>({
+function EntityImpl<TSchema, K extends keyof TSchema>({
 	name,
 	id,
 	children,
@@ -63,7 +65,8 @@ export function Entity<TSchema, K extends keyof TSchema>({
 	error: errorFallback,
 	notFound,
 }: EntityProps<TSchema, K>): ReactElement | null {
-	const [phase, setPhase] = useState<EntityPhase>({ phase: 'collecting' })
+	const { store, dispatcher, adapter } = useBindxContext()
+	const entityType = name as string
 
 	// Phase 1: Collection - runs synchronously on first render
 	const { jsxSelection, standardSelection } = useMemo(() => {
@@ -89,31 +92,92 @@ export function Entity<TSchema, K extends keyof TSchema>({
 			jsxSelection: selection,
 			standardSelection: toSelectionMeta(selection),
 		}
-	}, [name, id]) // Re-collect if entity changes
+	}, [name, id, children]) // Re-collect if entity changes
 
-	// Use shared hook for data loading
-	const { state, notifyChange, identityMap } = useEntityData(
-		{ entityType: name as string, id },
-		standardSelection,
+	// Subscribe to store changes
+	const subscribe = useCallback(
+		(onStoreChange: () => void) => {
+			return store.subscribeToEntity(entityType, id, onStoreChange)
+		},
+		[store, entityType, id],
 	)
 
-	// Update phase based on data state
+	// Get current state
+	const getSnapshot = useCallback(() => {
+		const snapshot = store.getEntitySnapshot(entityType, id)
+		const loadState = store.getLoadState(entityType, id)
+		return { snapshot, loadState }
+	}, [store, entityType, id])
+
+	const { snapshot, loadState } = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+
+	// Load data on mount or when id changes
 	useEffect(() => {
-		switch (state.status) {
-			case 'loading':
-				setPhase({ phase: 'loading', selection: jsxSelection })
-				break
-			case 'success':
-				setPhase({ phase: 'ready', selection: jsxSelection })
-				break
-			case 'error':
-				setPhase({ phase: 'error', error: state.error })
-				break
-			case 'not_found':
-				setPhase({ phase: 'not_found' })
-				break
+		const abortController = new AbortController()
+
+		// Set loading state
+		dispatcher.dispatch(setLoadState(entityType, id, 'loading'))
+
+		// Fetch data
+		const fetchData = async () => {
+			try {
+				const query = buildQueryFromSelection(standardSelection)
+				const result = await adapter.fetchOne(
+					entityType,
+					id,
+					query,
+					{ signal: abortController.signal },
+				)
+
+				if (abortController.signal.aborted) return
+
+				if (result === null) {
+					dispatcher.dispatch(setLoadState(entityType, id, 'not_found'))
+				} else {
+					dispatcher.dispatch(setEntityData(entityType, id, result, true))
+					dispatcher.dispatch(setLoadState(entityType, id, 'success'))
+				}
+			} catch (error) {
+				if (abortController.signal.aborted) return
+
+				if (error instanceof Error && error.name === 'AbortError') {
+					return
+				}
+
+				dispatcher.dispatch(
+					setLoadState(
+						entityType,
+						id,
+						'error',
+						error instanceof Error ? error : new Error(String(error)),
+					),
+				)
+			}
 		}
-	}, [state.status, jsxSelection])
+
+		fetchData()
+
+		return () => {
+			abortController.abort()
+		}
+	}, [entityType, id, adapter, dispatcher, standardSelection])
+
+	// Determine current phase
+	const phase = useMemo((): EntityPhase => {
+		if (!loadState || loadState.status === 'loading') {
+			return { phase: 'loading', selection: jsxSelection }
+		}
+		if (loadState.status === 'error') {
+			return { phase: 'error', error: loadState.error! }
+		}
+		if (loadState.status === 'not_found') {
+			return { phase: 'not_found' }
+		}
+		if (snapshot) {
+			return { phase: 'ready', selection: jsxSelection }
+		}
+		return { phase: 'loading', selection: jsxSelection }
+	}, [loadState, snapshot, jsxSelection])
 
 	// Render based on phase
 	if (phase.phase === 'collecting' || phase.phase === 'loading') {
@@ -128,19 +192,27 @@ export function Entity<TSchema, K extends keyof TSchema>({
 	}
 
 	if (phase.phase === 'not_found') {
-		return <>{notFound ?? <DefaultNotFound entityType={name as string} id={id} />}</>
+		return <>{notFound ?? <DefaultNotFound entityType={entityType} id={id} />}</>
 	}
 
 	// Phase 3: Runtime render with real data
+	// Create a notify function for the accessor
+	const notifyChange = () => {
+		// Changes are automatically handled by useSyncExternalStore
+	}
+
 	const accessor = createRuntimeAccessor<TSchema[K]>(
-		name as string,
+		entityType,
 		id,
-		identityMap,
+		store,
 		notifyChange,
 	)
 
 	return <>{children(accessor)}</>
 }
+
+// Note: Using type assertion for generic memo component
+export const Entity = memo(EntityImpl) as unknown as typeof EntityImpl
 
 /**
  * Default loading component

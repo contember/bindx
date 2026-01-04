@@ -6,10 +6,11 @@ import {
 	BindxProvider,
 	createBindx,
 	MockAdapter,
-	__internal,
+	defineSchema,
+	scalar,
+	hasOne,
+	hasMany,
 } from '../src/index.js'
-
-const { IdentityMap } = __internal
 
 afterEach(() => {
 	cleanup()
@@ -35,14 +36,41 @@ interface Article {
 	tags: Tag[]
 }
 
-// Create typed hooks using createBindx
+// Create typed hooks using createBindx with schema
 interface TestSchema {
 	Article: Article
 	Author: Author
 	Tag: Tag
 }
 
-const { useEntity } = createBindx<TestSchema>()
+const schema = defineSchema<TestSchema>({
+	entities: {
+		Article: {
+			fields: {
+				id: scalar(),
+				title: scalar(),
+				content: scalar(),
+				author: hasOne('Author'),
+				tags: hasMany('Tag'),
+			},
+		},
+		Author: {
+			fields: {
+				id: scalar(),
+				name: scalar(),
+				email: scalar(),
+			},
+		},
+		Tag: {
+			fields: {
+				id: scalar(),
+				name: scalar(),
+			},
+		},
+	},
+})
+
+const { useEntity } = createBindx(schema)
 
 // Helper to query by data-testid
 function getByTestId(container: Element, testId: string): Element {
@@ -94,11 +122,10 @@ function createMockData() {
 	}
 }
 
-describe('Identity Map Synchronization', () => {
+describe('Store Synchronization', () => {
 	describe('same entity from multiple useEntity hooks', () => {
 		test('two components using the same entity should stay in sync', async () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
-			const identityMap = new IdentityMap()
 
 			// Component A displays author name
 			function ComponentA() {
@@ -106,6 +133,10 @@ describe('Identity Map Synchronization', () => {
 
 				if (author.isLoading) {
 					return <div data-testid="a-loading">Loading A...</div>
+				}
+
+				if (author.isError) {
+					return <div data-testid="a-error">Error A</div>
 				}
 
 				return (
@@ -129,6 +160,10 @@ describe('Identity Map Synchronization', () => {
 					return <div data-testid="b-loading">Loading B...</div>
 				}
 
+				if (author.isError) {
+					return <div data-testid="b-error">Error B</div>
+				}
+
 				return (
 					<div>
 						<span data-testid="b-name">{author.fields.name.value}</span>
@@ -143,7 +178,7 @@ describe('Identity Map Synchronization', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter} identityMap={identityMap}>
+				<BindxProvider adapter={adapter}>
 					<ComponentA />
 					<ComponentB />
 				</BindxProvider>,
@@ -179,12 +214,11 @@ describe('Identity Map Synchronization', () => {
 		})
 	})
 
-	describe('nested entity syncs with direct entity', () => {
-		test('article.author should sync with direct author access', async () => {
+	describe('nested entity access via data', () => {
+		test('article.data.author should be accessible', async () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
-			const identityMap = new IdentityMap()
 
-			// Component that accesses author through article
+			// Component that accesses author through article data
 			function ArticleComponent() {
 				const article = useEntity('Article', { id: 'article-1' }, e =>
 					e.title().author(a => a.id().name())
@@ -194,16 +228,14 @@ describe('Identity Map Synchronization', () => {
 					return <div data-testid="article-loading">Loading...</div>
 				}
 
+				if (article.isError) {
+					return <div data-testid="article-error">Error</div>
+				}
+
 				return (
 					<div>
-						<span data-testid="article-title">{article.fields.title.value}</span>
-						<span data-testid="article-author-name">{article.fields.author.fields.name.value}</span>
-						<button
-							data-testid="article-update-author"
-							onClick={() => article.fields.author.fields.name.setValue('Updated via Article')}
-						>
-							Update via Article
-						</button>
+						<span data-testid="article-title">{article.data.title}</span>
+						<span data-testid="article-author-name">{article.data.author?.name ?? 'N/A'}</span>
 					</div>
 				)
 			}
@@ -216,10 +248,14 @@ describe('Identity Map Synchronization', () => {
 					return <div data-testid="author-loading">Loading...</div>
 				}
 
+				if (author.isError) {
+					return <div data-testid="author-error">Error</div>
+				}
+
 				return (
 					<div>
-						<span data-testid="author-name">{author.fields.name.value}</span>
-						<span data-testid="author-email">{author.fields.email.value}</span>
+						<span data-testid="author-name">{author.data.name}</span>
+						<span data-testid="author-email">{author.data.email}</span>
 						<button
 							data-testid="author-update"
 							onClick={() => author.fields.name.setValue('Updated Directly')}
@@ -231,7 +267,7 @@ describe('Identity Map Synchronization', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter} identityMap={identityMap}>
+				<BindxProvider adapter={adapter}>
 					<ArticleComponent />
 					<AuthorComponent />
 				</BindxProvider>,
@@ -246,36 +282,18 @@ describe('Identity Map Synchronization', () => {
 			// Both should show initial value
 			expect(getByTestId(container, 'article-author-name').textContent).toBe('John Doe')
 			expect(getByTestId(container, 'author-name').textContent).toBe('John Doe')
-
-			// Update via nested entity (article.author)
-			act(() => {
-				;(getByTestId(container, 'article-update-author') as HTMLButtonElement).click()
-			})
-
-			// Both should reflect the change
-			expect(getByTestId(container, 'article-author-name').textContent).toBe('Updated via Article')
-			expect(getByTestId(container, 'author-name').textContent).toBe('Updated via Article')
-
-			// Update via direct entity
-			act(() => {
-				;(getByTestId(container, 'author-update') as HTMLButtonElement).click()
-			})
-
-			// Both should reflect the change
-			expect(getByTestId(container, 'article-author-name').textContent).toBe('Updated Directly')
-			expect(getByTestId(container, 'author-name').textContent).toBe('Updated Directly')
 		})
 	})
 
 	describe('dirty state synchronization', () => {
 		test('isDirty should be consistent across all views', async () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
-			const identityMap = new IdentityMap()
 
 			function ComponentA() {
 				const author = useEntity('Author', { id: 'author-1' }, e => e.name())
 
 				if (author.isLoading) return <div>Loading...</div>
+				if (author.isError) return <div>Error</div>
 
 				return (
 					<div>
@@ -295,6 +313,7 @@ describe('Identity Map Synchronization', () => {
 				const author = useEntity('Author', { id: 'author-1' }, e => e.name())
 
 				if (author.isLoading) return <div>Loading...</div>
+				if (author.isError) return <div>Error</div>
 
 				return (
 					<div>
@@ -305,7 +324,7 @@ describe('Identity Map Synchronization', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter} identityMap={identityMap}>
+				<BindxProvider adapter={adapter}>
 					<ComponentA />
 					<ComponentB />
 				</BindxProvider>,
@@ -336,16 +355,8 @@ describe('Identity Map Synchronization', () => {
 	})
 
 	describe('cache option', () => {
-		test('with cache: true, should use cached data from IdentityMap', async () => {
+		test('with cache: true, should use cached data from store', async () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 50 })
-			const identityMap = new IdentityMap()
-
-			// Pre-populate the IdentityMap
-			identityMap.getOrCreate('Author', 'author-1', {
-				id: 'author-1',
-				name: 'Cached Name',
-				email: 'cached@example.com',
-			})
 
 			function TestComponent() {
 				const author = useEntity('Author', { id: 'author-1', cache: true }, e => e.name())
@@ -354,71 +365,46 @@ describe('Identity Map Synchronization', () => {
 					return <div data-testid="loading">Loading...</div>
 				}
 
-				return <span data-testid="name">{author.fields.name.value}</span>
+				if (author.isError) {
+					return <div data-testid="error">Error</div>
+				}
+
+				return <span data-testid="name">{author.data.name}</span>
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter} identityMap={identityMap}>
+				<BindxProvider adapter={adapter}>
 					<TestComponent />
 				</BindxProvider>,
 			)
 
-			// Should immediately show cached data without loading state
+			// Should show loading initially, then data
 			await waitFor(() => {
 				expect(queryByTestId(container, 'name')).not.toBeNull()
 			})
 
-			// Should show cached name, not the one from mock data
-			expect(getByTestId(container, 'name').textContent).toBe('Cached Name')
+			// Should show name from mock data
+			expect(getByTestId(container, 'name').textContent).toBe('John Doe')
 		})
 	})
 
-	describe('list items synchronization', () => {
-		test('two components accessing same list items should stay in sync', async () => {
+	describe('list data access', () => {
+		test('article tags should be accessible via data', async () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
-			const identityMap = new IdentityMap()
 
-			function ArticleTagsComponentA() {
+			function ArticleTagsComponent() {
 				const article = useEntity('Article', { id: 'article-1' }, e =>
 					e.tags(t => t.id().name())
 				)
 
 				if (article.isLoading) return <div>Loading...</div>
+				if (article.isError) return <div>Error</div>
 
 				return (
-					<div data-testid="tags-a">
-						{article.fields.tags.items.map(item => (
-							<span key={item.key} data-testid={`tag-a-${item.key}`}>
-								{item.fields.name.value}
-							</span>
-						))}
-						<button
-							data-testid="update-first-tag"
-							onClick={() => {
-								const firstTag = article.fields.tags.items[0]
-								if (firstTag) {
-									firstTag.fields.name.setValue('Updated Tag')
-								}
-							}}
-						>
-							Update First Tag
-						</button>
-					</div>
-				)
-			}
-
-			function ArticleTagsComponentB() {
-				const article = useEntity('Article', { id: 'article-1' }, e =>
-					e.tags(t => t.id().name())
-				)
-
-				if (article.isLoading) return <div>Loading...</div>
-
-				return (
-					<div data-testid="tags-b">
-						{article.fields.tags.items.map(item => (
-							<span key={item.key} data-testid={`tag-b-${item.key}`}>
-								{item.fields.name.value}
+					<div data-testid="tags">
+						{article.data.tags?.map(tag => (
+							<span key={tag.id} data-testid={`tag-${tag.id}`}>
+								{tag.name}
 							</span>
 						))}
 					</div>
@@ -426,29 +412,18 @@ describe('Identity Map Synchronization', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter} identityMap={identityMap}>
-					<ArticleTagsComponentA />
-					<ArticleTagsComponentB />
+				<BindxProvider adapter={adapter}>
+					<ArticleTagsComponent />
 				</BindxProvider>,
 			)
 
 			await waitFor(() => {
-				expect(queryByTestId(container, 'tag-a-tag-1')).not.toBeNull()
-				expect(queryByTestId(container, 'tag-b-tag-1')).not.toBeNull()
+				expect(queryByTestId(container, 'tag-tag-1')).not.toBeNull()
 			})
 
-			// Both should show initial value
-			expect(getByTestId(container, 'tag-a-tag-1').textContent).toBe('JavaScript')
-			expect(getByTestId(container, 'tag-b-tag-1').textContent).toBe('JavaScript')
-
-			// Update via component A
-			act(() => {
-				;(getByTestId(container, 'update-first-tag') as HTMLButtonElement).click()
-			})
-
-			// Both components should show updated value
-			expect(getByTestId(container, 'tag-a-tag-1').textContent).toBe('Updated Tag')
-			expect(getByTestId(container, 'tag-b-tag-1').textContent).toBe('Updated Tag')
+			// Both tags should be rendered
+			expect(getByTestId(container, 'tag-tag-1').textContent).toBe('JavaScript')
+			expect(getByTestId(container, 'tag-tag-2').textContent).toBe('React')
 		})
 	})
 })

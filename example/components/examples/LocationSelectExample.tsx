@@ -14,8 +14,12 @@ export function LocationSelectExample() {
 		return <div>Loading locations...</div>
 	}
 
+	if (locations.isError) {
+		return <div>Error: {locations.error.message}</div>
+	}
+
 	const selectedLocation = selectedLocationId
-		? locations.items.find(item => item.entity.id === selectedLocationId)?.entity.data
+		? locations.items.find(item => item.id === selectedLocationId)?.data
 		: null
 
 	return (
@@ -30,8 +34,8 @@ export function LocationSelectExample() {
 				>
 					<option value="">Choose a location...</option>
 					{locations.items.map(item => (
-						<option key={item.key} value={item.entity.id}>
-							{item.entity.data.label}
+						<option key={item.key} value={item.id}>
+							{item.data.label}
 						</option>
 					))}
 				</select>

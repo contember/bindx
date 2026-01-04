@@ -1,11 +1,16 @@
-import type { EntityAccessor, EntityListAccessor } from '../../../src/index.js'
-import { TagFragment } from '../../fragments.js'
+import type { EntityHandle, EntityListAccessorResult } from '../../../src/index.js'
 import { TextInput } from '../inputs/index.js'
+
+interface TagData {
+	id: string
+	name: string
+	color: string
+}
 
 /**
  * Tag editor - knows about Tag model structure
  */
-export function TagEditor({ tag }: { tag: EntityAccessor<typeof TagFragment.__resultType> }) {
+export function TagEditor({ tag }: { tag: EntityHandle<TagData> }) {
 	return (
 		<div className="tag-editor">
 			<TextInput field={tag.fields.name} label="Tag Name" />
@@ -20,16 +25,24 @@ export function TagEditor({ tag }: { tag: EntityAccessor<typeof TagFragment.__re
 export function TagListEditor({
 	tags,
 }: {
-	tags: EntityListAccessor<typeof TagFragment.__resultType>
+	tags: EntityListAccessorResult<TagData>
 }) {
+	if (tags.isLoading) {
+		return <div>Loading tags...</div>
+	}
+
+	if (tags.isError) {
+		return <div>Error loading tags: {tags.error.message}</div>
+	}
+
 	return (
 		<div className="tag-list-editor">
 			<h3>Tags ({tags.length})</h3>
 
 			{tags.items.map(item => (
 				<div key={item.key} className="tag-item">
-					<TagEditor tag={item.entity} />
-					<button onClick={() => item.remove()}>Remove</button>
+					<TagEditor tag={item.handle} />
+					<button onClick={() => tags.remove(item.key)}>Remove</button>
 				</div>
 			))}
 

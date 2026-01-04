@@ -1,25 +1,27 @@
 import { useEntity } from '../../bindx.js'
-import { AuthorFragment, LocationFragment, TagFragment } from '../../fragments.js'
+import { AuthorEditor } from '../editors/AuthorEditor.js'
 import { TextInput } from '../inputs/index.js'
-import { AuthorEditor, LocationEditor, TagListEditor } from '../editors/index.js'
 
 /**
- * Full article editor - defines what data to fetch and composes fragments
+ * Full article editor - demonstrates useEntity with the new API
  */
 export function ArticleEditor({ id }: { id: string }) {
-	// Type is inferred automatically from the schema and fragment definition
 	const article = useEntity('Article', { id }, e =>
 		e
 			.id()
 			.title()
 			.content()
-			.author(AuthorFragment)
-			.location(LocationFragment)
-			.tags(TagFragment),
+			.author(a => a.id().name().email().bio())
+			.location(l => l.id().label().lat().lng())
+			.tags(t => t.id().name().color()),
 	)
 
 	if (article.isLoading) {
 		return <div>Loading article...</div>
+	}
+
+	if (article.isError) {
+		return <div>Error: {article.error.message}</div>
 	}
 
 	return (
@@ -32,15 +34,27 @@ export function ArticleEditor({ id }: { id: string }) {
 			</div>
 
 			<div className="form-section">
-				<AuthorEditor author={article.fields.author} />
+				<AuthorEditor author={article.fields.author.fields} />
 			</div>
 
 			<div className="form-section">
-				<LocationEditor location={article.fields.location} />
+				<h3>Location</h3>
+				<p>Label: {article.data.location?.label ?? 'N/A'}</p>
+				<p>
+					Coordinates: {article.data.location?.lat ?? 'N/A'},{' '}
+					{article.data.location?.lng ?? 'N/A'}
+				</p>
 			</div>
 
 			<div className="form-section">
-				<TagListEditor tags={article.fields.tags} />
+				<h3>Tags ({article.data.tags?.length ?? 0})</h3>
+				<ul>
+					{article.data.tags?.map(tag => (
+						<li key={tag.id} style={{ color: tag.color }}>
+							{tag.name}
+						</li>
+					))}
+				</ul>
 			</div>
 
 			<div className="actions">

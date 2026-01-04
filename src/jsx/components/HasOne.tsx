@@ -1,4 +1,4 @@
-import React, { type ReactElement, type ReactNode } from 'react'
+import React, { memo, type ReactElement, type ReactNode } from 'react'
 import type { HasOneProps, EntityRef, SelectionFieldMeta, SelectionMeta, SelectionProvider } from '../types.js'
 import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
 import { createCollectorProxy } from '../proxy.js'
@@ -19,7 +19,7 @@ import { SelectionMetaCollector, mergeSelections } from '../SelectionMeta.js'
  * </HasOne>
  * ```
  */
-export function HasOne<T>({ field, children }: HasOneProps<T>): ReactElement | null {
+function HasOneImpl<T>({ field, children }: HasOneProps<T>): ReactElement | null {
 	// If disconnected, don't render
 	if (field.id === null) {
 		return null
@@ -35,6 +35,8 @@ export function HasOne<T>({ field, children }: HasOneProps<T>): ReactElement | n
 
 	return <>{children(entityRef)}</>
 }
+
+export const HasOne = memo(HasOneImpl) as typeof HasOneImpl
 
 // Static method for selection extraction
 const hasOneWithSelection = HasOne as typeof HasOne & SelectionProvider & { [BINDX_COMPONENT]: true }

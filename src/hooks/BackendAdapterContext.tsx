@@ -1,13 +1,24 @@
-import { createContext, useContext, type ReactNode } from 'react'
+import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import type { BackendAdapter } from '../adapter/types.js'
-import { IdentityMap } from '../store/IdentityMap.js'
+import { SnapshotStore } from '../store/SnapshotStore.js'
+import { ActionDispatcher } from '../core/ActionDispatcher.js'
+import { PersistenceManager } from '../core/PersistenceManager.js'
+import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 
 /**
- * Context value containing adapter and identity map
+ * Context value containing all bindx services
  */
-interface BindxContextValue {
+export interface BindxContextValue {
+	/** Backend adapter for data fetching/persistence */
 	adapter: BackendAdapter
-	identityMap: IdentityMap
+	/** Immutable snapshot store */
+	store: SnapshotStore
+	/** Action dispatcher for mutations */
+	dispatcher: ActionDispatcher
+	/** Persistence manager with concurrency control */
+	persistence: PersistenceManager
+	/** Schema registry (set by createBindx) */
+	schema: SchemaRegistry | null
 }
 
 const BindxContext = createContext<BindxContextValue | null>(null)
@@ -18,13 +29,13 @@ const BindxContext = createContext<BindxContextValue | null>(null)
 export interface BindxProviderProps {
 	/** The backend adapter to use for data fetching/persistence */
 	adapter: BackendAdapter
-	/** Optional custom identity map (useful for testing) */
-	identityMap?: IdentityMap
+	/** Optional custom snapshot store (useful for testing) */
+	store?: SnapshotStore
 	children: ReactNode
 }
 
 /**
- * Provider component that supplies the backend adapter and identity map
+ * Provider component that supplies the bindx services
  * to all child components using bindx hooks.
  *
  * @example
@@ -40,11 +51,23 @@ export interface BindxProviderProps {
  * }
  * ```
  */
-export function BindxProvider({ adapter, identityMap, children }: BindxProviderProps) {
-	// Create or use provided identity map
-	const map = identityMap ?? new IdentityMap()
+export function BindxProvider({ adapter, store: customStore, children }: BindxProviderProps) {
+	// Create services - memoized to maintain stable references
+	const services = useMemo(() => {
+		const store = customStore ?? new SnapshotStore()
+		const dispatcher = new ActionDispatcher(store)
+		const persistence = new PersistenceManager(adapter, store, dispatcher)
 
-	return <BindxContext.Provider value={{ adapter, identityMap: map }}>{children}</BindxContext.Provider>
+		return {
+			adapter,
+			store,
+			dispatcher,
+			persistence,
+			schema: null, // Will be set by createBindx
+		}
+	}, [adapter, customStore])
+
+	return <BindxContext.Provider value={services}>{children}</BindxContext.Provider>
 }
 
 /**
@@ -60,19 +83,43 @@ export function useBackendAdapter(): BackendAdapter {
 }
 
 /**
- * Hook to access the identity map.
+ * Hook to access the snapshot store.
  * Must be used within a BindxProvider.
  */
-export function useIdentityMap(): IdentityMap {
+export function useSnapshotStore(): SnapshotStore {
 	const context = useContext(BindxContext)
 	if (!context) {
-		throw new Error('useIdentityMap must be used within a BindxProvider')
+		throw new Error('useSnapshotStore must be used within a BindxProvider')
 	}
-	return context.identityMap
+	return context.store
 }
 
 /**
- * Hook to access both adapter and identity map.
+ * Hook to access the action dispatcher.
+ * Must be used within a BindxProvider.
+ */
+export function useDispatcher(): ActionDispatcher {
+	const context = useContext(BindxContext)
+	if (!context) {
+		throw new Error('useDispatcher must be used within a BindxProvider')
+	}
+	return context.dispatcher
+}
+
+/**
+ * Hook to access the persistence manager.
+ * Must be used within a BindxProvider.
+ */
+export function usePersistence(): PersistenceManager {
+	const context = useContext(BindxContext)
+	if (!context) {
+		throw new Error('usePersistence must be used within a BindxProvider')
+	}
+	return context.persistence
+}
+
+/**
+ * Hook to access all bindx services.
  * Must be used within a BindxProvider.
  */
 export function useBindxContext(): BindxContextValue {
@@ -81,4 +128,10 @@ export function useBindxContext(): BindxContextValue {
 		throw new Error('useBindxContext must be used within a BindxProvider')
 	}
 	return context
+}
+
+// Legacy export for backward compatibility during migration
+export { SnapshotStore as IdentityMap } from '../store/SnapshotStore.js'
+export function useIdentityMap(): SnapshotStore {
+	return useSnapshotStore()
 }

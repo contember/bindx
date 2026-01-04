@@ -1,5 +1,5 @@
-import React, { type ReactElement } from 'react'
-import type { FieldRef, FieldProps, SelectionFieldMeta, SelectionProvider } from '../types.js'
+import { memo, type ReactElement } from 'react'
+import type { FieldProps, SelectionFieldMeta, SelectionProvider } from '../types.js'
 import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
 
 /**
@@ -19,7 +19,7 @@ import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
  * <Field field={entity.fields.date} format={d => d?.toLocaleDateString()} />
  * ```
  */
-export function Field<T>({ field, children, format }: FieldProps<T>): ReactElement | null {
+function FieldImpl<T>({ field, children, format }: FieldProps<T>): ReactElement | null {
 	if (children) {
 		return <>{children(field)}</>
 	}
@@ -35,6 +35,8 @@ export function Field<T>({ field, children, format }: FieldProps<T>): ReactEleme
 
 	return <>{String(field.value)}</>
 }
+
+export const Field = memo(FieldImpl) as typeof FieldImpl
 
 // Static method for selection extraction
 const fieldWithSelection = Field as typeof Field & SelectionProvider & { [BINDX_COMPONENT]: true }

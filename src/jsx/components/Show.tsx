@@ -1,4 +1,4 @@
-import React, { type ReactElement, type ReactNode } from 'react'
+import React, { memo, type ReactElement, type ReactNode } from 'react'
 import type { FieldRef, SelectionFieldMeta, SelectionMeta, SelectionProvider } from '../types.js'
 import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
 
@@ -26,13 +26,15 @@ export interface ShowProps<T> {
  * </Show>
  * ```
  */
-export function Show<T>({ field, children, fallback }: ShowProps<T>): ReactElement | null {
+function ShowImpl<T>({ field, children, fallback }: ShowProps<T>): ReactElement | null {
 	if (field.value === null || field.value === undefined) {
 		return fallback ? <>{fallback}</> : null
 	}
 
 	return <>{children(field.value as NonNullable<T>)}</>
 }
+
+export const Show = memo(ShowImpl) as typeof ShowImpl
 
 // Static method for selection extraction
 const showWithSelection = Show as typeof Show & SelectionProvider & { [BINDX_COMPONENT]: true }

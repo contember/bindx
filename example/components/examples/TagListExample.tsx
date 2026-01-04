@@ -11,6 +11,10 @@ export function TagListExample() {
 		return <div>Loading tags...</div>
 	}
 
+	if (tags.isError) {
+		return <div>Error: {tags.error.message}</div>
+	}
+
 	return (
 		<div className="tag-list">
 			<h3>Available Tags</h3>
@@ -20,7 +24,7 @@ export function TagListExample() {
 						key={item.key}
 						className="tag-badge"
 						style={{
-							backgroundColor: item.entity.data.color,
+							backgroundColor: item.data.color,
 							color: '#fff',
 							padding: '4px 8px',
 							borderRadius: '4px',
@@ -28,7 +32,7 @@ export function TagListExample() {
 							display: 'inline-block',
 						}}
 					>
-						{item.entity.data.name}
+						{item.data.name}
 					</span>
 				))}
 			</div>

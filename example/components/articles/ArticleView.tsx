@@ -10,10 +10,14 @@ export function ArticleView({ id }: { id: string }) {
 		return <div>Loading...</div>
 	}
 
+	if (article.isError) {
+		return <div>Error: {article.error.message}</div>
+	}
+
 	return (
 		<div className="article-view">
-			<h2>{article.fields.title.value}</h2>
-			<p>By: {article.fields.author.fields.name.value}</p>
+			<h2>{article.data.title}</h2>
+			<p>By: {article.data.author?.name ?? 'Unknown'}</p>
 		</div>
 	)
 }

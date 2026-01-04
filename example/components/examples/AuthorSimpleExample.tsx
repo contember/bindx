@@ -1,6 +1,4 @@
 import { Entity, Field, HasMany, HasOne, If, Show } from '../../bindx.js'
-import type { Schema } from '../../bindx.js'
-import type { Author, Article } from '../../types.js'
 
 /**
  * Simple example using the two-pass JSX approach.
@@ -8,7 +6,7 @@ import type { Author, Article } from '../../types.js'
  */
 export function AuthorSimpleExample({ authorId }: { authorId: string }) {
 	return (
-		<Entity<Schema, 'Author'> name="Author" id={authorId}>
+		<Entity name="Author" id={authorId}>
 			{author => (
 				<div className="author-card">
 					{/* Scalar fields - fully typed */}
@@ -82,7 +80,7 @@ export function AuthorSimpleExample({ authorId }: { authorId: string }) {
  */
 export function ArticleDetailExample({ articleId }: { articleId: string }) {
 	return (
-		<Entity<Schema, 'Article'> name="Article" id={articleId}>
+		<Entity name="Article" id={articleId}>
 			{article => (
 				<article className="article-detail">
 					<header>
@@ -126,7 +124,7 @@ export function ArticleDetailExample({ articleId }: { articleId: string }) {
  */
 export function AuthorEditExample({ authorId }: { authorId: string }) {
 	return (
-		<Entity<Schema, 'Author'>
+		<Entity
 			name="Author"
 			id={authorId}
 			loading={<div>Loading author...</div>}

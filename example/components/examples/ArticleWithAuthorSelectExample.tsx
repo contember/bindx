@@ -5,11 +5,7 @@ import { TextInput } from '../inputs/index.js'
  * Example: Article form with author select
  * Demonstrates combining useEntity for the main form with useEntityList for select options.
  *
- * Now uses HasOneAccessor API:
- * - article.fields.author.connect(id) to change the relation
- * - article.fields.author.disconnect() to set to null
- * - article.fields.author.id to get current ID
- * - article.fields.author.isRelationDirty to check for changes
+ * With the new API, relations are accessed via data and edited via setValue on field handles.
  */
 export function ArticleWithAuthorSelectExample({ id }: { id: string }) {
 	// Load the article
@@ -18,7 +14,7 @@ export function ArticleWithAuthorSelectExample({ id }: { id: string }) {
 			.id()
 			.title()
 			.content()
-			.author(a => a.name()),
+			.author(a => a.id().name().email()),
 	)
 
 	// Load all authors for the select dropdown
@@ -28,15 +24,21 @@ export function ArticleWithAuthorSelectExample({ id }: { id: string }) {
 		return <div>Loading article...</div>
 	}
 
+	if (article.isError) {
+		return <div>Error: {article.error.message}</div>
+	}
+
 	const handleAuthorChange = (newAuthorId: string) => {
 		if (newAuthorId === '') {
-			// Disconnect the relation (set to null)
+			// Disconnect the relation
 			article.fields.author.disconnect()
 		} else {
-			// Connect to a different author
+			// Connect to the selected author
 			article.fields.author.connect(newAuthorId)
 		}
 	}
+
+	const currentAuthorId = article.data.author?.id ?? ''
 
 	return (
 		<div className="article-with-select">
@@ -51,15 +53,17 @@ export function ArticleWithAuthorSelectExample({ id }: { id: string }) {
 					<select disabled>
 						<option>Loading authors...</option>
 					</select>
+				) : authors.isError ? (
+					<div>Error loading authors</div>
 				) : (
 					<select
-						value={article.fields.author.id ?? ''}
+						value={currentAuthorId}
 						onChange={e => handleAuthorChange(e.target.value)}
 					>
 						<option value="">No author</option>
 						{authors.items.map(item => (
-							<option key={item.key} value={item.entity.id}>
-								{item.entity.data.name} ({item.entity.data.email})
+							<option key={item.key} value={item.id}>
+								{item.data.name} ({item.data.email})
 							</option>
 						))}
 					</select>
@@ -67,24 +71,23 @@ export function ArticleWithAuthorSelectExample({ id }: { id: string }) {
 			</div>
 
 			<div className="current-author">
-				{article.fields.author.state === 'connected' && (
+				{article.data.author ? (
 					<p>
-						<strong>Current author:</strong> {article.fields.author.fields.name.value}
+						<strong>Current author:</strong> {article.data.author.name} ({article.data.author.email})
+					</p>
+				) : (
+					<p>
+						<strong>Author:</strong> None
 					</p>
 				)}
-				{article.fields.author.state === 'disconnected' && (
-					<p>
-						<strong>Author:</strong> None (disconnected)
-					</p>
-				)}
-				{article.fields.author.isRelationDirty && (
-					<p className="warning">Author change will be applied on save</p>
+				{article.isDirty && (
+					<p className="warning">Changes will be applied on save</p>
 				)}
 			</div>
 
 			<div className="actions">
-				<button onClick={() => article.persist()} disabled={!article.isDirty}>
-					Save
+				<button onClick={() => article.persist()} disabled={!article.isDirty || article.isPersisting}>
+					{article.isPersisting ? 'Saving...' : 'Save'}
 				</button>
 				<button onClick={() => article.reset()} disabled={!article.isDirty}>
 					Reset

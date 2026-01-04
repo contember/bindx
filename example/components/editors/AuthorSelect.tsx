@@ -42,14 +42,23 @@ export function AuthorSelectWithEmail({ value, onChange, label = 'Author' }: Aut
 		)
 	}
 
+	if (authors.isError) {
+		return (
+			<div className="field">
+				<label>{label}</label>
+				<div>Error: {authors.error.message}</div>
+			</div>
+		)
+	}
+
 	return (
 		<div className="field">
 			<label>{label}</label>
 			<select value={value ?? ''} onChange={e => onChange(e.target.value || null)}>
 				<option value="">Select author...</option>
 				{authors.items.map(item => (
-					<option key={item.key} value={item.entity.id}>
-						{item.entity.data.name} ({item.entity.data.email})
+					<option key={item.key} value={item.id}>
+						{item.data.name} ({item.data.email})
 					</option>
 				))}
 			</select>

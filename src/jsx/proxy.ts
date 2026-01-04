@@ -1,4 +1,4 @@
-import type { IdentityMap } from '../store/IdentityMap.js'
+import type { SnapshotStore } from '../store/SnapshotStore.js'
 import { SelectionMetaCollector, createEmptySelection } from './SelectionMeta.js'
 import {
 	type EntityRef,
@@ -8,6 +8,11 @@ import {
 	type HasOneRef,
 	FIELD_REF_META,
 } from './types.js'
+
+/**
+ * Notify change callback type
+ */
+type NotifyChange = () => void
 
 /**
  * Creates a collector proxy for the collection phase.
@@ -137,32 +142,32 @@ function createCollectorFieldRef(
 }
 
 /**
- * Creates a runtime accessor with real data from IdentityMap
+ * Creates a runtime accessor with real data from SnapshotStore
  */
 export function createRuntimeAccessor<T>(
 	entityType: string,
 	entityId: string,
-	identityMap: IdentityMap,
-	notifyChange: () => void,
+	store: SnapshotStore,
+	notifyChange: NotifyChange,
 	path: string[] = [],
 ): EntityRef<T> {
-	const record = identityMap.get(entityType, entityId)
+	const snapshot = store.getEntitySnapshot(entityType, entityId)
 
 	const fieldsProxy = new Proxy({} as EntityFields<T>, {
 		get(_, fieldName: string): FieldRef<unknown> | HasManyRef<unknown> | HasOneRef<unknown> {
 			const fieldPath = [...path, fieldName]
-			return createRuntimeFieldRef(entityType, entityId, identityMap, notifyChange, fieldPath, fieldName)
+			return createRuntimeFieldRef(entityType, entityId, store, notifyChange, fieldPath, fieldName)
 		},
 	})
 
 	return {
 		id: entityId,
 		fields: fieldsProxy,
-		data: record?.data as T | null,
+		data: (snapshot?.data ?? null) as T | null,
 		get isDirty() {
-			const rec = identityMap.get(entityType, entityId)
-			if (!rec) return false
-			return JSON.stringify(rec.data) !== JSON.stringify(rec.serverData)
+			const snap = store.getEntitySnapshot(entityType, entityId)
+			if (!snap) return false
+			return !deepEqual(snap.data, snap.serverData)
 		},
 	}
 }
@@ -178,8 +183,8 @@ type RuntimeRef = FieldRef<unknown> & HasManyRef<unknown> & HasOneRef<unknown>
 function createRuntimeFieldRef(
 	entityType: string,
 	entityId: string,
-	identityMap: IdentityMap,
-	notifyChange: () => void,
+	store: SnapshotStore,
+	notifyChange: NotifyChange,
 	path: string[],
 	fieldName: string,
 ): RuntimeRef {
@@ -190,11 +195,20 @@ function createRuntimeFieldRef(
 		isRelation: false as boolean,
 	}
 
-	const getValue = () => identityMap.getValue(entityType, entityId, path)
-	const getServerValue = () => identityMap.getServerValue(entityType, entityId, path)
+	const getValue = (): unknown => {
+		const snapshot = store.getEntitySnapshot(entityType, entityId)
+		if (!snapshot) return null
+		return getNestedValue(snapshot.data, path)
+	}
+
+	const getServerValue = (): unknown => {
+		const snapshot = store.getEntitySnapshot(entityType, entityId)
+		if (!snapshot) return null
+		return getNestedValue(snapshot.serverData, path)
+	}
 
 	const setValue = (value: unknown) => {
-		identityMap.setFieldValue(entityType, entityId, path, value)
+		store.setFieldValue(entityType, entityId, path, value)
 		notifyChange()
 	}
 
@@ -209,7 +223,7 @@ function createRuntimeFieldRef(
 			return getServerValue() ?? null
 		},
 		get isDirty() {
-			return getValue() !== getServerValue()
+			return !deepEqual(getValue(), getServerValue())
 		},
 		setValue,
 		get inputProps() {
@@ -238,13 +252,15 @@ function createRuntimeFieldRef(
 				// In a real implementation, this would be provided by schema metadata
 				const nestedEntityType = `${entityType}_${fieldName}`
 
-				// Ensure the item is in identity map
-				identityMap.getOrCreate(nestedEntityType, itemId, item as Record<string, unknown>)
+				// Ensure the item is in store
+				if (!store.hasEntity(nestedEntityType, itemId)) {
+					store.setEntityData(nestedEntityType, itemId, item as Record<string, unknown>, true)
+				}
 
 				const accessor = createRuntimeAccessor<unknown>(
 					nestedEntityType,
 					itemId,
-					identityMap,
+					store,
 					notifyChange,
 				)
 				return fn(accessor, index)
@@ -253,7 +269,7 @@ function createRuntimeFieldRef(
 		add: (data?: Record<string, unknown>) => {
 			const items = getValue()
 			const currentItems = Array.isArray(items) ? [...items] : []
-			const newId = `new_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+			const newId = `new_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 			currentItems.push({ id: newId, ...data })
 			setValue(currentItems)
 		},
@@ -289,13 +305,15 @@ function createRuntimeFieldRef(
 			const relatedId = (value as { id: string }).id
 			const nestedEntityType = `${entityType}_${fieldName}`
 
-			// Ensure related entity is in identity map
-			identityMap.getOrCreate(nestedEntityType, relatedId, value as Record<string, unknown>)
+			// Ensure related entity is in store
+			if (!store.hasEntity(nestedEntityType, relatedId)) {
+				store.setEntityData(nestedEntityType, relatedId, value as Record<string, unknown>, true)
+			}
 
 			const relatedAccessor = createRuntimeAccessor<unknown>(
 				nestedEntityType,
 				relatedId,
-				identityMap,
+				store,
 				notifyChange,
 			)
 			return relatedAccessor.fields
@@ -330,4 +348,54 @@ function createNullFieldRef(path: string[], fieldName: string): FieldRef<unknown
 			setValue: () => {},
 		},
 	}
+}
+
+// ==================== Helper Functions ====================
+
+/**
+ * Gets a nested value from an object using a path array.
+ */
+function getNestedValue(obj: unknown, path: string[]): unknown {
+	if (path.length === 0) return obj
+	if (obj === null || typeof obj !== 'object') return undefined
+
+	let current: unknown = obj
+	for (const key of path) {
+		if (current === null || typeof current !== 'object') return undefined
+		current = (current as Record<string, unknown>)[key]
+	}
+	return current
+}
+
+/**
+ * Deep equality check for values.
+ */
+function deepEqual(a: unknown, b: unknown): boolean {
+	if (a === b) return true
+	if (a === null || b === null) return false
+	if (typeof a !== 'object' || typeof b !== 'object') return false
+
+	if (Array.isArray(a) && Array.isArray(b)) {
+		if (a.length !== b.length) return false
+		for (let i = 0; i < a.length; i++) {
+			if (!deepEqual(a[i], b[i])) return false
+		}
+		return true
+	}
+
+	if (Array.isArray(a) || Array.isArray(b)) return false
+
+	const keysA = Object.keys(a)
+	const keysB = Object.keys(b)
+
+	if (keysA.length !== keysB.length) return false
+
+	for (const key of keysA) {
+		if (!keysB.includes(key)) return false
+		if (!deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])) {
+			return false
+		}
+	}
+
+	return true
 }

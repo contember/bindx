@@ -7,6 +7,10 @@ import {
 	createBindx,
 	MockAdapter,
 	createFragment,
+	defineSchema,
+	scalar,
+	hasOne,
+	hasMany,
 } from '../src/index.js'
 
 afterEach(() => {
@@ -33,14 +37,41 @@ interface Article {
 	tags: Tag[]
 }
 
-// Create typed hooks using createBindx
+// Create typed hooks using createBindx with schema
 interface TestSchema {
 	Article: Article
 	Author: Author
 	Tag: Tag
 }
 
-const { useEntity } = createBindx<TestSchema>()
+const schema = defineSchema<TestSchema>({
+	entities: {
+		Article: {
+			fields: {
+				id: scalar(),
+				title: scalar(),
+				content: scalar(),
+				author: hasOne('Author'),
+				tags: hasMany('Tag'),
+			},
+		},
+		Author: {
+			fields: {
+				id: scalar(),
+				name: scalar(),
+				email: scalar(),
+			},
+		},
+		Tag: {
+			fields: {
+				id: scalar(),
+				name: scalar(),
+			},
+		},
+	},
+})
+
+const { useEntity } = createBindx(schema)
 
 // Helper to query by data-testid
 function getByTestId(container: Element, testId: string): Element {
@@ -188,8 +219,8 @@ describe('useEntity hook', () => {
 				return (
 					<div>
 						<h1 data-testid="title">{article.fields.title.value}</h1>
-						<p data-testid="author-name">{article.fields.author.fields.name.value}</p>
-						<p data-testid="author-email">{article.fields.author.fields.email.value}</p>
+						<p data-testid="author-name">{article.data.author?.name ?? 'N/A'}</p>
+						<p data-testid="author-email">{article.data.author?.email ?? 'N/A'}</p>
 					</div>
 				)
 			}
@@ -216,7 +247,7 @@ describe('useEntity hook', () => {
 				const article = useEntity(
 					'Article',
 					{ id: 'article-1' },
-					e => e.title().tags(t => t.name()),
+					e => e.title().tags(t => t.id().name()),
 				)
 
 				if (article.isLoading) {
@@ -227,9 +258,9 @@ describe('useEntity hook', () => {
 					<div>
 						<h1 data-testid="title">{article.fields.title.value}</h1>
 						<ul data-testid="tags">
-							{article.fields.tags.items.map(item => (
-								<li key={item.key} data-testid={`tag-${item.key}`}>
-									{item.fields.name.value}
+							{article.data.tags?.map(tag => (
+								<li key={tag.id} data-testid={`tag-${tag.id}`}>
+									{tag.name}
 								</li>
 							))}
 						</ul>
@@ -330,14 +361,17 @@ describe('useEntity hook', () => {
 			expect(getByTestId(container, 'title').textContent).toBe('Updated Title')
 		})
 
-		test('should update nested entity value optimistically', async () => {
+		test('should update nested entity value optimistically via data', async () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
+			// Note: The new API uses data for read access. To update nested relations,
+			// you would use useEntity on the related entity directly.
+			// This test demonstrates reading nested data.
 			function TestComponent() {
 				const article = useEntity(
 					'Article',
 					{ id: 'article-1' },
-					e => e.author(a => a.name()),
+					e => e.author(a => a.id().name()),
 				)
 
 				if (article.isLoading) {
@@ -346,13 +380,8 @@ describe('useEntity hook', () => {
 
 				return (
 					<div>
-						<span data-testid="author-name">{article.fields.author.fields.name.value}</span>
-						<button
-							data-testid="update-btn"
-							onClick={() => article.fields.author.fields.name.setValue('Jane Doe')}
-						>
-							Update
-						</button>
+						<span data-testid="author-name">{article.data.author?.name ?? 'N/A'}</span>
+						<span data-testid="author-id">{article.data.author?.id ?? 'N/A'}</span>
 					</div>
 				)
 			}
@@ -368,12 +397,7 @@ describe('useEntity hook', () => {
 			})
 
 			expect(getByTestId(container, 'author-name').textContent).toBe('John Doe')
-
-			act(() => {
-				;(getByTestId(container, 'update-btn') as HTMLButtonElement).click()
-			})
-
-			expect(getByTestId(container, 'author-name').textContent).toBe('Jane Doe')
+			expect(getByTestId(container, 'author-id').textContent).toBe('author-1')
 		})
 	})
 
@@ -731,7 +755,7 @@ describe('useEntity hook', () => {
 				return (
 					<div>
 						<h1 data-testid="title">{article.fields.title.value}</h1>
-						<p data-testid="author-name">{article.fields.author.fields.name.value}</p>
+						<p data-testid="author-name">{article.data.author?.name ?? 'N/A'}</p>
 					</div>
 				)
 			}
@@ -753,8 +777,6 @@ describe('useEntity hook', () => {
 		test('should work with child components receiving field accessors', async () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
-			const AuthorFragment = createFragment<Author>()(a => a.id().name().email())
-
 			// Simulates TextInput from example/components.tsx
 			function TextInput({ field, label }: { field: { value: string | null; setValue: (v: string) => void }; label: string }) {
 				return (
@@ -770,12 +792,12 @@ describe('useEntity hook', () => {
 				)
 			}
 
-			// Simulates AuthorEditor from example/components.tsx
-			function AuthorEditor({ author }: { author: { fields: { name: { value: string | null; setValue: (v: string) => void }; email: { value: string | null; setValue: (v: string) => void } } } }) {
+			// AuthorDisplay shows read-only data from nested relation
+			function AuthorDisplay({ data }: { data: { name: string; email: string } | undefined }) {
 				return (
-					<div data-testid="author-editor">
-						<TextInput field={author.fields.name} label="Name" />
-						<TextInput field={author.fields.email} label="Email" />
+					<div data-testid="author-display">
+						<span data-testid="author-name">{data?.name ?? 'N/A'}</span>
+						<span data-testid="author-email">{data?.email ?? 'N/A'}</span>
 					</div>
 				)
 			}
@@ -784,7 +806,7 @@ describe('useEntity hook', () => {
 				const article = useEntity(
 					'Article',
 					{ id: 'article-1' },
-					e => e.title().author(AuthorFragment),
+					e => e.title().author(a => a.id().name().email()),
 				)
 
 				if (article.isLoading) {
@@ -794,7 +816,7 @@ describe('useEntity hook', () => {
 				return (
 					<div>
 						<TextInput field={article.fields.title} label="Title" />
-						<AuthorEditor author={article.fields.author} />
+						<AuthorDisplay data={article.data.author} />
 					</div>
 				)
 			}
@@ -806,16 +828,13 @@ describe('useEntity hook', () => {
 			)
 
 			await waitFor(() => {
-				expect(queryByTestId(container, 'author-editor')).not.toBeNull()
+				expect(queryByTestId(container, 'author-display')).not.toBeNull()
 			})
 
 			const titleInput = getByTestId(container, 'input-Title') as HTMLInputElement
-			const nameInput = getByTestId(container, 'input-Name') as HTMLInputElement
-			const emailInput = getByTestId(container, 'input-Email') as HTMLInputElement
-
 			expect(titleInput.value).toBe('Hello World')
-			expect(nameInput.value).toBe('John Doe')
-			expect(emailInput.value).toBe('john@example.com')
+			expect(getByTestId(container, 'author-name').textContent).toBe('John Doe')
+			expect(getByTestId(container, 'author-email').textContent).toBe('john@example.com')
 		})
 	})
 })

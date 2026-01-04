@@ -1,8 +1,12 @@
 import type { ReactNode } from 'react'
 import type { SelectionMeta, SelectionFieldMeta } from '../selection/types.js'
+import type { EntityFields, FieldRefMeta } from '../handles/types.js'
 
 // Re-export unified types for backwards compatibility
 export type { SelectionMeta, SelectionFieldMeta }
+
+// Re-export from handles/types for backwards compatibility
+export type { EntityFields, FieldRefMeta, ScalarKeys, HasManyKeys, HasOneKeys } from '../handles/types.js'
 
 /**
  * @deprecated Use SelectionMeta from selection/types.ts instead
@@ -23,16 +27,6 @@ export const BINDX_COMPONENT = Symbol('BINDX_COMPONENT')
  * Marker symbol for field reference metadata
  */
 export const FIELD_REF_META = Symbol('FIELD_REF_META')
-
-/**
- * Base metadata for all field references
- */
-export interface FieldRefMeta {
-	readonly path: string[]
-	readonly fieldName: string
-	readonly isArray: boolean
-	readonly isRelation: boolean
-}
 
 /**
  * Reference to a scalar field - works in both collection and runtime phases
@@ -104,50 +98,6 @@ export interface HasOneRef<T> {
 
 	/** Disconnect relation */
 	disconnect(): void
-}
-
-/**
- * Extract scalar field keys from entity type
- */
-type ScalarKeys<T> = {
-	[K in keyof T]: T[K] extends (infer _U)[]
-		? never
-		: NonNullable<T[K]> extends object
-			? K extends 'id'
-				? K
-				: never
-			: K
-}[keyof T]
-
-/**
- * Extract has-many relation keys from entity type
- */
-type HasManyKeys<T> = {
-	[K in keyof T]: T[K] extends (infer _U)[] ? K : never
-}[keyof T]
-
-/**
- * Extract has-one relation keys from entity type
- */
-type HasOneKeys<T> = {
-	[K in keyof T]: T[K] extends (infer _U)[]
-		? never
-		: NonNullable<T[K]> extends object
-			? K extends 'id'
-				? never
-				: K
-			: never
-}[keyof T]
-
-/**
- * Map entity fields to their corresponding ref types
- */
-export type EntityFields<T> = {
-	[K in ScalarKeys<T>]: FieldRef<T[K]>
-} & {
-	[K in HasManyKeys<T>]: HasManyRef<T[K] extends (infer U)[] ? U : never>
-} & {
-	[K in HasOneKeys<T>]: HasOneRef<NonNullable<T[K]>>
 }
 
 /**

@@ -1,8 +1,8 @@
-import { createBindx } from '../src/index.js'
+import { createBindx, defineSchema, scalar, hasOne, hasMany } from '../src/index.js'
 import type { Article, Author, Tag, Location } from './types.js'
 
 // Re-export JSX components for examples
-export { Entity, Field, HasMany, HasOne, If, Show } from '../src/index.js'
+export { Field, HasMany, HasOne, If, Show } from '../src/index.js'
 export type { EntityRef, FieldRef, HasManyRef, HasOneRef } from '../src/index.js'
 
 /**
@@ -17,9 +17,53 @@ export interface Schema {
 }
 
 /**
- * Type-safe bindx hooks for this project's schema.
+ * Schema definition with field types and relations.
+ */
+const schema = defineSchema<Schema>({
+	entities: {
+		Article: {
+			fields: {
+				id: scalar(),
+				title: scalar(),
+				content: scalar(),
+				publishedAt: scalar(),
+				author: hasOne('Author'),
+				location: hasOne('Location'),
+				tags: hasMany('Tag'),
+			},
+		},
+		Author: {
+			fields: {
+				id: scalar(),
+				name: scalar(),
+				email: scalar(),
+				bio: scalar(),
+				articles: hasMany('Article'),
+			},
+		},
+		Tag: {
+			fields: {
+				id: scalar(),
+				name: scalar(),
+				color: scalar(),
+				articles: hasMany('Article'),
+			},
+		},
+		Location: {
+			fields: {
+				id: scalar(),
+				lat: scalar(),
+				lng: scalar(),
+				label: scalar(),
+			},
+		},
+	},
+})
+
+/**
+ * Type-safe bindx hooks and components for this project's schema.
  *
- * Usage:
+ * Usage with hooks:
  * ```ts
  * const article = useEntity('Article', { id }, e => ({
  *   title: e.title,
@@ -32,8 +76,19 @@ export interface Schema {
  * }))
  * ```
  *
+ * Usage with JSX component:
+ * ```tsx
+ * <Entity name="Article" id={articleId}>
+ *   {article => (
+ *     <div>
+ *       <Field field={article.fields.title} />
+ *     </div>
+ *   )}
+ * </Entity>
+ * ```
+ *
  * - Entity name ('Article') is autocompleted
  * - `e` is automatically typed as ModelProxy<Article>
  * - Result fields are fully typed
  */
-export const { useEntity, useEntityList, } = createBindx<Schema>()
+export const { useEntity, useEntityList, Entity } = createBindx(schema)

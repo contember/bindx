@@ -1,4 +1,4 @@
-import React, { type ReactElement, type ReactNode } from 'react'
+import React, { memo, type ReactElement, type ReactNode } from 'react'
 import type { HasManyProps, SelectionFieldMeta, SelectionMeta, SelectionProvider, EntityRef } from '../types.js'
 import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
 import { createCollectorProxy } from '../proxy.js'
@@ -28,13 +28,15 @@ import { SelectionMetaCollector, mergeSelections } from '../SelectionMeta.js'
  * </HasMany>
  * ```
  */
-export function HasMany<T>({ field, children }: HasManyProps<T>): ReactElement {
+function HasManyImpl<T>({ field, children }: HasManyProps<T>): ReactElement {
 	const items = field.map((item, index) => {
 		return <React.Fragment key={item.id}>{children(item, index)}</React.Fragment>
 	})
 
 	return <>{items}</>
 }
+
+export const HasMany = memo(HasManyImpl) as typeof HasManyImpl
 
 // Static method for selection extraction
 const hasManyWithSelection = HasMany as typeof HasMany & SelectionProvider & { [BINDX_COMPONENT]: true }

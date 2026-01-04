@@ -1,4 +1,4 @@
-import React, { type ReactElement, type ReactNode } from 'react'
+import React, { memo, type ReactElement, type ReactNode } from 'react'
 import type { IfProps, SelectionFieldMeta, SelectionMeta, SelectionProvider } from '../types.js'
 import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
 import { mergeSelections, createEmptySelection } from '../SelectionMeta.js'
@@ -24,7 +24,7 @@ import { mergeSelections, createEmptySelection } from '../SelectionMeta.js'
  * />
  * ```
  */
-export function If({ condition, then: thenBranch, else: elseBranch }: IfProps): ReactElement | null {
+function IfImpl({ condition, then: thenBranch, else: elseBranch }: IfProps): ReactElement | null {
 	// Resolve condition value
 	const conditionValue = typeof condition === 'boolean'
 		? condition
@@ -32,6 +32,8 @@ export function If({ condition, then: thenBranch, else: elseBranch }: IfProps): 
 
 	return conditionValue ? <>{thenBranch}</> : <>{elseBranch ?? null}</>
 }
+
+export const If = memo(IfImpl)
 
 // Static method for selection extraction - analyzes BOTH branches
 const ifWithSelection = If as typeof If & SelectionProvider & { [BINDX_COMPONENT]: true }

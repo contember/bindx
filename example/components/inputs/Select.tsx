@@ -1,5 +1,4 @@
-import type { EntityListAccessor } from '../../../src/index.js'
-import type { LoadingEntityListAccessor } from '../../../src/hooks/createBindx.js'
+import type { EntityListAccessorResult } from '../../../src/hooks/createBindx.js'
 
 export interface SelectOption {
 	id: string
@@ -10,7 +9,7 @@ export interface SelectProps<TData extends { id: string }> {
 	label: string
 	value: string | null
 	onChange: (id: string | null) => void
-	options: EntityListAccessor<TData> | LoadingEntityListAccessor<TData>
+	options: EntityListAccessorResult<TData>
 	getLabel: (data: TData) => string
 	placeholder?: string
 }
@@ -38,9 +37,9 @@ export function Select<TData extends { id: string }>({
 			>
 				<option value="">{isLoading ? 'Loading...' : placeholder}</option>
 				{!isLoading &&
-					options.items.map(item => (
-						<option key={item.key} value={item.entity.id}>
-							{getLabel(item.entity.data)}
+					options.items.map((item) => (
+						<option key={item.key} value={item.id}>
+							{getLabel(item.data)}
 						</option>
 					))}
 			</select>
