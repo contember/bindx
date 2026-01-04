@@ -110,6 +110,11 @@ export type {
 	EntityComponentProps,
 	HasManyComponentOptions,
 	ShowProps,
+	EntityFragmentComponent,
+	EntityFragmentComponentWithProps,
+	EntityPropKeys,
+	EntityFromProp,
+	EntityFragmentProperties,
 } from './jsx/index.js'
 
 // Unified handle types
@@ -168,6 +173,11 @@ export {
 	type EntityProps,
 	BINDX_COMPONENT,
 	FIELD_REF_META,
+	createEntityFragment,
+	mergeFragments,
+	isEntityFragmentComponent,
+	ENTITY_FRAGMENT_COMPONENT,
+	ENTITY_FRAGMENT_PROPS,
 } from './jsx/index.js'
 
 // ============================================================================

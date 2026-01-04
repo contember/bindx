@@ -6,6 +6,7 @@ import {
 	type SelectionMeta,
 	type HasManyOptions,
 } from './types.js'
+import { mergeSelections, SelectionMetaCollector } from '../jsx/SelectionMeta.js'
 
 /**
  * Creates a fluent selection builder for an entity type.
@@ -62,7 +63,7 @@ function createFieldMethod<TEntity, TSelected extends object, THasManyParams ext
 ) {
 	return function selectField(...args: unknown[]): SelectionBuilder<TEntity, object, object> {
 		// Parse arguments to determine what kind of selection this is
-		const { options, selector, fragment } = parseFieldArgs(args)
+		const { options, selector, fragment, fragments } = parseFieldArgs(args)
 
 		const alias = (options as { as?: string } | undefined)?.as ?? fieldName
 
@@ -96,9 +97,31 @@ function createFieldMethod<TEntity, TSelected extends object, THasManyParams ext
 			}
 		}
 
-		// Handle relation with fragment
+		// Handle relation with single fragment
 		if (fragment && isFluentFragment(fragment)) {
 			fieldMeta.nested = fragment.__meta
+			fieldMeta.isRelation = true
+
+			// Check has-many params
+			if (options && isHasManyOptions(options)) {
+				fieldMeta.isArray = true
+				fieldMeta.hasManyParams = {
+					filter: (options as HasManyOptions).filter,
+					orderBy: (options as HasManyOptions).orderBy,
+					limit: (options as HasManyOptions).limit,
+					offset: (options as HasManyOptions).offset,
+				}
+			}
+		}
+
+		// Handle relation with multiple fragments (merged)
+		if (fragments && fragments.length > 0) {
+			// Merge all fragment selections into one
+			const mergedSelection = new SelectionMetaCollector()
+			for (const frag of fragments) {
+				mergeSelections(mergedSelection, frag.__meta)
+			}
+			fieldMeta.nested = mergedSelection
 			fieldMeta.isRelation = true
 
 			// Check has-many params
@@ -158,17 +181,22 @@ function isFluentFragment(value: unknown): value is FluentFragment<unknown, unkn
  * - e.title({ as: 'x' })                -> scalar with alias
  * - e.author(a => a.name())             -> has-one with callback
  * - e.author(AuthorFragment)            -> has-one with fragment
+ * - e.author(Frag1, Frag2, ...)         -> has-one with multiple fragments (merged)
  * - e.author({ as: 'x' }, a => a.name())-> has-one with alias + callback
  * - e.author({ as: 'x' }, AuthorFrag)   -> has-one with alias + fragment
+ * - e.author({ as: 'x' }, Frag1, Frag2) -> has-one with alias + multiple fragments
  * - e.tags(t => t.name())               -> has-many with callback
  * - e.tags(TagFragment)                 -> has-many with fragment
+ * - e.tags(Frag1, Frag2, ...)           -> has-many with multiple fragments (merged)
  * - e.tags({ filter: {} }, t => t.name()) -> has-many with options + callback
  * - e.tags({ filter: {} }, TagFragment)   -> has-many with options + fragment
+ * - e.tags({ filter: {} }, Frag1, Frag2)  -> has-many with options + multiple fragments
  */
 function parseFieldArgs(args: unknown[]): {
 	options?: Record<string, unknown>
 	selector?: (builder: SelectionBuilder<unknown>) => SelectionBuilder<unknown, object, object>
 	fragment?: FluentFragment<unknown, unknown>
+	fragments?: FluentFragment<unknown, unknown>[]
 } {
 	if (args.length === 0) {
 		// Just field name, no args: e.title()
@@ -191,9 +219,18 @@ function parseFieldArgs(args: unknown[]): {
 		}
 	}
 
-	if (args.length === 2) {
-		const [first, second] = args
+	// Check for multiple fragments: e.author(Frag1, Frag2, ...)
+	if (args.length >= 2 && args.every(isFluentFragment)) {
+		return { fragments: args as FluentFragment<unknown, unknown>[] }
+	}
+
+	if (args.length >= 2) {
+		const [first, ...rest] = args
+
+		// Check if first is options object
 		if (typeof first === 'object' && first !== null && !isFluentFragment(first)) {
+			const second = rest[0]
+
 			if (typeof second === 'function') {
 				// Options + selector: e.tags({ filter: {...} }, t => t.name())
 				return {
@@ -201,11 +238,20 @@ function parseFieldArgs(args: unknown[]): {
 					selector: second as (builder: SelectionBuilder<unknown>) => SelectionBuilder<unknown, object, object>,
 				}
 			}
-			if (isFluentFragment(second)) {
-				// Options + fragment: e.tags({ filter: {...} }, TagFragment)
+
+			// Check for options + multiple fragments
+			if (rest.every(isFluentFragment)) {
+				if (rest.length === 1) {
+					// Options + single fragment: e.tags({ filter: {...} }, TagFragment)
+					return {
+						options: first as Record<string, unknown>,
+						fragment: rest[0] as FluentFragment<unknown, unknown>,
+					}
+				}
+				// Options + multiple fragments: e.tags({ filter: {} }, Frag1, Frag2)
 				return {
 					options: first as Record<string, unknown>,
-					fragment: second,
+					fragments: rest as FluentFragment<unknown, unknown>[],
 				}
 			}
 		}

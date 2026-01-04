@@ -55,6 +55,18 @@ export function mergeSelections(target: SelectionMeta, source: SelectionMeta): v
 	for (const [key, field] of source.fields) {
 		const existing = target.fields.get(key)
 		if (existing) {
+			// Update relation/array flags if source has more specific info
+			if (field.isRelation && !existing.isRelation) {
+				existing.isRelation = true
+			}
+			if (field.isArray && !existing.isArray) {
+				existing.isArray = true
+			}
+			// Merge hasManyParams if source has them
+			if (field.hasManyParams && !existing.hasManyParams) {
+				existing.hasManyParams = field.hasManyParams
+			}
+			// Merge nested selections
 			if (field.nested && existing.nested) {
 				mergeSelections(existing.nested, field.nested)
 			} else if (field.nested) {

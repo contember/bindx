@@ -184,3 +184,13 @@ export interface SelectionProvider {
 		collectNested: (children: ReactNode) => SelectionMeta,
 	): SelectionFieldMeta | SelectionFieldMeta[] | null
 }
+
+// Re-export entity fragment types
+export type {
+	EntityFragmentComponent,
+	EntityFragmentComponentWithProps,
+	EntityPropKeys,
+	EntityFromProp,
+	EntityFragmentProperties,
+} from './createEntityFragment.js'
+export { ENTITY_FRAGMENT_COMPONENT, ENTITY_FRAGMENT_PROPS } from './createEntityFragment.js'

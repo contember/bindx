@@ -48,3 +48,17 @@ export { HasOne, HasOneWithMeta } from './components/HasOne.js'
 export { If, IfWithMeta } from './components/If.js'
 export { Show, ShowWithMeta, type ShowProps } from './components/Show.js'
 export { Entity, type EntityProps } from './components/Entity.js'
+
+// Entity Fragment
+export {
+	createEntityFragment,
+	isEntityFragmentComponent,
+	mergeFragments,
+	ENTITY_FRAGMENT_COMPONENT,
+	ENTITY_FRAGMENT_PROPS,
+	type EntityFragmentComponent,
+	type EntityFragmentComponentWithProps,
+	type EntityPropKeys,
+	type EntityFromProp,
+	type EntityFragmentProperties,
+} from './createEntityFragment.js'

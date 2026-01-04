@@ -2,7 +2,7 @@ import { createBindx, defineSchema, scalar, hasOne, hasMany } from '../src/index
 import type { Article, Author, Tag, Location } from './types.js'
 
 // Re-export JSX components for examples
-export { Field, HasMany, HasOne, If, Show } from '../src/index.js'
+export { Field, HasMany, HasOne, If, Show, createEntityFragment } from '../src/index.js'
 export type { EntityRef, FieldRef, HasManyRef, HasOneRef } from '../src/index.js'
 
 /**

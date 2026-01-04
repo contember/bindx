@@ -1,8 +1,9 @@
 import type { ReactNode, ReactElement } from 'react'
 import { Children, isValidElement } from 'react'
 import type { JsxSelectionMeta, JsxSelectionFieldMeta, SelectionProvider } from './types.js'
-import { BINDX_COMPONENT } from './types.js'
+import { BINDX_COMPONENT, FIELD_REF_META } from './types.js'
 import { SelectionMetaCollector, mergeSelections, createEmptySelection } from './SelectionMeta.js'
+import { isEntityFragmentComponent, ENTITY_FRAGMENT_PROPS } from './createEntityFragment.js'
 
 /**
  * Analyzes JSX tree to extract field selection metadata.
@@ -56,9 +57,17 @@ export function analyzeJsx(node: ReactNode, selection: SelectionMetaCollector): 
 	// Handle function components
 	const component = element.type as unknown
 
+	// Check if it's an EntityFragmentComponent - needs special handling
+	if (isEntityFragmentComponent(component)) {
+		handleEntityFragmentComponent(component, element.props as Record<string, unknown>, selection)
+		return
+	}
+
 	// Check if it's a bindx component with getSelection
+	// Note: memo() returns an object, not a function, so we check for both
 	if (
-		typeof component === 'function' &&
+		(typeof component === 'function' || typeof component === 'object') &&
+		component !== null &&
 		'getSelection' in component &&
 		typeof (component as SelectionProvider).getSelection === 'function'
 	) {
@@ -138,6 +147,63 @@ export function convertToQuerySelection(jsxSelection: JsxSelectionMeta): Record<
 	}
 
 	return result
+}
+
+/**
+ * Handles EntityFragmentComponent in JSX analysis.
+ * Merges the fragment's pre-computed selection into the parent selection,
+ * adjusted to the correct path context based on the entity prop.
+ */
+function handleEntityFragmentComponent(
+	component: { [ENTITY_FRAGMENT_PROPS]: Map<string, { selection: JsxSelectionMeta }> },
+	props: Record<string, unknown>,
+	parentSelection: SelectionMetaCollector,
+): void {
+	const entityPropsMap = component[ENTITY_FRAGMENT_PROPS]
+
+	// For each entity prop in the fragment component
+	for (const [propName, meta] of entityPropsMap) {
+		const propValue = props[propName]
+
+		if (!propValue || typeof propValue !== 'object') {
+			continue
+		}
+
+		// Case 1: Prop is a FieldRef from a relation (e.g., article.fields.author)
+		// This has FIELD_REF_META with a path to adjust
+		if (FIELD_REF_META in propValue) {
+			const refMeta = (propValue as { [FIELD_REF_META]: { path: string[]; fieldName: string } })[FIELD_REF_META]
+
+			// For each field in the fragment's selection, add it with the correct path context
+			for (const [_key, field] of meta.selection.fields) {
+				// Only process root-level fields from the fragment
+				if (field.path.length === 1) {
+					// Create a new field meta with the path adjusted to the parent context
+					const adjustedField: JsxSelectionFieldMeta = {
+						...field,
+						path: [...refMeta.path, ...field.path],
+					}
+
+					// If the field has nested selection, we need to preserve it
+					if (field.nested) {
+						adjustedField.nested = field.nested
+					}
+
+					parentSelection.addField(adjustedField)
+				}
+			}
+		}
+		// Case 2: Prop is an EntityRef from Entity children callback (root level)
+		// This doesn't have FIELD_REF_META, just merge the fields directly
+		else if ('id' in propValue && 'fields' in propValue) {
+			// This is an EntityRef - merge fragment's selection directly
+			for (const [_key, field] of meta.selection.fields) {
+				if (field.path.length === 1) {
+					parentSelection.addField({ ...field })
+				}
+			}
+		}
+	}
 }
 
 /**

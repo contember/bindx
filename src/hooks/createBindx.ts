@@ -574,18 +574,44 @@ export function createBindx<TModels extends { [K in keyof TModels]: object }>(
 		const { store, dispatcher, adapter } = useBindxContext()
 		const entityType = name as string
 
-		// Phase 1: Collection - runs synchronously on first render
-		const { jsxSelection, standardSelection } = useMemo(() => {
+		// Stable children ref - we use a ref to avoid re-running useMemo on every render
+		const childrenRef = useRef(children)
+		childrenRef.current = children
+
+		// Cache for selection to avoid unnecessary refetches
+		const selectionCache = useRef<{
+			jsxSelection: SelectionMetaCollector
+			standardSelection: SelectionMeta
+			queryKey: string
+		} | null>(null)
+
+		// Phase 1: Collection - runs on every render but caches based on content
+		const { jsxSelection, standardSelection, queryKey } = useMemo(() => {
 			const selection = new SelectionMetaCollector()
 			const collector = createCollectorProxy<TModels[TEntityName]>(selection)
-			const jsx = children(collector)
+			const jsx = childrenRef.current(collector)
 			const jsxSel = collectSelection(jsx)
 			mergeSelections(selection, jsxSel)
-			return {
-				jsxSelection: selection,
-				standardSelection: toSelectionMeta(selection),
+			const standardSel = toSelectionMeta(selection)
+
+			// Create a stable key from the selection to detect actual changes
+			const query = buildQueryFromSelection(standardSel)
+			const newQueryKey = JSON.stringify(query)
+
+			// If the selection hasn't actually changed, return cached values
+			if (selectionCache.current && selectionCache.current.queryKey === newQueryKey) {
+				return selectionCache.current
 			}
-		}, [name, id, children])
+
+			// Update cache with new values
+			selectionCache.current = {
+				jsxSelection: selection,
+				standardSelection: standardSel,
+				queryKey: newQueryKey,
+			}
+
+			return selectionCache.current
+		}, [name, id]) // Only depend on entity identity, not children
 
 		// Subscribe to store changes
 		const subscribe = useCallback(
@@ -595,11 +621,29 @@ export function createBindx<TModels extends { [K in keyof TModels]: object }>(
 			[store, entityType, id],
 		)
 
-		// Get current state
+		// Cache for getSnapshot to ensure referential stability
+		const snapshotCache = useRef<{
+			snapshot: ReturnType<typeof store.getEntitySnapshot>
+			loadState: ReturnType<typeof store.getLoadState>
+		} | null>(null)
+
+		// Get current state - must return referentially stable values
 		const getSnapshot = useCallback(() => {
 			const snapshot = store.getEntitySnapshot(entityType, id)
 			const loadState = store.getLoadState(entityType, id)
-			return { snapshot, loadState }
+
+			// Return cached value if nothing changed
+			if (
+				snapshotCache.current &&
+				snapshotCache.current.snapshot === snapshot &&
+				snapshotCache.current.loadState === loadState
+			) {
+				return snapshotCache.current
+			}
+
+			// Update cache and return new value
+			snapshotCache.current = { snapshot, loadState }
+			return snapshotCache.current
 		}, [store, entityType, id])
 
 		const { snapshot, loadState } = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
@@ -647,7 +691,7 @@ export function createBindx<TModels extends { [K in keyof TModels]: object }>(
 			return () => {
 				abortController.abort()
 			}
-		}, [entityType, id, adapter, dispatcher, standardSelection])
+		}, [entityType, id, adapter, dispatcher, queryKey]) // Use queryKey for stable comparison
 
 		// Determine current phase and render
 		if (!loadState || loadState.status === 'loading') {

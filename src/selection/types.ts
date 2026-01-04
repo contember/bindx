@@ -103,6 +103,19 @@ export interface HasOneMethod<
 		fragment: FluentFragment<TRelated, TFragmentResult>,
 	): SelectionBuilder<TEntity, TSelected & { [P in K & string]: TFragmentResult }, THasManyParams>
 
+	/** Select with multiple fragments (merged) - result type is intersection of all fragment result types */
+	<T1 extends object, T2 extends object>(
+		fragment1: FluentFragment<TRelated, T1>,
+		fragment2: FluentFragment<TRelated, T2>,
+	): SelectionBuilder<TEntity, TSelected & { [P in K & string]: T1 & T2 }, THasManyParams>
+
+	/** Select with three fragments (merged) */
+	<T1 extends object, T2 extends object, T3 extends object>(
+		fragment1: FluentFragment<TRelated, T1>,
+		fragment2: FluentFragment<TRelated, T2>,
+		fragment3: FluentFragment<TRelated, T3>,
+	): SelectionBuilder<TEntity, TSelected & { [P in K & string]: T1 & T2 & T3 }, THasManyParams>
+
 	/** Select with alias and callback */
 	<TAlias extends string, TNestedSelected extends object>(
 		options: { as: TAlias },
@@ -114,6 +127,21 @@ export interface HasOneMethod<
 		options: { as: TAlias },
 		fragment: FluentFragment<TRelated, TFragmentResult>,
 	): SelectionBuilder<TEntity, TSelected & { [P in TAlias]: TFragmentResult }, THasManyParams>
+
+	/** Select with alias and two fragments (merged) */
+	<TAlias extends string, T1 extends object, T2 extends object>(
+		options: { as: TAlias },
+		fragment1: FluentFragment<TRelated, T1>,
+		fragment2: FluentFragment<TRelated, T2>,
+	): SelectionBuilder<TEntity, TSelected & { [P in TAlias]: T1 & T2 }, THasManyParams>
+
+	/** Select with alias and three fragments (merged) */
+	<TAlias extends string, T1 extends object, T2 extends object, T3 extends object>(
+		options: { as: TAlias },
+		fragment1: FluentFragment<TRelated, T1>,
+		fragment2: FluentFragment<TRelated, T2>,
+		fragment3: FluentFragment<TRelated, T3>,
+	): SelectionBuilder<TEntity, TSelected & { [P in TAlias]: T1 & T2 & T3 }, THasManyParams>
 }
 
 /**
@@ -149,6 +177,27 @@ export interface HasManyMethod<
 		THasManyParams & { [P in K & string]: object }
 	>
 
+	/** Select with two fragments (merged, no options) */
+	<T1 extends object, T2 extends object>(
+		fragment1: FluentFragment<TItem, T1>,
+		fragment2: FluentFragment<TItem, T2>,
+	): SelectionBuilder<
+		TEntity,
+		TSelected & { [P in K & string]: (T1 & T2)[] },
+		THasManyParams & { [P in K & string]: object }
+	>
+
+	/** Select with three fragments (merged, no options) */
+	<T1 extends object, T2 extends object, T3 extends object>(
+		fragment1: FluentFragment<TItem, T1>,
+		fragment2: FluentFragment<TItem, T2>,
+		fragment3: FluentFragment<TItem, T3>,
+	): SelectionBuilder<
+		TEntity,
+		TSelected & { [P in K & string]: (T1 & T2 & T3)[] },
+		THasManyParams & { [P in K & string]: object }
+	>
+
 	/** Select with options and callback */
 	<TOptions extends HasManyOptions, TNestedSelected extends object>(
 		options: TOptions,
@@ -166,6 +215,29 @@ export interface HasManyMethod<
 	): SelectionBuilder<
 		TEntity,
 		TSelected & { [P in ResolveAlias<K, TOptions>]: TFragmentResult[] },
+		THasManyParams & { [P in ResolveAlias<K, TOptions>]: TOptions }
+	>
+
+	/** Select with options and two fragments (merged) */
+	<TOptions extends HasManyOptions, T1 extends object, T2 extends object>(
+		options: TOptions,
+		fragment1: FluentFragment<TItem, T1>,
+		fragment2: FluentFragment<TItem, T2>,
+	): SelectionBuilder<
+		TEntity,
+		TSelected & { [P in ResolveAlias<K, TOptions>]: (T1 & T2)[] },
+		THasManyParams & { [P in ResolveAlias<K, TOptions>]: TOptions }
+	>
+
+	/** Select with options and three fragments (merged) */
+	<TOptions extends HasManyOptions, T1 extends object, T2 extends object, T3 extends object>(
+		options: TOptions,
+		fragment1: FluentFragment<TItem, T1>,
+		fragment2: FluentFragment<TItem, T2>,
+		fragment3: FluentFragment<TItem, T3>,
+	): SelectionBuilder<
+		TEntity,
+		TSelected & { [P in ResolveAlias<K, TOptions>]: (T1 & T2 & T3)[] },
 		THasManyParams & { [P in ResolveAlias<K, TOptions>]: TOptions }
 	>
 }
