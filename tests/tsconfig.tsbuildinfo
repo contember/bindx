@@ -1,1 +1,0 @@
-{"root":["./accessors.test.ts","./createComponent.test.tsx","./identityMapSync.test.tsx","./interoperability.test.ts","./queryBuilding.test.ts","./setup.ts","./typeSafety.test.ts","./useEntity.test.tsx"],"version":"5.9.3"}
