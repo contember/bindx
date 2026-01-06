@@ -770,7 +770,7 @@ describe('MutationCollector', () => {
 			}, true)
 
 			// Plan to disconnect tag-2
-			store.getOrCreateHasMany('Article', 'a-1', 'tags', new Set(['tag-1', 'tag-2']))
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['tag-1', 'tag-2'])
 			store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-2', 'disconnect')
 
 			// Remove tag-2 from current data
@@ -796,7 +796,7 @@ describe('MutationCollector', () => {
 			}, true)
 
 			// Plan to delete tag-2
-			store.getOrCreateHasMany('Article', 'a-1', 'tags', new Set(['tag-1', 'tag-2']))
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['tag-1', 'tag-2'])
 			store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-2', 'delete')
 
 			// Remove tag-2 from current data
@@ -823,7 +823,7 @@ describe('MutationCollector', () => {
 			}, true)
 
 			// Plan different operations
-			store.getOrCreateHasMany('Article', 'a-1', 'tags', new Set(['tag-1', 'tag-2', 'tag-3']))
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['tag-1', 'tag-2', 'tag-3'])
 			store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-2', 'disconnect')
 			store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-3', 'delete')
 
@@ -848,7 +848,7 @@ describe('MutationCollector', () => {
 			}, true)
 
 			// Plan to disconnect tag-1
-			store.getOrCreateHasMany('Article', 'a-1', 'tags', new Set(['tag-1']))
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['tag-1'])
 			store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-1', 'disconnect')
 
 			// Remove from current data

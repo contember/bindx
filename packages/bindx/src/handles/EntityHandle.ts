@@ -373,14 +373,29 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 
 	/**
 	 * Gets the current related entity ID.
+	 * Falls back to entity data if relation state is not initialized.
 	 */
 	get relatedId(): string | null {
+		// First check relation state (for manual changes like connect/disconnect)
 		const relation = this.store.getRelation(
 			this.entityType,
 			this.entityId,
 			this.fieldName,
 		)
-		return relation?.currentId ?? null
+		if (relation) {
+			return relation.currentId
+		}
+
+		// Fallback to entity snapshot data (for server-loaded data)
+		const parentSnapshot = this.store.getEntitySnapshot(this.entityType, this.entityId)
+		if (parentSnapshot?.data) {
+			const relatedData = (parentSnapshot.data as Record<string, unknown>)[this.fieldName]
+			if (relatedData && typeof relatedData === 'object' && 'id' in relatedData) {
+				return (relatedData as { id: string }).id
+			}
+		}
+
+		return null
 	}
 
 	/**
@@ -409,6 +424,10 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		const id = this.relatedId
 
 		if (id) {
+			// Ensure the related entity has a snapshot in the store
+			// (it may be embedded in the parent entity's data)
+			this.ensureRelatedEntitySnapshot(id)
+
 			// Connected - return real entity handle
 			if (!this.entityHandleCache || this.entityHandleCache.id !== id) {
 				this.entityHandleCache = new EntityHandle<TEntity, TSelected>(
@@ -436,6 +455,37 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			)
 		}
 		return this.placeholderCache
+	}
+
+	/**
+	 * Ensures the related entity has a snapshot in the store.
+	 * If the related entity is embedded in the parent's data (not yet normalized),
+	 * creates a snapshot from the embedded data.
+	 */
+	private ensureRelatedEntitySnapshot(id: string): void {
+		// Check if snapshot already exists
+		if (this.store.hasEntity(this.targetType, id)) {
+			return
+		}
+
+		// Get embedded data from parent entity
+		const parentSnapshot = this.store.getEntitySnapshot(this.entityType, this.entityId)
+		if (!parentSnapshot?.data) {
+			return
+		}
+
+		const embeddedData = (parentSnapshot.data as Record<string, unknown>)[this.fieldName]
+		if (!embeddedData || typeof embeddedData !== 'object') {
+			return
+		}
+
+		// Create snapshot from embedded data
+		this.store.setEntityData(
+			this.targetType,
+			id,
+			embeddedData as Record<string, unknown>,
+			true, // isServerData
+		)
 	}
 
 	/**
@@ -567,7 +617,33 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		const listData = data[this.fieldName] as Array<{ id: string }> | undefined
 		if (!Array.isArray(listData)) return []
 
+		// Ensure snapshots exist for embedded items
+		this.ensureItemSnapshots(listData)
+
 		return listData.map((item) => this.getItemHandle(item.id))
+	}
+
+	/**
+	 * Ensures snapshots exist for embedded has-many items.
+	 */
+	private ensureItemSnapshots(listData: Array<Record<string, unknown>>): void {
+		for (const itemData of listData) {
+			const itemId = itemData['id'] as string
+			if (!itemId) continue
+
+			// Skip if snapshot already exists
+			if (this.store.hasEntity(this.itemType, itemId)) {
+				continue
+			}
+
+			// Create snapshot from embedded data
+			this.store.setEntityData(
+				this.itemType,
+				itemId,
+				itemData,
+				true, // isServerData
+			)
+		}
 	}
 
 	/**

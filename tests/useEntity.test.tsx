@@ -735,6 +735,138 @@ describe('useEntity hook', () => {
 		})
 	})
 
+	describe('relation field handles', () => {
+		test('should access has-one relation fields via fields accessor', async () => {
+			const adapter = new MockAdapter(createMockData(), { delay: 0 })
+
+			function TestComponent() {
+				const article = useEntity(
+					'Article',
+					{ id: 'article-1' },
+					e => e.title().author(a => a.id().name().email()),
+				)
+
+				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+
+				// Access nested field handles - this was broken before the fix
+				const authorFields = article.fields.author.fields
+
+				return (
+					<div>
+						<h1 data-testid="title">{article.fields.title.value}</h1>
+						<p data-testid="author-name-field">{authorFields.name.value}</p>
+						<p data-testid="author-email-field">{authorFields.email.value}</p>
+					</div>
+				)
+			}
+
+			const { container } = render(
+				<BindxProvider adapter={adapter}>
+					<TestComponent />
+				</BindxProvider>,
+			)
+
+			await waitFor(() => {
+				expect(queryByTestId(container, 'title')).not.toBeNull()
+			})
+
+			expect(getByTestId(container, 'title').textContent).toBe('Hello World')
+			expect(getByTestId(container, 'author-name-field').textContent).toBe('John Doe')
+			expect(getByTestId(container, 'author-email-field').textContent).toBe('john@example.com')
+		})
+
+		test('should access has-many relation items via fields accessor', async () => {
+			const adapter = new MockAdapter(createMockData(), { delay: 0 })
+
+			function TestComponent() {
+				const article = useEntity(
+					'Article',
+					{ id: 'article-1' },
+					e => e.title().tags(t => t.id().name()),
+				)
+
+				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+
+				// Access has-many items - this was broken before the fix
+				const tagItems = article.fields.tags.items
+
+				return (
+					<div>
+						<h1 data-testid="title">{article.fields.title.value}</h1>
+						<ul data-testid="tags">
+							{tagItems.map(tag => (
+								<li key={tag.id} data-testid={`tag-${tag.id}`}>
+									{tag.fields.name.value}
+								</li>
+							))}
+						</ul>
+						<span data-testid="tag-count">{tagItems.length}</span>
+					</div>
+				)
+			}
+
+			const { container } = render(
+				<BindxProvider adapter={adapter}>
+					<TestComponent />
+				</BindxProvider>,
+			)
+
+			await waitFor(() => {
+				expect(queryByTestId(container, 'title')).not.toBeNull()
+			})
+
+			expect(getByTestId(container, 'title').textContent).toBe('Hello World')
+			expect(getByTestId(container, 'tag-count').textContent).toBe('2')
+			expect(getByTestId(container, 'tag-tag-1').textContent).toBe('JavaScript')
+			expect(getByTestId(container, 'tag-tag-2').textContent).toBe('React')
+		})
+
+		test('should map over has-many relation items', async () => {
+			const adapter = new MockAdapter(createMockData(), { delay: 0 })
+
+			function TestComponent() {
+				const article = useEntity(
+					'Article',
+					{ id: 'article-1' },
+					e => e.title().tags(t => t.id().name()),
+				)
+
+				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+
+				return (
+					<div>
+						<ul data-testid="tags">
+							{article.fields.tags.map((tag, index) => (
+								<li key={tag.id} data-testid={`tag-${index}`}>
+									{tag.fields.name.value}
+								</li>
+							))}
+						</ul>
+					</div>
+				)
+			}
+
+			const { container } = render(
+				<BindxProvider adapter={adapter}>
+					<TestComponent />
+				</BindxProvider>,
+			)
+
+			await waitFor(() => {
+				expect(queryByTestId(container, 'tags')).not.toBeNull()
+			})
+
+			expect(getByTestId(container, 'tag-0').textContent).toBe('JavaScript')
+			expect(getByTestId(container, 'tag-1').textContent).toBe('React')
+		})
+	})
+
 	describe('fragment composition', () => {
 		test('should work with pre-defined fragments', async () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
