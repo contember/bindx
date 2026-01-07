@@ -44,8 +44,8 @@ export function UndoDemo({ id }: { id: string }): React.ReactElement {
 				<div className="field">
 					<label>Title:</label>
 					<TextInput
-						value={article.fields.title.value ?? ''}
-						onChange={article.fields.title.setValue}
+						field={article.fields.title}
+						label=""
 					/>
 					{article.fields.title.isDirty && <span className="dirty-indicator">*</span>}
 				</div>

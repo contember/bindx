@@ -53,12 +53,12 @@ describe('UndoManager', () => {
 			dispatcher.dispatch(setField('Article', '1', ['title'], 'Changed'))
 			undoManager.undo()
 
-			expect(store.getEntitySnapshot('Article', '1')?.data.title).toBe('Original')
+			expect(store.getEntitySnapshot<{title: string}>('Article', '1')?.data.title).toBe('Original')
 
 			// Redo
 			undoManager.redo()
 
-			expect(store.getEntitySnapshot('Article', '1')?.data.title).toBe('Changed')
+			expect(store.getEntitySnapshot<{title: string}>('Article', '1')?.data.title).toBe('Changed')
 			expect(undoManager.getState().canUndo).toBe(true)
 			expect(undoManager.getState().canRedo).toBe(false)
 		})
@@ -75,7 +75,7 @@ describe('UndoManager', () => {
 			dispatcher.dispatch(setField('Article', '1', ['title'], 'Second Change'))
 
 			expect(undoManager.getState().canRedo).toBe(false)
-			expect(store.getEntitySnapshot('Article', '1')?.data.title).toBe('Second Change')
+			expect(store.getEntitySnapshot<{title: string}>('Article', '1')?.data.title).toBe('Second Change')
 		})
 
 		test('should handle multiple sequential changes', () => {
@@ -88,13 +88,13 @@ describe('UndoManager', () => {
 			expect(undoManager.getState().undoCount).toBe(3)
 
 			undoManager.undo()
-			expect(store.getEntitySnapshot('Article', '1')?.data.title).toBe('Change 2')
+			expect(store.getEntitySnapshot<{title: string}>('Article', '1')?.data.title).toBe('Change 2')
 
 			undoManager.undo()
-			expect(store.getEntitySnapshot('Article', '1')?.data.title).toBe('Change 1')
+			expect(store.getEntitySnapshot<{title: string}>('Article', '1')?.data.title).toBe('Change 1')
 
 			undoManager.undo()
-			expect(store.getEntitySnapshot('Article', '1')?.data.title).toBe('Original')
+			expect(store.getEntitySnapshot<{title: string}>('Article', '1')?.data.title).toBe('Original')
 
 			expect(undoManager.getState().canUndo).toBe(false)
 			expect(undoManager.getState().redoCount).toBe(3)
@@ -186,14 +186,14 @@ describe('UndoManager', () => {
 
 			// Undo should be ignored while blocked
 			undoManager.undo()
-			expect(store.getEntitySnapshot('Article', '1')?.data.title).toBe('Changed')
+			expect(store.getEntitySnapshot<{title: string}>('Article', '1')?.data.title).toBe('Changed')
 
 			undoManager.unblock()
 			expect(undoManager.getState().isBlocked).toBe(false)
 
 			// Now undo should work
 			undoManager.undo()
-			expect(store.getEntitySnapshot('Article', '1')?.data.title).toBe('Original')
+			expect(store.getEntitySnapshot<{title: string}>('Article', '1')?.data.title).toBe('Original')
 		})
 
 		test('should not track actions while blocked', () => {
@@ -230,7 +230,7 @@ describe('UndoManager', () => {
 			limitedUndoManager.undo()
 
 			// Should be at Change 2, not Original (Change 1 and Original were trimmed)
-			expect(store.getEntitySnapshot('Article', '1')?.data.title).toBe('Change 2')
+			expect(store.getEntitySnapshot<{title: string}>('Article', '1')?.data.title).toBe('Change 2')
 		})
 
 		test('should clear history', () => {
@@ -352,6 +352,6 @@ describe('Debounced auto-grouping', () => {
 
 		// Undo should go back to original
 		undoManager.undo()
-		expect(store.getEntitySnapshot('Article', '1')?.data.title).toBe('Original')
+		expect(store.getEntitySnapshot<{title: string}>('Article', '1')?.data.title).toBe('Original')
 	})
 })
