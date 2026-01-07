@@ -20,7 +20,7 @@ interface EntityLoadState {
 /**
  * Entity metadata for mutation generation
  */
-interface EntityMeta {
+export interface EntityMeta {
 	/** Whether the entity exists on the server */
 	existsOnServer: boolean
 	/** Whether the entity is scheduled for deletion */
@@ -35,7 +35,7 @@ export type HasManyRemovalType = 'disconnect' | 'delete'
 /**
  * Has-many list state stored in SnapshotStore
  */
-interface StoredHasManyState {
+export interface StoredHasManyState {
 	/** IDs of items from server */
 	serverIds: Set<string>
 	/** Planned removals (disconnect or delete) keyed by entity ID */
@@ -48,7 +48,7 @@ interface StoredHasManyState {
 /**
  * Relation state stored in SnapshotStore
  */
-interface StoredRelationState {
+export interface StoredRelationState {
 	currentId: string | null
 	serverId: string | null
 	state: HasOneRelationState
@@ -973,6 +973,137 @@ export class SnapshotStore {
 			const entitySubs = this.entitySubscribers.get(entityKey)
 			if (entitySubs) {
 				for (const sub of entitySubs) {
+					sub()
+				}
+			}
+		}
+
+		// Notify global subscribers
+		for (const sub of this.globalSubscribers) {
+			sub()
+		}
+	}
+
+	// ==================== Partial Snapshot Export/Import ====================
+
+	/**
+	 * Exports a partial snapshot containing only the specified keys.
+	 * Used by UndoManager to capture state before actions.
+	 */
+	exportPartialSnapshot(keys: {
+		entityKeys: string[]
+		relationKeys: string[]
+		hasManyKeys: string[]
+	}): {
+		entitySnapshots: Map<string, EntitySnapshot>
+		relationStates: Map<string, StoredRelationState>
+		hasManyStates: Map<string, StoredHasManyState>
+		entityMetas: Map<string, EntityMeta>
+	} {
+		const entitySnapshots = new Map<string, EntitySnapshot>()
+		const relationStates = new Map<string, StoredRelationState>()
+		const hasManyStates = new Map<string, StoredHasManyState>()
+		const entityMetas = new Map<string, EntityMeta>()
+
+		// Export entity snapshots
+		for (const key of keys.entityKeys) {
+			const snapshot = this.entitySnapshots.get(key)
+			if (snapshot) {
+				entitySnapshots.set(key, snapshot)
+			}
+			const meta = this.entityMetas.get(key)
+			if (meta) {
+				entityMetas.set(key, { ...meta })
+			}
+		}
+
+		// Export relation states (deep clone Sets/Maps)
+		for (const key of keys.relationKeys) {
+			const state = this.relationStates.get(key)
+			if (state) {
+				relationStates.set(key, {
+					...state,
+					placeholderData: { ...state.placeholderData },
+				})
+			}
+		}
+
+		// Export has-many states (deep clone Sets/Maps)
+		for (const key of keys.hasManyKeys) {
+			const state = this.hasManyStates.get(key)
+			if (state) {
+				hasManyStates.set(key, {
+					serverIds: new Set(state.serverIds),
+					plannedRemovals: new Map(state.plannedRemovals),
+					plannedConnections: new Set(state.plannedConnections),
+					version: state.version,
+				})
+			}
+		}
+
+		return { entitySnapshots, relationStates, hasManyStates, entityMetas }
+	}
+
+	/**
+	 * Imports a partial snapshot, restoring the specified state.
+	 * Used by UndoManager to restore state on undo/redo.
+	 */
+	importPartialSnapshot(snapshot: {
+		entitySnapshots: Map<string, EntitySnapshot>
+		relationStates: Map<string, StoredRelationState>
+		hasManyStates: Map<string, StoredHasManyState>
+		entityMetas: Map<string, EntityMeta>
+	}): void {
+		const notifiedEntityKeys = new Set<string>()
+		const notifiedRelationKeys = new Set<string>()
+
+		// Restore entity snapshots
+		for (const [key, entitySnapshot] of snapshot.entitySnapshots) {
+			this.entitySnapshots.set(key, entitySnapshot)
+			notifiedEntityKeys.add(key)
+		}
+
+		// Restore entity metas
+		for (const [key, meta] of snapshot.entityMetas) {
+			this.entityMetas.set(key, { ...meta })
+		}
+
+		// Restore relation states
+		for (const [key, state] of snapshot.relationStates) {
+			this.relationStates.set(key, {
+				...state,
+				placeholderData: { ...state.placeholderData },
+			})
+			notifiedRelationKeys.add(key)
+		}
+
+		// Restore has-many states
+		for (const [key, state] of snapshot.hasManyStates) {
+			this.hasManyStates.set(key, {
+				serverIds: new Set(state.serverIds),
+				plannedRemovals: new Map(state.plannedRemovals),
+				plannedConnections: new Set(state.plannedConnections),
+				version: state.version + 1, // Bump version to trigger re-render
+			})
+			notifiedRelationKeys.add(key)
+		}
+
+		// Notify subscribers
+		this.globalVersion++
+
+		for (const key of notifiedEntityKeys) {
+			const subs = this.entitySubscribers.get(key)
+			if (subs) {
+				for (const sub of subs) {
+					sub()
+				}
+			}
+		}
+
+		for (const key of notifiedRelationKeys) {
+			const subs = this.relationSubscribers.get(key)
+			if (subs) {
+				for (const sub of subs) {
 					sub()
 				}
 			}

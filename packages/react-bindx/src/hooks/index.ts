@@ -37,3 +37,5 @@ export {
 	type ContemberBindxProviderProps,
 	type ContemberContextValue,
 } from './ContemberBindxProvider.js'
+
+export { useUndo, type UndoHookResult } from './useUndo.js'

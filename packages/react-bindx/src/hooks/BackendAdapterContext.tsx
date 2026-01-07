@@ -1,10 +1,11 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
-import type { BackendAdapter, MutationDataCollector, SchemaDefinition } from '@contember/bindx'
+import type { BackendAdapter, MutationDataCollector, SchemaDefinition, UndoManagerConfig } from '@contember/bindx'
 import { SnapshotStore } from '@contember/bindx'
 import { ActionDispatcher } from '@contember/bindx'
 import { PersistenceManager } from '@contember/bindx'
 import { MockMutationCollector } from '@contember/bindx'
 import { SchemaRegistry } from '@contember/bindx'
+import { UndoManager } from '@contember/bindx'
 
 /**
  * Context value containing all bindx services
@@ -20,6 +21,8 @@ export interface BindxContextValue {
 	persistence: PersistenceManager
 	/** Schema registry (set by createBindx) */
 	schema: SchemaRegistry | null
+	/** Undo manager (if enabled) */
+	undoManager: UndoManager | null
 }
 
 const BindxContext = createContext<BindxContextValue | null>(null)
@@ -36,6 +39,10 @@ export interface BindxProviderProps {
 	schema?: SchemaDefinition<Record<string, object>>
 	/** Optional custom mutation collector (overrides default behavior) */
 	mutationCollector?: MutationDataCollector
+	/** Enable undo/redo functionality */
+	enableUndo?: boolean
+	/** Configuration for undo manager */
+	undoConfig?: UndoManagerConfig
 	children: ReactNode
 }
 
@@ -61,12 +68,20 @@ export function BindxProvider({
 	store: customStore,
 	schema: schemaDefinition,
 	mutationCollector: customMutationCollector,
+	enableUndo = false,
+	undoConfig,
 	children,
 }: BindxProviderProps) {
 	// Create services - memoized to maintain stable references
 	const services = useMemo(() => {
 		const store = customStore ?? new SnapshotStore()
 		const dispatcher = new ActionDispatcher(store)
+
+		// Create undo manager if enabled
+		const undoManager = enableUndo ? new UndoManager(store, undoConfig) : null
+		if (undoManager) {
+			dispatcher.addMiddleware(undoManager.createMiddleware())
+		}
 
 		// Create schema registry from definition if provided
 		const schemaRegistry = schemaDefinition ? new SchemaRegistry(schemaDefinition) : null
@@ -77,6 +92,7 @@ export function BindxProvider({
 
 		const persistence = new PersistenceManager(adapter, store, dispatcher, {
 			mutationCollector,
+			undoManager: undoManager ?? undefined,
 		})
 
 		return {
@@ -85,8 +101,9 @@ export function BindxProvider({
 			dispatcher,
 			persistence,
 			schema: schemaRegistry,
+			undoManager,
 		}
-	}, [adapter, customStore, schemaDefinition, customMutationCollector])
+	}, [adapter, customStore, schemaDefinition, customMutationCollector, enableUndo, undoConfig])
 
 	return <BindxContext.Provider value={services}>{children}</BindxContext.Provider>
 }

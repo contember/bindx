@@ -7,6 +7,7 @@ import {
 	TagListExample,
 	ArticleWithAuthorSelectExample,
 	LocationSelectExample,
+	UndoDemo,
 } from './components/index.js'
 
 // Create mock adapter with sample data
@@ -17,7 +18,7 @@ const adapter = new MockAdapter(mockData, { debug: true, delay: 200 })
  */
 export function App() {
 	return (
-		<BindxProvider adapter={adapter}>
+		<BindxProvider adapter={adapter} enableUndo={true}>
 			<div className="app">
 				<header>
 					<h1>Bindx Demo</h1>
@@ -25,6 +26,15 @@ export function App() {
 				</header>
 
 				<main>
+					{/* Undo/Redo Demo */}
+					<section>
+						<h2>🔄 Undo/Redo Demo</h2>
+						<p>Edit fields and use Undo/Redo. Changes are auto-grouped when typing rapidly.</p>
+						<UndoDemo id="article-1" />
+					</section>
+
+					<hr />
+
 					{/* Basic useEntity examples */}
 					<section>
 						<h2>1. Article Editor (useEntity with Fragment Composition)</h2>

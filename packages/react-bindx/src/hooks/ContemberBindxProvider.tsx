@@ -130,6 +130,7 @@ export const ContemberBindxProvider = memo(function ContemberBindxProvider({
 			dispatcher,
 			persistence,
 			schema: null,
+			undoManager: null, // TODO: Add enableUndo support to ContemberBindxProvider
 		}
 	}, [apiBaseUrl, project, stage, sessionToken, schema, customStore])
 

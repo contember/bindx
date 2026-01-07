@@ -145,6 +145,23 @@ export { deepEqual } from './utils/deepEqual.js'
 // Contember integration
 export { MutationCollector } from './contember/index.js'
 
+// Undo/Redo
+export { UndoManager } from './undo/index.js'
+export type {
+	UndoManagerConfig,
+	UndoState,
+	UndoEntry,
+	PartialStoreSnapshot,
+	StoreAffectedKeys,
+} from './undo/index.js'
+
+// Store types (for undo)
+export type {
+	StoredRelationState,
+	StoredHasManyState,
+	EntityMeta,
+} from './store/SnapshotStore.js'
+
 // Re-export Contember types for convenience
 export type { SchemaNames, SchemaEntityNames } from '@contember/client-content'
 

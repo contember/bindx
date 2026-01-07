@@ -83,6 +83,10 @@ export type {
 	HasManySnapshot,
 	EntityState,
 	LoadStatus,
+	// Undo types
+	UndoManagerConfig,
+	UndoState,
+	UndoEntry,
 } from '@contember/bindx'
 
 export {
@@ -113,6 +117,8 @@ export {
 	SnapshotStore,
 	ActionDispatcher,
 	PersistenceManager,
+	// Undo
+	UndoManager,
 	// Internal
 	__internal,
 } from '@contember/bindx'
@@ -170,6 +176,8 @@ export {
 	useBindxContext,
 	useIdentityMap,
 	createBindx,
+	// Undo
+	useUndo,
 	// Contember
 	ContemberBindxProvider,
 	useContember,
@@ -180,6 +188,9 @@ export {
 	useContemberProject,
 	useContemberStage,
 } from './hooks/index.js'
+
+// Undo hook types
+export type { UndoHookResult } from './hooks/useUndo.js'
 
 // JSX Components
 export {

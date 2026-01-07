@@ -14,3 +14,6 @@ export {
 	ArticleWithAuthorSelectExample,
 	LocationSelectExample,
 } from './examples/index.js'
+
+// Undo/Redo demo
+export { UndoDemo } from './UndoDemo.js'

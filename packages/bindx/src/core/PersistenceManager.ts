@@ -3,6 +3,7 @@ import type { SnapshotStore } from '../store/SnapshotStore.js'
 import type { ActionDispatcher } from './ActionDispatcher.js'
 import { setPersisting, commitEntity } from './actions.js'
 import { deepEqual } from '../utils/deepEqual.js'
+import type { UndoManager } from '../undo/UndoManager.js'
 
 /**
  * Pending persist operation tracking
@@ -33,6 +34,11 @@ export interface PersistenceManagerOptions {
 	 * If provided, will be used instead of simple field diff.
 	 */
 	mutationCollector?: MutationDataCollector
+	/**
+	 * UndoManager instance to block during persist operations.
+	 * When provided, undo/redo will be blocked during persistence.
+	 */
+	undoManager?: UndoManager
 }
 
 /**
@@ -49,6 +55,7 @@ export class PersistenceManager {
 	/** Pending persist operations keyed by "entityType:id" */
 	private readonly pending = new Map<string, PendingPersist>()
 	private readonly mutationCollector?: MutationDataCollector
+	private readonly undoManager?: UndoManager
 
 	constructor(
 		private readonly adapter: BackendAdapter,
@@ -57,6 +64,7 @@ export class PersistenceManager {
 		options?: PersistenceManagerOptions,
 	) {
 		this.mutationCollector = options?.mutationCollector
+		this.undoManager = options?.undoManager
 	}
 
 	/**
@@ -111,43 +119,51 @@ export class PersistenceManager {
 		id: string,
 		signal: AbortSignal,
 	): Promise<void> {
-		const snapshot = this.store.getEntitySnapshot(entityType, id)
-		if (!snapshot) {
-			throw new Error(`Entity ${entityType}:${id} not found`)
+		// Block undo during persist
+		this.undoManager?.block()
+
+		try {
+			const snapshot = this.store.getEntitySnapshot(entityType, id)
+			if (!snapshot) {
+				throw new Error(`Entity ${entityType}:${id} not found`)
+			}
+
+			// Collect changes using custom collector or simple field diff
+			let changes: Record<string, unknown> | null
+
+			if (this.mutationCollector) {
+				// Use custom mutation collector (e.g., for Contember nested operations)
+				changes = this.mutationCollector.collectUpdateData(entityType, id)
+			} else {
+				// Simple field diff
+				changes = this.collectChanges(
+					snapshot.data as Record<string, unknown>,
+					snapshot.serverData as Record<string, unknown>,
+				)
+			}
+
+			if (!changes || Object.keys(changes).length === 0) {
+				// Nothing to persist
+				return
+			}
+
+			// Persist to backend
+			await this.adapter.persist(entityType, id, changes)
+
+			// Check if aborted
+			if (signal.aborted) {
+				throw new Error('Persist operation was aborted')
+			}
+
+			// Commit changes (serverData = data)
+			this.dispatcher.dispatch(commitEntity(entityType, id))
+
+			// Commit all relations (hasOne and hasMany)
+			this.store.commitAllRelations(entityType, id)
+		} finally {
+			// Unblock undo after persist completes (success or failure)
+			this.undoManager?.unblock()
 		}
-
-		// Collect changes using custom collector or simple field diff
-		let changes: Record<string, unknown> | null
-
-		if (this.mutationCollector) {
-			// Use custom mutation collector (e.g., for Contember nested operations)
-			changes = this.mutationCollector.collectUpdateData(entityType, id)
-		} else {
-			// Simple field diff
-			changes = this.collectChanges(
-				snapshot.data as Record<string, unknown>,
-				snapshot.serverData as Record<string, unknown>,
-			)
-		}
-
-		if (!changes || Object.keys(changes).length === 0) {
-			// Nothing to persist
-			return
-		}
-
-		// Persist to backend
-		await this.adapter.persist(entityType, id, changes)
-
-		// Check if aborted
-		if (signal.aborted) {
-			throw new Error('Persist operation was aborted')
-		}
-
-		// Commit changes (serverData = data)
-		this.dispatcher.dispatch(commitEntity(entityType, id))
-
-		// Commit all relations (hasOne and hasMany)
-		this.store.commitAllRelations(entityType, id)
 	}
 
 	/**
