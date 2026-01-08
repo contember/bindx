@@ -3,8 +3,10 @@
 	"references": [
 		{ "path": "./tests" },
 		{ "path": "./packages/bindx" },
-		{ "path": "./packages/example" },
-		{ "path": "./packages/react-bindx" }
+		{ "path": "./packages/react-bindx" },
+		{ "path": "./packages/bindx-generator" },
+		{ "path": "./packages/bindx-generator/tests" },
+		{ "path": "./packages/example" }
 	],
 	"files": []
 }

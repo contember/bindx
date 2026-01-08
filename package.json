@@ -5,11 +5,12 @@
 		"packages/*"
 	],
 	"scripts": {
-		"build": "tsc --build ./packages/bindx ./packages/react-bindx",
+		"build": "tsc --build",
 		"dev": "tsc --build --watch",
 		"typecheck": "tsc --build",
 		"test": "bun test",
-		"playground": "cd packages/example && bun run dev"
+		"playground": "cd packages/example && bun run dev",
+		"generate:schema": "bun run packages/bindx-generator/src/generate.ts"
 	},
 	"devDependencies": {
 		"@contember/bindx": "workspace:*",

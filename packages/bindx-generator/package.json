@@ -1,0 +1,26 @@
+{
+	"name": "@contember/bindx-generator",
+	"version": "0.1.0",
+	"description": "Schema generator for @contember/bindx with role-based ACL support",
+	"type": "module",
+	"main": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"build": "tsc --build",
+		"typecheck": "tsc --build"
+	},
+	"files": [
+		"dist",
+		"src"
+	],
+	"license": "MIT",
+	"dependencies": {
+		"@contember/schema": "^2.1.0-alpha.30",
+		"@contember/schema-utils": "^2.1.0-alpha.30"
+	},
+	"devDependencies": {
+		"@types/node": "^25.0.3"
+	}
+}

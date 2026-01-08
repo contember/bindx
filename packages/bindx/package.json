@@ -17,8 +17,8 @@
 	],
 	"license": "MIT",
 	"dependencies": {
-		"@contember/client-content": "^2.0.4",
-		"@contember/graphql-builder": "^2.0.4",
-		"@contember/graphql-client": "^2.0.4"
+		"@contember/client-content": "^2.1.0-alpha.30",
+		"@contember/graphql-builder": "^2.1.0-alpha.30",
+		"@contember/graphql-client": "^2.1.0-alpha.30"
 	}
 }
