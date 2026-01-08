@@ -266,15 +266,10 @@ describe('Role Schema Types', () => {
 
 describe('createRoleAwareBindx', () => {
 	test('creates role-aware bindx instance', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
+		// Use the admin schema (most complete) as the single schema
+		const { schemaRegistry, RoleAwareProvider, Entity, HasRole, useEntity } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
-		const { roleSchemaRegistry, RoleAwareProvider, Entity, HasRole, useEntity } = createRoleAwareBindx<RoleSchemas>(schemas)
-
-		expect(roleSchemaRegistry).toBeInstanceOf(RoleSchemaRegistry)
+		expect(schemaRegistry).toBeDefined()
 		expect(RoleAwareProvider).toBeInstanceOf(Function)
 		expect(Entity).toBeInstanceOf(Function)
 		expect(HasRole).toBeInstanceOf(Function)
@@ -282,13 +277,7 @@ describe('createRoleAwareBindx', () => {
 	})
 
 	test('Entity with roles provides typed entity', async () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { RoleAwareProvider, Entity, HasRole } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { RoleAwareProvider, Entity, HasRole } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		const mockData = {
 			Article: {
@@ -354,13 +343,7 @@ describe('createRoleAwareBindx', () => {
 	})
 
 	test('HasRole renders when user has the role', async () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { RoleAwareProvider, Entity, HasRole } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { RoleAwareProvider, Entity, HasRole } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		const mockData = {
 			Article: {
@@ -452,13 +435,7 @@ describe('createRoleAwareBindx', () => {
 	})
 
 	test('nested HasRole restricts available roles', async () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { RoleAwareProvider, Entity, HasRole } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { RoleAwareProvider, Entity, HasRole } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		const mockData = {
 			Article: {
@@ -569,13 +546,7 @@ describe('Role-aware createComponent', () => {
 	})
 
 	test('createComponent returns component with correct type', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		// Create an admin-only component
 		const AdminArticleCard = createComponent({
@@ -595,13 +566,7 @@ describe('Role-aware createComponent', () => {
 	})
 
 	test('createComponent fragment has correct role info', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		// Create component with multiple roles
 		const EditorAdminCard = createComponent({
@@ -619,13 +584,7 @@ describe('Role-aware createComponent', () => {
 	})
 
 	test('createComponent with scalar props works', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		// Create component with scalar props
 		const AdminArticleCard = createComponent<{ showNotes?: boolean }>()({
@@ -644,13 +603,7 @@ describe('Role-aware createComponent', () => {
 	})
 
 	test('component fragment type correctly narrows entity access', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		// Create an admin-only component
 		const AdminArticleCard = createComponent({
@@ -670,13 +623,7 @@ describe('Role-aware createComponent', () => {
 	})
 
 	test('createComponent type restricts to valid entity names for roles', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		// This should compile - Article exists in admin schema
 		const AdminArticleCard = createComponent({
@@ -698,13 +645,7 @@ describe('Role-aware createComponent', () => {
 
 	test('fragment carries type-level role information for validation', () => {
 		// This is a compile-time test
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		const AdminCard = createComponent({
 			roles: ['admin'] as const,
@@ -719,13 +660,7 @@ describe('Role-aware createComponent', () => {
 	})
 
 	test('type error: public role cannot access admin-only fields', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		// Create a public-only component
 		const PublicArticleCard = createComponent({
@@ -742,13 +677,7 @@ describe('Role-aware createComponent', () => {
 	})
 
 	test('type error: editor role cannot access admin-only fields', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		// Create an editor-only component
 		const EditorArticleCard = createComponent({
@@ -766,13 +695,7 @@ describe('Role-aware createComponent', () => {
 	})
 
 	test('type error: public role cannot access editor field (content)', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		const PublicArticleCard = createComponent({
 			roles: ['public'] as const,
@@ -788,13 +711,7 @@ describe('Role-aware createComponent', () => {
 	})
 
 	test('type error: public role cannot access author relation', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		const PublicArticleCard = createComponent({
 			roles: ['public'] as const,
@@ -810,13 +727,7 @@ describe('Role-aware createComponent', () => {
 	})
 
 	test('type error: admin Author fields not accessible from editor role', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		const EditorAuthorCard = createComponent({
 			roles: ['editor'] as const,
@@ -833,13 +744,7 @@ describe('Role-aware createComponent', () => {
 	})
 
 	test('type error: invalid role name is rejected', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent: _createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		// Verify that invalid roles are rejected at the type level
 		// @ts-expect-error - 'superadmin' is not a valid role in RoleSchemas
@@ -849,13 +754,7 @@ describe('Role-aware createComponent', () => {
 	})
 
 	test('type error: component props require matching role EntityRef', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		// Create admin-only component
 		const AdminArticleCard = createComponent({
@@ -897,13 +796,7 @@ describe('Role-aware createComponent', () => {
 	})
 
 	test('component props accept EntityRef with superset of required roles', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		// Create admin-only component
 		const AdminArticleCard = createComponent({
@@ -931,13 +824,7 @@ describe('Role-aware createComponent', () => {
 	})
 
 	test('fragment role info is preserved in type system', () => {
-		const schemas: RoleSchemaDefinitions<RoleSchemas> = {
-			public: publicSchema,
-			editor: editorSchema,
-			admin: adminSchema,
-		}
-
-		const { createComponent } = createRoleAwareBindx<RoleSchemas>(schemas)
+		const { createComponent } = createRoleAwareBindx<RoleSchemas>(adminSchema)
 
 		const AdminCard = createComponent({
 			roles: ['admin'] as const,

@@ -6,8 +6,6 @@
 
 import React, { useMemo, memo, type ReactNode, type ReactElement, type ComponentType } from 'react'
 import {
-	RoleSchemaRegistry,
-	type RoleSchemaDefinitions,
 	type IntersectRoleSchemas,
 	type EntityForRoles,
 	type EntityNamesForRoles,
@@ -24,6 +22,8 @@ import {
 	ComponentBrand,
 	AnyBrand,
 	type RolesAreSubset,
+	type SchemaDefinition,
+	ContemberSchema,
 } from '@contember/bindx'
 import {
 	createRoleContext,
@@ -37,7 +37,13 @@ import {
 import { useBindxContext } from '../hooks/BackendAdapterContext.js'
 import { useEntityImpl } from '../hooks/useEntityImpl.js'
 import { useEntityListImpl } from '../hooks/useEntityListImpl.js'
+import { useSelectionCollection } from '../hooks/useSelectionCollection.js'
+import { useSelectionCollectionForList } from '../hooks/useSelectionCollectionForList.js'
+import { useEntityCore } from '../hooks/useEntityCore.js'
+import { useEntityListCore } from '../hooks/useEntityListCore.js'
+import { createRuntimeAccessor } from '../jsx/proxy.js'
 import type { UseEntityOptions, EntityAccessorResult, UseEntityListOptions, EntityListAccessorResult } from '../hooks/index.js'
+import type { EntityRef as JsxEntityRef } from '../jsx/types.js'
 import {
 	COMPONENT_MARKER,
 	COMPONENT_SELECTIONS,
@@ -266,6 +272,15 @@ export interface RoleAwareEntityProps<
 				TRoles
 			>) => ReactNode
 		: (entity: EntityRef<object, object, AnyBrand, TEntityName, readonly string[]>) => ReactNode
+
+	/** Loading fallback */
+	loading?: ReactNode
+
+	/** Error fallback */
+	error?: (error: Error) => ReactNode
+
+	/** Not found fallback */
+	notFound?: ReactNode
 }
 
 /**
@@ -424,8 +439,8 @@ export type RoleAwareUseEntityList<TRoleSchemas extends RoleSchemasBase<TRoleSch
 // ============================================================================
 
 export interface RoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleSchemas>> {
-	/** The role schema registry */
-	roleSchemaRegistry: RoleSchemaRegistry<TRoleSchemas>
+	/** The schema registry */
+	schemaRegistry: SchemaRegistry
 
 	/** Provider for hasRole function - wrap at app level */
 	RoleAwareProvider: typeof HasRoleProvider
@@ -475,6 +490,65 @@ export interface RoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleSchema
 // ============================================================================
 
 /**
+ * Interface for binding-common's Schema class compatibility.
+ * If the input has these methods, it's treated as a ContemberSchema-like object.
+ */
+export interface ContemberSchemaLike {
+	getEntityNames(): string[]
+	getEntity(name: string): { fields: Map<string, { __typename: string; name: string; targetEntity?: string; type?: string }> } | undefined
+}
+
+/**
+ * Input types accepted by createRoleAwareBindx.
+ * Can be a SchemaDefinition, ContemberSchema (from API), binding-common Schema, or SchemaRegistry.
+ */
+export type SchemaInput =
+	| SchemaDefinition<Record<string, object>>
+	| ContemberSchema
+	| ContemberSchemaLike
+	| SchemaRegistry
+
+function isContemberSchemaLike(input: unknown): input is ContemberSchemaLike {
+	return (
+		typeof input === 'object' &&
+		input !== null &&
+		'getEntityNames' in input &&
+		typeof (input as ContemberSchemaLike).getEntityNames === 'function' &&
+		'getEntity' in input &&
+		typeof (input as ContemberSchemaLike).getEntity === 'function'
+	)
+}
+
+function isSchemaRegistry(input: unknown): input is SchemaRegistry {
+	return input instanceof SchemaRegistry
+}
+
+function isSchemaDefinition(input: unknown): input is SchemaDefinition<Record<string, object>> {
+	return (
+		typeof input === 'object' &&
+		input !== null &&
+		'entities' in input &&
+		typeof (input as SchemaDefinition<Record<string, object>>).entities === 'object'
+	)
+}
+
+function resolveSchemaRegistry(input: SchemaInput): SchemaRegistry {
+	if (isSchemaRegistry(input)) {
+		return input
+	}
+
+	if (isContemberSchemaLike(input)) {
+		return SchemaRegistry.fromContemberSchema(input as ContemberSchema)
+	}
+
+	if (isSchemaDefinition(input)) {
+		return new SchemaRegistry(input)
+	}
+
+	throw new Error('Invalid schema input: expected SchemaDefinition, ContemberSchema, or SchemaRegistry')
+}
+
+/**
  * Creates role-aware bindx hooks and components.
  *
  * @example
@@ -485,11 +559,16 @@ export interface RoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleSchema
  *   admin: { Article: AdminArticle; Author: AdminAuthor }
  * }
  *
- * const { RoleAwareProvider, Entity, HasRole } = createRoleAwareBindx<RoleSchemas>({
- *   public: publicSchemaDefinition,
- *   editor: editorSchemaDefinition,
- *   admin: adminSchemaDefinition,
- * })
+ * // From SchemaDefinition (generated)
+ * const bindx = createRoleAwareBindx<RoleSchemas>(schemaDefinition)
+ *
+ * // From ContemberSchema (loaded from API)
+ * const schema = await SchemaLoader.loadSchema(client)
+ * const bindx = createRoleAwareBindx<RoleSchemas>(schema)
+ *
+ * // From binding-common's Schema (via useEnvironment)
+ * const schema = useEnvironment().getSchema()
+ * const bindx = createRoleAwareBindx<RoleSchemas>(schema)
  *
  * // Usage - provider at app level:
  * <RoleAwareProvider hasRole={(role) => userRoles.has(role)}>
@@ -510,20 +589,14 @@ export interface RoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleSchema
  * ```
  */
 export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleSchemas>>(
-	schemas: RoleSchemaDefinitions<TRoleSchemas>,
+	schema: SchemaInput,
 ): RoleAwareBindx<TRoleSchemas> {
-	// Create the role schema registry
-	const roleSchemaRegistry = new RoleSchemaRegistry(schemas)
+	// Resolve the schema registry from whatever input was provided
+	const schemaRegistry = resolveSchemaRegistry(schema)
 
 	// Create the role context
 	const RoleContextInstance = createRoleContext<TRoleSchemas>()
 	const useRoleContext = createUseRoleContext(RoleContextInstance)
-
-	// Create SchemaRegistry instances for each role (cached)
-	const schemaRegistries = new Map<keyof TRoleSchemas, SchemaRegistry>()
-	for (const role of roleSchemaRegistry.getRoleNames()) {
-		schemaRegistries.set(role, roleSchemaRegistry.getSchemaForRole(role))
-	}
 
 	/**
 	 * Role-aware useEntity hook.
@@ -537,16 +610,6 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 		options: UseEntityOptions & { roles?: TRoles },
 		definer: SelectionInput<object, TResult>,
 	): EntityAccessorResult<object, TResult> {
-		const { roles } = options
-
-		// Get schema for first role (or use first available)
-		const primaryRole = roles?.[0] ?? roleSchemaRegistry.getRoleNames()[0]
-		const primarySchema = primaryRole ? schemaRegistries.get(primaryRole) : undefined
-
-		if (!primarySchema) {
-			throw new Error('No schema available for roles')
-		}
-
 		const selectionMeta = useMemo(
 			() => resolveSelectionMeta(definer),
 			// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -557,7 +620,7 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 			entityType,
 			options,
 			selectionMeta,
-			primarySchema as SchemaRegistry<Record<string, object>>,
+			schemaRegistry as SchemaRegistry<Record<string, object>>,
 		)
 	}
 
@@ -573,15 +636,7 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 		options: UseEntityListOptions & { roles?: TRoles },
 		definer: SelectionInput<object, TResult>,
 	): EntityListAccessorResult<TResult> {
-		const { roles, ...restOptions } = options
-
-		// Get schema for first role (or use first available)
-		const primaryRole = roles?.[0] ?? roleSchemaRegistry.getRoleNames()[0]
-		const primarySchema = primaryRole ? schemaRegistries.get(primaryRole) : undefined
-
-		if (!primarySchema) {
-			throw new Error('No schema available for roles')
-		}
+		const { roles: _roles, ...restOptions } = options
 
 		const selectionMeta = useMemo(
 			() => resolveSelectionMeta(definer),
@@ -593,12 +648,13 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 			entityType,
 			restOptions,
 			selectionMeta,
-			primarySchema as SchemaRegistry<Record<string, object>>,
+			schemaRegistry as SchemaRegistry<Record<string, object>>,
 		)
 	}
 
 	/**
 	 * Entity component with optional roles prop.
+	 * Uses proper JSX selection collection like standard Entity.
 	 */
 	function EntityComponent<
 		TEntityName extends string,
@@ -608,53 +664,75 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 		id,
 		roles,
 		children: renderFn,
+		loading,
+		error: errorFallback,
+		notFound,
 	}: RoleAwareEntityProps<TRoleSchemas, TEntityName, TRoles>): ReactElement | null {
-		// Get schema for first role
-		const primaryRole = roles?.[0] ?? roleSchemaRegistry.getRoleNames()[0]
-		const primarySchema = primaryRole ? schemaRegistries.get(primaryRole) : undefined
+		const { store } = useBindxContext()
+		const entityType = name as string
 
-		if (!primarySchema) {
-			throw new Error('No schema available for roles')
+		// Phase 1: Collect JSX selection (same as standard Entity)
+		const { standardSelection, queryKey } = useSelectionCollection({
+			entityType,
+			entityId: id,
+			children: renderFn as (entity: JsxEntityRef<object>) => ReactNode,
+		})
+
+		// Phase 2: Load data using core hook (same as standard Entity)
+		const result = useEntityCore({
+			entityType,
+			id,
+			selectionMeta: standardSelection,
+			queryKey,
+		})
+
+		// Render based on status
+		if (result.status === 'loading') {
+			return <>{loading ?? <div className="bindx-loading">Loading...</div>}</>
 		}
 
-		// For POC, just use a simple identity selection
-		const result = useEntityHook(
-			name,
-			{ id, roles },
-			(e: any) => e.id(),
+		if (result.status === 'error') {
+			if (errorFallback) {
+				return <>{errorFallback(result.error!)}</>
+			}
+			return <div className="bindx-error"><strong>Error:</strong> {result.error!.message}</div>
+		}
+
+		if (result.status === 'not_found') {
+			return <>{notFound ?? <div className="bindx-not-found">{entityType} with id &quot;{id}&quot; not found</div>}</>
+		}
+
+		// Phase 3: Runtime render with real data (same as standard Entity)
+		const accessor = createRuntimeAccessor<object>(
+			entityType,
+			id,
+			store,
+			() => {}, // Changes are automatically handled by useSyncExternalStore
 		)
 
-		if (result.status === 'loading' || result.status === 'error') {
-			return null
-		}
-
-		// Create EntityRef with available roles
-		const entityRef: EntityRef<object, object, AnyBrand, TEntityName, TRoles extends readonly string[] ? TRoles : readonly string[]> = {
-			id: result.id,
-			fields: result.fields as SelectedEntityFields<object, object>,
-			data: result.data,
-			isDirty: result.isDirty,
-			__entityType: undefined as unknown as object,
-			__entityName: name,
+		// Role-aware addition: inject __availableRoles
+		const roleAwareAccessor = {
+			...accessor,
 			__availableRoles: (roles ?? []) as TRoles extends readonly string[] ? TRoles : readonly string[],
 		}
 
 		// Provide entity context for HasRole
 		const entityContext: EntityContextValue = {
-			entityType: name,
+			entityType,
 			entityId: id,
-			storeKey: `${name}:${id}`,
+			storeKey: `${entityType}:${id}`,
 		}
 
 		return (
 			<EntityContext.Provider value={entityContext}>
-				{(renderFn as (entity: typeof entityRef) => ReactNode)(entityRef)}
+				{(renderFn as unknown as (entity: typeof roleAwareAccessor) => ReactNode)(roleAwareAccessor)}
 			</EntityContext.Provider>
 		)
 	}
 
 	/**
 	 * EntityList component with optional roles prop.
+	 * Uses proper JSX selection collection like standard EntityList.
 	 */
 	function EntityListComponent<
 		TEntityName extends string,
@@ -669,54 +747,58 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 		empty,
 	}: RoleAwareEntityListProps<TRoleSchemas, TEntityName, TRoles>): ReactElement | null {
 		const { store } = useBindxContext()
+		const entityType = name as string
 
-		// Get schema for first role
-		const primaryRole = roles?.[0] ?? roleSchemaRegistry.getRoleNames()[0]
-		const primarySchema = primaryRole ? schemaRegistries.get(primaryRole) : undefined
+		// Phase 1: Collect JSX selection (same as standard EntityList)
+		const { standardSelection, queryKey } = useSelectionCollectionForList({
+			entityType,
+			filter,
+			children: renderFn as (entity: JsxEntityRef<object>, index: number) => ReactNode,
+		})
 
-		if (!primarySchema) {
-			throw new Error('No schema available for roles')
-		}
+		// Phase 2: Load data using core hook (same as standard EntityList)
+		const result = useEntityListCore({
+			entityType,
+			filter,
+			selectionMeta: standardSelection,
+			queryKey,
+		})
 
-		// Use the list hook with roles
-		const result = useEntityListHook(
-			name,
-			{ filter, roles },
-			(e: any) => e.id(),
-		)
-
+		// Render based on status
 		if (result.status === 'loading') {
 			return <>{loading ?? <div className="bindx-loading">Loading...</div>}</>
 		}
 
 		if (result.status === 'error') {
 			if (errorFallback) {
-				return <>{errorFallback(result.error)}</>
+				return <>{errorFallback(result.error!)}</>
 			}
-			return <div className="bindx-error"><strong>Error:</strong> {result.error.message}</div>
+			return <div className="bindx-error"><strong>Error:</strong> {result.error!.message}</div>
 		}
 
 		// Empty state
 		if (result.items.length === 0) {
-			return <>{empty ?? <div className="bindx-empty">No {name} items found</div>}</>
+			return <>{empty ?? <div className="bindx-empty">No {entityType} items found</div>}</>
 		}
 
-		// Render items
+		// Phase 3: Runtime render with real data (same as standard EntityList)
 		const items = result.items.map((item, index) => {
-			// Create EntityRef with available roles
-			const entityRef: EntityRef<object, object, AnyBrand, TEntityName, TRoles extends readonly string[] ? TRoles : readonly string[]> = {
-				id: item.id,
-				fields: item.fields as SelectedEntityFields<object, object>,
-				data: item.data,
-				isDirty: false,
-				__entityType: undefined as unknown as object,
-				__entityName: name,
+			const accessor = createRuntimeAccessor<object>(
+				entityType,
+				item.id,
+				store,
+				() => {}, // Changes are automatically handled by useSyncExternalStore
+			)
+
+			// Role-aware addition: inject __availableRoles
+			const roleAwareAccessor = {
+				...accessor,
 				__availableRoles: (roles ?? []) as TRoles extends readonly string[] ? TRoles : readonly string[],
 			}
 
 			return (
 				<React.Fragment key={item.id}>
-					{(renderFn as (entity: typeof entityRef, index: number) => ReactNode)(entityRef, index)}
+					{(renderFn as unknown as (entity: typeof roleAwareAccessor, index: number) => ReactNode)(roleAwareAccessor, index)}
 				</React.Fragment>
 			)
 		})
@@ -939,7 +1021,7 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 	}
 
 	return {
-		roleSchemaRegistry,
+		schemaRegistry,
 		RoleAwareProvider: HasRoleProvider,
 		Entity: EntityComponent as RoleAwareEntityComponent<TRoleSchemas>,
 		EntityList: EntityListComponent as RoleAwareEntityListComponent<TRoleSchemas>,

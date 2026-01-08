@@ -36,6 +36,8 @@ export type {
 	RoleAwareExplicitFragmentComponent,
 	RoleAwareCreateComponentOptions,
 	RoleAwareCreateComponent,
+	SchemaInput,
+	ContemberSchemaLike,
 } from './createRoleAwareBindx.js'
 
 export {

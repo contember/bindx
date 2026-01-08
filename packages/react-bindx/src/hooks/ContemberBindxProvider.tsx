@@ -1,8 +1,8 @@
-import { createContext, memo, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { memo, useMemo, type ReactNode } from 'react'
 import { GraphQlClient } from '@contember/graphql-client'
 import { ContentClient, ContentQueryBuilder, type SchemaNames } from '@contember/client-content'
 import { ContemberAdapter, SnapshotStore, ActionDispatcher, PersistenceManager, MutationCollector } from '@contember/bindx'
-import type { BindxContextValue } from './BackendAdapterContext.js'
+import { BindxContext, type BindxContextValue } from './BackendAdapterContext.js'
 
 /**
  * Props for ContemberBindxProvider
@@ -17,9 +17,6 @@ export interface ContemberBindxProviderProps {
 
 	client: GraphQlClient
 }
-
-const BindxContext = createContext<BindxContextValue | null>(null)
-
 
 /**
  * Provider component that combines Contember authentication with bindx data binding.

@@ -25,7 +25,7 @@ export interface BindxContextValue {
 	undoManager: UndoManager | null
 }
 
-const BindxContext = createContext<BindxContextValue | null>(null)
+export const BindxContext = createContext<BindxContextValue | null>(null)
 
 /**
  * Props for BindxProvider

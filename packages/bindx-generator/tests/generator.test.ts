@@ -309,18 +309,15 @@ describe('EntityTypeSchemaGenerator', () => {
 
 		// Check Author entity
 		expect(code).toContain('export interface Author {')
-		expect(code).toContain('columns: {')
 		expect(code).toContain('id: string')
 		expect(code).toContain('name: string')
 		expect(code).toContain('email: string | null')
-		expect(code).toContain('hasOne: {')
-		expect(code).toContain('hasMany: {')
-		expect(code).toContain('posts: Post')
+		expect(code).toContain('posts: Post[]')
 
 		// Check Post entity
 		expect(code).toContain('export interface Post {')
 		expect(code).toContain('author: Author')
-		expect(code).toContain('tags: Tag')
+		expect(code).toContain('tags: Tag[]')
 		expect(code).toContain('status: PostStatusEnum')
 
 		// Check schema types
@@ -428,13 +425,14 @@ describe('BindxGenerator', () => {
 		expect(files['entities.ts']).toContain('EditorSchema')
 		expect(files['entities.ts']).toContain('AdminSchema')
 
-		expect(files['names.ts']).toContain('PublicSchemaNames')
-		expect(files['names.ts']).toContain('EditorSchemaNames')
-		expect(files['names.ts']).toContain('AdminSchemaNames')
+		// names.ts is no longer generated for role-aware schemas
+		expect(files['names.ts']).toBeUndefined()
 
+		// index.ts now exports a factory function instead of the bindx instance directly
 		expect(files['index.ts']).toContain('createRoleAwareBindx')
-		expect(files['index.ts']).toContain('RoleAwareProvider')
-		expect(files['index.ts']).toContain('HasRole')
+		expect(files['index.ts']).toContain('createBindx')
+		expect(files['index.ts']).toContain('SchemaInput')
+		expect(files['index.ts']).toContain('RoleAwareBindx<RoleSchemas>')
 	})
 })
 

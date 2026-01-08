@@ -15,3 +15,20 @@ export {
 } from './types.js'
 
 export { SchemaRegistry } from './SchemaRegistry.js'
+
+export {
+	type SchemaColumnType,
+	type SchemaColumn,
+	type SchemaRelationOrderBy,
+	type OwningRelation,
+	type InverseRelation,
+	type SchemaRelation,
+	type SchemaField,
+	type SchemaEntity,
+	type SchemaEnum,
+	type ContemberSchemaStore,
+	type RawContemberSchema,
+	ContemberSchema,
+} from './ContemberSchema.js'
+
+export { SchemaLoader, type SchemaLoaderClient } from './SchemaLoader.js'

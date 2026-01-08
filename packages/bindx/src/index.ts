@@ -114,7 +114,23 @@ export type {
 // ============================================================================
 
 // Schema utilities
-export { scalar, hasOne, hasMany, defineSchema, SchemaRegistry } from './schema/index.js'
+export { scalar, hasOne, hasMany, defineSchema, SchemaRegistry, ContemberSchema, SchemaLoader } from './schema/index.js'
+
+// Contember schema types
+export type {
+	SchemaColumnType,
+	SchemaColumn,
+	SchemaRelationOrderBy,
+	OwningRelation,
+	InverseRelation,
+	SchemaRelation,
+	SchemaField,
+	SchemaEntity,
+	SchemaEnum,
+	ContemberSchemaStore,
+	RawContemberSchema,
+	SchemaLoaderClient,
+} from './schema/index.js'
 
 // Selection utilities
 export { createFragment, buildQueryFromSelection, SELECTION_META, createSelectionBuilder, SelectionMetaCollector, mergeSelections, createEmptySelection } from './selection/index.js'

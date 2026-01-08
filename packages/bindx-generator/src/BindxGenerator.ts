@@ -25,7 +25,7 @@ export interface BindxGeneratorOptions extends RoleSchemaGeneratorOptions {
 
 export interface GeneratedFiles {
 	'entities.ts': string
-	'names.ts': string
+	'names.ts'?: string
 	'enums.ts': string
 	'types.ts': string
 	'index.ts': string
@@ -91,83 +91,48 @@ export const { useEntity, useEntityList, Entity, createComponent } = createBindx
 	generateWithRoles(model: Model.Schema, acl: Acl.Schema): GeneratedFiles {
 		const enumsCode = this.enumTypeSchemaGenerator.generate(model)
 		const entitiesCode = this.roleSchemaGenerator.generate(model, acl)
-		const namesCode = this.roleNameSchemaGenerator.generateCode(model, acl)
 
 		const typesCode = this.generateTypesFile()
 
-		const roleNames = Object.keys(acl.roles)
-		
-		let indexCode = `export * from './enums'
+		const indexCode = `export * from './enums'
 export * from './entities'
-export * from './names'
 export * from './types'
 
-import { RoleSchemaNames } from './names'
 import type { RoleSchemas } from './entities'
+import type { SchemaInput, RoleAwareBindx } from '@contember/react-bindx'
 import { createRoleAwareBindx } from '@contember/react-bindx'
-import { defineSchema, scalar, hasOne, hasMany } from '@contember/bindx'
 
-`
-
-		// Generate defineSchema calls for each role
-		indexCode += `// Schema definitions for each role\n`
-		for (const roleName of roleNames) {
-			const roleTypeName = capitalizeFirstLetter(roleName)
-			indexCode += `import type { ${roleTypeName}Schema } from './entities'\n`
-		}
-		indexCode += `\n`
-
-		// Create role schema definitions from names
-		indexCode += `const roleSchemaDefinitions = {} as any // Runtime schema definitions derived from RoleSchemaNames\n\n`
-
-		// For each role, generate schema definition from names
-		for (const roleName of roleNames) {
-			const roleTypeName = capitalizeFirstLetter(roleName)
-			indexCode += `// ${roleTypeName} schema definition\n`
-			indexCode += `roleSchemaDefinitions.${roleName} = {\n`
-			indexCode += `\tentities: Object.fromEntries(\n`
-			indexCode += `\t\tObject.entries(RoleSchemaNames.${roleName}.entities).map(([entityName, entity]) => [\n`
-			indexCode += `\t\t\tentityName,\n`
-			indexCode += `\t\t\t{\n`
-			indexCode += `\t\t\t\tfields: Object.fromEntries(\n`
-			indexCode += `\t\t\t\t\tObject.entries(entity.fields).map(([fieldName, field]) => {\n`
-			indexCode += `\t\t\t\t\t\tif (field.type === 'column') return [fieldName, scalar()]\n`
-			indexCode += `\t\t\t\t\t\tif (field.type === 'one') return [fieldName, hasOne(field.entity)]\n`
-			indexCode += `\t\t\t\t\t\treturn [fieldName, hasMany(field.entity)]\n`
-			indexCode += `\t\t\t\t\t})\n`
-			indexCode += `\t\t\t\t)\n`
-			indexCode += `\t\t\t}\n`
-			indexCode += `\t\t])\n`
-			indexCode += `\t)\n`
-			indexCode += `}\n\n`
-		}
-
-		indexCode += `/**
- * Pre-configured role-aware bindx instance
- * 
- * Usage:
+/**
+ * Creates a typed role-aware bindx instance for this schema.
+ *
+ * @param schema - Schema loaded from API (ContemberSchema), binding-common Schema,
+ *                 or a SchemaRegistry instance
+ *
+ * @example
  * \`\`\`tsx
- * <RoleAwareProvider roles={['public']}>
+ * // With binding-common's Schema (from useEnvironment)
+ * const schema = useEnvironment().getSchema()
+ * const { RoleAwareProvider, Entity, HasRole } = createBindx(schema)
+ *
+ * // With SchemaLoader
+ * const schema = await SchemaLoader.loadSchema(client)
+ * const { RoleAwareProvider, Entity, HasRole } = createBindx(schema)
+ *
+ * // Usage:
+ * <RoleAwareProvider hasRole={(role) => userRoles.has(role)}>
  *   <Entity name="Article" id={id}>
  *     {entity => <HasRole role="admin">{adminEntity => ...}</HasRole>}
  *   </Entity>
  * </RoleAwareProvider>
  * \`\`\`
  */
-export const {
-	roleSchemaRegistry,
-	RoleAwareProvider,
-	Entity,
-	HasRole,
-	useEntity,
-	useEntityList,
-	createComponent,
-} = createRoleAwareBindx<RoleSchemas>(roleSchemaDefinitions)
+export function createBindx(schema: SchemaInput): RoleAwareBindx<RoleSchemas> {
+	return createRoleAwareBindx<RoleSchemas>(schema)
+}
 `
 
 		return {
 			'entities.ts': entitiesCode,
-			'names.ts': namesCode,
 			'enums.ts': enumsCode,
 			'types.ts': typesCode,
 			'index.ts': indexCode,

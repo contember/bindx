@@ -1,3 +1,4 @@
+import type { ContemberSchema } from './ContemberSchema.js'
 import type {
 	EntitySchemaDef,
 	FieldDef,
@@ -20,6 +21,46 @@ export class SchemaRegistry<TModels extends Record<string, object> = Record<stri
 		for (const [entityName, entityDef] of Object.entries(definition.entities)) {
 			this.entityDefs.set(entityName, entityDef as EntitySchemaDef)
 		}
+	}
+
+	/**
+	 * Creates a SchemaRegistry from a ContemberSchema (loaded from API or injected).
+	 * This is the preferred way to create a SchemaRegistry at runtime.
+	 */
+	static fromContemberSchema(schema: ContemberSchema): SchemaRegistry {
+		const entities: Record<string, EntitySchemaDef> = {}
+
+		for (const entityName of schema.getEntityNames()) {
+			const entity = schema.getEntity(entityName)
+			if (!entity) continue
+
+			const fields: Record<string, FieldDef> = {}
+
+			for (const [fieldName, field] of entity.fields) {
+				if (field.__typename === '_Column') {
+					fields[fieldName] = { type: 'scalar' }
+				} else if (field.__typename === '_Relation') {
+					const isMany = field.type === 'OneHasMany' || field.type === 'ManyHasMany'
+					if (isMany) {
+						fields[fieldName] = {
+							type: 'hasMany',
+							target: field.targetEntity,
+							inverse: field.side === 'owning' ? field.inversedBy ?? undefined : field.ownedBy,
+						}
+					} else {
+						fields[fieldName] = {
+							type: 'hasOne',
+							target: field.targetEntity,
+							inverse: field.side === 'owning' ? field.inversedBy ?? undefined : field.ownedBy,
+						}
+					}
+				}
+			}
+
+			entities[entityName] = { fields }
+		}
+
+		return new SchemaRegistry({ entities } as SchemaDefinition<Record<string, object>>)
 	}
 
 	/**
