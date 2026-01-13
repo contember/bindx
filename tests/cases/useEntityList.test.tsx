@@ -8,6 +8,7 @@ import {
 	MockAdapter,
 	defineSchema,
 	scalar,
+	SnapshotStore,
 } from '@contember/react-bindx'
 
 afterEach(() => {
@@ -302,6 +303,209 @@ describe('useEntityList', () => {
 
 			// The ID should be a temp ID
 			expect(getByTestId(container, 'last-id').textContent).toMatch(/^__temp_/)
+		})
+	})
+
+	describe('remove() method', () => {
+		test('remove() removes an existing server entity and schedules for deletion', async () => {
+			const store = new SnapshotStore()
+			const adapter = new MockAdapter(createMockData(), { delay: 0 })
+
+			function TestComponent(): React.ReactElement {
+				const authors = useEntityList('Author', {}, a => a.id().name().email())
+
+				if (authors.isLoading) {
+					return <div data-testid="loading">Loading...</div>
+				}
+
+				return (
+					<div>
+						<span data-testid="count">{authors.length}</span>
+						<ul data-testid="list">
+							{authors.items.map(author => (
+								<li key={author.id} data-testid={`author-${author.id}`}>
+									{author.fields.name.value}
+									<button
+										data-testid={`remove-${author.id}`}
+										onClick={() => authors.remove(author.key)}
+									>
+										Remove
+									</button>
+								</li>
+							))}
+						</ul>
+					</div>
+				)
+			}
+
+			const { container } = render(
+				<BindxProvider adapter={adapter} store={store}>
+					<TestComponent />
+				</BindxProvider>,
+			)
+
+			// Wait for data to load
+			await waitFor(() => {
+				expect(queryByTestId(container, 'count')).not.toBeNull()
+			})
+
+			// Initially 2 authors
+			expect(getByTestId(container, 'count').textContent).toBe('2')
+
+			// Click remove on first author
+			act(() => {
+				const button = getByTestId(container, 'remove-author-1') as HTMLButtonElement
+				button.click()
+			})
+
+			// Should now have 1 author
+			expect(getByTestId(container, 'count').textContent).toBe('1')
+
+			// The removed author should not be in the list
+			expect(queryByTestId(container, 'author-author-1')).toBeNull()
+
+			// The removed entity should be scheduled for deletion in the store
+			expect(store.isScheduledForDeletion('Author', 'author-1')).toBe(true)
+		})
+
+		test('remove() cancels a newly added entity (not scheduled for deletion)', async () => {
+			const store = new SnapshotStore()
+			const adapter = new MockAdapter(createMockData(), { delay: 0 })
+
+			let addedId: string | undefined
+
+			function TestComponent(): React.ReactElement {
+				const authors = useEntityList('Author', {}, a => a.id().name().email())
+
+				if (authors.isLoading) {
+					return <div data-testid="loading">Loading...</div>
+				}
+
+				return (
+					<div>
+						<span data-testid="count">{authors.length}</span>
+						<ul data-testid="list">
+							{authors.items.map(author => (
+								<li key={author.id} data-testid={`author-${author.id}`}>
+									{author.fields.name.value ?? 'unnamed'}
+									<button
+										data-testid={`remove-${author.id}`}
+										onClick={() => authors.remove(author.key)}
+									>
+										Remove
+									</button>
+								</li>
+							))}
+						</ul>
+						<button
+							data-testid="add-button"
+							onClick={() => {
+								addedId = authors.add({ name: 'New Author', email: 'new@example.com' })
+							}}
+						>
+							Add
+						</button>
+					</div>
+				)
+			}
+
+			const { container } = render(
+				<BindxProvider adapter={adapter} store={store}>
+					<TestComponent />
+				</BindxProvider>,
+			)
+
+			// Wait for data to load
+			await waitFor(() => {
+				expect(queryByTestId(container, 'count')).not.toBeNull()
+			})
+
+			// Initially 2 authors
+			expect(getByTestId(container, 'count').textContent).toBe('2')
+
+			// Add a new author
+			act(() => {
+				const button = getByTestId(container, 'add-button') as HTMLButtonElement
+				button.click()
+			})
+
+			// Should now have 3 authors
+			expect(getByTestId(container, 'count').textContent).toBe('3')
+			expect(addedId).toBeDefined()
+			expect(addedId).toMatch(/^__temp_/)
+
+			// Verify the entity exists in the store
+			expect(store.hasEntity('Author', addedId!)).toBe(true)
+
+			// Remove the newly added author
+			act(() => {
+				const button = getByTestId(container, `remove-${addedId}`) as HTMLButtonElement
+				button.click()
+			})
+
+			// Should be back to 2 authors
+			expect(getByTestId(container, 'count').textContent).toBe('2')
+
+			// The entity should be removed from the store entirely (not just scheduled for deletion)
+			expect(store.hasEntity('Author', addedId!)).toBe(false)
+			expect(store.isScheduledForDeletion('Author', addedId!)).toBe(false)
+		})
+
+		test('remove() works correctly for multiple items', async () => {
+			const store = new SnapshotStore()
+			const adapter = new MockAdapter(createMockData(), { delay: 0 })
+
+			function TestComponent(): React.ReactElement {
+				const authors = useEntityList('Author', {}, a => a.id().name().email())
+
+				if (authors.isLoading) {
+					return <div data-testid="loading">Loading...</div>
+				}
+
+				return (
+					<div>
+						<span data-testid="count">{authors.length}</span>
+						<button
+							data-testid="remove-all"
+							onClick={() => {
+								// Remove all items
+								for (const author of [...authors.items]) {
+									authors.remove(author.key)
+								}
+							}}
+						>
+							Remove All
+						</button>
+					</div>
+				)
+			}
+
+			const { container } = render(
+				<BindxProvider adapter={adapter} store={store}>
+					<TestComponent />
+				</BindxProvider>,
+			)
+
+			// Wait for data to load
+			await waitFor(() => {
+				expect(queryByTestId(container, 'count')).not.toBeNull()
+			})
+
+			// Initially 2 authors
+			expect(getByTestId(container, 'count').textContent).toBe('2')
+
+			// Remove all
+			act(() => {
+				const button = getByTestId(container, 'remove-all') as HTMLButtonElement
+				button.click()
+			})
+
+			// Should be empty
+			expect(getByTestId(container, 'count').textContent).toBe('0')
+
+			// Both should be scheduled for deletion
+			expect(store.isScheduledForDeletion('Author', 'author-1')).toBe(true)
+			expect(store.isScheduledForDeletion('Author', 'author-2')).toBe(true)
 		})
 	})
 })

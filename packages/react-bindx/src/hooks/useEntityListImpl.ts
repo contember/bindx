@@ -205,11 +205,23 @@ export function useEntityListImpl<TResult extends object>(
 	// Remove an entity from the list
 	const removeItem = useCallback(
 		(key: string): void => {
+			// Check if this is a newly created entity (temp ID, not on server)
+			const isNewEntity = key.startsWith('__temp_') && !store.existsOnServer(entityType, key)
+
+			if (isNewEntity) {
+				// For newly created entities, remove from store entirely
+				store.removeEntity(entityType, key)
+			} else {
+				// For existing server entities, schedule for deletion
+				store.scheduleForDeletion(entityType, key)
+			}
+
+			// Remove from the local list state
 			listStateRef.current.items = listStateRef.current.items.filter(item => item.id !== key)
 			versionRef.current++
 			store.notify()
 		},
-		[store],
+		[entityType, store],
 	)
 
 	// Move an entity within the list
