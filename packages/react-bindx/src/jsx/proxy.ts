@@ -405,8 +405,19 @@ function createRuntimeFieldRef(
 			setValue(currentItems)
 			return newId
 		},
-		move: (_fromIndex: number, _toIndex: number) => {
-			// Move not implemented in standalone proxy - requires proper store
+		move: (fromIndex: number, toIndex: number) => {
+			const items = getValue()
+			if (!Array.isArray(items)) return
+			if (fromIndex < 0 || fromIndex >= items.length || toIndex < 0 || toIndex >= items.length) {
+				return
+			}
+			if (fromIndex === toIndex) return
+			const newItems = [...items]
+			const [removed] = newItems.splice(fromIndex, 1)
+			if (removed !== undefined) {
+				newItems.splice(toIndex, 0, removed)
+				setValue(newItems)
+			}
 		},
 		remove: (key: string) => {
 			const items = getValue()
