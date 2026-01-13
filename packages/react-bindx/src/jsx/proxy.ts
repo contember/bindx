@@ -7,6 +7,7 @@ import {
 	type HasManyRef,
 	type HasOneRef,
 	FIELD_REF_META,
+	NESTED_SELECTION_REF,
 } from './types.js'
 import { deepEqual } from '@contember/bindx'
 
@@ -184,7 +185,14 @@ function createCollectorFieldRef(
 				isRelation: true,
 				nested: nestedSelection,
 			})
-			return createCollectorProxy<unknown>(nestedSelection, [])
+			// Create collector proxy with FIELD_REF_META and NESTED_SELECTION_REF
+			// FIELD_REF_META preserves path context for path-based lookups
+			// NESTED_SELECTION_REF allows direct access to the nested selection for merging
+			const entityProxy = createCollectorProxy<unknown>(nestedSelection, [])
+			return Object.assign(entityProxy, {
+				[FIELD_REF_META]: meta,
+				[NESTED_SELECTION_REF]: nestedSelection,
+			})
 		},
 		// HasOneRef methods (connect already added above for HasManyRef)
 		disconnect: () => {},

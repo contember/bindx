@@ -14,6 +14,13 @@ export class SelectionMetaCollector implements SelectionMeta {
 		const existing = this.fields.get(key)
 
 		if (existing) {
+			// Update relation/array flags if source has more specific info
+			if (fieldMeta.isRelation && !existing.isRelation) {
+				existing.isRelation = true
+			}
+			if (fieldMeta.isArray && !existing.isArray) {
+				existing.isArray = true
+			}
 			// Merge nested selections if both have them
 			if (fieldMeta.nested && existing.nested) {
 				mergeSelections(existing.nested, fieldMeta.nested)

@@ -604,3 +604,123 @@ describe('createComponent.entityInterface', () => {
 		})
 	})
 })
+
+// ============================================================================
+// Nested createComponent Tests
+// ============================================================================
+
+describe('nested createComponent with relation entity', () => {
+	// This tests the scenario where a component receives an entity from a relation
+	// e.g., <AuthorBreadcrumbs author={article.fields.author.entity} />
+
+	test('correctly tracks entity scope when passing relation entity to nested component', () => {
+		// AuthorBreadcrumbs expects an Author entity
+		const AuthorBreadcrumbs = createComponent()
+			.entity('author', 'Author')
+			.render(({ author }) => (
+				<div data-testid="author-breadcrumbs">
+					<span data-testid="author-name">{author.fields.name.value}</span>
+				</div>
+			))
+
+		// ArticlePage has an Article entity and passes article.fields.author.entity to AuthorBreadcrumbs
+		const ArticlePage = createComponent()
+			.entity('article', 'Article')
+			.render(({ article }) => (
+				<div data-testid="article-page">
+					<h1>{article.fields.title.value}</h1>
+					<AuthorBreadcrumbs author={article.fields.author.entity} />
+				</div>
+			))
+
+		// Verify the selection was collected correctly
+		const articleMeta = ArticlePage.$article.__meta
+		expect(articleMeta.fields.has('title')).toBe(true)
+		expect(articleMeta.fields.has('author')).toBe(true)
+
+		// The author field should be a relation with nested selection
+		const authorField = articleMeta.fields.get('author')
+		expect(authorField?.isRelation).toBe(true)
+		expect(authorField?.nested).toBeDefined()
+
+		// The nested selection should have 'name' from AuthorBreadcrumbs
+		expect(authorField?.nested?.fields.has('name')).toBe(true)
+	})
+
+	test('renders nested component with relation entity data', async () => {
+		const AuthorBreadcrumbs = createComponent()
+			.entity('author', 'Author')
+			.render(({ author }) => (
+				<div data-testid="author-breadcrumbs">
+					<span data-testid="breadcrumb-author-name">{author.fields.name.value}</span>
+				</div>
+			))
+
+		const ArticlePage = createComponent()
+			.entity('article', 'Article')
+			.render(({ article }) => (
+				<div data-testid="article-page">
+					<h1 data-testid="article-title">{article.fields.title.value}</h1>
+					<AuthorBreadcrumbs author={article.fields.author.entity} />
+				</div>
+			))
+
+		const adapter = new MockAdapter(createMockData())
+
+		const { container } = render(
+			<BindxProvider adapter={adapter}>
+				<Entity name="Article" by={{ id: 'article-1' }}>
+					{article => <ArticlePage article={article} />}
+				</Entity>
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'article-title').textContent).toBe('Hello World')
+		})
+
+		expect(getByTestId(container, 'breadcrumb-author-name').textContent).toBe('John Doe')
+	})
+
+	test('correctly tracks scope with multiple levels of nesting', () => {
+		// AuthorName is a simple component showing author name
+		const AuthorName = createComponent()
+			.entity('author', 'Author')
+			.render(({ author }) => (
+				<span data-testid="author-name">{author.fields.name.value}</span>
+			))
+
+		// AuthorCard uses AuthorName internally
+		const AuthorCard = createComponent()
+			.entity('author', 'Author')
+			.render(({ author }) => (
+				<div data-testid="author-card">
+					<AuthorName author={author} />
+					<span data-testid="author-email">{author.fields.email.value}</span>
+				</div>
+			))
+
+		// ArticleWithAuthor passes article.fields.author.entity to AuthorCard
+		const ArticleWithAuthor = createComponent()
+			.entity('article', 'Article')
+			.render(({ article }) => (
+				<div data-testid="article-with-author">
+					<h1>{article.fields.title.value}</h1>
+					<AuthorCard author={article.fields.author.entity} />
+				</div>
+			))
+
+		// Verify the selection was collected correctly
+		const articleMeta = ArticleWithAuthor.$article.__meta
+		expect(articleMeta.fields.has('title')).toBe(true)
+		expect(articleMeta.fields.has('author')).toBe(true)
+
+		const authorField = articleMeta.fields.get('author')
+		expect(authorField?.isRelation).toBe(true)
+		expect(authorField?.nested).toBeDefined()
+
+		// Nested selection should have both name and email from AuthorCard
+		expect(authorField?.nested?.fields.has('name')).toBe(true)
+		expect(authorField?.nested?.fields.has('email')).toBe(true)
+	})
+})

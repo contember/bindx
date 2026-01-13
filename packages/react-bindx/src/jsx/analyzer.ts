@@ -1,8 +1,8 @@
 import type { ReactNode, ReactElement } from 'react'
 import { isValidElement } from 'react'
-import type { JsxSelectionMeta, JsxSelectionFieldMeta, SelectionProvider } from './types.js'
-import { FIELD_REF_META } from './types.js'
-import { SelectionMetaCollector } from './SelectionMeta.js'
+import type { JsxSelectionMeta, JsxSelectionFieldMeta, SelectionProvider, SelectionMeta } from './types.js'
+import { FIELD_REF_META, NESTED_SELECTION_REF } from './types.js'
+import { SelectionMetaCollector, mergeSelections } from './SelectionMeta.js'
 import { isBindxComponent, COMPONENT_SELECTIONS } from './createComponent.js'
 
 /**
@@ -168,12 +168,19 @@ function handleBindxComponent(
 			continue
 		}
 
-		// Case 1: Prop is a FieldRef from a relation (e.g., article.fields.author)
+		// Case 1: Prop has NESTED_SELECTION_REF - direct reference to nested selection
+		// This is the case when passing relation.entity to a nested component
+		if (NESTED_SELECTION_REF in propValue) {
+			const nestedSelection = (propValue as { [NESTED_SELECTION_REF]: SelectionMeta })[NESTED_SELECTION_REF]
+			// Merge the nested component's selection directly into the relation's nested selection
+			mergeSelections(nestedSelection, meta.selection)
+		}
+		// Case 2: Prop is a FieldRef from a relation (e.g., article.fields.author)
 		// This has FIELD_REF_META with a path to adjust
-		if (FIELD_REF_META in propValue) {
+		else if (FIELD_REF_META in propValue) {
 			const refMeta = (propValue as { [FIELD_REF_META]: { path: string[]; fieldName: string } })[FIELD_REF_META]
 
-			// For each field in the fragment's selection, add it with the correct path context
+			// Add fields with adjusted paths to parent selection
 			for (const [_key, field] of meta.selection.fields) {
 				// Only process root-level fields from the fragment
 				if (field.path.length === 1) {
@@ -192,7 +199,7 @@ function handleBindxComponent(
 				}
 			}
 		}
-		// Case 2: Prop is an EntityRef from Entity children callback (root level)
+		// Case 3: Prop is an EntityRef from Entity children callback (root level)
 		// This doesn't have FIELD_REF_META, just merge the fields directly
 		else if ('id' in propValue && 'fields' in propValue) {
 			// This is an EntityRef - merge fragment's selection directly
