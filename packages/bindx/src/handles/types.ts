@@ -204,6 +204,8 @@ export const FIELD_REF_META = Symbol('FIELD_REF_META')
  * Used by JSX components for selection collection.
  */
 export interface FieldRefMeta {
+	readonly entityType: string
+	readonly entityId: string
 	readonly path: string[]
 	readonly fieldName: string
 	readonly isArray: boolean

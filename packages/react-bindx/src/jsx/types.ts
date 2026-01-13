@@ -96,12 +96,13 @@ export interface HasOneProps<TEntity, TSelected = TEntity> {
 }
 
 /**
- * Props for Entity component
+ * Props for Entity component.
+ * Entity name is preserved for proper HasRole type narrowing.
  */
-export interface EntityComponentProps<TSchema, K extends keyof TSchema> {
+export interface EntityComponentProps<TSchema, K extends keyof TSchema & string> {
 	name: K
 	id: string
-	children: (entity: EntityRef<TSchema[K]>) => ReactNode
+	children: (entity: EntityRef<TSchema[K], TSchema[K], import('@contember/bindx').AnyBrand, K>) => ReactNode
 }
 
 /**

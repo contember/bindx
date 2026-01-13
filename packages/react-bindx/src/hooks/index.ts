@@ -3,11 +3,19 @@ export {
 	useBackendAdapter,
 	useSnapshotStore,
 	useDispatcher,
-	usePersistence,
+	useBatchPersister,
 	useBindxContext,
 	type BindxProviderProps,
 	type BindxContextValue,
 } from './BackendAdapterContext.js'
+
+export {
+	usePersist,
+	usePersistEntity,
+	type PersistApi,
+	type EntityPersistApi,
+	type AnyRefWithMeta,
+} from './usePersist.js'
 
 export {
 	createBindx,

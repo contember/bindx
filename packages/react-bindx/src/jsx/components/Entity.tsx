@@ -4,18 +4,19 @@ import { useEntityCore } from '../../hooks/useEntityCore.js'
 import { useSelectionCollection } from '../../hooks/useSelectionCollection.js'
 import { createRuntimeAccessor } from '../proxy.js'
 import type { EntityRef } from '../types.js'
-import type { EntityUniqueWhere } from '@contember/bindx'
+import { type EntityUniqueWhere, type AnyBrand } from '@contember/bindx'
 
 // ==================== Props Types ====================
 
 /**
- * Base props shared by both edit and create modes
+ * Base props shared by both edit and create modes.
+ * K must extend string to preserve the entity name literal type.
  */
-interface EntityBaseProps<TSchema, K extends keyof TSchema> {
+interface EntityBaseProps<TSchema, K extends keyof TSchema & string> {
 	/** Entity type name */
 	name: K
-	/** Render function receiving typed entity accessor */
-	children: (entity: EntityRef<TSchema[K]>) => React.ReactNode
+	/** Render function receiving typed entity accessor with preserved entity name */
+	children: (entity: EntityRef<TSchema[K], TSchema[K], AnyBrand, K>) => React.ReactNode
 	/** Error fallback */
 	error?: (error: Error) => React.ReactNode
 }
@@ -23,7 +24,7 @@ interface EntityBaseProps<TSchema, K extends keyof TSchema> {
 /**
  * Props for editing an existing entity (fetched by unique field)
  */
-interface EntityByProps<TSchema, K extends keyof TSchema> extends EntityBaseProps<TSchema, K> {
+interface EntityByProps<TSchema, K extends keyof TSchema & string> extends EntityBaseProps<TSchema, K> {
 	/** Unique field(s) to identify the entity (e.g., { id: '...' } or { slug: '...' }) */
 	by: EntityUniqueWhere
 	create?: never
@@ -37,7 +38,7 @@ interface EntityByProps<TSchema, K extends keyof TSchema> extends EntityBaseProp
 /**
  * Props for creating a new entity
  */
-interface EntityCreateProps<TSchema, K extends keyof TSchema> extends EntityBaseProps<TSchema, K> {
+interface EntityCreateProps<TSchema, K extends keyof TSchema & string> extends EntityBaseProps<TSchema, K> {
 	by?: never
 	/** Create a new entity instead of fetching an existing one */
 	create: true
@@ -50,7 +51,7 @@ interface EntityCreateProps<TSchema, K extends keyof TSchema> extends EntityBase
 /**
  * Props for Entity component - union of edit mode (by) and create mode
  */
-export type EntityProps<TSchema, K extends keyof TSchema> =
+export type EntityProps<TSchema, K extends keyof TSchema & string> =
 	| EntityByProps<TSchema, K>
 	| EntityCreateProps<TSchema, K>
 
@@ -262,7 +263,7 @@ function EntityCreateMode({
  * </Entity>
  * ```
  */
-function EntityImpl<TSchema, K extends keyof TSchema>(
+function EntityImpl<TSchema, K extends keyof TSchema & string>(
 	props: EntityProps<TSchema, K>,
 ): ReactElement | null {
 	const isCreateMode = 'create' in props && props.create === true

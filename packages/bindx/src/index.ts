@@ -79,6 +79,9 @@ export type {
 	MockAdapterOptions,
 	ContemberAdapterOptions,
 	EntityUniqueWhere,
+	TransactionMutation as AdapterTransactionMutation,
+	TransactionMutationResult as AdapterTransactionMutationResult,
+	TransactionResult as AdapterTransactionResult,
 } from './adapter/index.js'
 
 // Core types
@@ -90,7 +93,6 @@ export type {
 	SelectionInput,
 	FluentDefiner as CoreFluentDefiner,
 	MutationDataCollector,
-	PersistenceManagerOptions,
 } from './core/index.js'
 
 // Store types
@@ -147,7 +149,26 @@ export { setEntityData, setLoadState, setField, resetEntity, commitEntity } from
 // Store
 export { SnapshotStore, type HasManyRemovalType } from './store/SnapshotStore.js'
 export { ActionDispatcher } from './core/ActionDispatcher.js'
-export { PersistenceManager } from './core/PersistenceManager.js'
+
+// Persistence
+export { BatchPersister, type BatchPersisterOptions } from './persistence/index.js'
+export { ChangeRegistry, type DirtyEntity } from './persistence/index.js'
+export type {
+	AllScope,
+	EntityScope,
+	FieldsScope,
+	RelationScope,
+	CustomScope,
+	PersistScope,
+	FieldPersistResult,
+	EntityPersistResult,
+	PersistError as PersistenceError,
+	PersistenceResult,
+	TransactionMutation,
+	TransactionMutationResult,
+	TransactionResult,
+	BatchPersistOptions,
+} from './persistence/index.js'
 
 // Utils
 export { deepEqual } from './utils/deepEqual.js'
@@ -245,8 +266,6 @@ export {
 	extractMappedErrors,
 } from './errors/index.js'
 
-// Persist error classes
-export { ClientValidationError, PersistError } from './core/PersistenceManager.js'
 
 // Re-export Contember types for convenience
 export type { SchemaNames, SchemaEntityNames } from '@contember/client-content'

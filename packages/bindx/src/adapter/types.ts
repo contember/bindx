@@ -102,6 +102,40 @@ export interface DeleteResult {
 }
 
 /**
+ * A single mutation in a transaction.
+ */
+export interface TransactionMutation {
+	readonly entityType: string
+	readonly entityId: string
+	readonly operation: 'create' | 'update' | 'delete'
+	readonly data?: Record<string, unknown>
+}
+
+/**
+ * Result of a single mutation in a transaction.
+ */
+export interface TransactionMutationResult {
+	readonly entityType: string
+	readonly entityId: string
+	readonly ok: boolean
+	/** Server-assigned ID for creates */
+	readonly persistedId?: string
+	readonly errorMessage?: string
+	readonly mutationResult?: ContemberMutationResult
+}
+
+/**
+ * Result of a transaction persist operation.
+ * All-or-nothing: if any mutation fails, all are rolled back.
+ */
+export interface TransactionResult {
+	/** Whether all mutations succeeded */
+	readonly ok: boolean
+	/** Results per mutation, in same order as input */
+	readonly results: readonly TransactionMutationResult[]
+}
+
+/**
  * Interface for backend adapters.
  * Implement this to connect bindx to your data source.
  */
@@ -147,4 +181,13 @@ export interface BackendAdapter {
 	 * @returns Result with ok status and optional error details
 	 */
 	delete?(entityType: string, id: string): Promise<DeleteResult>
+
+	/**
+	 * Persists multiple mutations in a single transaction.
+	 * All-or-nothing: if any mutation fails, all are rolled back.
+	 *
+	 * @param mutations - Array of mutations to execute
+	 * @returns Result with success status and per-mutation results
+	 */
+	persistTransaction?(mutations: readonly TransactionMutation[]): Promise<TransactionResult>
 }

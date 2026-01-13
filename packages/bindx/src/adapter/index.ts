@@ -11,6 +11,9 @@ export type {
 	CreateResult,
 	DeleteResult,
 	EntityUniqueWhere,
+	TransactionMutation,
+	TransactionMutationResult,
+	TransactionResult,
 } from './types.js'
 export { MockAdapter, type MockDataStore, type MockAdapterOptions } from './MockAdapter.js'
 export { MockMutationCollector } from './MockMutationCollector.js'

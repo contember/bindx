@@ -39,6 +39,8 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle implements Fie
 	 */
 	get [FIELD_REF_META](): FieldRefMeta {
 		return {
+			entityType: this.entityType,
+			entityId: this.entityId,
 			path: this.fieldPath,
 			fieldName: this.fieldName,
 			isArray: false,

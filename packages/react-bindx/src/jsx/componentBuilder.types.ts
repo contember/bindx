@@ -55,8 +55,43 @@ export type ExplicitEntityConfig<TEntityName extends string, TSelected extends o
 	EntityPropConfig<TEntityName, TSelected, false>
 
 // ============================================================================
+// Interface Entity Prop Configuration
+// ============================================================================
+
+/**
+ * Configuration for an interface-based entity prop.
+ * Unlike EntityPropConfig, this doesn't require a specific entity name.
+ * Instead, it constrains the TSelected type to extend TInterface.
+ */
+export interface InterfaceEntityPropConfig<
+	TInterface extends object = object,
+	TIsImplicit extends boolean = boolean,
+> {
+	readonly isInterface: true
+	readonly isImplicit: TIsImplicit
+	readonly __interface: TInterface
+}
+
+/**
+ * Creates an implicit interface entity prop config type.
+ */
+export type ImplicitInterfaceEntityConfig<TInterface extends object> =
+	InterfaceEntityPropConfig<TInterface, true>
+
+/**
+ * Creates an explicit interface entity prop config type.
+ */
+export type ExplicitInterfaceEntityConfig<TInterface extends object> =
+	InterfaceEntityPropConfig<TInterface, false>
+
+// ============================================================================
 // Builder State
 // ============================================================================
+
+/**
+ * Union type for all entity prop config types.
+ */
+export type AnyEntityPropConfig = EntityPropConfig | InterfaceEntityPropConfig
 
 /**
  * Accumulated builder state (type-level).
@@ -65,7 +100,7 @@ export type ExplicitEntityConfig<TEntityName extends string, TSelected extends o
 export interface ComponentBuilderState<
 	TSchema extends Record<string, object>,
 	// eslint-disable-next-line @typescript-eslint/ban-types
-	TEntityProps extends Record<string, EntityPropConfig> = {},
+	TEntityProps extends Record<string, AnyEntityPropConfig> = {},
 	TScalarProps extends object = object,
 	TRoles extends readonly string[] = readonly string[],
 > {
@@ -116,6 +151,64 @@ export type AddExplicitEntity<
 >
 
 /**
+ * Add an implicit interface entity to builder state.
+ */
+export type AddImplicitInterfaceEntity<
+	TState extends ComponentBuilderState<Record<string, object>>,
+	TPropName extends string,
+	TInterface extends object,
+> = ComponentBuilderState<
+	TState['__schema'],
+	TState['__entityProps'] & {
+		readonly [K in TPropName]: ImplicitInterfaceEntityConfig<TInterface>
+	},
+	TState['__scalarProps'],
+	TState['__roles']
+>
+
+/**
+ * Add an explicit interface entity to builder state.
+ */
+export type AddExplicitInterfaceEntity<
+	TState extends ComponentBuilderState<Record<string, object>>,
+	TPropName extends string,
+	TInterface extends object,
+> = ComponentBuilderState<
+	TState['__schema'],
+	TState['__entityProps'] & {
+		readonly [K in TPropName]: ExplicitInterfaceEntityConfig<TInterface>
+	},
+	TState['__scalarProps'],
+	TState['__roles']
+>
+
+/**
+ * Add multiple interface entities to builder state.
+ * Each key in TInterfaces becomes a prop.
+ */
+export type AddInterfaces<
+	TState extends ComponentBuilderState<Record<string, object>>,
+	TInterfaces extends Record<string, object>,
+> = ComponentBuilderState<
+	TState['__schema'],
+	TState['__entityProps'] & {
+		readonly [K in keyof TInterfaces]: InterfaceEntityPropConfig<TInterfaces[K]>
+	},
+	TState['__scalarProps'],
+	TState['__roles']
+>
+
+/**
+ * Type for selectors parameter in interfaces() method.
+ * Maps prop names to selector functions.
+ */
+export type InterfaceSelectorsMap<TInterfaces extends Record<string, object>> = {
+	readonly [K in keyof TInterfaces]?: (
+		e: SelectionBuilder<TInterfaces[K]>,
+	) => SelectionBuilder<TInterfaces[K], TInterfaces[K], object>
+}
+
+/**
  * Set scalar props in builder state.
  */
 export type SetScalarProps<
@@ -134,11 +227,11 @@ export type SetScalarProps<
 
 /**
  * Build EntityRef props from entity config.
- * Note: Uses `string` for entity name to be compatible with Entity component callback
- * which provides EntityRef with generic string entity name.
+ * Uses string for entity name to accept entities from various sources (Entity callbacks, relation accessors, etc.).
+ * HasRole inside createComponent uses the fallback mechanism based on entity type when name is unknown.
  */
 export type BuildEntityProps<
-	TEntityProps extends Record<string, EntityPropConfig>,
+	TEntityProps extends Record<string, AnyEntityPropConfig>,
 	TSchema extends Record<string, object>,
 	TRoles extends readonly string[],
 > = {
@@ -151,10 +244,12 @@ export type BuildEntityProps<
 				TEntityName extends keyof TSchema ? TSchema[TEntityName] : object,
 				TSelected,
 				AnyBrand,
-				string,  // Use string to be compatible with Entity component
+				string,  // Use string to accept entities from various sources
 				TRoles
 			>
-		: never
+		: TEntityProps[K] extends InterfaceEntityPropConfig<infer TInterface, infer _TIsImplicit>
+			? EntityRef<TInterface, TInterface, AnyBrand, string, TRoles>
+			: never
 }
 
 /**
@@ -168,7 +263,7 @@ export type BuildProps<TState extends ComponentBuilderState<Record<string, objec
  * Build fragment properties ($propName) from entity config.
  */
 export type BuildFragmentProps<
-	TEntityProps extends Record<string, EntityPropConfig>,
+	TEntityProps extends Record<string, AnyEntityPropConfig>,
 	TSchema extends Record<string, object>,
 	TRoles extends readonly string[],
 > = {
@@ -183,7 +278,9 @@ export type BuildFragmentProps<
 				AnyBrand,
 				TRoles
 			>
-		: never
+		: TEntityProps[K] extends InterfaceEntityPropConfig<infer TInterface, infer _TIsImplicit>
+			? FluentFragment<TInterface, TInterface, AnyBrand, TRoles>
+			: never
 }
 
 // ============================================================================
@@ -266,6 +363,43 @@ export interface ComponentBuilder<
 		entityName: TEntityName,
 		selector: (e: SelectionBuilder<TSchema[TEntityName]>) => SelectionBuilder<TSchema[TEntityName], TSelected, object>,
 	): ComponentBuilder<TSchema, AddExplicitEntity<TState, TPropName, TEntityName, TSelected>>
+
+	/**
+	 * Add interface-based entity props that accept any EntityRef with matching fields.
+	 * Each key in TInterfaces becomes a prop name, and the value defines required fields.
+	 *
+	 * Props without selectors use implicit mode (selection collected from JSX).
+	 * Props with selectors use explicit mode (selection from selector function).
+	 *
+	 * @example
+	 * ```typescript
+	 * interface HasName { name: string }
+	 * interface HasArchivedAt { archivedAt: string | null }
+	 *
+	 * // Implicit mode - selection from JSX
+	 * const NameCard = createComponent()
+	 *   .interfaces<{ item: HasName }>()
+	 *   .render(({ item }) => <span>{item.fields.name.value}</span>)
+	 *
+	 * // Explicit mode - selection from selector
+	 * const ArchiveIndicator = createComponent()
+	 *   .interfaces<{ item: HasArchivedAt }>({
+	 *     item: e => e.archivedAt(),
+	 *   })
+	 *   .render(({ item }) => <span>{item.data?.archivedAt ? 'Archived' : 'Active'}</span>)
+	 *
+	 * // Mixed mode - some implicit, some explicit
+	 * const Card = createComponent()
+	 *   .interfaces<{ item: HasName; status: HasArchivedAt }>({
+	 *     status: e => e.archivedAt(), // explicit
+	 *     // item has no selector -> implicit from JSX
+	 *   })
+	 *   .render(({ item, status }) => ...)
+	 * ```
+	 */
+	interfaces<TInterfaces extends Record<string, object>>(
+		selectors?: InterfaceSelectorsMap<TInterfaces>,
+	): ComponentBuilder<TSchema, AddInterfaces<TState, TInterfaces>>
 
 	/**
 	 * Define additional scalar (non-entity) props.

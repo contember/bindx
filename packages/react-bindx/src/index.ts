@@ -144,7 +144,9 @@ export {
 	// Store
 	SnapshotStore,
 	ActionDispatcher,
-	PersistenceManager,
+	// Persistence
+	BatchPersister,
+	ChangeRegistry,
 	// Undo
 	UndoManager,
 	// Events
@@ -171,8 +173,25 @@ export type {
 	ErrorEntityListAccessor,
 	ReadyEntityListAccessor,
 	EntityListAccessorResult,
-	// Contember types
+	// Persistence hook types
+	PersistApi,
+	EntityPersistApi,
+	AnyRefWithMeta,
 } from './hooks/index.js'
+
+// Persistence types from @contember/bindx
+export type {
+	DirtyEntity,
+	PersistScope,
+	AllScope,
+	EntityScope,
+	FieldsScope,
+	RelationScope,
+	CustomScope,
+	EntityPersistResult,
+	PersistenceResult,
+	BatchPersistOptions,
+} from '@contember/bindx'
 
 // JSX types
 export type {
@@ -188,6 +207,35 @@ export type {
 	EntityFromProp,
 	SelectionFromProp,
 	ImplicitFragmentProperties,
+	// Component builder types
+	BindxComponentBase,
+	BindxComponent,
+	ComponentBuilder,
+	ComponentBuilderState,
+	CreateComponentOptions,
+	CreateComponentFn,
+	// Interface types
+	InterfaceEntityPropConfig,
+	ImplicitInterfaceEntityConfig,
+	ExplicitInterfaceEntityConfig,
+	AddInterfaces,
+	InterfaceSelectorsMap,
+	AnyEntityPropConfig,
+	// Entity prop config types
+	EntityPropConfig,
+	ImplicitEntityConfig,
+	ExplicitEntityConfig,
+	// State helpers
+	AddImplicitEntity,
+	AddExplicitEntity,
+	AddImplicitInterfaceEntity,
+	AddExplicitInterfaceEntity,
+	SetScalarProps,
+	// Props building
+	BuildEntityProps,
+	BuildProps,
+	BuildFragmentProps,
+	InitialBuilderState,
 } from './jsx/index.js'
 
 // ============================================================================
@@ -200,9 +248,12 @@ export {
 	useBackendAdapter,
 	useSnapshotStore,
 	useDispatcher,
-	usePersistence,
+	useBatchPersister,
 	useBindxContext,
 	createBindx,
+	// Persistence
+	usePersist,
+	usePersistEntity,
 	// Undo
 	useUndo,
 	// Events

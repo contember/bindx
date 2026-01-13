@@ -1,7 +1,7 @@
 import { memo, useMemo, type ReactNode } from 'react'
 import { GraphQlClient } from '@contember/graphql-client'
 import { ContentClient, ContentQueryBuilder, type SchemaNames } from '@contember/client-content'
-import { ContemberAdapter, SnapshotStore, ActionDispatcher, PersistenceManager, MutationCollector } from '@contember/bindx'
+import { ContemberAdapter, SnapshotStore, ActionDispatcher, BatchPersister, MutationCollector } from '@contember/bindx'
 import { BindxContext, type BindxContextValue } from './BackendAdapterContext.js'
 import { QueryBatcher } from '../batching/QueryBatcher.js'
 
@@ -60,7 +60,7 @@ export const ContemberBindxProvider = memo(function ContemberBindxProvider({
 		// Create mutation collector for proper nested operations
 		const mutationCollector = new MutationCollector(store, schema)
 
-		const persistence = new PersistenceManager(adapter, store, dispatcher, {
+		const batchPersister = new BatchPersister(adapter, store, dispatcher, {
 			mutationCollector,
 		})
 
@@ -69,7 +69,7 @@ export const ContemberBindxProvider = memo(function ContemberBindxProvider({
 			batcher,
 			store,
 			dispatcher,
-			persistence,
+			batchPersister,
 			schema: null,
 			undoManager: null, // TODO: Add enableUndo support to ContemberBindxProvider
 		}

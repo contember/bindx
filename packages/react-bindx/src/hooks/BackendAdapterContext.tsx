@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import type { BackendAdapter, MutationDataCollector, SchemaDefinition, UndoManagerConfig } from '@contember/bindx'
 import { SnapshotStore } from '@contember/bindx'
 import { ActionDispatcher } from '@contember/bindx'
-import { PersistenceManager } from '@contember/bindx'
+import { BatchPersister } from '@contember/bindx'
 import { MockMutationCollector } from '@contember/bindx'
 import { SchemaRegistry } from '@contember/bindx'
 import { UndoManager } from '@contember/bindx'
@@ -20,8 +20,8 @@ export interface BindxContextValue {
 	store: SnapshotStore
 	/** Action dispatcher for mutations */
 	dispatcher: ActionDispatcher
-	/** Persistence manager with concurrency control */
-	persistence: PersistenceManager
+	/** Batch persister for multi-entity persistence */
+	batchPersister: BatchPersister
 	/** Schema registry (set by createBindx) */
 	schema: SchemaRegistry | null
 	/** Undo manager (if enabled) */
@@ -94,9 +94,10 @@ export function BindxProvider({
 		const mutationCollector =
 			customMutationCollector ?? (schemaRegistry ? new MockMutationCollector(store, schemaRegistry) : undefined)
 
-		const persistence = new PersistenceManager(adapter, store, dispatcher, {
+		const batchPersister = new BatchPersister(adapter, store, dispatcher, {
 			mutationCollector,
 			undoManager: undoManager ?? undefined,
+			schema: schemaRegistry ?? undefined,
 		})
 
 		return {
@@ -104,7 +105,7 @@ export function BindxProvider({
 			batcher,
 			store,
 			dispatcher,
-			persistence,
+			batchPersister,
 			schema: schemaRegistry,
 			undoManager,
 		}
@@ -150,15 +151,15 @@ export function useDispatcher(): ActionDispatcher {
 }
 
 /**
- * Hook to access the persistence manager.
+ * Hook to access the batch persister.
  * Must be used within a BindxProvider.
  */
-export function usePersistence(): PersistenceManager {
+export function useBatchPersister(): BatchPersister {
 	const context = useContext(BindxContext)
 	if (!context) {
-		throw new Error('usePersistence must be used within a BindxProvider')
+		throw new Error('useBatchPersister must be used within a BindxProvider')
 	}
-	return context.persistence
+	return context.batchPersister
 }
 
 /**

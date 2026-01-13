@@ -181,6 +181,58 @@ export class MutationCollector {
 		return Object.keys(createData).length > 0 ? createData : null
 	}
 
+	/**
+	 * Collects mutation data for specific fields only.
+	 * Returns the mutation data containing only the specified fields.
+	 */
+	collectFieldsData(
+		entityType: string,
+		entityId: string,
+		fieldNames: readonly string[],
+	): Record<string, unknown> | null {
+		const snapshot = this.store.getEntitySnapshot(entityType, entityId)
+		if (!snapshot) {
+			return null
+		}
+
+		const entitySchema = this.schema.entities[entityType]
+		if (!entitySchema) {
+			throw new Error(`Entity type '${entityType}' not found in schema`)
+		}
+
+		const data = snapshot.data as Record<string, unknown>
+		const serverData = snapshot.serverData as Record<string, unknown>
+		const result: Record<string, unknown> = {}
+
+		for (const fieldName of fieldNames) {
+			const fieldDef = entitySchema.fields[fieldName]
+			if (!fieldDef) continue
+
+			if (fieldDef.type === 'column') {
+				// Scalar field - include if changed
+				const currentValue = data[fieldName]
+				const serverValue = serverData[fieldName]
+				if (!deepEqual(currentValue, serverValue)) {
+					result[fieldName] = currentValue
+				}
+			} else if (fieldDef.type === 'one') {
+				// Has-one relation - include relation operation
+				const operation = this.collectHasOneOperation(entityType, entityId, fieldName)
+				if (operation !== null) {
+					result[fieldName] = operation
+				}
+			} else if (fieldDef.type === 'many') {
+				// Has-many relation - include relation operations
+				const operations = this.collectHasManyOperations(entityType, entityId, fieldName)
+				if (operations !== null && operations.length > 0) {
+					result[fieldName] = operations
+				}
+			}
+		}
+
+		return Object.keys(result).length > 0 ? result : null
+	}
+
 	// ==================== Scalar Changes ====================
 
 	/**

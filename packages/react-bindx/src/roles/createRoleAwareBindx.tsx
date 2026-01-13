@@ -409,6 +409,24 @@ type ExtractAvailableRoles<T> = T extends EntityRef<any, any, any, any, infer TR
 type ExtractEntityName<T> = T extends EntityRef<any, any, any, infer TName, any> ? TName : string
 
 /**
+ * Extract entity type from EntityRef type.
+ */
+type ExtractEntityType<T> = T extends EntityRef<infer TEntity, any, any, any, any> ? TEntity : object
+
+/**
+ * Helper type that looks up entity type by name in role schemas, or falls back to the input entity type.
+ * This enables HasRole to work even when entity name is `string` (e.g., from relation accessors).
+ */
+type EntityTypeForRolesOrFallback<
+	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
+	TNewRoles extends readonly (keyof TRoleSchemas)[],
+	TEntityName extends string,
+	TFallback,
+> = TEntityName extends keyof IntersectRoleSchemas<TRoleSchemas, TNewRoles>
+	? EntityForRolesObject<TRoleSchemas, TNewRoles, TEntityName>
+	: TFallback
+
+/**
  * Props for HasRole component.
  */
 export interface HasRoleProps<
@@ -422,11 +440,13 @@ export interface HasRoleProps<
 	/** Parent entity reference */
 	entity: TEntityRef
 
-	/** Render function receiving entity ref with narrowed type */
+	/** Render function receiving entity ref with narrowed type.
+	 * Type is looked up from role schemas if entity name is known, otherwise uses the input entity type.
+	 */
 	children: (
 		entity: EntityRef<
-			EntityForRolesObject<TRoleSchemas, TNewRoles, ExtractEntityName<TEntityRef>>,
-			EntityForRolesObject<TRoleSchemas, TNewRoles, ExtractEntityName<TEntityRef>>,
+			EntityTypeForRolesOrFallback<TRoleSchemas, TNewRoles, ExtractEntityName<TEntityRef>, ExtractEntityType<TEntityRef>>,
+			EntityTypeForRolesOrFallback<TRoleSchemas, TNewRoles, ExtractEntityName<TEntityRef>, ExtractEntityType<TEntityRef>>,
 			AnyBrand,
 			ExtractEntityName<TEntityRef>,
 			TNewRoles

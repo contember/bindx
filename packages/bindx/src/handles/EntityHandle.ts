@@ -431,6 +431,22 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 		)
 	}
 
+	// ==================== Dirty Tracking ====================
+
+	/**
+	 * Gets the list of dirty scalar fields.
+	 */
+	getDirtyFields(): readonly string[] {
+		return this.store.getDirtyFields(this.entityType, this.entityId)
+	}
+
+	/**
+	 * Gets the list of dirty relations.
+	 */
+	getDirtyRelations(): readonly string[] {
+		return this.store.getDirtyRelations(this.entityType, this.entityId)
+	}
+
 	// ==================== Event Subscriptions ====================
 
 	/**
@@ -504,6 +520,8 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 */
 	get [FIELD_REF_META](): FieldRefMeta {
 		return {
+			entityType: this.entityType,
+			entityId: this.entityId,
 			path: [this.fieldName],
 			fieldName: this.fieldName,
 			isArray: false,
@@ -868,6 +886,8 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 */
 	get [FIELD_REF_META](): FieldRefMeta {
 		return {
+			entityType: this.entityType,
+			entityId: this.entityId,
 			path: [this.fieldName],
 			fieldName: this.fieldName,
 			isArray: true,
@@ -1276,6 +1296,8 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 		return {
 			get [FIELD_REF_META](): FieldRefMeta {
 				return {
+					entityType: self.targetType,
+					entityId: '', // Placeholder has no ID
 					path: [fieldName],
 					fieldName,
 					isArray: false,

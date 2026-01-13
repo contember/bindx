@@ -147,7 +147,7 @@ export function useEntityImpl<TEntity extends object, TSelected extends object>(
 	selectionMeta: SelectionMeta,
 	schema: SchemaRegistry<Record<string, object>>,
 ): EntityAccessorResult<TEntity, TSelected> {
-	const { store, dispatcher, persistence } = useBindxContext()
+	const { store, dispatcher, batchPersister } = useBindxContext()
 
 	// Derive ID from 'by' for internal use (before entity is loaded)
 	const derivedId = useMemo(() => {
@@ -211,13 +211,13 @@ export function useEntityImpl<TEntity extends object, TSelected extends object>(
 			fields: handle.fields as SelectedEntityFields<TEntity, TSelected>,
 			data: snapshot.data as TSelected,
 			async persist() {
-				await persistence.persist(entityType, realId)
+				await batchPersister.persist(entityType, realId)
 			},
 			reset() {
 				handle.reset()
 			},
 		}
-	}, [coreResult, derivedId, handle, persistence, entityType])
+	}, [coreResult, derivedId, handle, batchPersister, entityType])
 
 	return accessor
 }

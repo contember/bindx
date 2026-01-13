@@ -404,3 +404,203 @@ describe('createComponent rendering', () => {
 		expect(getByTestId(container, 'author-email').textContent).toBe('john@example.com')
 	})
 })
+
+// ============================================================================
+// entityInterface Tests
+// ============================================================================
+
+describe('createComponent.entityInterface', () => {
+	// Interface for entities that have a 'name' field
+	interface HasName {
+		name: string
+	}
+
+	// Interface for entities with title
+	interface HasTitle {
+		title: string
+	}
+
+	describe('selection collection', () => {
+		test('creates component with fragment from JSX analysis', () => {
+			const NameCard = createComponent()
+				.interfaces<{ item: HasName }>()
+				.render(({ item }) => (
+					<div data-testid="name-card">
+						<span data-testid="name">{item.fields.name.value}</span>
+					</div>
+				))
+
+			expect(NameCard.$item).toBeDefined()
+			expect(NameCard.$item.__isFragment).toBe(true)
+		})
+
+		test('collects fields from JSX field access', () => {
+			const NameCard = createComponent()
+				.interfaces<{ item: HasName }>()
+				.render(({ item }) => (
+					<div>{item.fields.name.value}</div>
+				))
+
+			const meta = NameCard.$item.__meta
+			expect(meta.fields.has('name')).toBe(true)
+		})
+
+		test('isBindxComponent returns true', () => {
+			const NameCard = createComponent()
+				.interfaces<{ item: HasName }>()
+				.render(({ item }) => <span>{item.fields.name.value}</span>)
+
+			expect(isBindxComponent(NameCard)).toBe(true)
+		})
+	})
+
+	describe('rendering with different entity types', () => {
+		test('accepts Author entity that has name field', async () => {
+			const NameCard = createComponent()
+				.interfaces<{ item: HasName }>()
+				.render(({ item }) => (
+					<div data-testid="name-card">
+						<span data-testid="name">{item.fields.name.value}</span>
+					</div>
+				))
+
+			const adapter = new MockAdapter(createMockData())
+
+			const { container } = render(
+				<BindxProvider adapter={adapter}>
+					<Entity name="Author" by={{ id: 'author-1' }}>
+						{author => <NameCard item={author} />}
+					</Entity>
+				</BindxProvider>,
+			)
+
+			await waitFor(() => {
+				expect(getByTestId(container, 'name').textContent).toBe('John Doe')
+			})
+		})
+
+		test('accepts Tag entity that has name field', async () => {
+			const NameCard = createComponent()
+				.interfaces<{ item: HasName }>()
+				.render(({ item }) => (
+					<div data-testid="name-card">
+						<span data-testid="name">{item.fields.name.value}</span>
+					</div>
+				))
+
+			const adapter = new MockAdapter({
+				Tag: {
+					'tag-1': { id: 'tag-1', name: 'JavaScript', color: '#f7df1e' },
+				},
+			})
+
+			const { container } = render(
+				<BindxProvider adapter={adapter}>
+					<Entity name="Tag" by={{ id: 'tag-1' }}>
+						{tag => <NameCard item={tag} />}
+					</Entity>
+				</BindxProvider>,
+			)
+
+			await waitFor(() => {
+				expect(getByTestId(container, 'name').textContent).toBe('JavaScript')
+			})
+		})
+
+		test('accepts Article entity with title interface', async () => {
+			const TitleCard = createComponent()
+				.interfaces<{ item: HasTitle }>()
+				.render(({ item }) => (
+					<div data-testid="title-card">
+						<span data-testid="title">{item.fields.title.value}</span>
+					</div>
+				))
+
+			const adapter = new MockAdapter(createMockData())
+
+			const { container } = render(
+				<BindxProvider adapter={adapter}>
+					<Entity name="Article" by={{ id: 'article-1' }}>
+						{article => <TitleCard item={article} />}
+					</Entity>
+				</BindxProvider>,
+			)
+
+			await waitFor(() => {
+				expect(getByTestId(container, 'title').textContent).toBe('Hello World')
+			})
+		})
+	})
+
+	describe('mixed with regular entity props', () => {
+		test('can combine interfaces with regular entity', () => {
+			const MixedComponent = createComponent()
+				.interfaces<{ item: HasName }>()
+				.entity('article', 'Article', e => e.title())
+				.render(({ item, article }) => (
+					<div>
+						<span data-testid="name">{item.fields.name.value}</span>
+						<span data-testid="title">{article.data?.title}</span>
+					</div>
+				))
+
+			expect(MixedComponent.$item).toBeDefined()
+			expect(MixedComponent.$article).toBeDefined()
+
+			expect(MixedComponent.$item.__meta.fields.has('name')).toBe(true)
+			expect(MixedComponent.$article.__meta.fields.has('title')).toBe(true)
+		})
+	})
+
+	describe('type inference', () => {
+		test('interface prop is correctly typed', () => {
+			// This test verifies compile-time type checking
+			// If types are wrong, this file won't compile
+			const _testComponent = createComponent()
+				.interfaces<{ item: HasName }>()
+				.render(({ item }) => {
+					// These should be typed correctly
+					const name: string | null = item.fields.name.value
+					return <div>{name}</div>
+				})
+
+			expect(_testComponent.$item).toBeDefined()
+		})
+	})
+
+	describe('explicit mode with selectors', () => {
+		test('supports explicit selectors for interface props', () => {
+			interface HasEmail { email: string }
+
+			const EmailCard = createComponent()
+				.interfaces<{ item: HasEmail }>({
+					item: e => e.email(),
+				})
+				.render(({ item }) => <div>{item.data?.email}</div>)
+
+			expect(EmailCard.$item).toBeDefined()
+			expect(EmailCard.$item.__meta.fields.has('email')).toBe(true)
+		})
+
+		test('supports mixed implicit and explicit interface props', () => {
+			interface HasArchivedAt { archivedAt: string | null }
+
+			const StatusCard = createComponent()
+				.interfaces<{ item: HasName; status: HasArchivedAt }>({
+					status: e => e.archivedAt(), // explicit
+					// item has no selector -> implicit from JSX
+				})
+				.render(({ item, status }) => (
+					<div>
+						<span>{item.fields.name.value}</span>
+						<span>{status.data?.archivedAt ? 'Archived' : 'Active'}</span>
+					</div>
+				))
+
+			expect(StatusCard.$item).toBeDefined()
+			expect(StatusCard.$status).toBeDefined()
+			expect(StatusCard.$item.__meta.fields.has('name')).toBe(true)
+			expect(StatusCard.$status.__meta.fields.has('archivedAt')).toBe(true)
+		})
+	})
+})

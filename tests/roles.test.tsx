@@ -1085,3 +1085,158 @@ describe('Role-aware implicit createComponent', () => {
 		expect(true).toBe(true)
 	})
 })
+
+// ============================================================================
+// HasRole inside createComponent Tests
+// ============================================================================
+
+describe('HasRole inside createComponent', () => {
+	test('HasRole inside createComponent preserves entity type', () => {
+		const { createComponent, HasRole } = createRoleAwareBindx<RoleSchemas>(adminSchema)
+
+		// Create component with HasRole inside
+		const ArticleWithAdmin = createComponent({ roles: ['admin'] as const })
+			.entity('article', 'Article')
+			.render(({ article }) => (
+				<div>
+					<span>{article.fields.title.value}</span>
+					<HasRole roles={['admin']} entity={article}>
+						{(adminArticle) => (
+							// adminArticle should have AdminArticle type with internalNotes field
+							<span>{adminArticle.fields.internalNotes.value}</span>
+						)}
+					</HasRole>
+				</div>
+			))
+
+		expect(ArticleWithAdmin.$article).toBeDefined()
+	})
+
+	test('HasRole inside createComponent narrows available roles', () => {
+		const { createComponent, HasRole } = createRoleAwareBindx<RoleSchemas>(adminSchema)
+
+		// Create component with editor+admin roles
+		// Note: Entity type uses PickCommonProperties, so only common fields (title) are accessible
+		const ArticleCard = createComponent({ roles: ['editor', 'admin'] as const })
+			.entity('article', 'Article')
+			.render(({ article }) => (
+				<div>
+					{/* article has common fields of editor & admin (title is common to all) */}
+					<span>{article.fields.title.value}</span>
+
+					{/* HasRole narrows available roles - entity type falls back to input since name is string */}
+					<HasRole roles={['admin']} entity={article}>
+						{(adminArticle) => (
+							// adminArticle still has common fields (entity name is unknown, so no schema lookup)
+							<span>{adminArticle.fields.title.value}</span>
+						)}
+					</HasRole>
+
+					<HasRole roles={['editor']} entity={article}>
+						{(editorArticle) => (
+							<span>{editorArticle.fields.title.value}</span>
+						)}
+					</HasRole>
+				</div>
+			))
+
+		expect(ArticleCard.$article).toBeDefined()
+	})
+
+	test('HasRole children entity type inherits from input', () => {
+		// Type-level test: entity name is string (from createComponent), so HasRole uses fallback type
+		const { createComponent, HasRole } = createRoleAwareBindx<RoleSchemas>(adminSchema)
+
+		const TestComponent = createComponent({ roles: ['admin'] as const })
+			.entity('article', 'Article')
+			.render(({ article }) => (
+				<div>
+					{/* Access a field to ensure selection is collected */}
+					<span>{article.fields.title.value}</span>
+					<HasRole roles={['admin']} entity={article}>
+						{(adminArticle) => {
+							// Entity name is string (inherited from input entity ref)
+							type EntityNameType = typeof adminArticle.__entityName
+							const _nameCheck: EntityNameType = 'some-string' as string
+							// Can access fields from the admin role (via entity type fallback)
+							return <span>{adminArticle.data?.internalNotes}</span>
+						}}
+					</HasRole>
+				</div>
+			))
+
+		expect(TestComponent.$article).toBeDefined()
+	})
+
+	test('type error: HasRole with unavailable role inside createComponent', () => {
+		const { createComponent, HasRole } = createRoleAwareBindx<RoleSchemas>(adminSchema)
+
+		// Create component with only editor role
+		const EditorComponent = createComponent({ roles: ['editor'] as const })
+			.entity('article', 'Article')
+			.render(({ article }) => (
+				<div>
+					{/* Access a field to ensure selection is collected */}
+					<span>{article.fields.title.value}</span>
+					{/* @ts-expect-error - 'admin' is not in available roles ['editor'] */}
+					<HasRole roles={['admin']} entity={article}>
+						{(adminArticle) => <span>{adminArticle.data?.title}</span>}
+					</HasRole>
+				</div>
+			))
+
+		expect(EditorComponent.$article).toBeDefined()
+	})
+
+	test('nested HasRole inside createComponent narrows available roles', () => {
+		const { createComponent, HasRole } = createRoleAwareBindx<RoleSchemas>(adminSchema)
+
+		// Create component with all three roles
+		// Note: Entity type uses PickCommonProperties, so only title is accessible
+		const FullAccessComponent = createComponent({ roles: ['public', 'editor', 'admin'] as const })
+			.entity('article', 'Article')
+			.render(({ article }) => (
+				<div>
+					<span>{article.fields.title.value}</span>
+					{/* First level: narrow available roles to editor+admin */}
+					<HasRole roles={['editor', 'admin']} entity={article}>
+						{(editorAdminArticle) => (
+							<div>
+								{/* Entity type is fallback (common fields), access common fields */}
+								<span>{editorAdminArticle.fields.title.value}</span>
+								{/* Second level: narrow further to admin only */}
+								<HasRole roles={['admin']} entity={editorAdminArticle}>
+									{(adminArticle) => (
+										<span>{adminArticle.fields.title.value}</span>
+									)}
+								</HasRole>
+							</div>
+						)}
+					</HasRole>
+				</div>
+			))
+
+		expect(FullAccessComponent.$article).toBeDefined()
+	})
+
+	test('HasRole inside createComponent with explicit selection', () => {
+		const { createComponent, HasRole } = createRoleAwareBindx<RoleSchemas>(adminSchema)
+
+		// Create component with explicit selection
+		const ArticleCard = createComponent({ roles: ['admin'] as const })
+			.entity('article', 'Article', e => e.id().title().internalNotes())
+			.render(({ article }) => (
+				<div>
+					<span>{article.data?.title}</span>
+					<HasRole roles={['admin']} entity={article}>
+						{(adminArticle) => (
+							<span>{adminArticle.data?.internalNotes}</span>
+						)}
+					</HasRole>
+				</div>
+			))
+
+		expect(ArticleCard.$article).toBeDefined()
+		expect(ArticleCard.$article.__roles).toEqual(['admin'])
+	})
+})

@@ -86,6 +86,8 @@ function createCollectorFieldRef(
 	const nestedSelection = new SelectionMetaCollector()
 
 	const meta = {
+		entityType: '', // Collection phase - no entity
+		entityId: '', // Collection phase - no entity
 		path,
 		fieldName,
 		isArray: false as boolean,
@@ -276,6 +278,8 @@ function createRuntimeFieldRef(
 	fieldName: string,
 ): RuntimeRef {
 	const meta = {
+		entityType,
+		entityId,
 		path,
 		fieldName,
 		isArray: false as boolean,
@@ -527,6 +531,8 @@ function createRuntimeFieldRef(
 function createNullFieldRef(path: string[], fieldName: string): FieldRef<unknown> {
 	return {
 		[FIELD_REF_META]: {
+			entityType: '', // Null ref - no entity
+			entityId: '', // Null ref - no entity
 			path,
 			fieldName,
 			isArray: false,
@@ -577,6 +583,8 @@ function createPlaceholderAccessor<T>(): EntityRef<T> {
 		get(_, fieldName: string) {
 			return {
 				[FIELD_REF_META]: {
+					entityType: '', // Placeholder - no entity
+					entityId: '', // Placeholder - no entity
 					path: [fieldName as string],
 					fieldName: fieldName as string,
 					isArray: false,

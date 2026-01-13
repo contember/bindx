@@ -29,6 +29,28 @@ export type {
 	ComponentBuilderState,
 	CreateComponentOptions,
 	CreateComponentFn,
+	// Interface types
+	InterfaceEntityPropConfig,
+	ImplicitInterfaceEntityConfig,
+	ExplicitInterfaceEntityConfig,
+	AddInterfaces,
+	InterfaceSelectorsMap,
+	AnyEntityPropConfig,
+	// Entity prop config types
+	EntityPropConfig,
+	ImplicitEntityConfig,
+	ExplicitEntityConfig,
+	// State helpers
+	AddImplicitEntity,
+	AddExplicitEntity,
+	AddImplicitInterfaceEntity,
+	AddExplicitInterfaceEntity,
+	SetScalarProps,
+	// Props building
+	BuildEntityProps,
+	BuildProps,
+	BuildFragmentProps,
+	InitialBuilderState,
 } from './componentBuilder.types.js'
 
 // ============================================================================

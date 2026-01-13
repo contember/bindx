@@ -8,6 +8,7 @@ import {
 } from './snapshots.js'
 import type { ErrorState, FieldError } from '../errors/types.js'
 import { filterStickyErrors } from '../errors/types.js'
+import { deepEqual } from '../utils/deepEqual.js'
 
 type Subscriber = () => void
 
@@ -1480,6 +1481,201 @@ export class SnapshotStore {
 		for (const sub of this.globalSubscribers) {
 			sub()
 		}
+	}
+
+	// ==================== Dirty Tracking ====================
+
+	/**
+	 * Information about a dirty entity
+	 */
+
+
+	/**
+	 * Gets all dirty entities in the store.
+	 * Returns entities that have changes (data !== serverData), are new, or are scheduled for deletion.
+	 */
+	getAllDirtyEntities(): Array<{
+		entityType: string
+		entityId: string
+		changeType: 'create' | 'update' | 'delete'
+	}> {
+		const dirtyEntities: Array<{
+			entityType: string
+			entityId: string
+			changeType: 'create' | 'update' | 'delete'
+		}> = []
+
+		// Check all entity snapshots
+		for (const [key, snapshot] of this.entitySnapshots) {
+			const [entityType, ...idParts] = key.split(':')
+			const entityId = idParts.join(':')
+
+			if (!entityType || !entityId) continue
+
+			// Check if scheduled for deletion
+			if (this.isScheduledForDeletion(entityType, entityId)) {
+				// Only include if it exists on server (can't delete what doesn't exist)
+				if (this.existsOnServer(entityType, entityId)) {
+					dirtyEntities.push({ entityType, entityId, changeType: 'delete' })
+				}
+				continue
+			}
+
+			// Check if new entity (not yet on server)
+			if (!this.existsOnServer(entityType, entityId)) {
+				dirtyEntities.push({ entityType, entityId, changeType: 'create' })
+				continue
+			}
+
+			// Check if entity has dirty fields or relations
+			if (this.isEntityDirty(entityType, entityId)) {
+				dirtyEntities.push({ entityType, entityId, changeType: 'update' })
+			}
+		}
+
+		return dirtyEntities
+	}
+
+	/**
+	 * Checks if an entity has any dirty data (data !== serverData).
+	 */
+	private isEntityDirty(entityType: string, entityId: string): boolean {
+		// Check scalar fields
+		const dirtyFields = this.getDirtyFields(entityType, entityId)
+		if (dirtyFields.length > 0) {
+			return true
+		}
+
+		// Check relations
+		const dirtyRelations = this.getDirtyRelations(entityType, entityId)
+		if (dirtyRelations.length > 0) {
+			return true
+		}
+
+		return false
+	}
+
+	/**
+	 * Gets the list of dirty fields for an entity.
+	 * Compares each field in data vs serverData.
+	 */
+	getDirtyFields(entityType: string, entityId: string): string[] {
+		const snapshot = this.getEntitySnapshot(entityType, entityId)
+		if (!snapshot) return []
+
+		const data = snapshot.data as Record<string, unknown>
+		const serverData = snapshot.serverData as Record<string, unknown>
+
+		const dirtyFields: string[] = []
+
+		for (const fieldName of Object.keys(data)) {
+			// Skip id field
+			if (fieldName === 'id') continue
+
+			const currentValue = data[fieldName]
+			const serverValue = serverData[fieldName]
+
+			// Skip relation fields (objects/arrays that represent relations)
+			// Relations are tracked separately via relationStates and hasManyStates
+			if (this.isRelationValue(currentValue) || this.isRelationValue(serverValue)) {
+				continue
+			}
+
+			if (!deepEqual(currentValue, serverValue)) {
+				dirtyFields.push(fieldName)
+			}
+		}
+
+		return dirtyFields
+	}
+
+	/**
+	 * Checks if a value represents a relation (object with id or array of objects).
+	 */
+	private isRelationValue(value: unknown): boolean {
+		if (value === null || value === undefined) return false
+
+		if (Array.isArray(value)) {
+			return value.length > 0 && typeof value[0] === 'object' && value[0] !== null
+		}
+
+		if (typeof value === 'object') {
+			return 'id' in (value as object)
+		}
+
+		return false
+	}
+
+	/**
+	 * Gets the list of dirty relations for an entity.
+	 * Checks both hasOne and hasMany relations.
+	 */
+	getDirtyRelations(entityType: string, entityId: string): string[] {
+		const keyPrefix = `${entityType}:${entityId}:`
+		const dirtyRelations: string[] = []
+
+		// Check hasOne relations
+		for (const [key, state] of this.relationStates) {
+			if (!key.startsWith(keyPrefix)) continue
+
+			const fieldName = key.slice(keyPrefix.length)
+
+			// Dirty if current differs from server, or has placeholder data
+			if (
+				state.currentId !== state.serverId ||
+				state.state !== state.serverState ||
+				Object.keys(state.placeholderData).length > 0
+			) {
+				dirtyRelations.push(fieldName)
+			}
+		}
+
+		// Check hasMany relations
+		for (const [key, state] of this.hasManyStates) {
+			if (!key.startsWith(keyPrefix)) continue
+
+			const fieldName = key.slice(keyPrefix.length)
+
+			// Dirty if has planned removals or connections
+			if (state.plannedRemovals.size > 0 || state.plannedConnections.size > 0) {
+				dirtyRelations.push(fieldName)
+			}
+		}
+
+		return dirtyRelations
+	}
+
+	/**
+	 * Commits only specific fields of an entity.
+	 * Updates serverData for the specified fields only, leaving other fields as-is.
+	 */
+	commitFields(entityType: string, entityId: string, fieldNames: string[]): void {
+		const key = this.getEntityKey(entityType, entityId)
+		const existing = this.entitySnapshots.get(key)
+
+		if (!existing) return
+
+		const data = existing.data as Record<string, unknown>
+		const serverData = existing.serverData as Record<string, unknown>
+
+		// Create new serverData with only specified fields updated
+		const newServerData = { ...serverData }
+		for (const fieldName of fieldNames) {
+			if (fieldName in data) {
+				newServerData[fieldName] = data[fieldName]
+			}
+		}
+
+		const newSnapshot = createEntitySnapshot(
+			entityId,
+			entityType,
+			data,
+			newServerData,
+			existing.version + 1,
+		)
+
+		this.entitySnapshots.set(key, newSnapshot)
+		this.notifyEntitySubscribers(key)
 	}
 
 	// ==================== Utility ====================

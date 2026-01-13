@@ -57,8 +57,9 @@ export const COMPONENT_SELECTIONS = Symbol('COMPONENT_SELECTIONS')
 // ============================================================================
 
 interface EntityConfig {
-	readonly entityName: string
+	readonly entityName: string | null  // null for interface-based props
 	readonly selector?: (builder: SelectionBuilder<object>) => SelectionBuilder<object, object, object>
+	readonly isInterface?: boolean
 }
 
 // ============================================================================
@@ -81,6 +82,7 @@ export class ComponentBuilderImpl<
 		private readonly schemaRegistry: SchemaRegistry<Record<string, object>> | null,
 		private readonly entityConfigs: Map<string, EntityConfig>,
 		private readonly roles: readonly string[],
+		private readonly hasInterfacesMode: boolean = false,
 	) {}
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,6 +99,37 @@ export class ComponentBuilderImpl<
 			this.schemaRegistry,
 			newConfigs,
 			this.roles,
+			this.hasInterfacesMode,
+		)
+	}
+
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	interfaces(
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		selectors?: Record<string, (builder: any) => any>,
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	): any {
+		// Note: At runtime we don't know the TInterfaces keys, so we rely on
+		// the selectors parameter to determine which props have explicit selectors.
+		// For props without selectors (including pure implicit mode with no selectors param),
+		// entity-like props are discovered at render time via proxy.
+		const newConfigs = new Map(this.entityConfigs)
+
+		if (selectors) {
+			for (const [propName, selector] of Object.entries(selectors)) {
+				newConfigs.set(propName, {
+					entityName: null,
+					selector,
+					isInterface: true,
+				})
+			}
+		}
+
+		return new ComponentBuilderImpl(
+			this.schemaRegistry,
+			newConfigs,
+			this.roles,
+			true, // Enable interfaces mode for discovery of implicit interface props
 		)
 	}
 
@@ -107,6 +140,7 @@ export class ComponentBuilderImpl<
 			this.schemaRegistry,
 			this.entityConfigs,
 			this.roles,
+			this.hasInterfacesMode,
 		)
 	}
 
@@ -116,6 +150,7 @@ export class ComponentBuilderImpl<
 			this.entityConfigs,
 			this.roles,
 			renderFn,
+			this.hasInterfacesMode,
 		)
 	}
 }
@@ -134,6 +169,7 @@ function buildComponent<TProps extends object>(
 	entityConfigs: Map<string, EntityConfig>,
 	roles: readonly string[],
 	renderFn: (props: TProps) => ReactNode,
+	hasInterfacesMode: boolean,
 ): unknown {
 	const selectionsMap = new Map<string, SelectionPropMeta>()
 
@@ -159,11 +195,13 @@ function buildComponent<TProps extends object>(
 	let implicitCollected = false
 
 	function ensureImplicitCollected(): void {
-		if (implicitCollected || implicitConfigs.length === 0) {
+		// In interfaces mode, we also need to collect even if no explicit implicit configs exist
+		// (because interface props may be discovered dynamically)
+		if (implicitCollected || (implicitConfigs.length === 0 && !hasInterfacesMode)) {
 			return
 		}
 		implicitCollected = true
-		collectImplicitSelections(implicitConfigs, renderFn, selectionsMap, componentBrand, roles)
+		collectImplicitSelections(implicitConfigs, renderFn, selectionsMap, componentBrand, roles, hasInterfacesMode)
 	}
 
 	// 3. Create React component
@@ -212,6 +250,35 @@ function buildComponent<TProps extends object>(
 		})
 	}
 
+	// 8. In interfaces mode, wrap the component in a Proxy to handle dynamic $propName access
+	// This is needed because interface prop names are only known at type-level, not runtime
+	if (hasInterfacesMode) {
+		return new Proxy(MemoizedComponent, {
+			get(target, prop, receiver): unknown {
+				// Handle $propName access for interface props discovered during collection
+				if (typeof prop === 'string' && prop.startsWith('$')) {
+					const propName = prop.slice(1)
+					// Check if it's already defined on the target
+					if (prop in target) {
+						return Reflect.get(target, prop, receiver)
+					}
+					// Trigger collection and return the fragment
+					ensureImplicitCollected()
+					return selectionsMap.get(propName)?.fragment
+				}
+				return Reflect.get(target, prop, receiver)
+			},
+			has(target, prop): boolean {
+				if (typeof prop === 'string' && prop.startsWith('$')) {
+					ensureImplicitCollected()
+					const propName = prop.slice(1)
+					return selectionsMap.has(propName)
+				}
+				return Reflect.has(target, prop)
+			},
+		})
+	}
+
 	return MemoizedComponent
 }
 
@@ -247,6 +314,9 @@ function createExplicitPropMock(): unknown {
 
 /**
  * Collects selections from JSX for implicit entity props.
+ *
+ * In interfaces mode (hasInterfacesMode=true), any prop that is accessed
+ * and used as an entity-like object will be captured as a potential interface prop.
  */
 function collectImplicitSelections<TProps extends object>(
 	implicitConfigs: [string, EntityConfig][],
@@ -254,6 +324,7 @@ function collectImplicitSelections<TProps extends object>(
 	selectionsMap: Map<string, SelectionPropMeta>,
 	componentBrand: ComponentBrand,
 	roles: readonly string[],
+	hasInterfacesMode: boolean,
 ): void {
 	const propCollectors = new Map<string, SelectionMetaCollector>()
 	const implicitPropNames = new Set(implicitConfigs.map(([name]) => name))
@@ -268,6 +339,12 @@ function collectImplicitSelections<TProps extends object>(
 				return undefined
 			}
 
+			// For explicit entity props, return a mock object that won't crash
+			// when accessing .data or .fields during the collection phase
+			if (explicitPropNames.has(propName)) {
+				return createExplicitPropMock()
+			}
+
 			// For implicit entity props, create collectors
 			if (implicitPropNames.has(propName)) {
 				const selection = new SelectionMetaCollector()
@@ -275,10 +352,12 @@ function collectImplicitSelections<TProps extends object>(
 				return createCollectorProxy(selection)
 			}
 
-			// For explicit entity props, return a mock object that won't crash
-			// when accessing .data or .fields during the collection phase
-			if (explicitPropNames.has(propName)) {
-				return createExplicitPropMock()
+			// In interfaces mode, any unknown prop could be an interface entity prop
+			// Create a collector for it and return a collector proxy
+			if (hasInterfacesMode) {
+				const selection = new SelectionMetaCollector()
+				propCollectors.set(propName, selection)
+				return createCollectorProxy(selection)
 			}
 
 			// Scalar prop - return undefined
