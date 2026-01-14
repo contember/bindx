@@ -33,6 +33,23 @@ import {
 	MockAdapter,
 } from '@contember/react-bindx'
 
+/**
+ * Helper to create mock EntityRef with $ prefixed properties.
+ * This is needed because EntityRef interface now requires $ prefixed properties.
+ */
+function mockEntityRef<T extends object, TResult = T>(obj: T): TResult {
+	const objWithAliases = obj as Record<string, unknown>
+	// Add $ prefixed aliases for standard properties
+	if ('data' in obj) objWithAliases['$data'] = objWithAliases['data']
+	if ('fields' in obj) objWithAliases['$fields'] = objWithAliases['fields']
+	if ('isDirty' in obj) objWithAliases['$isDirty'] = objWithAliases['isDirty']
+	if ('isNew' in obj) objWithAliases['$isNew'] = objWithAliases['isNew']
+	if ('persistedId' in obj) objWithAliases['$persistedId'] = objWithAliases['persistedId']
+	if ('errors' in obj) objWithAliases['$errors'] = objWithAliases['errors']
+	if ('hasError' in obj) objWithAliases['$hasError'] = objWithAliases['hasError']
+	return obj as unknown as TResult
+}
+
 // ============================================================================
 // Test Schema Definitions
 // ============================================================================
@@ -310,15 +327,15 @@ describe('createRoleAwareBindx', () => {
 						<Entity name="Article" by={{ id: 'article-1' }} roles={['editor', 'admin'] as const}>
 							{(article) => (
 								<div>
-									<span data-testid="title">{article.data?.title}</span>
+									<span data-testid="title">{article.$data?.title}</span>
 									{/* article has intersection of editor ∩ admin */}
-									<span data-testid="content">{article.data?.content}</span>
+									<span data-testid="content">{article.$data?.content}</span>
 
 									{/* HasRole narrows to just admin - but user doesn't have it */}
 									<HasRole roles={['admin']} entity={article}>
 										{(adminArticle) => (
 											<span data-testid="admin-notes">
-												{adminArticle.data?.internalNotes}
+												{adminArticle.$data?.internalNotes}
 											</span>
 										)}
 									</HasRole>
@@ -367,15 +384,15 @@ describe('createRoleAwareBindx', () => {
 						<Entity name="Article" by={{ id: 'article-1' }} roles={['editor', 'admin']}>
 							{(article) => (
 								<div>
-									<span data-testid="title">{article.data?.title}</span>
+									<span data-testid="title">{article.title.value}</span>
 									{/* internalNotes is NOT in editor schema, only in admin - with intersection it should error */}
 									{/* @ts-expect-error - internalNotes doesn't exist in intersection of editor ∩ admin (editor doesn't have it) */}
-									<span data-testid="title">{article.data?.internalNotes}</span>
+									<span data-testid="title">{article.$data?.internalNotes}</span>
 
 									<HasRole roles={['admin']} entity={article}>
 										{(adminArticle) => (
 											<span data-testid="admin-notes">
-												{adminArticle.data?.internalNotes}
+												{adminArticle.$data?.internalNotes}
 											</span>
 										)}
 									</HasRole>
@@ -384,7 +401,7 @@ describe('createRoleAwareBindx', () => {
 										{(editorArticle) => (
 											<span data-testid="editor-content">
 												{/* EditorArticle has content but not internalNotes */}
-												{editorArticle.data?.content}
+												{editorArticle.$data?.content}
 											</span>
 										)}
 									</HasRole>
@@ -459,18 +476,18 @@ describe('createRoleAwareBindx', () => {
 						<Entity name="Article" by={{ id: 'article-1' }} roles={['public', 'editor', 'admin'] as const}>
 							{(article) => (
 								<div>
-									<span data-testid="title">{article.data?.title}</span>
+									<span data-testid="title">{article.$data?.title}</span>
 
 									{/* First HasRole narrows to editor+admin */}
 									<HasRole roles={['editor', 'admin']} entity={article}>
 										{(editorAdminArticle) => (
 											<div>
-												<span data-testid="content">{editorAdminArticle.data?.content}</span>
+												<span data-testid="content">{editorAdminArticle.$data?.content}</span>
 
 												{/* Nested HasRole - can only use editor or admin, not public */}
 												<HasRole roles={['admin']} entity={editorAdminArticle}>
 													{(adminArticle) => (
-														<span data-testid="notes">{adminArticle.data?.internalNotes}</span>
+														<span data-testid="notes">{adminArticle.$data?.internalNotes}</span>
 													)}
 												</HasRole>
 											</div>
@@ -554,7 +571,7 @@ describe('Role-aware createComponent', () => {
 			.entity('article', 'Article', e => e.id().title().internalNotes())
 			.render(({ article }) => (
 				<div>
-					<span>{article.data?.title}</span>
+					<span>{article.$data?.title}</span>
 				</div>
 			))
 
@@ -571,7 +588,7 @@ describe('Role-aware createComponent', () => {
 		const EditorAdminCard = createComponent({ roles: ['editor', 'admin'] })
 			.entity('article', 'Article', e => e.id().title())
 			.render(({ article }) => (
-				<div>{article.fields.title.value}</div>
+				<div>{article.$fields.title.value}</div>
 			))
 
 		// Fragment should carry role information
@@ -589,7 +606,7 @@ describe('Role-aware createComponent', () => {
 			.props<{ showNotes?: boolean }>()
 			.render(({ article, showNotes }) => (
 				<div>
-					<span>{article.data?.title}</span>
+					<span>{article.$data?.title}</span>
 					{showNotes && <span>Notes visible</span>}
 				</div>
 			))
@@ -606,9 +623,9 @@ describe('Role-aware createComponent', () => {
 			.entity('article', 'Article', e => e.id().title().internalNotes())
 			.render(({ article }) => (
 				<div>
-					{/* article.data should have internalNotes */}
-					<span>{article.data?.title}</span>
-					<span>{article.data?.internalNotes}</span>
+					{/* article.$data should have internalNotes */}
+					<span>{article.$data?.title}</span>
+					<span>{article.$data?.internalNotes}</span>
 				</div>
 			))
 
@@ -621,12 +638,12 @@ describe('Role-aware createComponent', () => {
 		// This should compile - Article exists in admin schema
 		const AdminArticleCard = createComponent({ roles: ['admin'] as const })
 			.entity('article', 'Article', e => e.id())
-			.render(({ article }) => <div>{article.data?.id}</div>)
+			.render(({ article }) => <div>{article.$data?.id}</div>)
 
 		// This should compile - Author exists in admin schema
 		const AdminAuthorCard = createComponent({ roles: ['admin'] as const })
 			.entity('author', 'Author', e => e.id().name())
-			.render(({ author }) => <div>{author.data?.name}</div>)
+			.render(({ author }) => <div>{author.$data?.name}</div>)
 
 		expect(AdminArticleCard.$article).toBeDefined()
 		expect(AdminAuthorCard.$author).toBeDefined()
@@ -638,7 +655,7 @@ describe('Role-aware createComponent', () => {
 
 		const AdminCard = createComponent({ roles: ['admin'] as const })
 			.entity('article', 'Article', e => e.id())
-			.render(({ article }) => <div>{article.data?.id}</div>)
+			.render(({ article }) => <div>{article.$data?.id}</div>)
 
 		// The fragment should have ['admin'] as its available roles at type level
 		type FragmentRoles = typeof AdminCard.$article extends { __availableRoles?: infer R } ? R : never
@@ -743,13 +760,13 @@ describe('Role-aware createComponent', () => {
 			.entity('article', 'Article', e => e.id().title().internalNotes())
 			.render(({ article }) => (
 				<div>
-					<span>{article.data?.title}</span>
-					<span>{article.data?.internalNotes}</span>
+					<span>{article.$data?.title}</span>
+					<span>{article.$data?.internalNotes}</span>
 				</div>
 			))
 
 		// Create a mock EntityRef with only editor roles
-		const editorOnlyEntityRef: EntityRef<EditorArticle, EditorArticle, any, 'Article', readonly ['editor']> = {
+		const editorOnlyEntityRef: EntityRef<EditorArticle, EditorArticle, any, 'Article', readonly ['editor']> = mockEntityRef({
 			id: 'article-1',
 			fields: {} as any,
 			data: { id: 'article-1', title: 'Test', content: 'Content', author: {} as any },
@@ -768,7 +785,7 @@ describe('Role-aware createComponent', () => {
 			intercept: () => () => {},
 			onPersisted: () => () => {},
 			interceptPersisting: () => () => {},
-		}
+		})
 
 		// Define what the component expects
 		type ExpectedArticleRef = EntityRef<
@@ -792,10 +809,10 @@ describe('Role-aware createComponent', () => {
 		// Create admin-only component using the new builder API
 		const AdminArticleCard = createComponent({ roles: ['admin'] as const })
 			.entity('article', 'Article', e => e.id().title())
-			.render(({ article }) => <div>{article.data?.title}</div>)
+			.render(({ article }) => <div>{article.$data?.title}</div>)
 
 		// Create a mock EntityRef with admin + editor roles (superset of required ['admin'])
-		const adminEditorEntityRef: EntityRef<AdminArticle, { id: string; title: string }, any, 'Article', readonly ['admin', 'editor']> = {
+		const adminEditorEntityRef: EntityRef<AdminArticle, { id: string; title: string }, any, 'Article', readonly ['admin', 'editor']> = mockEntityRef({
 			id: 'article-1',
 			fields: {} as any,
 			data: { id: 'article-1', title: 'Test' },
@@ -814,7 +831,7 @@ describe('Role-aware createComponent', () => {
 			intercept: () => () => {},
 			onPersisted: () => () => {},
 			interceptPersisting: () => () => {},
-		}
+		})
 
 		// This should work - ['admin'] is subset of ['admin', 'editor']
 		// Note: The actual type check depends on how component props are typed
@@ -828,7 +845,7 @@ describe('Role-aware createComponent', () => {
 		// This is important for using components in narrower role contexts
 
 		// Create EntityRef from admin-only context
-		const adminOnlyEntityRef: EntityRef<AdminArticle, { id: string; title: string }, AnyBrand, 'Article', readonly ['admin']> = {
+		const adminOnlyEntityRef: EntityRef<AdminArticle, { id: string; title: string }, AnyBrand, 'Article', readonly ['admin']> = mockEntityRef({
 			id: 'article-1',
 			fields: {} as any,
 			data: { id: 'article-1', title: 'Test' },
@@ -847,7 +864,7 @@ describe('Role-aware createComponent', () => {
 			intercept: () => () => {},
 			onPersisted: () => () => {},
 			interceptPersisting: () => () => {},
-		}
+		})
 
 		// Define what a component with ['admin', 'editor'] roles would expect
 		type MultiRoleEntityRef = EntityRef<AdminArticle, { id: string; title: string }, AnyBrand, 'Article', readonly ['admin', 'editor']>
@@ -864,7 +881,7 @@ describe('Role-aware createComponent', () => {
 
 		const AdminCard = createComponent({ roles: ['admin'] as const })
 			.entity('article', 'Article', e => e.id())
-			.render(({ article }) => <div>{article.data?.id}</div>)
+			.render(({ article }) => <div>{article.$data?.id}</div>)
 
 		// Type-level check: fragment should have ['admin'] as available roles
 		type FragmentType = typeof AdminCard.$article
@@ -960,8 +977,8 @@ describe('Role-aware implicit createComponent', () => {
 		type EntityName = AdminArticleRef['__entityName']
 		const _checkName: EntityName = 'Article'
 
-		// The ref's fields should have internalNotes (admin-only field)
-		type HasInternalNotes = AdminArticleRef['fields'] extends { internalNotes: unknown } ? true : false
+		// The ref's $fields should have internalNotes (admin-only field)
+		type HasInternalNotes = AdminArticleRef['$fields'] extends { internalNotes: unknown } ? true : false
 		const _hasNotes: HasInternalNotes = true
 
 		expect(true).toBe(true) // Compile-time test passed
@@ -973,10 +990,10 @@ describe('Role-aware implicit createComponent', () => {
 		type PublicArticleRef = import('@contember/bindx').EntityRefFor<RoleSchemas, ['public'], 'Article'>
 
 		// @ts-expect-error - internalNotes should not exist on public entity
-		type HasInternalNotes = PublicArticleRef['fields']['internalNotes']
+		type HasInternalNotes = PublicArticleRef['$fields']['internalNotes']
 
 		// Public should have title
-		type HasTitle = PublicArticleRef['fields'] extends { title: unknown } ? true : false
+		type HasTitle = PublicArticleRef['$fields'] extends { title: unknown } ? true : false
 		const _hasTitle: HasTitle = true
 
 		expect(true).toBe(true) // Compile-time test passed
@@ -990,8 +1007,8 @@ describe('Role-aware implicit createComponent', () => {
 			.entity('article', 'Article')
 			.render(({ article }) => (
 				<div>
-					<span data-testid="title">{article.fields.title.value}</span>
-					<span data-testid="notes">{article.fields.internalNotes.value}</span>
+					<span data-testid="title">{article.$fields.title.value}</span>
+					<span data-testid="notes">{article.$fields.internalNotes.value}</span>
 				</div>
 			))
 
@@ -1007,7 +1024,7 @@ describe('Role-aware implicit createComponent', () => {
 		const AdminArticleCard = createComponent({ roles: ['admin'] as const })
 			.entity('article', 'Article')
 			.render(({ article }) => (
-				<div>{article.fields.title.value}</div>
+				<div>{article.$fields.title.value}</div>
 			))
 
 		// Fragment should carry role information
@@ -1024,8 +1041,8 @@ describe('Role-aware implicit createComponent', () => {
 			.entity('article', 'Article')
 			.render(({ article }) => (
 				<div>
-					<span>{article.fields.title.value}</span>
-					<span>{article.fields.content.value}</span>
+					<span>{article.$fields.title.value}</span>
+					<span>{article.$fields.content.value}</span>
 				</div>
 			))
 
@@ -1040,7 +1057,7 @@ describe('Role-aware implicit createComponent', () => {
 		const AdminArticleCard = createComponent({ roles: ['admin'] as const })
 			.entity('article', 'Article')
 			.render(({ article }) => (
-				<div>{article.fields.title.value}</div>
+				<div>{article.$fields.title.value}</div>
 			))
 
 		// Component should have __componentRoles
@@ -1055,8 +1072,8 @@ describe('Role-aware implicit createComponent', () => {
 			.entity('article', 'Article')
 			.render(({ article }) => (
 				<div>
-					<span>{article.fields.title.value}</span>
-					<span>{article.fields.internalNotes.value}</span>
+					<span>{article.$fields.title.value}</span>
+					<span>{article.$fields.internalNotes.value}</span>
 				</div>
 			))
 
@@ -1099,11 +1116,11 @@ describe('HasRole inside createComponent', () => {
 			.entity('article', 'Article')
 			.render(({ article }) => (
 				<div>
-					<span>{article.fields.title.value}</span>
+					<span>{article.$fields.title.value}</span>
 					<HasRole roles={['admin']} entity={article}>
 						{(adminArticle) => (
 							// adminArticle should have AdminArticle type with internalNotes field
-							<span>{adminArticle.fields.internalNotes.value}</span>
+							<span>{adminArticle.$fields.internalNotes.value}</span>
 						)}
 					</HasRole>
 				</div>
@@ -1122,19 +1139,19 @@ describe('HasRole inside createComponent', () => {
 			.render(({ article }) => (
 				<div>
 					{/* article has common fields of editor & admin (title is common to all) */}
-					<span>{article.fields.title.value}</span>
+					<span>{article.$fields.title.value}</span>
 
 					{/* HasRole narrows available roles - entity type falls back to input since name is string */}
 					<HasRole roles={['admin']} entity={article}>
 						{(adminArticle) => (
 							// adminArticle still has common fields (entity name is unknown, so no schema lookup)
-							<span>{adminArticle.fields.title.value}</span>
+							<span>{adminArticle.$fields.title.value}</span>
 						)}
 					</HasRole>
 
 					<HasRole roles={['editor']} entity={article}>
 						{(editorArticle) => (
-							<span>{editorArticle.fields.title.value}</span>
+							<span>{editorArticle.$fields.title.value}</span>
 						)}
 					</HasRole>
 				</div>
@@ -1152,14 +1169,14 @@ describe('HasRole inside createComponent', () => {
 			.render(({ article }) => (
 				<div>
 					{/* Access a field to ensure selection is collected */}
-					<span>{article.fields.title.value}</span>
+					<span>{article.$fields.title.value}</span>
 					<HasRole roles={['admin']} entity={article}>
 						{(adminArticle) => {
 							// Entity name is string (inherited from input entity ref)
 							type EntityNameType = typeof adminArticle.__entityName
 							const _nameCheck: EntityNameType = 'some-string' as string
 							// Can access fields from the admin role (via entity type fallback)
-							return <span>{adminArticle.data?.internalNotes}</span>
+							return <span>{adminArticle.$data?.internalNotes}</span>
 						}}
 					</HasRole>
 				</div>
@@ -1177,10 +1194,10 @@ describe('HasRole inside createComponent', () => {
 			.render(({ article }) => (
 				<div>
 					{/* Access a field to ensure selection is collected */}
-					<span>{article.fields.title.value}</span>
+					<span>{article.$fields.title.value}</span>
 					{/* @ts-expect-error - 'admin' is not in available roles ['editor'] */}
 					<HasRole roles={['admin']} entity={article}>
-						{(adminArticle) => <span>{adminArticle.data?.title}</span>}
+						{(adminArticle) => <span>{adminArticle.$data?.title}</span>}
 					</HasRole>
 				</div>
 			))
@@ -1197,17 +1214,17 @@ describe('HasRole inside createComponent', () => {
 			.entity('article', 'Article')
 			.render(({ article }) => (
 				<div>
-					<span>{article.fields.title.value}</span>
+					<span>{article.$fields.title.value}</span>
 					{/* First level: narrow available roles to editor+admin */}
 					<HasRole roles={['editor', 'admin']} entity={article}>
 						{(editorAdminArticle) => (
 							<div>
 								{/* Entity type is fallback (common fields), access common fields */}
-								<span>{editorAdminArticle.fields.title.value}</span>
+								<span>{editorAdminArticle.$fields.title.value}</span>
 								{/* Second level: narrow further to admin only */}
 								<HasRole roles={['admin']} entity={editorAdminArticle}>
 									{(adminArticle) => (
-										<span>{adminArticle.fields.title.value}</span>
+										<span>{adminArticle.$fields.title.value}</span>
 									)}
 								</HasRole>
 							</div>
@@ -1227,10 +1244,10 @@ describe('HasRole inside createComponent', () => {
 			.entity('article', 'Article', e => e.id().title().internalNotes())
 			.render(({ article }) => (
 				<div>
-					<span>{article.data?.title}</span>
+					<span>{article.$data?.title}</span>
 					<HasRole roles={['admin']} entity={article}>
 						{(adminArticle) => (
-							<span>{adminArticle.data?.internalNotes}</span>
+							<span>{adminArticle.$data?.internalNotes}</span>
 						)}
 					</HasRole>
 				</div>

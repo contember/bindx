@@ -20,10 +20,10 @@ export function AuthorListExample() {
 			<h3>All Authors ({authors.length})</h3>
 			<ul>
 				{authors.items.map(item => (
-					<li key={item.key}>
-						<strong>{item.data.name}</strong>
-						<span> - {item.data.email}</span>
-						<p>{item.data.bio}</p>
+					<li key={item.id}>
+						<strong>{item.$data?.name}</strong>
+						<span> - {item.$data?.email}</span>
+						<p>{item.$data?.bio}</p>
 					</li>
 				))}
 			</ul>

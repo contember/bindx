@@ -4,7 +4,7 @@ import { collectSelection, debugSelection } from '../jsx/analyzer.js'
 import { mergeSelections } from '../jsx/SelectionMeta.js'
 import { buildQueryFromSelection, SelectionScope } from '@contember/bindx'
 import type { SelectionMeta } from '@contember/bindx'
-import type { EntityRef } from '../jsx/types.js'
+import type { EntityAccessor } from '../jsx/types.js'
 
 /**
  * Options for useSelectionCollection hook.
@@ -15,7 +15,7 @@ export interface UseSelectionCollectionOptions<T> {
 	/** Entity ID (for dependency tracking) */
 	entityId: string
 	/** Children render function */
-	children: (entity: EntityRef<T>) => ReactNode
+	children: (entity: EntityAccessor<T>) => ReactNode
 }
 
 /**

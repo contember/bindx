@@ -57,8 +57,8 @@ export function AuthorSelectWithEmail({ value, onChange, label = 'Author' }: Aut
 			<select value={value ?? ''} onChange={e => onChange(e.target.value || null)}>
 				<option value="">Select author...</option>
 				{authors.items.map(item => (
-					<option key={item.key} value={item.id}>
-						{item.data.name} ({item.data.email})
+					<option key={item.id} value={item.id}>
+						{item.$data?.name} ({item.$data?.email})
 					</option>
 				))}
 			</select>

@@ -31,17 +31,17 @@ export function ArticleWithAuthorSelectExample({ id }: { id: string }) {
 	const handleAuthorChange = (newAuthorId: string) => {
 		if (newAuthorId === '') {
 			// Disconnect the relation
-			article.fields.author.disconnect()
+			article.fields.author.$disconnect()
 		} else {
 			// Connect to the selected author
-			article.fields.author.connect(newAuthorId)
+			article.fields.author.$connect(newAuthorId)
 		}
 	}
 
-	// Use fields.author.id for reactive value (tracks local changes)
-	const currentAuthorId = article.fields.author.id ?? ''
+	// Use fields.author.$id for reactive value (tracks local changes)
+	const currentAuthorId = article.fields.author.$id ?? ''
 	// Get author entity for display (reactive to connect/disconnect)
-	const authorEntity = article.fields.author.entity
+	const authorEntity = article.fields.author.$entity
 
 	return (
 		<div className="article-with-select">
@@ -65,8 +65,8 @@ export function ArticleWithAuthorSelectExample({ id }: { id: string }) {
 					>
 						<option value="">No author</option>
 						{authors.items.map(item => (
-							<option key={item.key} value={item.id}>
-								{item.data.name} ({item.data.email})
+							<option key={item.id} value={item.id}>
+								{item.$data?.name} ({item.$data?.email})
 							</option>
 						))}
 					</select>
@@ -76,7 +76,7 @@ export function ArticleWithAuthorSelectExample({ id }: { id: string }) {
 			<div className="current-author">
 				{currentAuthorId ? (
 					<p>
-						<strong>Current author:</strong> {authorEntity.fields.name.value} ({authorEntity.fields.email.value})
+						<strong>Current author:</strong> {authorEntity.$fields.name.value} ({authorEntity.$fields.email.value})
 					</p>
 				) : (
 					<p>

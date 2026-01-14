@@ -22,7 +22,7 @@ import { SelectionScope } from '@contember/bindx'
  */
 function HasOneImpl<T, TSelected = T>({ field, children }: HasOneProps<T, TSelected>): ReactElement {
 	// Get the related entity reference (always available, may be placeholder with id=null)
-	return <>{children(field.entity)}</>
+	return <>{children(field.$entity)}</>
 }
 
 export const HasOne = memo(HasOneImpl) as typeof HasOneImpl

@@ -1,4 +1,4 @@
-import type { EntityHandle, EntityListAccessorResult } from '@contember/react-bindx'
+import type { EntityRef, EntityListAccessorResult } from '@contember/react-bindx'
 import { TextInput } from '../inputs/index.js'
 
 interface TagData {
@@ -10,11 +10,11 @@ interface TagData {
 /**
  * Tag editor - knows about Tag model structure
  */
-export function TagEditor({ tag }: { tag: EntityHandle<TagData> }) {
+export function TagEditor({ tag }: { tag: EntityRef<TagData> }) {
 	return (
 		<div className="tag-editor">
-			<TextInput field={tag.fields.name} label="Tag Name" />
-			<TextInput field={tag.fields.color} label="Color" />
+			<TextInput field={tag.$fields.name} label="Tag Name" />
+			<TextInput field={tag.$fields.color} label="Color" />
 		</div>
 	)
 }
@@ -40,9 +40,9 @@ export function TagListEditor({
 			<h3>Tags ({tags.length})</h3>
 
 			{tags.items.map(item => (
-				<div key={item.key} className="tag-item">
-					<TagEditor tag={item.handle} />
-					<button onClick={() => tags.remove(item.key)}>Remove</button>
+				<div key={item.id} className="tag-item">
+					<TagEditor tag={item} />
+					<button onClick={() => tags.remove(item.id)}>Remove</button>
 				</div>
 			))}
 

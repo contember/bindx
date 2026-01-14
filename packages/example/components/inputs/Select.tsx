@@ -38,8 +38,8 @@ export function Select<TData extends { id: string }>({
 				<option value="">{isLoading ? 'Loading...' : placeholder}</option>
 				{!isLoading &&
 					options.items.map((item) => (
-						<option key={item.key} value={item.id}>
-							{getLabel(item.data)}
+						<option key={item.id} value={item.id}>
+							{item.$data ? getLabel(item.$data) : ''}
 						</option>
 					))}
 			</select>

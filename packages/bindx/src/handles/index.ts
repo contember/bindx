@@ -16,5 +16,6 @@ export {
 	type HasOneRef,
 	type EntityRef,
 	type EntityRefFor,
+	type EntityAccessor,
 	type Unsubscribe,
 } from './types.js'

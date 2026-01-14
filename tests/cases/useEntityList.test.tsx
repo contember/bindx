@@ -89,7 +89,7 @@ describe('useEntityList', () => {
 						<ul data-testid="list">
 							{authors.items.map(author => (
 								<li key={author.id} data-testid={`author-${author.id}`}>
-									{author.fields.name.value ?? 'unnamed'}
+									{author.name.value ?? 'unnamed'}
 								</li>
 							))}
 						</ul>
@@ -267,8 +267,8 @@ describe('useEntityList', () => {
 				return (
 					<div>
 						<span data-testid="count">{authors.length}</span>
-						<span data-testid="last-name">{lastAuthor?.handle.fields.name.value ?? 'none'}</span>
-						<span data-testid="last-id">{lastAuthor?.handle.id ?? 'none'}</span>
+						<span data-testid="last-name">{lastAuthor?.name.value ?? 'none'}</span>
+						<span data-testid="last-id">{lastAuthor?.id ?? 'none'}</span>
 						<button
 							data-testid="add-button"
 							onClick={() => {
@@ -324,10 +324,10 @@ describe('useEntityList', () => {
 						<ul data-testid="list">
 							{authors.items.map(author => (
 								<li key={author.id} data-testid={`author-${author.id}`}>
-									{author.fields.name.value}
+									{author.name.value}
 									<button
 										data-testid={`remove-${author.id}`}
-										onClick={() => authors.remove(author.key)}
+										onClick={() => authors.remove(author.id)}
 									>
 										Remove
 									</button>
@@ -387,10 +387,10 @@ describe('useEntityList', () => {
 						<ul data-testid="list">
 							{authors.items.map(author => (
 								<li key={author.id} data-testid={`author-${author.id}`}>
-									{author.fields.name.value ?? 'unnamed'}
+									{author.name.value ?? 'unnamed'}
 									<button
 										data-testid={`remove-${author.id}`}
-										onClick={() => authors.remove(author.key)}
+										onClick={() => authors.remove(author.id)}
 									>
 										Remove
 									</button>
@@ -470,7 +470,7 @@ describe('useEntityList', () => {
 							onClick={() => {
 								// Remove all items
 								for (const author of [...authors.items]) {
-									authors.remove(author.key)
+									authors.remove(author.id)
 								}
 							}}
 						>
@@ -526,7 +526,7 @@ describe('useEntityList', () => {
 						<ul data-testid="list">
 							{authors.items.map((author, index) => (
 								<li key={author.id} data-testid={`author-${index}`}>
-									{author.fields.name.value}
+									{author.name.value}
 								</li>
 							))}
 						</ul>
@@ -582,7 +582,7 @@ describe('useEntityList', () => {
 						<ul data-testid="list">
 							{authors.items.map((author, index) => (
 								<li key={author.id} data-testid={`author-${index}`}>
-									{author.fields.name.value}
+									{author.name.value}
 								</li>
 							))}
 						</ul>
@@ -638,7 +638,7 @@ describe('useEntityList', () => {
 						<ul data-testid="list">
 							{authors.items.map((author, index) => (
 								<li key={author.id} data-testid={`author-${index}`}>
-									{author.fields.name.value}
+									{author.name.value}
 								</li>
 							))}
 						</ul>
@@ -705,7 +705,7 @@ describe('useEntityList', () => {
 						<ul data-testid="list">
 							{authors.items.map((author, index) => (
 								<li key={author.id} data-testid={`author-${index}`}>
-									{author.fields.name.value}
+									{author.name.value}
 								</li>
 							))}
 						</ul>
@@ -757,7 +757,7 @@ describe('useEntityList', () => {
 						<ul data-testid="list">
 							{authors.items.map((author, index) => (
 								<li key={author.id} data-testid={`author-${index}`}>
-									{author.fields.name.value ?? 'unnamed'}
+									{author.name.value ?? 'unnamed'}
 								</li>
 							))}
 						</ul>

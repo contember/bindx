@@ -1,12 +1,11 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react'
-import type { SchemaRegistry } from '@contember/bindx'
+import type { SchemaRegistry, EntityAccessor } from '@contember/bindx'
 import { EntityHandle } from '@contember/bindx'
 import { useBindxContext } from './BackendAdapterContext.js'
 import { useStoreSubscription } from './useStoreSubscription.js'
 import { setEntityData, setLoadState } from '@contember/bindx'
 import { buildQueryFromSelection } from '@contember/bindx'
 import type { SelectionMeta } from '@contember/bindx'
-import type { EntityFields } from '@contember/bindx'
 
 /**
  * Options for useEntityList hook
@@ -61,15 +60,7 @@ export interface ReadyEntityListAccessor<T extends object> {
 	readonly isLoading: false
 	readonly isError: false
 	readonly isDirty: boolean
-	readonly items: Array<{
-		id: string
-		key: string
-		handle: EntityHandle<T>
-		/** @deprecated Use handle instead */
-		entity: EntityHandle<T>
-		fields: EntityFields<T>
-		data: T
-	}>
+	readonly items: Array<EntityAccessor<T>>
 	readonly length: number
 	add(data?: Partial<T>): string
 	remove(key: string): void
@@ -262,21 +253,14 @@ export function useEntityListImpl<TResult extends object>(
 		} else {
 			// Build item handles
 			const items = state.items.map((item) => {
-				const handle = new EntityHandle<TResult>(
+				// EntityHandle constructor returns a Proxy that implements EntityAccessor
+				return new EntityHandle<TResult>(
 					item.id,
 					entityType,
 					store,
 					dispatcher,
 					schema,
-				)
-				return {
-					id: item.id,
-					key: item.id,
-					handle,
-					entity: handle, // Legacy alias
-					fields: handle.fields as EntityFields<TResult>,
-					data: item.data,
-				}
+				) as unknown as EntityAccessor<TResult>
 			})
 
 			result = {

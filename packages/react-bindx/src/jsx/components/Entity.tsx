@@ -3,7 +3,7 @@ import { useBindxContext } from '../../hooks/BackendAdapterContext.js'
 import { useEntityCore } from '../../hooks/useEntityCore.js'
 import { useSelectionCollection } from '../../hooks/useSelectionCollection.js'
 import { createRuntimeAccessor } from '../proxy.js'
-import type { EntityRef } from '../types.js'
+import type { EntityAccessor } from '../types.js'
 import { type EntityUniqueWhere, type AnyBrand } from '@contember/bindx'
 
 // ==================== Props Types ====================
@@ -15,8 +15,8 @@ import { type EntityUniqueWhere, type AnyBrand } from '@contember/bindx'
 interface EntityBaseProps<TSchema, K extends keyof TSchema & string> {
 	/** Entity type name */
 	name: K
-	/** Render function receiving typed entity accessor with preserved entity name */
-	children: (entity: EntityRef<TSchema[K], TSchema[K], AnyBrand, K>) => React.ReactNode
+	/** Render function receiving typed entity accessor with direct field access */
+	children: (entity: EntityAccessor<TSchema[K], TSchema[K], AnyBrand, K>) => React.ReactNode
 	/** Error fallback */
 	error?: (error: Error) => React.ReactNode
 }
@@ -60,7 +60,7 @@ export type EntityProps<TSchema, K extends keyof TSchema & string> =
 interface EntityByModeProps {
 	entityType: string
 	by: EntityUniqueWhere
-	children: (entity: EntityRef<unknown>) => React.ReactNode
+	children: (entity: EntityAccessor<unknown>) => React.ReactNode
 	loading?: React.ReactNode
 	error?: (error: Error) => React.ReactNode
 	notFound?: React.ReactNode
@@ -68,7 +68,7 @@ interface EntityByModeProps {
 
 interface EntityCreateModeProps {
 	entityType: string
-	children: (entity: EntityRef<unknown>) => React.ReactNode
+	children: (entity: EntityAccessor<unknown>) => React.ReactNode
 	error?: (error: Error) => React.ReactNode
 	onPersisted?: (id: string) => void
 }
@@ -273,7 +273,7 @@ function EntityImpl<TSchema, K extends keyof TSchema & string>(
 		return (
 			<EntityCreateMode
 				entityType={createProps.name as string}
-				children={createProps.children as (entity: EntityRef<unknown>) => React.ReactNode}
+				children={createProps.children as (entity: EntityAccessor<unknown>) => React.ReactNode}
 				error={createProps.error}
 				onPersisted={createProps.onPersisted}
 			/>
@@ -285,7 +285,7 @@ function EntityImpl<TSchema, K extends keyof TSchema & string>(
 		<EntityByMode
 			entityType={byProps.name as string}
 			by={byProps.by}
-			children={byProps.children as (entity: EntityRef<unknown>) => React.ReactNode}
+			children={byProps.children as (entity: EntityAccessor<unknown>) => React.ReactNode}
 			loading={byProps.loading}
 			error={byProps.error}
 			notFound={byProps.notFound}

@@ -438,13 +438,14 @@ describe('Event React Hooks', () => {
 				})
 
 				if (article.isLoading) return <div>Loading...</div>
+				if (article.isError) return <div>Error</div>
 
 				return (
 					<div>
-						<span data-testid="title">{article.fields.title.value}</span>
+						<span data-testid="title">{article.title.value}</span>
 						<button
 							data-testid="update"
-							onClick={() => article.fields.title.setValue('Updated Title')}
+							onClick={() => article.title.setValue('Updated Title')}
 						>
 							Update
 						</button>
@@ -486,6 +487,7 @@ describe('Event React Hooks', () => {
 				})
 
 				if (article.isLoading) return <div>Loading...</div>
+				if (article.isError) return <div>Error</div>
 
 				return (
 					<div>
@@ -495,7 +497,7 @@ describe('Event React Hooks', () => {
 						</button>
 						<button
 							data-testid="update"
-							onClick={() => article.fields.title.setValue(`Title ${Date.now()}`)}
+							onClick={() => article.title.setValue(`Title ${Date.now()}`)}
 						>
 							Update
 						</button>
@@ -548,18 +550,19 @@ describe('Event React Hooks', () => {
 				})
 
 				if (article1.isLoading || article2.isLoading) return <div>Loading...</div>
+				if (article1.isError || article2.isError) return <div>Error</div>
 
 				return (
 					<div>
 						<button
 							data-testid="update-1"
-							onClick={() => article1.fields.title.setValue('Updated 1')}
+							onClick={() => article1.title.setValue('Updated 1')}
 						>
 							Update 1
 						</button>
 						<button
 							data-testid="update-2"
-							onClick={() => article2.fields.title.setValue('Updated 2')}
+							onClick={() => article2.title.setValue('Updated 2')}
 						>
 							Update 2
 						</button>
@@ -614,18 +617,19 @@ describe('Event React Hooks', () => {
 				})
 
 				if (article.isLoading) return <div>Loading...</div>
+				if (article.isError) return <div>Error</div>
 
 				return (
 					<div>
 						<button
 							data-testid="update-title"
-							onClick={() => article.fields.title.setValue('New Title')}
+							onClick={() => article.title.setValue('New Title')}
 						>
 							Update Title
 						</button>
 						<button
 							data-testid="update-content"
-							onClick={() => article.fields.content.setValue('New Content')}
+							onClick={() => article.content.setValue('New Content')}
 						>
 							Update Content
 						</button>
@@ -687,13 +691,14 @@ describe('Event React Hooks', () => {
 				const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().title())
 
 				if (article.isLoading) return <div>Loading...</div>
+				if (article.isError) return <div>Error</div>
 
 				return (
 					<div>
 						{showListener && <EventListener />}
 						<button
 							data-testid="update"
-							onClick={() => article.fields.title.setValue(`Title ${Date.now()}`)}
+							onClick={() => article.title.setValue(`Title ${Date.now()}`)}
 						>
 							Update
 						</button>

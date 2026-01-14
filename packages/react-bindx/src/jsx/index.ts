@@ -14,8 +14,8 @@ export {
 	type HasOneProps,
 	type IfProps,
 	type EntityComponentProps,
-	type JsxSelectionMeta,
-	type JsxSelectionFieldMeta,
+	type SelectionMeta,
+	type SelectionFieldMeta,
 	type HasManyComponentOptions,
 } from './types.js'
 

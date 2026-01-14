@@ -3,7 +3,7 @@ import { useBindxContext } from '../../hooks/BackendAdapterContext.js'
 import { useEntityListCore } from '../../hooks/useEntityListCore.js'
 import { useSelectionCollectionForList } from '../../hooks/useSelectionCollectionForList.js'
 import { createRuntimeAccessor } from '../proxy.js'
-import type { EntityRef } from '../types.js'
+import type { EntityAccessor } from '../types.js'
 
 /**
  * Props for EntityList component
@@ -19,8 +19,8 @@ export interface EntityListProps<TSchema, K extends keyof TSchema> {
 	limit?: number
 	/** Optional offset */
 	offset?: number
-	/** Render function receiving typed entity accessor and index */
-	children: (entity: EntityRef<TSchema[K]>, index: number) => React.ReactNode
+	/** Render function receiving typed entity accessor with direct field access */
+	children: (entity: EntityAccessor<TSchema[K]>, index: number) => React.ReactNode
 	/** Loading fallback */
 	loading?: React.ReactNode
 	/** Error fallback */

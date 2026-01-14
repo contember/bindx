@@ -10,6 +10,7 @@ import {
 	type EntityForRoles,
 	type EntityNamesForRoles,
 	type EntityRef,
+	type EntityAccessor,
 	type SelectedEntityFields,
 	SchemaRegistry,
 	resolveSelectionMeta,
@@ -43,7 +44,7 @@ import { useEntityCore } from '../hooks/useEntityCore.js'
 import { useEntityListCore } from '../hooks/useEntityListCore.js'
 import { createRuntimeAccessor } from '../jsx/proxy.js'
 import type { UseEntityOptions, EntityAccessorResult, UseEntityListOptions, EntityListAccessorResult } from '../hooks/index.js'
-import type { EntityRef as JsxEntityRef } from '../jsx/types.js'
+import type { EntityAccessor as JsxEntityAccessor } from '../jsx/types.js'
 import {
 	COMPONENT_MARKER,
 	COMPONENT_SELECTIONS,
@@ -311,16 +312,16 @@ export interface RoleAwareEntityProps<
 	/** Optional roles - when provided, entity type is narrowed to intersection of these roles */
 	roles?: TRoles
 
-	/** Render function receiving typed entity ref */
+	/** Render function receiving typed entity accessor with direct field access */
 	children: TRoles extends readonly (keyof TRoleSchemas & string)[]
-		? (entity: EntityRef<
+		? (entity: EntityAccessor<
 				EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
 				EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
 				AnyBrand,
 				TEntityName,
 				TRoles
 			>) => ReactNode
-		: (entity: EntityRef<object, object, AnyBrand, TEntityName, readonly string[]>) => ReactNode
+		: (entity: EntityAccessor<object, object, AnyBrand, TEntityName, readonly string[]>) => ReactNode
 
 	/** Loading fallback */
 	loading?: ReactNode
@@ -363,16 +364,16 @@ export interface RoleAwareEntityListProps<
 	/** Optional roles - when provided, entity type is narrowed to intersection of these roles */
 	roles?: TRoles
 
-	/** Render function receiving typed entity ref and index */
+	/** Render function receiving typed entity accessor with direct field access and index */
 	children: TRoles extends readonly (keyof TRoleSchemas & string)[]
-		? (entity: EntityRef<
+		? (entity: EntityAccessor<
 				EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
 				EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
 				AnyBrand,
 				TEntityName,
 				TRoles
 			>, index: number) => ReactNode
-		: (entity: EntityRef<object, object, AnyBrand, TEntityName, readonly string[]>, index: number) => ReactNode
+		: (entity: EntityAccessor<object, object, AnyBrand, TEntityName, readonly string[]>, index: number) => ReactNode
 
 	/** Loading fallback */
 	loading?: ReactNode
@@ -730,7 +731,7 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 		const { selection, queryKey } = useSelectionCollection({
 			entityType,
 			entityId: byKey,
-			children: renderFn as (entity: JsxEntityRef<object>) => ReactNode,
+			children: renderFn as (entity: JsxEntityAccessor<object>) => ReactNode,
 		})
 
 		// Phase 2: Load data using core hook (same as standard Entity)
@@ -768,11 +769,16 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 			() => {}, // Changes are automatically handled by useSyncExternalStore
 		)
 
-		// Role-aware addition: inject __availableRoles
-		const roleAwareAccessor = {
-			...accessor,
-			__availableRoles: (roles ?? []) as TRoles extends readonly string[] ? TRoles : readonly string[],
-		}
+		// Role-aware addition: wrap in Proxy to inject __availableRoles while preserving direct field access
+		// We can't use spread because it breaks the Proxy behavior
+		const roleAwareAccessor = new Proxy(accessor, {
+			get(target, prop) {
+				if (prop === '__availableRoles') {
+					return (roles ?? []) as TRoles extends readonly string[] ? TRoles : readonly string[]
+				}
+				return Reflect.get(target, prop)
+			},
+		})
 
 		// Provide entity context for HasRole
 		const entityContext: EntityContextValue = {
@@ -811,7 +817,7 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 		const { selection, queryKey } = useSelectionCollectionForList({
 			entityType,
 			filter,
-			children: renderFn as (entity: JsxEntityRef<object>, index: number) => ReactNode,
+			children: renderFn as (entity: JsxEntityAccessor<object>, index: number) => ReactNode,
 		})
 
 		// Phase 2: Load data using core hook (same as standard EntityList)
@@ -848,11 +854,15 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 				() => {}, // Changes are automatically handled by useSyncExternalStore
 			)
 
-			// Role-aware addition: inject __availableRoles
-			const roleAwareAccessor = {
-				...accessor,
-				__availableRoles: (roles ?? []) as TRoles extends readonly string[] ? TRoles : readonly string[],
-			}
+			// Role-aware addition: wrap in Proxy to inject __availableRoles while preserving direct field access
+			const roleAwareAccessor = new Proxy(accessor, {
+				get(target, prop) {
+					if (prop === '__availableRoles') {
+						return (roles ?? []) as TRoles extends readonly string[] ? TRoles : readonly string[]
+					}
+					return Reflect.get(target, prop)
+				},
+			})
 
 			return (
 				<React.Fragment key={item.id}>

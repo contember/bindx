@@ -162,8 +162,11 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
-				return <div data-testid="title">{article.fields.title.value}</div>
+				return <div data-testid="title">{article.title.value}</div>
 			}
 
 			const { container } = render(
@@ -217,11 +220,14 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<h1 data-testid="title">{article.fields.title.value}</h1>
-						<p data-testid="content">{article.fields.content.value}</p>
+						<h1 data-testid="title">{article.title.value}</h1>
+						<p data-testid="content">{article.content.value}</p>
 					</div>
 				)
 			}
@@ -253,10 +259,13 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<h1 data-testid="title">{article.fields.title.value}</h1>
+						<h1 data-testid="title">{article.title.value}</h1>
 						<p data-testid="author-name">{article.data.author?.name ?? 'N/A'}</p>
 						<p data-testid="author-email">{article.data.author?.email ?? 'N/A'}</p>
 					</div>
@@ -291,10 +300,13 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<h1 data-testid="title">{article.fields.title.value}</h1>
+						<h1 data-testid="title">{article.title.value}</h1>
 						<ul data-testid="tags">
 							{article.data.tags?.map(tag => (
 								<li key={tag.id} data-testid={`tag-${tag.id}`}>
@@ -334,10 +346,13 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<h1 data-testid="title">{article.fields.title.value}</h1>
+						<h1 data-testid="title">{article.title.value}</h1>
 						<p data-testid="location-label">{article.data.location?.label ?? 'N/A'}</p>
 						<p data-testid="location-lat">{article.data.location?.lat ?? 'N/A'}</p>
 						<p data-testid="tags-count">{article.data.tags?.length ?? 0}</p>
@@ -425,11 +440,14 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div data-testid="editor-loading">Loading editor...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div data-testid="editor">
-						<span data-testid="editor-title">{article.fields.title.value}</span>
-						<span data-testid="editor-author">{article.fields.author.fields.name.value}</span>
+						<span data-testid="editor-title">{article.title.value}</span>
+						<span data-testid="editor-author">{article.author.name.value}</span>
 						<span data-testid="editor-location">{article.data.location?.label ?? 'N/A'}</span>
 						<span data-testid="editor-tags">{article.data.tags?.length ?? 0}</span>
 					</div>
@@ -446,10 +464,13 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div data-testid="view-loading">Loading view...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div data-testid="view">
-						<span data-testid="view-title">{article.fields.title.value}</span>
+						<span data-testid="view-title">{article.title.value}</span>
 					</div>
 				)
 			}
@@ -490,6 +511,9 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return <div data-testid="data">{JSON.stringify(article.data)}</div>
 			}
@@ -526,6 +550,9 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return <div data-testid="data">{JSON.stringify(article.data)}</div>
 			}
@@ -556,13 +583,16 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<span data-testid="title">{article.fields.title.value}</span>
+						<span data-testid="title">{article.title.value}</span>
 						<button
 							data-testid="update-btn"
-							onClick={() => article.fields.title.setValue('Updated Title')}
+							onClick={() => article.title.setValue('Updated Title')}
 						>
 							Update
 						</button>
@@ -607,6 +637,9 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
@@ -641,6 +674,9 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return <div data-testid="dirty">{article.isDirty ? 'dirty' : 'clean'}</div>
 			}
@@ -667,13 +703,16 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
 						<span data-testid="dirty">{article.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="update-btn"
-							onClick={() => article.fields.title.setValue('New Title')}
+							onClick={() => article.title.setValue('New Title')}
 						>
 							Update
 						</button>
@@ -709,19 +748,22 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
 						<span data-testid="dirty">{article.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="update-btn"
-							onClick={() => article.fields.title.setValue('New Title')}
+							onClick={() => article.title.setValue('New Title')}
 						>
 							Update
 						</button>
 						<button
 							data-testid="revert-btn"
-							onClick={() => article.fields.title.setValue('Hello World')}
+							onClick={() => article.title.setValue('Hello World')}
 						>
 							Revert
 						</button>
@@ -759,14 +801,17 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<span data-testid="value">{article.fields.title.value}</span>
-						<span data-testid="server-value">{article.fields.title.serverValue}</span>
+						<span data-testid="value">{article.title.value}</span>
+						<span data-testid="server-value">{article.title.serverValue}</span>
 						<button
 							data-testid="update-btn"
-							onClick={() => article.fields.title.setValue('New Title')}
+							onClick={() => article.title.setValue('New Title')}
 						>
 							Update
 						</button>
@@ -803,14 +848,17 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<span data-testid="title">{article.fields.title.value}</span>
+						<span data-testid="title">{article.title.value}</span>
 						<span data-testid="dirty">{article.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="update-btn"
-							onClick={() => article.fields.title.setValue('New Title')}
+							onClick={() => article.title.setValue('New Title')}
 						>
 							Update
 						</button>
@@ -858,15 +906,18 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<span data-testid="title">{article.fields.title.value}</span>
-						<span data-testid="server-value">{article.fields.title.serverValue}</span>
+						<span data-testid="title">{article.title.value}</span>
+						<span data-testid="server-value">{article.title.serverValue}</span>
 						<span data-testid="dirty">{article.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="update-btn"
-							onClick={() => article.fields.title.setValue('Persisted Title')}
+							onClick={() => article.title.setValue('Persisted Title')}
 						>
 							Update
 						</button>
@@ -919,13 +970,16 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
 						<span data-testid="persisting">{article.isPersisting ? 'persisting' : 'idle'}</span>
 						<button
 							data-testid="update-btn"
-							onClick={() => article.fields.title.setValue('New Title')}
+							onClick={() => article.title.setValue('New Title')}
 						>
 							Update
 						</button>
@@ -979,15 +1033,16 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
-				// Access nested field handles - this was broken before the fix
-				const authorFields = article.fields.author.fields
-
+				// Access nested field handles via $fields or directly
 				return (
 					<div>
-						<h1 data-testid="title">{article.fields.title.value}</h1>
-						<p data-testid="author-name-field">{authorFields.name.value}</p>
-						<p data-testid="author-email-field">{authorFields.email.value}</p>
+						<h1 data-testid="title">{article.title.value}</h1>
+						<p data-testid="author-name-field">{article.author.name.value}</p>
+						<p data-testid="author-email-field">{article.author.email.value}</p>
 					</div>
 				)
 			}
@@ -1020,17 +1075,20 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				// Access has-many items - this was broken before the fix
-				const tagItems = article.fields.tags.items
+				const tagItems = article.tags.items
 
 				return (
 					<div>
-						<h1 data-testid="title">{article.fields.title.value}</h1>
+						<h1 data-testid="title">{article.title.value}</h1>
 						<ul data-testid="tags">
 							{tagItems.map(tag => (
 								<li key={tag.id} data-testid={`tag-${tag.id}`}>
-									{tag.fields.name.value}
+									{tag.name.value}
 								</li>
 							))}
 						</ul>
@@ -1068,13 +1126,16 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
 						<ul data-testid="tags">
-							{article.fields.tags.map((tag, index) => (
+							{article.tags.map((tag, index) => (
 								<li key={tag.id} data-testid={`tag-${index}`}>
-									{tag.fields.name.value}
+									{tag.name.value}
 								</li>
 							))}
 						</ul>
@@ -1113,10 +1174,13 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<h1 data-testid="title">{article.fields.title.value}</h1>
+						<h1 data-testid="title">{article.title.value}</h1>
 						<p data-testid="author-name">{article.data.author?.name ?? 'N/A'}</p>
 					</div>
 				)
@@ -1174,10 +1238,13 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<TextInput field={article.fields.title} label="Title" />
+						<TextInput field={article.title} label="Title" />
 						<AuthorDisplay data={article.data.author} />
 					</div>
 				)
@@ -1214,18 +1281,21 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<span data-testid="tag-count">{article.fields.tags.length}</span>
-						<span data-testid="tags-dirty">{article.fields.tags.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="tag-count">{article.tags.length}</span>
+						<span data-testid="tags-dirty">{article.tags.isDirty ? 'dirty' : 'clean'}</span>
 						<ul data-testid="tags">
-							{article.fields.tags.items.map(tag => (
+							{article.tags.items.map(tag => (
 								<li key={tag.id} data-testid={`tag-${tag.id}`}>
-									{tag.fields.name.value}
+									{tag.name.value}
 									<button
 										data-testid={`disconnect-${tag.id}`}
-										onClick={() => article.fields.tags.disconnect(tag.id)}
+										onClick={() => article.tags.disconnect(tag.id)}
 									>
 										Disconnect
 									</button>
@@ -1279,21 +1349,24 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<span data-testid="tag-count">{article.fields.tags.length}</span>
-						<span data-testid="tags-dirty">{article.fields.tags.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="tag-count">{article.tags.length}</span>
+						<span data-testid="tags-dirty">{article.tags.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="connect-tag-3"
-							onClick={() => article.fields.tags.connect('tag-3')}
+							onClick={() => article.tags.connect('tag-3')}
 						>
 							Connect TypeScript
 						</button>
 						<ul data-testid="tags">
-							{article.fields.tags.items.map(tag => (
+							{article.tags.items.map(tag => (
 								<li key={tag.id} data-testid={`tag-${tag.id}`}>
-									{tag.fields.name.value}
+									{tag.name.value}
 								</li>
 							))}
 						</ul>
@@ -1343,21 +1416,24 @@ describe('useEntity hook', () => {
 				if (article.isLoading) {
 					return <div>Loading...</div>
 				}
+				if (article.isError) {
+					return <div>Error</div>
+				}
 
-				const tagIds = article.fields.tags.items.map(t => t.id).sort().join(',')
+				const tagIds = article.tags.items.map(t => t.id).sort().join(',')
 
 				return (
 					<div>
 						<span data-testid="tag-ids">{tagIds}</span>
 						<button
 							data-testid="disconnect-tag-1"
-							onClick={() => article.fields.tags.disconnect('tag-1')}
+							onClick={() => article.tags.disconnect('tag-1')}
 						>
 							Disconnect tag-1
 						</button>
 						<button
 							data-testid="connect-tag-3"
-							onClick={() => article.fields.tags.connect('tag-3')}
+							onClick={() => article.tags.connect('tag-3')}
 						>
 							Connect tag-3
 						</button>

@@ -4,7 +4,7 @@ import { collectSelection } from '../jsx/analyzer.js'
 import { mergeSelections } from '../jsx/SelectionMeta.js'
 import { buildQueryFromSelection, SelectionScope } from '@contember/bindx'
 import type { SelectionMeta } from '@contember/bindx'
-import type { EntityRef } from '../jsx/types.js'
+import type { EntityAccessor } from '../jsx/types.js'
 
 /**
  * Options for useSelectionCollectionForList hook.
@@ -21,7 +21,7 @@ export interface UseSelectionCollectionForListOptions<T> {
 	/** Optional offset (for dependency tracking) */
 	offset?: number
 	/** Children render function - receives entity and index */
-	children: (entity: EntityRef<T>, index: number) => ReactNode
+	children: (entity: EntityAccessor<T>, index: number) => ReactNode
 }
 
 /**

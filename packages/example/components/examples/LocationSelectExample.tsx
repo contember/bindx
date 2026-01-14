@@ -19,7 +19,7 @@ export function LocationSelectExample() {
 	}
 
 	const selectedLocation = selectedLocationId
-		? locations.items.find(item => item.id === selectedLocationId)?.data
+		? locations.items.find(item => item.id === selectedLocationId)?.$data
 		: null
 
 	return (
@@ -34,8 +34,8 @@ export function LocationSelectExample() {
 				>
 					<option value="">Choose a location...</option>
 					{locations.items.map(item => (
-						<option key={item.key} value={item.id}>
-							{item.data.label}
+						<option key={item.id} value={item.id}>
+							{item.$data?.label}
 						</option>
 					))}
 				</select>

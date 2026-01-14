@@ -117,33 +117,36 @@ function HasManyTestComponent({ articleId, onArticle }: TestComponentProps): Rea
 	}, [article, onArticle])
 
 	if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 		return <div data-testid="loading">Loading...</div>
 	}
 
-	const tagIds = article.fields.tags.items.map(t => t.id).sort().join(',')
+	const tagIds = article.tags.items.map(t => t.id).sort().join(',')
 
 	return (
 		<div>
 			<span data-testid="tag-ids">{tagIds}</span>
-			<span data-testid="tag-count">{article.fields.tags.length}</span>
-			<span data-testid="is-dirty">{article.fields.tags.isDirty ? 'dirty' : 'clean'}</span>
+			<span data-testid="tag-count">{article.tags.length}</span>
+			<span data-testid="is-dirty">{article.tags.isDirty ? 'dirty' : 'clean'}</span>
 			<ul data-testid="tags">
-				{article.fields.tags.items.map(tag => (
+				{article.tags.items.map(tag => (
 					<li key={tag.id} data-testid={`tag-${tag.id}`}>
-						{tag.fields.name.value}
+						{tag.$fields.name.value}
 						<button
 							data-testid={`disconnect-${tag.id}`}
-							onClick={() => article.fields.tags.disconnect(tag.id)}
+							onClick={() => article.tags.disconnect(tag.id)}
 						>
 							×
 						</button>
 					</li>
 				))}
 			</ul>
-			<button data-testid="connect-tag-3" onClick={() => article.fields.tags.connect('tag-3')}>
+			<button data-testid="connect-tag-3" onClick={() => article.tags.connect('tag-3')}>
 				Connect tag-3
 			</button>
-			<button data-testid="connect-tag-4" onClick={() => article.fields.tags.connect('tag-4')}>
+			<button data-testid="connect-tag-4" onClick={() => article.tags.connect('tag-4')}>
 				Connect tag-4
 			</button>
 		</div>
@@ -251,23 +254,26 @@ describe('HasMany Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
-				const tagIds = article.fields.tags.items.map(t => t.id).sort().join(',')
+				const tagIds = article.tags.items.map(t => t.id).sort().join(',')
 
 				return (
 					<div>
 						<span data-testid="tag-ids">{tagIds}</span>
 						<button
 							data-testid="disconnect-tag-1"
-							onClick={() => article.fields.tags.disconnect('tag-1')}
+							onClick={() => article.tags.disconnect('tag-1')}
 						>
 							Disconnect tag-1
 						</button>
 						<button
 							data-testid="connect-tag-1"
-							onClick={() => article.fields.tags.connect('tag-1')}
+							onClick={() => article.tags.connect('tag-1')}
 						>
 							Connect tag-1
 						</button>
@@ -343,15 +349,18 @@ describe('HasMany Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="tag-count">{article.fields.tags.length}</span>
+						<span data-testid="tag-count">{article.tags.length}</span>
 						<button
 							data-testid="disconnect-tag-1"
-							onClick={() => article.fields.tags.disconnect('tag-1')}
+							onClick={() => article.tags.disconnect('tag-1')}
 						>
 							Disconnect tag-1
 						</button>
@@ -515,29 +524,32 @@ describe('HasMany Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
-				const tagIds = article.fields.tags.items.map(t => t.id).sort().join(',')
+				const tagIds = article.tags.items.map(t => t.id).sort().join(',')
 
 				return (
 					<div>
 						<span data-testid="tag-ids">{tagIds}</span>
 						<button
 							data-testid="disconnect-tag-1"
-							onClick={() => article.fields.tags.disconnect('tag-1')}
+							onClick={() => article.tags.disconnect('tag-1')}
 						>
 							Disconnect tag-1
 						</button>
 						<button
 							data-testid="disconnect-tag-2"
-							onClick={() => article.fields.tags.disconnect('tag-2')}
+							onClick={() => article.tags.disconnect('tag-2')}
 						>
 							Disconnect tag-2
 						</button>
 						<button
 							data-testid="connect-tag-1"
-							onClick={() => article.fields.tags.connect('tag-1')}
+							onClick={() => article.tags.connect('tag-1')}
 						>
 							Connect tag-1
 						</button>
@@ -588,18 +600,21 @@ describe('HasMany Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
-				const tagIds = article.fields.tags.items.map(t => t.id).sort().join(',')
+				const tagIds = article.tags.items.map(t => t.id).sort().join(',')
 
 				return (
 					<div>
 						<span data-testid="tag-ids">{tagIds}</span>
-						<span data-testid="is-dirty">{article.fields.tags.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="is-dirty">{article.tags.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="connect-tag-3"
-							onClick={() => article.fields.tags.connect('tag-3')}
+							onClick={() => article.tags.connect('tag-3')}
 						>
 							Connect
 						</button>
@@ -647,18 +662,21 @@ describe('HasMany Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
-				const tagIds = article.fields.tags.items.map(t => t.id).sort().join(',')
+				const tagIds = article.tags.items.map(t => t.id).sort().join(',')
 
 				return (
 					<div>
 						<span data-testid="tag-ids">{tagIds}</span>
-						<span data-testid="is-dirty">{article.fields.tags.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="is-dirty">{article.tags.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="disconnect-tag-1"
-							onClick={() => article.fields.tags.disconnect('tag-1')}
+							onClick={() => article.tags.disconnect('tag-1')}
 						>
 							Disconnect
 						</button>
@@ -706,24 +724,27 @@ describe('HasMany Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
-				const tagIds = article.fields.tags.items.map(t => t.id).sort().join(',')
+				const tagIds = article.tags.items.map(t => t.id).sort().join(',')
 
 				return (
 					<div>
 						<span data-testid="tag-ids">{tagIds}</span>
-						<span data-testid="is-dirty">{article.fields.tags.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="is-dirty">{article.tags.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="connect-tag-3"
-							onClick={() => article.fields.tags.connect('tag-3')}
+							onClick={() => article.tags.connect('tag-3')}
 						>
 							Connect
 						</button>
 						<button
 							data-testid="disconnect-tag-1"
-							onClick={() => article.fields.tags.disconnect('tag-1')}
+							onClick={() => article.tags.disconnect('tag-1')}
 						>
 							Disconnect
 						</button>
@@ -835,15 +856,18 @@ describe('HasMany Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="tag-count">{article.fields.tags.length}</span>
+						<span data-testid="tag-count">{article.tags.length}</span>
 						<button
 							data-testid="connect-nonexistent"
-							onClick={() => article.fields.tags.connect('nonexistent-tag')}
+							onClick={() => article.tags.connect('nonexistent-tag')}
 						>
 							Connect
 						</button>
@@ -880,15 +904,18 @@ describe('HasMany Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="tag-count">{article.fields.tags.length}</span>
+						<span data-testid="tag-count">{article.tags.length}</span>
 						<button
 							data-testid="disconnect-nonexistent"
-							onClick={() => article.fields.tags.disconnect('nonexistent-tag')}
+							onClick={() => article.tags.disconnect('nonexistent-tag')}
 						>
 							Disconnect
 						</button>
@@ -924,18 +951,21 @@ describe('HasMany Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
-				const tagIds = article.fields.tags.items.map(t => t.id).sort().join(',')
+				const tagIds = article.tags.items.map(t => t.id).sort().join(',')
 
 				return (
 					<div>
 						<span data-testid="tag-ids">{tagIds}</span>
-						<span data-testid="tag-count">{article.fields.tags.length}</span>
+						<span data-testid="tag-count">{article.tags.length}</span>
 						<button
 							data-testid="connect-tag-1"
-							onClick={() => article.fields.tags.connect('tag-1')}
+							onClick={() => article.tags.connect('tag-1')}
 						>
 							Connect
 						</button>
@@ -976,20 +1006,23 @@ describe('HasMany Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
-				const tagIds = article.fields.tags.items.map(t => t.id).sort().join(',')
+				const tagIds = article.tags.items.map(t => t.id).sort().join(',')
 
 				return (
 					<div>
 						<span data-testid="tag-ids">{tagIds}</span>
-						<span data-testid="tag-count">{article.fields.tags.length}</span>
-						{article.fields.tags.items.map(tag => (
+						<span data-testid="tag-count">{article.tags.length}</span>
+						{article.tags.items.map(tag => (
 							<button
 								key={tag.id}
 								data-testid={`disconnect-${tag.id}`}
-								onClick={() => article.fields.tags.disconnect(tag.id)}
+								onClick={() => article.tags.disconnect(tag.id)}
 							>
 								Disconnect
 							</button>
@@ -1108,20 +1141,23 @@ describe('HasMany Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				// map() returns items including newly connected ones
 				// Note: newly connected items that aren't in parent entity's embedded data
 				// will have null for their fields until they are fetched separately
-				const ids = article.fields.tags.map(tag => tag.id).sort().join(',')
+				const ids = article.tags.map(tag => tag.id).sort().join(',')
 
 				return (
 					<div>
 						<span data-testid="tag-ids">{ids}</span>
 						<button
 							data-testid="connect-tag-3"
-							onClick={() => article.fields.tags.connect('tag-3')}
+							onClick={() => article.tags.connect('tag-3')}
 						>
 							Connect
 						</button>
@@ -1162,23 +1198,26 @@ describe('HasMany Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
 						<div data-testid="tag-names">
-							{article.fields.tags.items.map((tag, i) => (
+							{article.tags.items.map((tag, i) => (
 								<span key={i} data-testid={`tag-name-${tag.id}`}>
-									{tag.fields.name.value}
+									{tag.$fields.name.value}
 								</span>
 							))}
 						</div>
 						<button
 							data-testid="set-tag-1-name"
 							onClick={() => {
-								const tag = article.fields.tags.items.find(t => t.id === 'tag-1')
-								if (tag) tag.fields.name.setValue('Updated Tag 1')
+								const tag = article.tags.items.find(t => t.id === 'tag-1')
+								if (tag) tag.$fields.name.setValue('Updated Tag 1')
 							}}
 						>
 							Set Tag 1 Name
@@ -1218,23 +1257,26 @@ describe('HasMany Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
 						<div data-testid="tag-names">
-							{article.fields.tags.items.map((tag, i) => (
+							{article.tags.items.map((tag, i) => (
 								<span key={i} data-testid={`tag-name-${tag.id}`}>
-									{tag.fields.name.value}
+									{tag.$fields.name.value}
 								</span>
 							))}
 						</div>
 						<button
 							data-testid="set-all-names"
 							onClick={() => {
-								for (const tag of article.fields.tags.items) {
-									tag.fields.name.setValue(`Updated ${tag.id}`)
+								for (const tag of article.tags.items) {
+									tag.$fields.name.setValue(`Updated ${tag.id}`)
 								}
 							}}
 						>
@@ -1276,17 +1318,18 @@ describe('HasMany Relations', () => {
 			function TestComponent() {
 				const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().title().tags(t => t.id().name()))
 				if (article.isLoading) return <div data-testid="loading">Loading</div>
+				if (article.isError) return <div>Error</div>
 
-				const tagIds = article.fields.tags.items.map(t => t.id).join(',')
-				const isDirty = article.fields.tags.isDirty ? 'dirty' : 'clean'
-				const count = article.fields.tags.length
+				const tagIds = article.tags.items.map(t => t.id).join(',')
+				const isDirty = article.tags.isDirty ? 'dirty' : 'clean'
+				const count = article.tags.length
 
 				return (
 					<div>
 						<span data-testid="tag-ids">{tagIds}</span>
 						<span data-testid="tag-count">{count}</span>
 						<span data-testid="is-dirty">{isDirty}</span>
-						<button data-testid="add-tag" onClick={() => article.fields.tags.add({ name: 'New Tag' })}>
+						<button data-testid="add-tag" onClick={() => article.tags.add({ name: 'New Tag' })}>
 							Add Tag
 						</button>
 					</div>
@@ -1331,6 +1374,7 @@ describe('HasMany Relations', () => {
 			function TestComponent() {
 				const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
 				if (article.isLoading) return <div data-testid="loading">Loading</div>
+				if (article.isError) return <div>Error</div>
 
 				return (
 					<div>
@@ -1338,7 +1382,7 @@ describe('HasMany Relations', () => {
 						<button
 							data-testid="add-tag"
 							onClick={() => {
-								addedId = article.fields.tags.add({ name: 'New Tag' })
+								addedId = article.tags.add({ name: 'New Tag' })
 							}}
 						>
 							Add Tag
@@ -1374,11 +1418,12 @@ describe('HasMany Relations', () => {
 			function TestComponent() {
 				const article = useEntity('Article', { by: { id: 'article-empty' } }, e => e.id().tags(t => t.id()))
 				if (article.isLoading) return <div data-testid="loading">Loading</div>
+				if (article.isError) return <div>Error</div>
 
 				return (
 					<div>
-						<span data-testid="tag-count">{article.fields.tags.length}</span>
-						<button data-testid="add-tag" onClick={() => article.fields.tags.add()}>
+						<span data-testid="tag-count">{article.tags.length}</span>
+						<button data-testid="add-tag" onClick={() => article.tags.add()}>
 							Add Tag
 						</button>
 					</div>
@@ -1424,15 +1469,16 @@ describe('HasMany Relations', () => {
 			function TestComponent() {
 				const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
 				if (article.isLoading) return <div data-testid="loading">Loading</div>
+				if (article.isError) return <div>Error</div>
 
 				return (
 					<div>
-						<span data-testid="tag-count">{article.fields.tags.length}</span>
-						<span data-testid="is-dirty">{article.fields.tags.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="tag-count">{article.tags.length}</span>
+						<span data-testid="is-dirty">{article.tags.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="add-tag"
 							onClick={() => {
-								addedId = article.fields.tags.add()
+								addedId = article.tags.add()
 							}}
 						>
 							Add Tag
@@ -1440,7 +1486,7 @@ describe('HasMany Relations', () => {
 						<button
 							data-testid="remove-added"
 							onClick={() => {
-								if (addedId) article.fields.tags.remove(addedId)
+								if (addedId) article.tags.remove(addedId)
 							}}
 						>
 							Remove Added
@@ -1484,15 +1530,16 @@ describe('HasMany Relations', () => {
 			function TestComponent() {
 				const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
 				if (article.isLoading) return <div data-testid="loading">Loading</div>
+				if (article.isError) return <div>Error</div>
 
-				const tagIds = article.fields.tags.items.map(t => t.id).join(',')
+				const tagIds = article.tags.items.map(t => t.id).join(',')
 
 				return (
 					<div>
 						<span data-testid="tag-ids">{tagIds}</span>
-						<span data-testid="tag-count">{article.fields.tags.length}</span>
-						<span data-testid="is-dirty">{article.fields.tags.isDirty ? 'dirty' : 'clean'}</span>
-						<button data-testid="remove-tag-1" onClick={() => article.fields.tags.remove('tag-1')}>
+						<span data-testid="tag-count">{article.tags.length}</span>
+						<span data-testid="is-dirty">{article.tags.isDirty ? 'dirty' : 'clean'}</span>
+						<button data-testid="remove-tag-1" onClick={() => article.tags.remove('tag-1')}>
 							Remove tag-1
 						</button>
 					</div>
@@ -1531,14 +1578,15 @@ describe('HasMany Relations', () => {
 			function TestComponent() {
 				const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().tags(t => t.id().name()))
 				if (article.isLoading) return <div data-testid="loading">Loading</div>
+				if (article.isError) return <div>Error</div>
 
-				const tagIds = article.fields.tags.items.map(t => t.id).join(',')
+				const tagIds = article.tags.items.map(t => t.id).join(',')
 
 				return (
 					<div>
 						<span data-testid="tag-ids">{tagIds}</span>
-						<span data-testid="is-dirty">{article.fields.tags.isDirty ? 'dirty' : 'clean'}</span>
-						<button data-testid="move-0-1" onClick={() => article.fields.tags.move(0, 1)}>
+						<span data-testid="is-dirty">{article.tags.isDirty ? 'dirty' : 'clean'}</span>
+						<button data-testid="move-0-1" onClick={() => article.tags.move(0, 1)}>
 							Move 0 to 1
 						</button>
 					</div>
@@ -1575,14 +1623,15 @@ describe('HasMany Relations', () => {
 			function TestComponent() {
 				const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
 				if (article.isLoading) return <div data-testid="loading">Loading</div>
+				if (article.isError) return <div>Error</div>
 
-				const tagIds = article.fields.tags.items.map(t => t.id).join(',')
+				const tagIds = article.tags.items.map(t => t.id).join(',')
 
 				return (
 					<div>
 						<span data-testid="tag-ids">{tagIds}</span>
-						<span data-testid="is-dirty">{article.fields.tags.isDirty ? 'dirty' : 'clean'}</span>
-						<button data-testid="move-0-0" onClick={() => article.fields.tags.move(0, 0)}>
+						<span data-testid="is-dirty">{article.tags.isDirty ? 'dirty' : 'clean'}</span>
+						<button data-testid="move-0-0" onClick={() => article.tags.move(0, 0)}>
 							Move 0 to 0
 						</button>
 					</div>
@@ -1619,17 +1668,18 @@ describe('HasMany Relations', () => {
 			function TestComponent() {
 				const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
 				if (article.isLoading) return <div data-testid="loading">Loading</div>
+				if (article.isError) return <div>Error</div>
 
-				const tagIds = article.fields.tags.items.map(t => t.id).join(',')
+				const tagIds = article.tags.items.map(t => t.id).join(',')
 
 				return (
 					<div>
 						<span data-testid="tag-ids">{tagIds}</span>
-						<span data-testid="is-dirty">{article.fields.tags.isDirty ? 'dirty' : 'clean'}</span>
-						<button data-testid="move-0-1" onClick={() => article.fields.tags.move(0, 1)}>
+						<span data-testid="is-dirty">{article.tags.isDirty ? 'dirty' : 'clean'}</span>
+						<button data-testid="move-0-1" onClick={() => article.tags.move(0, 1)}>
 							Move 0 to 1
 						</button>
-						<button data-testid="reset" onClick={() => article.fields.tags.reset()}>
+						<button data-testid="reset" onClick={() => article.tags.reset()}>
 							Reset
 						</button>
 					</div>

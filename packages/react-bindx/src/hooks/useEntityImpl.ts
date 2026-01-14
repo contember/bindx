@@ -51,12 +51,12 @@ export interface ErrorEntityAccessor {
 }
 
 /**
- * Ready state for entity accessor
+ * Ready state base interface for entity accessor
  *
  * @typeParam TEntity - The full entity type
  * @typeParam TSelected - The selected subset of fields (defaults to TEntity for backwards compatibility)
  */
-export interface ReadyEntityAccessor<TEntity extends object, TSelected extends object = TEntity> {
+export interface ReadyEntityAccessorBase<TEntity extends object, TSelected extends object = TEntity> {
 	readonly status: 'ready'
 	readonly isLoading: false
 	readonly isError: false
@@ -68,6 +68,16 @@ export interface ReadyEntityAccessor<TEntity extends object, TSelected extends o
 	persist(): Promise<void>
 	reset(): void
 }
+
+/**
+ * Ready state for entity accessor with direct field access via Proxy.
+ * Access fields directly: `entity.fieldName` instead of `entity.fields.fieldName`.
+ *
+ * @typeParam TEntity - The full entity type
+ * @typeParam TSelected - The selected subset of fields (defaults to TEntity for backwards compatibility)
+ */
+export type ReadyEntityAccessor<TEntity extends object, TSelected extends object = TEntity> =
+	ReadyEntityAccessorBase<TEntity, TSelected> & SelectedEntityFields<TEntity, TSelected>
 
 /**
  * Union of all entity accessor states
@@ -198,17 +208,17 @@ export function useEntityImpl<TEntity extends object, TSelected extends object>(
 		const snapshot = coreResult.snapshot!
 		const realId = (snapshot.data as Record<string, unknown>)?.['id'] as string | undefined ?? derivedId
 
-		return {
+		const baseAccessor: ReadyEntityAccessorBase<TEntity, TSelected> = {
 			status: 'ready',
 			isLoading: false,
 			isError: false,
 			isPersisting: coreResult.isPersisting,
 			get isDirty() {
-				// Use handle.isDirty which includes scalar and relation changes
-				return handle.isDirty
+				// Use handle.$isDirty which includes scalar and relation changes
+				return handle.$isDirty
 			},
 			id: realId,
-			fields: handle.fields as SelectedEntityFields<TEntity, TSelected>,
+			fields: handle.$fields as SelectedEntityFields<TEntity, TSelected>,
 			data: snapshot.data as TSelected,
 			async persist() {
 				await batchPersister.persist(entityType, realId)
@@ -217,6 +227,26 @@ export function useEntityImpl<TEntity extends object, TSelected extends object>(
 				handle.reset()
 			},
 		}
+
+		// Wrap in Proxy to enable direct field access (entity.fieldName instead of entity.fields.fieldName)
+		return new Proxy(baseAccessor, {
+			get(target, prop, receiver) {
+				// First check if property exists on the base accessor
+				if (prop in target) {
+					return Reflect.get(target, prop, receiver)
+				}
+				// Then delegate to fields for direct field access
+				// Note: fields is a Proxy without a has trap, so we access directly
+				if (typeof prop === 'string') {
+					const fields = target.fields as Record<string, unknown>
+					const fieldValue = fields[prop]
+					if (fieldValue !== undefined) {
+						return fieldValue
+					}
+				}
+				return undefined
+			},
+		}) as ReadyEntityAccessor<TEntity, TSelected>
 	}, [coreResult, derivedId, handle, batchPersister, entityType])
 
 	return accessor

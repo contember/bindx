@@ -8,10 +8,10 @@ export const AuthorArticlesExplicit = createComponent()
 	.entity('author', 'Author', e => e.name().articles({ limit: 5 }, a => a.id().title()))
 	.render(({ author }) => (
 		<ul>
-			<HasMany field={author.fields.articles}>
+			<HasMany field={author.$fields.articles}>
 				{article => (
 					<li key={article.id}>
-						<Field field={article.fields.title} />
+						<Field field={article.$fields.title} />
 					</li>
 				)}
 			</HasMany>
@@ -25,10 +25,10 @@ export const AuthorArticlesImplicit = createComponent()
 	.entity('author', 'Author')
 	.render(({ author }) => (
 		<ul>
-			<HasMany field={author.fields.articles} limit={5}>
+			<HasMany field={author.$fields.articles} limit={5}>
 				{article => (
 					<li key={article.id}>
-						<Field field={article.fields.title} />
+						<Field field={article.$fields.title} />
 					</li>
 				)}
 			</HasMany>
@@ -43,7 +43,7 @@ export const AuthorBioImplicit = createComponent()
 	.render(({ author }) => (
 		<div>
 			<p>
-				<Field field={author.fields.bio} />
+				<Field field={author.$fields.bio} />
 			</p>
 		</div>
 	))
@@ -58,10 +58,10 @@ export const ArticleImplicitInImplicit = () => {
 				<article className="article-detail">
 					<header>
 						<h1>
-							<Field field={article.fields.title} />
+							<Field field={article.$fields.title} />
 						</h1>
 					</header>
-					<AuthorArticlesImplicit author={article.fields.author.entity} />
+					<AuthorArticlesImplicit author={article.$fields.author.$entity} />
 				</article>
 			)}
 		</Entity>
@@ -78,10 +78,10 @@ export const ArticleExplicitInImplicit = () => {
 				<article className="article-detail">
 					<header>
 						<h1>
-							<Field field={article.fields.title} />
+							<Field field={article.$fields.title} />
 						</h1>
 					</header>
-					<AuthorArticlesExplicit author={article.fields.author.entity} />
+					<AuthorArticlesExplicit author={article.$fields.author.$entity} />
 				</article>
 			)}
 		</Entity>
@@ -112,7 +112,7 @@ export const ArticleExplicitInExplicit = () => {
 					<Field field={article.fields.title} />
 				</h1>
 			</header>
-			<AuthorArticlesExplicit author={article.fields.author.entity} />
+			<AuthorArticlesExplicit author={article.fields.author.$entity} />
 		</article>
 	)
 }
@@ -143,9 +143,9 @@ export const ArticleImplicitInExplicit = () => {
 					<Field field={article.fields.title} />
 				</h1>
 			</header>
-			<AuthorBioImplicit author={article.fields.author.entity} />
+			<AuthorBioImplicit author={article.fields.author.$entity} />
 
-			<AuthorArticlesImplicit author={article.fields.author.entity} />
+			<AuthorArticlesImplicit author={article.fields.author.$entity} />
 		</article>
 	)
 }

@@ -136,7 +136,7 @@ describe('Type Safety - Compile Time Checks', () => {
 		test('EntityRef<T> defaults to full entity (backwards compatible)', () => {
 			// EntityRef<Author> should have all Author fields
 			type FullAuthorRef = EntityRef<Author>
-			type FullFields = FullAuthorRef['fields']
+			type FullFields = FullAuthorRef['$fields']
 
 			// These should all be accessible - compile-time verification
 			assertTrue<AssertExtends<'name', keyof FullFields>>()
@@ -147,7 +147,7 @@ describe('Type Safety - Compile Time Checks', () => {
 		test('EntityRef<T, S> restricts to selected fields', () => {
 			// EntityRef<Author, { name: string }> should only have name
 			type SelectedAuthorRef = EntityRef<Author, { name: string }>
-			type SelectedFields = SelectedAuthorRef['fields']
+			type SelectedFields = SelectedAuthorRef['$fields']
 
 			// name should be accessible
 			assertTrue<AssertExtends<'name', keyof SelectedFields>>()
@@ -157,11 +157,11 @@ describe('Type Safety - Compile Time Checks', () => {
 			assertFalse<AssertExtends<'bio', keyof SelectedFields>>()
 		})
 
-		test('EntityRef data property matches selection type', () => {
+		test('EntityRef $data property matches selection type', () => {
 			type SelectedRef = EntityRef<Author, { name: string; email: string }>
-			type DataType = SelectedRef['data']
+			type DataType = SelectedRef['$data']
 
-			// data should be { name: string; email: string } | null
+			// $data should be { name: string; email: string } | null
 			assertTrue<AssertExtends<DataType, { name: string; email: string } | null>>()
 		})
 
@@ -171,7 +171,7 @@ describe('Type Safety - Compile Time Checks', () => {
 			// This would be a type error if uncommented:
 			// declare const ref: SelectedRef
 			// @ts-expect-error - 'email' does not exist on selected fields
-			type _TestError = SelectedRef['fields']['email']
+			type _TestError = SelectedRef['$fields']['email']
 		})
 	})
 
@@ -226,8 +226,8 @@ describe('Type Safety - Compile Time Checks', () => {
 			const TagDisplay = createComponent()
 				.entity('tag', 'Tag', e => e.name().color())
 				.render(({ tag }) => {
-					void tag.data?.name
-					void tag.data?.color
+					void tag.$data?.name
+					void tag.$data?.color
 					return null
 				})
 
@@ -280,7 +280,7 @@ describe('Type Safety - Runtime Behavior', () => {
 			const AuthorInfo = createComponent()
 				.entity('author', 'Author', e => e.name())
 				.render(({ author }) => {
-					void author.data?.name
+					void author.$data?.name
 					return null
 				})
 
@@ -296,7 +296,7 @@ describe('Type Safety - Runtime Behavior', () => {
 				.entity('author', 'Author')
 				.render(({ author }) => {
 					// Access fields to trigger implicit selection collection
-					void author.fields.name.value
+					void author.$fields.name.value
 					return null
 				})
 
@@ -309,8 +309,8 @@ describe('Type Safety - Runtime Behavior', () => {
 			const TagList = createComponent()
 				.entity('tag', 'Tag', e => e.name().color())
 				.render(({ tag }) => {
-					void tag.data?.name
-					void tag.data?.color
+					void tag.$data?.name
+					void tag.$data?.color
 					return null
 				})
 
@@ -325,8 +325,8 @@ describe('Type Safety - Runtime Behavior', () => {
 				.entity('article', 'Article', e => e.title())
 				.entity('author', 'Author', e => e.name())
 				.render(({ article, author }) => {
-					void article.data?.title
-					void author.data?.name
+					void article.$data?.title
+					void author.$data?.name
 					return null
 				})
 
@@ -397,7 +397,7 @@ describe('Type Safety - Expected Errors', () => {
 
 	test('accessing non-selected field should be type error', () => {
 		type SelectedRef = EntityRef<Author, { name: string }>
-		type SelectedFields = SelectedRef['fields']
+		type SelectedFields = SelectedRef['$fields']
 
 		// This should work - name is selected
 		assertTrue<AssertExtends<'name', keyof SelectedFields>>()
@@ -417,18 +417,18 @@ describe('Type Safety - Expected Errors', () => {
 		const _ArticleFragment = createFragment<Article>()(e => e.author(TagFragment))
 	})
 
-	test('EntityRef types with different selections have different data types', () => {
+	test('EntityRef types with different selections have different $data types', () => {
 		type SmallRef = EntityRef<Author, { name: string }>
 		type LargeRef = EntityRef<Author, { name: string; email: string }>
 
-		// LargeRef.data extends SmallRef.data (has all required fields plus more)
-		assertTrue<AssertExtends<NonNullable<LargeRef['data']>, NonNullable<SmallRef['data']>>>()
+		// LargeRef.$data extends SmallRef.$data (has all required fields plus more)
+		assertTrue<AssertExtends<NonNullable<LargeRef['$data']>, NonNullable<SmallRef['$data']>>>()
 
-		// But SmallRef.data does NOT extend LargeRef.data (missing email)
-		assertFalse<AssertExtends<NonNullable<SmallRef['data']>, NonNullable<LargeRef['data']>>>()
+		// But SmallRef.$data does NOT extend LargeRef.$data (missing email)
+		assertFalse<AssertExtends<NonNullable<SmallRef['$data']>, NonNullable<LargeRef['$data']>>>()
 
-		// The data types are NOT equal
-		assertFalse<AssertEqual<LargeRef['data'], SmallRef['data']>>()
+		// The $data types are NOT equal
+		assertFalse<AssertEqual<LargeRef['$data'], SmallRef['$data']>>()
 	})
 
 	test('EntityRef with different entity types should NOT be assignable', () => {
@@ -460,7 +460,7 @@ describe('Type Safety - Expected Errors', () => {
 		const AuthorCard = createComponent()
 			.entity('author', 'Author', e => e.name())
 			.render(({ author }) => {
-				void author.data?.name
+				void author.$data?.name
 				return null
 			})
 
@@ -493,10 +493,10 @@ describe('Type Safety - Known Limitations', () => {
 		// EntityRef<Article, SelectedArticle> should restrict to only 'title'
 
 		// This SHOULD work - title is selected
-		assertTrue<AssertExtends<'title', keyof EntityRef<Article, SelectedArticle>['fields']>>()
+		assertTrue<AssertExtends<'title', keyof EntityRef<Article, SelectedArticle>['$fields']>>()
 
 		// This SHOULD NOT work - content is not selected
-		assertFalse<AssertExtends<'content', keyof EntityRef<Article, SelectedArticle>['fields']>>()
+		assertFalse<AssertExtends<'content', keyof EntityRef<Article, SelectedArticle>['$fields']>>()
 	})
 
 	test('mergeFragments preserves model type brand', () => {
@@ -531,7 +531,7 @@ describe('Type Safety - Known Limitations', () => {
 	test('nested relation selection types are propagated', () => {
 		// When you select author.name from Article, the author field should be typed correctly
 		type ArticleWithAuthor = EntityRef<Article, { title: string; author: { name: string } }>
-		type AuthorFields = ArticleWithAuthor['fields']['author']['fields']
+		type AuthorFields = ArticleWithAuthor['$fields']['author']['$fields']
 
 		// Should have access to name
 		assertTrue<AssertExtends<'name', keyof AuthorFields>>()
@@ -551,7 +551,7 @@ describe('Type Safety - Known Limitations', () => {
 		// The children callback receives EntityRef<Tag, SelectedTag>
 		// which should only allow accessing 'name', not 'color'
 		type CallbackArg = Parameters<Props['children']>[0]
-		type CallbackFields = CallbackArg['fields']
+		type CallbackFields = CallbackArg['$fields']
 
 		assertTrue<AssertExtends<'name', keyof CallbackFields>>()
 		assertFalse<AssertExtends<'color', keyof CallbackFields>>()
@@ -568,7 +568,7 @@ describe('Type Safety - Known Limitations', () => {
 		// The children callback receives EntityRef<Author, SelectedAuthor>
 		// which should only allow accessing 'name' and 'email', not 'bio'
 		type CallbackArg = Parameters<Props['children']>[0]
-		type CallbackFields = CallbackArg['fields']
+		type CallbackFields = CallbackArg['$fields']
 
 		assertTrue<AssertExtends<'name', keyof CallbackFields>>()
 		assertTrue<AssertExtends<'email', keyof CallbackFields>>()
@@ -594,8 +594,8 @@ describe('Type Safety - Integration', () => {
 		const AuthorDisplay = createComponent()
 			.entity('author', 'Author', e => e.id().name())
 			.render(({ author }) => {
-				void author.data?.id
-				void author.data?.name
+				void author.$data?.id
+				void author.$data?.name
 				return null
 			})
 

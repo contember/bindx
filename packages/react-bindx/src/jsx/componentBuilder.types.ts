@@ -9,6 +9,7 @@
 import type { ReactNode, ComponentType } from 'react'
 import type {
 	EntityRef,
+	EntityAccessor,
 	FluentFragment,
 	SelectionBuilder,
 	AnyBrand,
@@ -226,7 +227,8 @@ export type SetScalarProps<
 // ============================================================================
 
 /**
- * Build EntityRef props from entity config.
+ * Build EntityAccessor props from entity config.
+ * Uses EntityAccessor to support direct field access (entity.fieldName.value).
  * Uses string for entity name to accept entities from various sources (Entity callbacks, relation accessors, etc.).
  * HasRole inside createComponent uses the fallback mechanism based on entity type when name is unknown.
  */
@@ -240,7 +242,7 @@ export type BuildEntityProps<
 		infer TSelected,
 		infer _TIsImplicit
 	>
-		? EntityRef<
+		? EntityAccessor<
 				TEntityName extends keyof TSchema ? TSchema[TEntityName] : object,
 				TSelected,
 				AnyBrand,
@@ -248,7 +250,7 @@ export type BuildEntityProps<
 				TRoles
 			>
 		: TEntityProps[K] extends InterfaceEntityPropConfig<infer TInterface, infer _TIsImplicit>
-			? EntityRef<TInterface, TInterface, AnyBrand, string, TRoles>
+			? EntityAccessor<TInterface, TInterface, AnyBrand, string, TRoles>
 			: never
 }
 

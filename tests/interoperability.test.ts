@@ -143,8 +143,8 @@ describe('Fragment Interoperability', () => {
 			const ArticleHeader = createComponent()
 				.entity('article', 'Article', e => e.title().author(a => a.id().name().email()))
 				.render(({ article }) => {
-					void article.data?.title
-					void article.data?.author?.name
+					void article.$data?.title
+					void article.$data?.author?.name
 					return null
 				})
 
@@ -158,8 +158,8 @@ describe('Fragment Interoperability', () => {
 			const TagCard = createComponent()
 				.entity('tag', 'Tag', e => e.name().color())
 				.render(({ tag }) => {
-					void tag.data?.name
-					void tag.data?.color
+					void tag.$data?.name
+					void tag.$data?.color
 					return null
 				})
 
@@ -179,7 +179,7 @@ describe('Fragment Interoperability', () => {
 			const AuthorCard = createComponent()
 				.entity('author', 'Author', e => e.name())
 				.render(({ author }) => {
-					void author.data?.name
+					void author.$data?.name
 					return null
 				})
 
@@ -198,14 +198,14 @@ describe('Fragment Interoperability', () => {
 			const AuthorName = createComponent()
 				.entity('author', 'Author', e => e.name())
 				.render(({ author }) => {
-					void author.data?.name
+					void author.$data?.name
 					return null
 				})
 
 			const AuthorEmail = createComponent()
 				.entity('author', 'Author', e => e.email())
 				.render(({ author }) => {
-					void author.data?.email
+					void author.$data?.email
 					return null
 				})
 
@@ -309,7 +309,7 @@ describe('Component Integration', () => {
 		const AuthorView = createComponent()
 			.entity('author', 'Author', e => e.name())
 			.render(({ author }) => {
-				void author.data?.name
+				void author.$data?.name
 				return React.createElement('div', null, 'Author View')
 			})
 
@@ -323,16 +323,16 @@ describe('Component Integration', () => {
 		const AuthorName = createComponent()
 			.entity('author', 'Author', e => e.name())
 			.render(({ author }) => {
-				void author.data?.name
+				void author.$data?.name
 				return null
 			})
 
 		const AuthorFull = createComponent()
 			.entity('author', 'Author', e => e.name().email().bio())
 			.render(({ author }) => {
-				void author.data?.name
-				void author.data?.email
-				void author.data?.bio
+				void author.$data?.name
+				void author.$data?.email
+				void author.$data?.bio
 				return null
 			})
 

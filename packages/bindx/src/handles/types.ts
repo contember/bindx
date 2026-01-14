@@ -143,6 +143,9 @@ type ExtractNestedSelection<TSelected, K extends PropertyKey> =
  * Maps entity fields to Handle types, but only for fields present in TSelected.
  * This enables compile-time checking that only fetched fields are accessed.
  *
+ * HasOne relations return HasOneAccessor which supports direct field access:
+ * - `entity.author.name` instead of `entity.author.$entity.$fields.name`
+ *
  * @typeParam TEntity - The full entity type
  * @typeParam TSelected - The selected subset (determines which fields are accessible)
  * @typeParam TAvailableRoles - Available roles to propagate to nested relations
@@ -178,7 +181,8 @@ export type SelectedEntityFields<TEntity, TSelected, TAvailableRoles extends rea
 		: never
 } & {
 	// HasOne fields: only include if key exists in TSelected, with nested selection
-	[K in HasOneKeys<TEntity> & keyof TSelected]: HasOneRef<
+	// Returns HasOneAccessor for direct field access support
+	[K in HasOneKeys<TEntity> & keyof TSelected]: HasOneAccessor<
 		NonNullable<TEntity[K]>,
 		ExtractNestedSelection<TSelected, K> extends object ? ExtractNestedSelection<TSelected, K> : NonNullable<TEntity[K]>,
 		AnyBrand,
@@ -226,7 +230,11 @@ export interface InputProps<T> {
 // ============================================================================
 
 /**
- * Reference to a scalar field - works in both collection and runtime phases
+ * Reference to a scalar field - works in both collection and runtime phases.
+ *
+ * All properties are also available with $ prefix for consistency with relation handles:
+ * - `field.value` and `field.$value` are equivalent
+ * - `field.setValue(v)` and `field.$setValue(v)` are equivalent
  */
 export interface FieldRef<T> {
 	/** Internal metadata for collection phase */
@@ -234,45 +242,74 @@ export interface FieldRef<T> {
 
 	/** Current value (null in collection phase, real value in runtime) */
 	readonly value: T | null
+	/** Alias for value */
+	readonly $value: T | null
 
 	/** Server value for dirty tracking */
 	readonly serverValue: T | null
+	/** Alias for serverValue */
+	readonly $serverValue: T | null
 
 	/** Whether value differs from server */
 	readonly isDirty: boolean
+	/** Alias for isDirty */
+	readonly $isDirty: boolean
 
 	/** Update the value */
 	setValue(value: T | null): void
+	/** Alias for setValue */
+	$setValue(value: T | null): void
 
 	/** Input binding props */
 	readonly inputProps: {
 		value: T | null
 		setValue: (value: T | null) => void
 	}
+	/** Alias for inputProps */
+	readonly $inputProps: {
+		value: T | null
+		setValue: (value: T | null) => void
+	}
 
 	/** List of errors on this field */
 	readonly errors: readonly FieldError[]
+	/** Alias for errors */
+	readonly $errors: readonly FieldError[]
 
 	/** Whether this field has any errors */
 	readonly hasError: boolean
+	/** Alias for hasError */
+	readonly $hasError: boolean
 
 	/** Add a client-side error to this field */
 	addError(error: ErrorInput): void
+	/** Alias for addError */
+	$addError(error: ErrorInput): void
 
 	/** Clear all errors from this field */
 	clearErrors(): void
+	/** Alias for clearErrors */
+	$clearErrors(): void
 
 	// ==================== Event Subscriptions ====================
 
 	/** Subscribe to field value changes */
 	onChange(listener: EventListener<FieldChangedEvent>): UnsubscribeType
+	/** Alias for onChange */
+	$onChange(listener: EventListener<FieldChangedEvent>): UnsubscribeType
 
 	/** Intercept field value changes (can cancel or modify) */
 	onChanging(interceptor: Interceptor<FieldChangingEvent>): UnsubscribeType
+	/** Alias for onChanging */
+	$onChanging(interceptor: Interceptor<FieldChangingEvent>): UnsubscribeType
 }
 
 /**
- * Reference to a has-many relation - selection-aware version
+ * Reference to a has-many relation - selection-aware version.
+ *
+ * All handle properties are available with $ prefix for consistency:
+ * - `hasMany.$items`, `hasMany.$length`, `hasMany.$add()`, etc.
+ * - Non-prefixed versions also work for backwards compatibility.
  *
  * @typeParam TEntity - The full entity type
  * @typeParam TSelected - The selected subset of fields (defaults to TEntity for backwards compatibility)
@@ -285,33 +322,53 @@ export interface HasManyRef<TEntity, TSelected = TEntity, TBrand extends AnyBran
 
 	/** Number of items */
 	readonly length: number
+	/** Alias for length */
+	readonly $length: number
 
 	/** Whether any item has been modified */
 	readonly isDirty: boolean
+	/** Alias for isDirty */
+	readonly $isDirty: boolean
 
-	/** Direct access to items array - returns selection-aware entity refs */
-	readonly items: EntityRef<TEntity, TSelected, TBrand, string, TAvailableRoles>[]
+	/** Direct access to items array - returns selection-aware entity accessors with direct field access */
+	readonly items: EntityAccessor<TEntity, TSelected, TBrand, string, TAvailableRoles>[]
+	/** Alias for items */
+	readonly $items: EntityAccessor<TEntity, TSelected, TBrand, string, TAvailableRoles>[]
 
-	/** Iterate over items - returns selection-aware entity refs */
-	map<R>(fn: (item: EntityRef<TEntity, TSelected, TBrand, string, TAvailableRoles>, index: number) => R): R[]
+	/** Iterate over items - returns selection-aware entity accessors with direct field access */
+	map<R>(fn: (item: EntityAccessor<TEntity, TSelected, TBrand, string, TAvailableRoles>, index: number) => R): R[]
+	/** Alias for map */
+	$map<R>(fn: (item: EntityAccessor<TEntity, TSelected, TBrand, string, TAvailableRoles>, index: number) => R): R[]
 
 	/** Add a new item - returns the new entity's ID (temp ID) */
 	add(data?: Partial<TEntity>): string
+	/** Alias for add */
+	$add(data?: Partial<TEntity>): string
 
 	/** Remove item by ID */
 	remove(itemId: string): void
+	/** Alias for remove */
+	$remove(itemId: string): void
 
 	/** Move item from one position to another */
 	move(fromIndex: number, toIndex: number): void
+	/** Alias for move */
+	$move(fromIndex: number, toIndex: number): void
 
 	/** Connect an existing entity to this has-many relation */
 	connect(itemId: string): void
+	/** Alias for connect */
+	$connect(itemId: string): void
 
 	/** Disconnect an entity from this has-many relation */
 	disconnect(itemId: string | null): void
+	/** Alias for disconnect */
+	$disconnect(itemId: string | null): void
 
 	/** Reset the relation to server state */
 	reset(): void
+	/** Alias for reset */
+	$reset(): void
 
 	/** Type brand - ensures HasManyRef<Author> is not assignable to HasManyRef<Tag> */
 	readonly __entityType: TEntity
@@ -321,33 +378,65 @@ export interface HasManyRef<TEntity, TSelected = TEntity, TBrand extends AnyBran
 
 	/** List of errors on this relation */
 	readonly errors: readonly FieldError[]
+	/** Alias for errors */
+	readonly $errors: readonly FieldError[]
 
 	/** Whether this relation has any errors */
 	readonly hasError: boolean
+	/** Alias for hasError */
+	readonly $hasError: boolean
 
 	/** Add a client-side error to this relation */
 	addError(error: ErrorInput): void
+	/** Alias for addError */
+	$addError(error: ErrorInput): void
 
 	/** Clear all errors from this relation */
 	clearErrors(): void
+	/** Alias for clearErrors */
+	$clearErrors(): void
 
 	// ==================== Event Subscriptions ====================
 
 	/** Subscribe to item connected events */
 	onItemConnected(listener: EventListener<HasManyConnectedEvent>): UnsubscribeType
+	/** Alias for onItemConnected */
+	$onItemConnected(listener: EventListener<HasManyConnectedEvent>): UnsubscribeType
 
 	/** Subscribe to item disconnected events */
 	onItemDisconnected(listener: EventListener<HasManyDisconnectedEvent>): UnsubscribeType
+	/** Alias for onItemDisconnected */
+	$onItemDisconnected(listener: EventListener<HasManyDisconnectedEvent>): UnsubscribeType
 
 	/** Intercept item connection (can cancel) */
 	interceptItemConnecting(interceptor: Interceptor<HasManyConnectingEvent>): UnsubscribeType
+	/** Alias for interceptItemConnecting */
+	$interceptItemConnecting(interceptor: Interceptor<HasManyConnectingEvent>): UnsubscribeType
 
 	/** Intercept item disconnection (can cancel) */
 	interceptItemDisconnecting(interceptor: Interceptor<HasManyDisconnectingEvent>): UnsubscribeType
+	/** Alias for interceptItemDisconnecting */
+	$interceptItemDisconnecting(interceptor: Interceptor<HasManyDisconnectingEvent>): UnsubscribeType
 }
 
 /**
- * Reference to a has-one relation - selection-aware version
+ * Reference to a has-one relation - selection-aware version.
+ *
+ * Supports direct field access for shorter chains:
+ * - `hasOne.fieldName` returns the field handle for the related entity
+ * - Handle properties use $ prefix to avoid collision with field names: `$id`, `$connect()`, `$entity`, etc.
+ *
+ * @example
+ * ```typescript
+ * // Direct field access on has-one relation:
+ * article.author.name.value
+ *
+ * // Access handle methods with $ prefix:
+ * article.author.$connect('author-2')
+ * article.author.$disconnect()
+ * article.author.$isDirty
+ * article.author.$entity  // Get the full EntityRef
+ * ```
  *
  * @typeParam TEntity - The full entity type
  * @typeParam TSelected - The selected subset of fields (defaults to TEntity for backwards compatibility)
@@ -359,28 +448,31 @@ export interface HasOneRef<TEntity, TSelected = TEntity, TBrand extends AnyBrand
 	readonly [FIELD_REF_META]: FieldRefMeta
 
 	/** Entity ID (placeholder ID if disconnected) */
-	readonly id: string
+	readonly $id: string
 
 	/** Whether relation is dirty */
-	readonly isDirty: boolean
+	readonly $isDirty: boolean
+
+	/** Relation state */
+	readonly $state: HasOneRelationState
 
 	/** Nested entity fields - only selected fields are accessible */
-	readonly fields: SelectedEntityFields<TEntity, TSelected, TAvailableRoles>
+	readonly $fields: SelectedEntityFields<TEntity, TSelected, TAvailableRoles>
 
-	/** Related entity reference (always available, may be placeholder with placeholder ID) */
-	readonly entity: EntityRef<TEntity, TSelected, TBrand, string, TAvailableRoles>
+	/** Related entity accessor with direct field access (always available, may be placeholder with placeholder ID) */
+	readonly $entity: EntityAccessor<TEntity, TSelected, TBrand, string, TAvailableRoles>
 
 	/** Connect to existing entity */
-	connect(id: string): void
+	$connect(id: string): void
 
 	/** Disconnect relation */
-	disconnect(): void
+	$disconnect(): void
 
 	/** Mark relation for deletion */
-	delete(): void
+	$delete(): void
 
 	/** Reset the relation to server state */
-	reset(): void
+	$reset(): void
 
 	/** Type brand - ensures HasOneRef<Author> is not assignable to HasOneRef<Tag> */
 	readonly __entityType: TEntity
@@ -389,53 +481,66 @@ export interface HasOneRef<TEntity, TSelected = TEntity, TBrand extends AnyBrand
 	readonly __brands?: Set<symbol>
 
 	/** List of errors on this relation */
-	readonly errors: readonly FieldError[]
+	readonly $errors: readonly FieldError[]
 
 	/** Whether this relation has any errors */
-	readonly hasError: boolean
+	readonly $hasError: boolean
 
 	/** Add a client-side error to this relation */
-	addError(error: ErrorInput): void
+	$addError(error: ErrorInput): void
 
 	/** Clear all errors from this relation */
-	clearErrors(): void
+	$clearErrors(): void
 
 	// ==================== Event Subscriptions ====================
 
 	/** Subscribe to connection events */
-	onConnect(listener: EventListener<RelationConnectedEvent>): UnsubscribeType
+	$onConnect(listener: EventListener<RelationConnectedEvent>): UnsubscribeType
 
 	/** Subscribe to disconnection events */
-	onDisconnect(listener: EventListener<RelationDisconnectedEvent>): UnsubscribeType
+	$onDisconnect(listener: EventListener<RelationDisconnectedEvent>): UnsubscribeType
 
 	/** Intercept connection (can cancel or modify target) */
-	interceptConnect(interceptor: Interceptor<RelationConnectingEvent>): UnsubscribeType
+	$interceptConnect(interceptor: Interceptor<RelationConnectingEvent>): UnsubscribeType
 
 	/** Intercept disconnection (can cancel) */
-	interceptDisconnect(interceptor: Interceptor<RelationDisconnectingEvent>): UnsubscribeType
+	$interceptDisconnect(interceptor: Interceptor<RelationDisconnectingEvent>): UnsubscribeType
 }
+
+/**
+ * HasOneRef with direct field access via Proxy.
+ * Access fields directly: `hasOne.fieldName` instead of `hasOne.$entity.$fields.fieldName`.
+ * Handle properties use $ prefix to avoid collision with field names.
+ */
+export type HasOneAccessor<TEntity, TSelected = TEntity, TBrand extends AnyBrand = AnyBrand, TAvailableRoles extends readonly string[] = readonly string[]> =
+	HasOneRef<TEntity, TSelected, TBrand, TAvailableRoles> & SelectedEntityFields<TEntity, TSelected, TAvailableRoles>
 
 /**
  * Reference to an entity - provides typed field access.
  * Selection-aware: only selected fields are accessible.
+ *
+ * Supports direct field access for shorter chains:
+ * - `entity.fieldName` returns the field handle directly
+ * - Handle properties use $ prefix to avoid collision with field names: `$data`, `$isDirty`, etc.
+ * - The `id` property is special - it returns the entity ID (cannot collide with field names).
+ *
+ * @example
+ * ```typescript
+ * // Direct field access:
+ * article.title.value
+ * article.author.name.value  // Through has-one relation
+ *
+ * // Handle properties with $ prefix:
+ * article.$data
+ * article.$isDirty
+ * article.$fields  // Explicit access to fields proxy
+ * ```
  *
  * @typeParam TEntity - The full entity type
  * @typeParam TSelected - The selected subset of fields (defaults to TEntity for backwards compatibility)
  * @typeParam TBrand - Component brand type for validation (defaults to AnyBrand)
  * @typeParam TEntityName - The entity name as a string literal type (defaults to string)
  * @typeParam TAvailableRoles - Available roles for HasRole (defaults to readonly string[] for backwards compatibility)
- *
- * @example
- * ```ts
- * // Full access (backwards compatible)
- * EntityRef<Author>  // All fields accessible
- *
- * // Selection-aware
- * EntityRef<Author, { name: string; email: string }>  // Only name and email accessible
- *
- * // With entity name and roles for role-based access
- * EntityRef<Author, Author, AnyBrand, 'Author', readonly ['editor', 'admin']>
- * ```
  */
 export interface EntityRef<
 	TEntity,
@@ -444,29 +549,30 @@ export interface EntityRef<
 	TEntityName extends string = string,
 	TAvailableRoles extends readonly string[] = readonly string[],
 > {
-	/** Entity ID (placeholder ID for placeholder entities) */
+	/**
+	 * Entity ID (placeholder ID for placeholder entities).
+	 * Special case: `id` is always the entity ID, cannot collide with field names.
+	 */
 	readonly id: string
 
 	/** Typed field accessors - only selected fields are accessible */
-	readonly fields: SelectedEntityFields<TEntity, TSelected, TAvailableRoles>
+	readonly $fields: SelectedEntityFields<TEntity, TSelected, TAvailableRoles>
 
 	/** Raw data snapshot */
-	readonly data: TSelected | null
+	readonly $data: TSelected | null
 
 	/** Whether entity is dirty */
-	readonly isDirty: boolean
+	readonly $isDirty: boolean
 
 	/**
 	 * Server-assigned ID after persistence.
 	 * - null for entities that haven't been persisted yet (temp IDs)
 	 * - string (the real ID) after successful persist
 	 */
-	readonly persistedId: string | null
+	readonly $persistedId: string | null
 
-	/**
-	 * Whether this entity is new (created locally, not yet on server).
-	 */
-	readonly isNew: boolean
+	/** Whether this entity is new (created locally, not yet on server) */
+	readonly $isNew: boolean
 
 	/** Type brand - ensures EntityRef<Author> is not assignable to EntityRef<Tag> */
 	readonly __entityType: TEntity
@@ -486,40 +592,53 @@ export interface EntityRef<
 	readonly __brands?: Set<symbol>
 
 	/** List of entity-level errors (not including field or relation errors) */
-	readonly errors: readonly FieldError[]
+	readonly $errors: readonly FieldError[]
 
 	/** Whether this entity has any errors (entity-level, fields, or relations) */
-	readonly hasError: boolean
+	readonly $hasError: boolean
 
 	/** Add a client-side error to this entity */
-	addError(error: ErrorInput): void
+	$addError(error: ErrorInput): void
 
 	/** Clear entity-level errors */
-	clearErrors(): void
+	$clearErrors(): void
 
 	/** Clear all errors (entity-level, fields, and relations) */
-	clearAllErrors(): void
+	$clearAllErrors(): void
 
 	// ==================== Event Subscriptions ====================
 
 	/** Subscribe to any event on this entity */
-	on<E extends AfterEventTypes>(
+	$on<E extends AfterEventTypes>(
 		eventType: E,
 		listener: EventListener<EventTypeMap[E]>,
 	): UnsubscribeType
 
 	/** Intercept any before event on this entity */
-	intercept<E extends BeforeEventTypes>(
+	$intercept<E extends BeforeEventTypes>(
 		eventType: E,
 		interceptor: Interceptor<EventTypeMap[E]>,
 	): UnsubscribeType
 
 	/** Subscribe to persist success events */
-	onPersisted(listener: EventListener<EntityPersistedEvent>): UnsubscribeType
+	$onPersisted(listener: EventListener<EntityPersistedEvent>): UnsubscribeType
 
 	/** Intercept persist (can cancel) */
-	interceptPersisting(interceptor: Interceptor<EntityPersistingEvent>): UnsubscribeType
+	$interceptPersisting(interceptor: Interceptor<EntityPersistingEvent>): UnsubscribeType
 }
+
+/**
+ * EntityRef with direct field access via Proxy.
+ * Access fields directly: `entity.fieldName` instead of `entity.$fields.fieldName`.
+ * Handle properties use $ prefix to avoid collision with field names.
+ */
+export type EntityAccessor<
+	TEntity,
+	TSelected = TEntity,
+	TBrand extends AnyBrand = AnyBrand,
+	TEntityName extends string = string,
+	TAvailableRoles extends readonly string[] = readonly string[],
+> = EntityRef<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles> & SelectedEntityFields<TEntity, TSelected, TAvailableRoles>
 
 // ============================================================================
 // Role-Aware Type Helpers

@@ -141,10 +141,10 @@ describe('Store Synchronization', () => {
 
 				return (
 					<div>
-						<span data-testid="a-name">{author.fields.name.value}</span>
+						<span data-testid="a-name">{author.name.value}</span>
 						<button
 							data-testid="a-update"
-							onClick={() => author.fields.name.setValue('Jane Doe')}
+							onClick={() => author.name.setValue('Jane Doe')}
 						>
 							Update A
 						</button>
@@ -166,10 +166,10 @@ describe('Store Synchronization', () => {
 
 				return (
 					<div>
-						<span data-testid="b-name">{author.fields.name.value}</span>
+						<span data-testid="b-name">{author.name.value}</span>
 						<button
 							data-testid="b-update"
-							onClick={() => author.fields.name.setValue('Bob Smith')}
+							onClick={() => author.name.setValue('Bob Smith')}
 						>
 							Update B
 						</button>
@@ -258,7 +258,7 @@ describe('Store Synchronization', () => {
 						<span data-testid="author-email">{author.data.email}</span>
 						<button
 							data-testid="author-update"
-							onClick={() => author.fields.name.setValue('Updated Directly')}
+							onClick={() => author.name.setValue('Updated Directly')}
 						>
 							Update Directly
 						</button>
@@ -298,10 +298,10 @@ describe('Store Synchronization', () => {
 				return (
 					<div>
 						<span data-testid="a-dirty">{author.isDirty ? 'dirty' : 'clean'}</span>
-						<span data-testid="a-field-dirty">{author.fields.name.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="a-field-dirty">{author.name.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="a-update"
-							onClick={() => author.fields.name.setValue('Changed')}
+							onClick={() => author.name.setValue('Changed')}
 						>
 							Change
 						</button>
@@ -318,7 +318,7 @@ describe('Store Synchronization', () => {
 				return (
 					<div>
 						<span data-testid="b-dirty">{author.isDirty ? 'dirty' : 'clean'}</span>
-						<span data-testid="b-field-dirty">{author.fields.name.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="b-field-dirty">{author.name.isDirty ? 'dirty' : 'clean'}</span>
 					</div>
 				)
 			}

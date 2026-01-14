@@ -12,6 +12,7 @@ import type {
 	HasManyRef,
 	HasOneRef,
 	EntityRef,
+	EntityAccessor,
 } from '@contember/bindx'
 
 // Re-export unified types for backwards compatibility
@@ -30,17 +31,8 @@ export type {
 	HasManyRef,
 	HasOneRef,
 	EntityRef,
+	EntityAccessor,
 }
-
-/**
- * @deprecated Use SelectionMeta from selection/types.ts instead
- */
-export type JsxSelectionMeta = SelectionMeta
-
-/**
- * @deprecated Use SelectionFieldMeta from selection/types.ts instead
- */
-export type JsxSelectionFieldMeta = SelectionFieldMeta
 
 /**
  * Marker symbol for identifying bindx components
@@ -76,14 +68,14 @@ export interface HasManyComponentOptions {
 
 /**
  * Props for HasMany component.
- * Selection-aware: children callback receives EntityRef with only selected fields.
+ * Selection-aware: children callback receives EntityAccessor with direct field access.
  *
  * @typeParam TEntity - The full entity type
  * @typeParam TSelected - The selected subset of fields (defaults to TEntity for backwards compatibility)
  */
 export interface HasManyProps<TEntity, TSelected = TEntity> {
 	field: HasManyRef<TEntity, TSelected>
-	children: (item: EntityRef<TEntity, TSelected>, index: number) => ReactNode
+	children: (item: EntityAccessor<TEntity, TSelected>, index: number) => ReactNode
 	filter?: unknown
 	orderBy?: unknown
 	limit?: number
@@ -92,24 +84,25 @@ export interface HasManyProps<TEntity, TSelected = TEntity> {
 
 /**
  * Props for HasOne component.
- * Selection-aware: children callback receives EntityRef with only selected fields.
+ * Selection-aware: children callback receives EntityAccessor with direct field access.
  *
  * @typeParam TEntity - The full entity type
  * @typeParam TSelected - The selected subset of fields (defaults to TEntity for backwards compatibility)
  */
 export interface HasOneProps<TEntity, TSelected = TEntity> {
 	field: HasOneRef<TEntity, TSelected>
-	children: (entity: EntityRef<TEntity, TSelected>) => ReactNode
+	children: (entity: EntityAccessor<TEntity, TSelected>) => ReactNode
 }
 
 /**
  * Props for Entity component.
  * Entity name is preserved for proper HasRole type narrowing.
+ * Children receive EntityAccessor with direct field access.
  */
 export interface EntityComponentProps<TSchema, K extends keyof TSchema & string> {
 	name: K
 	id: string
-	children: (entity: EntityRef<TSchema[K], TSchema[K], import('@contember/bindx').AnyBrand, K>) => ReactNode
+	children: (entity: EntityAccessor<TSchema[K], TSchema[K], import('@contember/bindx').AnyBrand, K>) => ReactNode
 }
 
 /**

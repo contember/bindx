@@ -1,6 +1,6 @@
 import type { ReactNode, ReactElement } from 'react'
 import { isValidElement } from 'react'
-import type { JsxSelectionMeta, JsxSelectionFieldMeta, SelectionProvider } from './types.js'
+import type { SelectionMeta, SelectionFieldMeta, SelectionProvider } from './types.js'
 import { FIELD_REF_META, SCOPE_REF } from './types.js'
 import { SelectionMetaCollector, mergeSelections } from './SelectionMeta.js'
 import { SelectionScope } from '@contember/bindx'
@@ -57,7 +57,7 @@ export function analyzeJsx(node: ReactNode, selection: SelectionMetaCollector): 
 		}
 
 		handleBindxComponent(
-			component as { [COMPONENT_SELECTIONS]: Map<string, { selection: JsxSelectionMeta }> },
+			component as { [COMPONENT_SELECTIONS]: Map<string, { selection: SelectionMeta }> },
 			element.props as Record<string, unknown>,
 			selection,
 		)
@@ -74,7 +74,7 @@ export function analyzeJsx(node: ReactNode, selection: SelectionMetaCollector): 
 		const provider = component as SelectionProvider
 
 		// Collector function for nested selection analysis
-		const collectNested = (children: ReactNode): JsxSelectionMeta => {
+		const collectNested = (children: ReactNode): SelectionMeta => {
 			const nestedSelection = new SelectionMetaCollector()
 			analyzeJsx(children, nestedSelection)
 			return nestedSelection
@@ -118,7 +118,7 @@ export function collectSelection(jsx: ReactNode): SelectionMetaCollector {
 /**
  * Converts JSX selection metadata to the format used by query builder
  */
-export function convertToQuerySelection(jsxSelection: JsxSelectionMeta): Record<string, unknown> {
+export function convertToQuerySelection(jsxSelection: SelectionMeta): Record<string, unknown> {
 	const result: Record<string, unknown> = {}
 
 	for (const [_, field] of jsxSelection.fields) {
@@ -155,7 +155,7 @@ export function convertToQuerySelection(jsxSelection: JsxSelectionMeta): Record<
  * adjusted to the correct path context based on the entity prop.
  */
 function handleBindxComponent(
-	component: { [COMPONENT_SELECTIONS]: Map<string, { selection: JsxSelectionMeta }> },
+	component: { [COMPONENT_SELECTIONS]: Map<string, { selection: SelectionMeta }> },
 	props: Record<string, unknown>,
 	parentSelection: SelectionMetaCollector,
 ): void {
@@ -186,7 +186,7 @@ function handleBindxComponent(
 				// Only process root-level fields from the fragment
 				if (field.path.length === 1) {
 					// Create a new field meta with the path adjusted to the parent context
-					const adjustedField: JsxSelectionFieldMeta = {
+					const adjustedField: SelectionFieldMeta = {
 						...field,
 						path: [...refMeta.path, ...field.path],
 					}
@@ -216,7 +216,7 @@ function handleBindxComponent(
 /**
  * Debug helper - prints selection tree
  */
-export function debugSelection(selection: JsxSelectionMeta, indent = 0): string {
+export function debugSelection(selection: SelectionMeta, indent = 0): string {
 	const lines: string[] = []
 	const prefix = '  '.repeat(indent)
 

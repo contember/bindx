@@ -76,8 +76,8 @@ describe('Entity Create Mode', () => {
 					<Entity name="Author" create>
 						{author => (
 							<div data-testid="author">
-								<span data-testid="is-new">{author.isNew ? 'new' : 'existing'}</span>
-								<span data-testid="persisted-id">{author.persistedId ?? 'none'}</span>
+								<span data-testid="is-new">{author.$isNew ? 'new' : 'existing'}</span>
+								<span data-testid="persisted-id">{author.$persistedId ?? 'none'}</span>
 							</div>
 						)}
 					</Entity>
@@ -133,11 +133,11 @@ describe('Entity Create Mode', () => {
 				<BindxProvider adapter={adapter} schema={schema}>
 					<Entity name="Author" create>
 						{author => {
-							setNameFn = author.fields.name.setValue
+							setNameFn = author.$fields.name.setValue
 							return (
 								<div data-testid="author">
-									<span data-testid="name">{author.fields.name.value ?? 'empty'}</span>
-									<Field field={author.fields.name} />
+									<span data-testid="name">{author.$fields.name.value ?? 'empty'}</span>
+									<Field field={author.$fields.name} />
 								</div>
 							)
 						}}
@@ -175,9 +175,9 @@ describe('Entity Create Mode', () => {
 					<Entity name="Author" create onPersisted={onPersisted}>
 						{author => (
 							<div data-testid="author">
-								<span data-testid="is-new">{author.isNew ? 'new' : 'existing'}</span>
-								<span data-testid="persisted-id">{author.persistedId ?? 'none'}</span>
-								<Field field={author.fields.name} />
+								<span data-testid="is-new">{author.$isNew ? 'new' : 'existing'}</span>
+								<span data-testid="persisted-id">{author.$persistedId ?? 'none'}</span>
+								<Field field={author.$fields.name} />
 							</div>
 						)}
 					</Entity>
@@ -321,9 +321,9 @@ describe('Entity Create Mode', () => {
 					<Entity name="Author" by={{ id: 'author-1' }}>
 						{author => (
 							<div data-testid="author">
-								<span data-testid="name">{author.fields.name.value}</span>
-								<span data-testid="is-new">{author.isNew ? 'new' : 'existing'}</span>
-								<span data-testid="persisted-id">{author.persistedId ?? 'none'}</span>
+								<span data-testid="name">{author.$fields.name.value}</span>
+								<span data-testid="is-new">{author.$isNew ? 'new' : 'existing'}</span>
+								<span data-testid="persisted-id">{author.$persistedId ?? 'none'}</span>
 							</div>
 						)}
 					</Entity>
@@ -349,7 +349,7 @@ describe('Entity Create Mode', () => {
 					<Entity name="Author" create>
 						{author => (
 							<div data-testid="author">
-								<span data-testid="is-new">{author.isNew ? 'new' : 'existing'}</span>
+								<span data-testid="is-new">{author.$isNew ? 'new' : 'existing'}</span>
 							</div>
 						)}
 					</Entity>

@@ -56,6 +56,7 @@ export type {
 	HasOneRef,
 	EntityRef,
 	EntityRefFor,
+	EntityAccessor,
 } from './handles/index.js'
 
 // Brand types

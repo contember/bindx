@@ -21,10 +21,10 @@ export function TagListExample() {
 			<div className="tag-badges">
 				{tags.items.map(item => (
 					<span
-						key={item.key}
+						key={item.id}
 						className="tag-badge"
 						style={{
-							backgroundColor: item.data.color,
+							backgroundColor: item.$data?.color,
 							color: '#fff',
 							padding: '4px 8px',
 							borderRadius: '4px',
@@ -32,7 +32,7 @@ export function TagListExample() {
 							display: 'inline-block',
 						}}
 					>
-						{item.data.name}
+						{item.$data?.name}
 					</span>
 				))}
 			</div>

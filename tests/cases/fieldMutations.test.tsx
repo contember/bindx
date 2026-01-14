@@ -77,16 +77,19 @@ describe('Field Mutations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="title">{article.fields.title.value}</span>
-						<span data-testid="is-dirty">{article.fields.title.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="title">{article.title.value}</span>
+						<span data-testid="is-dirty">{article.title.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="set-title"
-							onClick={() => article.fields.title.setValue('New Title')}
+							onClick={() => article.title.setValue('New Title')}
 						>
 							Set Title
 						</button>
@@ -127,22 +130,25 @@ describe('Field Mutations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="title">{article.fields.title.value}</span>
-						<span data-testid="is-dirty">{article.fields.title.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="title">{article.title.value}</span>
+						<span data-testid="is-dirty">{article.title.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="set-new"
-							onClick={() => article.fields.title.setValue('New Title')}
+							onClick={() => article.title.setValue('New Title')}
 						>
 							Set New
 						</button>
 						<button
 							data-testid="set-original"
-							onClick={() => article.fields.title.setValue('Original Title')}
+							onClick={() => article.title.setValue('Original Title')}
 						>
 							Set Original
 						</button>
@@ -189,27 +195,30 @@ describe('Field Mutations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="title">{article.fields.title.value}</span>
+						<span data-testid="title">{article.title.value}</span>
 						<button
 							data-testid="set-a"
-							onClick={() => article.fields.title.setValue('Title A')}
+							onClick={() => article.title.setValue('Title A')}
 						>
 							Set A
 						</button>
 						<button
 							data-testid="set-b"
-							onClick={() => article.fields.title.setValue('Title B')}
+							onClick={() => article.title.setValue('Title B')}
 						>
 							Set B
 						</button>
 						<button
 							data-testid="set-c"
-							onClick={() => article.fields.title.setValue('Title C')}
+							onClick={() => article.title.setValue('Title C')}
 						>
 							Set C
 						</button>
@@ -251,16 +260,19 @@ describe('Field Mutations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="views">{article.fields.views.value}</span>
-						<span data-testid="is-dirty">{article.fields.views.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="views">{article.views.value}</span>
+						<span data-testid="is-dirty">{article.views.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="increment"
-							onClick={() => article.fields.views.setValue((article.fields.views.value ?? 0) + 1)}
+							onClick={() => article.views.setValue((article.views.value ?? 0) + 1)}
 						>
 							Increment
 						</button>
@@ -299,23 +311,26 @@ describe('Field Mutations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="title">{article.fields.title.value}</span>
-						<span data-testid="content">{article.fields.content.value}</span>
+						<span data-testid="title">{article.title.value}</span>
+						<span data-testid="content">{article.content.value}</span>
 						<span data-testid="entity-dirty">{article.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="set-title"
-							onClick={() => article.fields.title.setValue('New Title')}
+							onClick={() => article.title.setValue('New Title')}
 						>
 							Set Title
 						</button>
 						<button
 							data-testid="set-content"
-							onClick={() => article.fields.content.setValue('New Content')}
+							onClick={() => article.content.setValue('New Content')}
 						>
 							Set Content
 						</button>
@@ -370,16 +385,19 @@ describe('Field Mutations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="value">{article.fields.title.value}</span>
-						<span data-testid="server-value">{article.fields.title.serverValue}</span>
+						<span data-testid="value">{article.title.value}</span>
+						<span data-testid="server-value">{article.title.serverValue}</span>
 						<button
 							data-testid="set-title"
-							onClick={() => article.fields.title.setValue('New Title')}
+							onClick={() => article.title.setValue('New Title')}
 						>
 							Set Title
 						</button>

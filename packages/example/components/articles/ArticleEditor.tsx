@@ -31,12 +31,13 @@ export function ArticleEditor({ id }: { id: string }) {
 	}
 
 	// Get current tag IDs for filtering available tags
-	const currentTagIds = new Set(article.fields.tags.items.map(t => t.id))
+	const currentTagIds = new Set(article.fields.tags.$items.map(t => t.id))
 
 	// Filter available tags (those not already on the article)
 	const availableTags = allTags.isLoading || allTags.isError
 		? []
 		: allTags.items.filter(tag => !currentTagIds.has(tag.id))
+		.map(tag => ({ id: tag.id, data: tag.$data! }))
 
 	return (
 		<div className="article-editor">
@@ -53,23 +54,23 @@ export function ArticleEditor({ id }: { id: string }) {
 					<div style={{ marginBottom: '12px' }}>
 						<label>Select author: </label>
 						<select
-							value={article.fields.author.id ?? ''}
+							value={article.fields.author.$id ?? ''}
 							onChange={e => {
 								if (e.target.value) {
-									article.fields.author.connect(e.target.value)
+									article.fields.author.$connect(e.target.value)
 								}
 							}}
 						>
 							<option value="">Select an author...</option>
 							{allAuthors.items.map(author => (
 								<option key={author.id} value={author.id}>
-									{author.fields.name.value}
+									{author.$fields.name.value}
 								</option>
 							))}
 						</select>
 					</div>
 				)}
-				<AuthorEditor author={article.fields.author.fields} />
+				<AuthorEditor author={article.fields.author.$fields} />
 			</div>
 
 			<div className="form-section">
@@ -82,22 +83,22 @@ export function ArticleEditor({ id }: { id: string }) {
 			</div>
 
 			<div className="form-section">
-				<h3>Tags ({article.fields.tags.length})</h3>
+				<h3>Tags ({article.fields.tags.$length})</h3>
 				<ul style={{ listStyle: 'none', padding: 0 }}>
-					{article.fields.tags.items.map(tag => (
+					{article.fields.tags.$items.map(tag => (
 						<li key={tag.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
 							<span
 								style={{
-									backgroundColor: tag.fields.color.value ?? '#ccc',
+									backgroundColor: tag.$fields.color.value ?? '#ccc',
 									color: 'white',
 									padding: '2px 8px',
 									borderRadius: '4px',
 								}}
 							>
-								{tag.fields.name.value}
+								{tag.$fields.name.value}
 							</span>
 							<button
-								onClick={() => article.fields.tags.disconnect(tag.id)}
+								onClick={() => article.fields.tags.$disconnect(tag.id)}
 								style={{ padding: '2px 6px', cursor: 'pointer' }}
 							>
 								×
@@ -112,7 +113,7 @@ export function ArticleEditor({ id }: { id: string }) {
 						<select
 							onChange={e => {
 								if (e.target.value) {
-									article.fields.tags.connect(e.target.value)
+									article.fields.tags.$connect(e.target.value)
 									e.target.value = ''
 								}
 							}}
@@ -128,7 +129,7 @@ export function ArticleEditor({ id }: { id: string }) {
 					</div>
 				)}
 
-				{article.fields.tags.isDirty && (
+				{article.fields.tags.$isDirty && (
 					<p style={{ color: 'orange', fontSize: '12px' }}>Tags have been modified</p>
 				)}
 			</div>

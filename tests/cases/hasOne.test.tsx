@@ -112,17 +112,20 @@ describe('HasOne Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
-						<span data-testid="author-name">{article.fields.author.entity.fields.name.value ?? 'N/A'}</span>
-						<span data-testid="is-dirty">{article.fields.author.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+						<span data-testid="author-name">{article.author.$entity.$fields.name.value ?? 'N/A'}</span>
+						<span data-testid="is-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="connect-author-2"
-							onClick={() => article.fields.author.connect('author-2')}
+							onClick={() => article.author.$connect('author-2')}
 						>
 							Connect author-2
 						</button>
@@ -164,16 +167,19 @@ describe('HasOne Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
-						<span data-testid="is-dirty">{article.fields.author.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+						<span data-testid="is-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="disconnect"
-							onClick={() => article.fields.author.disconnect()}
+							onClick={() => article.author.$disconnect()}
 						>
 							Disconnect
 						</button>
@@ -214,21 +220,24 @@ describe('HasOne Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
 						<button
 							data-testid="connect-author-2"
-							onClick={() => article.fields.author.connect('author-2')}
+							onClick={() => article.author.$connect('author-2')}
 						>
 							Connect
 						</button>
 						<button
 							data-testid="disconnect"
-							onClick={() => article.fields.author.disconnect()}
+							onClick={() => article.author.$disconnect()}
 						>
 							Disconnect
 						</button>
@@ -270,21 +279,24 @@ describe('HasOne Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
 						<button
 							data-testid="disconnect"
-							onClick={() => article.fields.author.disconnect()}
+							onClick={() => article.author.$disconnect()}
 						>
 							Disconnect
 						</button>
 						<button
 							data-testid="connect-author-2"
-							onClick={() => article.fields.author.connect('author-2')}
+							onClick={() => article.author.$connect('author-2')}
 						>
 							Connect author-2
 						</button>
@@ -329,21 +341,24 @@ describe('HasOne Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
 						<button
 							data-testid="connect-author-1"
-							onClick={() => article.fields.author.connect('author-1')}
+							onClick={() => article.author.$connect('author-1')}
 						>
 							Connect author-1
 						</button>
 						<button
 							data-testid="connect-author-2"
-							onClick={() => article.fields.author.connect('author-2')}
+							onClick={() => article.author.$connect('author-2')}
 						>
 							Connect author-2
 						</button>
@@ -388,20 +403,23 @@ describe('HasOne Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
-						<span data-testid="is-dirty">{article.fields.author.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+						<span data-testid="is-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="connect-author-2"
-							onClick={() => article.fields.author.connect('author-2')}
+							onClick={() => article.author.$connect('author-2')}
 						>
 							Connect
 						</button>
-						<button data-testid="reset" onClick={() => article.fields.author.reset()}>
+						<button data-testid="reset" onClick={() => article.author.$reset()}>
 							Reset
 						</button>
 					</div>
@@ -445,20 +463,23 @@ describe('HasOne Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
-						<span data-testid="is-dirty">{article.fields.author.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+						<span data-testid="is-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="disconnect"
-							onClick={() => article.fields.author.disconnect()}
+							onClick={() => article.author.$disconnect()}
 						>
 							Disconnect
 						</button>
-						<button data-testid="reset" onClick={() => article.fields.author.reset()}>
+						<button data-testid="reset" onClick={() => article.author.$reset()}>
 							Reset
 						</button>
 					</div>
@@ -504,18 +525,21 @@ describe('HasOne Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
 						<span data-testid="placeholder-name">
-							{article.fields.author.entity.fields.name.value ?? 'empty'}
+							{article.author.$entity.$fields.name.value ?? 'empty'}
 						</span>
 						<button
 							data-testid="set-name"
-							onClick={() => article.fields.author.entity.fields.name.setValue('New Author')}
+							onClick={() => article.author.$entity.$fields.name.setValue('New Author')}
 						>
 							Set Name
 						</button>
@@ -564,23 +588,26 @@ describe('HasOne Relations', () => {
 				if (article.isLoading || allAuthors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError || allAuthors.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
-						<span data-testid="author-name">{article.fields.author.entity.fields.name.value ?? 'N/A'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+						<span data-testid="author-name">{article.author.$entity.$fields.name.value ?? 'N/A'}</span>
 						<select
 							data-testid="author-select"
-							value={article.fields.author.id ?? ''}
+							value={article.author.$id ?? ''}
 							onChange={e => {
 								if (e.target.value) {
-									article.fields.author.connect(e.target.value)
+									article.author.$connect(e.target.value)
 								}
 							}}
 						>
 							{allAuthors.items.map(author => (
 								<option key={author.id} value={author.id}>
-									{author.fields.name.value}
+									{author.name.value}
 								</option>
 							))}
 						</select>
@@ -630,11 +657,14 @@ describe('HasOne Relations', () => {
 				if (article.isLoading || allAuthors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError || allAuthors.isError) {
+					return <div>Error</div>
+				}
 
 				// Pattern from ArticleWithAuthorSelectExample
-				const currentAuthorId = article.fields.author.id
+				const currentAuthorId = article.author.$id
 				const isConnected = isPersistedId(currentAuthorId)
-				const authorEntity = article.fields.author.entity
+				const authorEntity = article.author.$entity
 
 				return (
 					<div>
@@ -643,22 +673,22 @@ describe('HasOne Relations', () => {
 							value={isConnected ? currentAuthorId : ''}
 							onChange={e => {
 								if (e.target.value === '') {
-									article.fields.author.disconnect()
+									article.author.$disconnect()
 								} else {
-									article.fields.author.connect(e.target.value)
+									article.author.$connect(e.target.value)
 								}
 							}}
 						>
 							<option value="">No author</option>
 							{allAuthors.items.map(author => (
 								<option key={author.id} value={author.id}>
-									{author.fields.name.value}
+									{author.name.value}
 								</option>
 							))}
 						</select>
 						<span data-testid="author-id">{currentAuthorId}</span>
 						<span data-testid="author-name">
-							{isConnected ? authorEntity.fields.name.value : 'N/A'}
+							{isConnected ? authorEntity.$fields.name.value : 'N/A'}
 						</span>
 					</div>
 				)
@@ -717,16 +747,19 @@ describe('HasOne Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="author-name">{article.fields.author.entity.fields.name.value ?? 'N/A'}</span>
-						<span data-testid="author-email">{article.fields.author.entity.fields.email.value ?? 'N/A'}</span>
+						<span data-testid="author-name">{article.author.$entity.$fields.name.value ?? 'N/A'}</span>
+						<span data-testid="author-email">{article.author.$entity.$fields.email.value ?? 'N/A'}</span>
 						<button
 							data-testid="set-name"
-							onClick={() => article.fields.author.entity.fields.name.setValue('Jane Updated')}
+							onClick={() => article.author.$entity.$fields.name.setValue('Jane Updated')}
 						>
 							Set Name
 						</button>
@@ -765,18 +798,21 @@ describe('HasOne Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="author-name">{article.fields.author.entity.fields.name.value ?? 'N/A'}</span>
-						<span data-testid="author-email">{article.fields.author.entity.fields.email.value ?? 'N/A'}</span>
+						<span data-testid="author-name">{article.author.$entity.$fields.name.value ?? 'N/A'}</span>
+						<span data-testid="author-email">{article.author.$entity.$fields.email.value ?? 'N/A'}</span>
 						<button
 							data-testid="set-both"
 							onClick={() => {
-								article.fields.author.entity.fields.name.setValue('New Name')
-								article.fields.author.entity.fields.email.setValue('new@email.com')
+								article.author.$entity.$fields.name.setValue('New Name')
+								article.author.$entity.$fields.email.setValue('new@email.com')
 							}}
 						>
 							Set Both
@@ -825,15 +861,18 @@ describe('HasOne Relations', () => {
 				if (article.isLoading || allAuthors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError || allAuthors.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
-						<span data-testid="relation-dirty">{article.fields.author.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+						<span data-testid="relation-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
 						<span data-testid="entity-dirty">{article.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="connect-author-2"
-							onClick={() => article.fields.author.connect('author-2')}
+							onClick={() => article.author.$connect('author-2')}
 						>
 							Connect Author 2
 						</button>
@@ -876,17 +915,20 @@ describe('HasOne Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
-						<span data-testid="relation-dirty">{article.fields.author.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+						<span data-testid="relation-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
 						<span data-testid="entity-dirty">{article.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="disconnect"
-							onClick={() => article.fields.author.disconnect()}
+							onClick={() => article.author.$disconnect()}
 						>
 							Disconnect
 						</button>
@@ -934,20 +976,23 @@ describe('HasOne Relations', () => {
 				if (article.isLoading || allAuthors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError || allAuthors.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
-						<span data-testid="relation-dirty">{article.fields.author.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+						<span data-testid="relation-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="connect-author-2"
-							onClick={() => article.fields.author.connect('author-2')}
+							onClick={() => article.author.$connect('author-2')}
 						>
 							Connect Author 2
 						</button>
 						<button
 							data-testid="connect-author-1"
-							onClick={() => article.fields.author.connect('author-1')}
+							onClick={() => article.author.$connect('author-1')}
 						>
 							Connect Author 1
 						</button>
@@ -995,15 +1040,18 @@ describe('HasOne Relations', () => {
 				if (article.isLoading || allAuthors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError || allAuthors.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
-						<span data-testid="relation-dirty">{article.fields.author.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+						<span data-testid="relation-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
 						<span data-testid="entity-dirty">{article.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="connect-author-2"
-							onClick={() => article.fields.author.connect('author-2')}
+							onClick={() => article.author.$connect('author-2')}
 						>
 							Connect Author 2
 						</button>
@@ -1061,20 +1109,23 @@ describe('HasOne Relations', () => {
 				if (article.isLoading || allAuthors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError || allAuthors.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
-						<span data-testid="relation-dirty">{article.fields.author.isDirty ? 'dirty' : 'clean'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+						<span data-testid="relation-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="disconnect"
-							onClick={() => article.fields.author.disconnect()}
+							onClick={() => article.author.$disconnect()}
 						>
 							Disconnect
 						</button>
 						<button
 							data-testid="connect-author-1"
-							onClick={() => article.fields.author.connect('author-1')}
+							onClick={() => article.author.$connect('author-1')}
 						>
 							Connect Author 1
 						</button>
@@ -1125,19 +1176,22 @@ describe('HasOne Relations', () => {
 				if (article.isLoading || allAuthors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError || allAuthors.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
 						<span data-testid="entity-dirty">{article.isDirty ? 'dirty' : 'clean'}</span>
 						<button
 							data-testid="connect-author-2"
-							onClick={() => article.fields.author.connect('author-2')}
+							onClick={() => article.author.$connect('author-2')}
 						>
 							Connect Author 2
 						</button>
 						<button
 							data-testid="connect-author-1"
-							onClick={() => article.fields.author.connect('author-1')}
+							onClick={() => article.author.$connect('author-1')}
 						>
 							Connect Author 1
 						</button>
@@ -1187,15 +1241,18 @@ describe('HasOne Relations', () => {
 				if (article.isLoading || allAuthors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError || allAuthors.isError) {
+					return <div>Error</div>
+				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
 						<span data-testid="is-dirty">{article.isDirty ? 'dirty' : 'clean'}</span>
 						<span data-testid="is-persisting">{article.isPersisting ? 'persisting' : 'idle'}</span>
 						<button
 							data-testid="connect-author-2"
-							onClick={() => article.fields.author.connect('author-2')}
+							onClick={() => article.author.$connect('author-2')}
 						>
 							Connect Author 2
 						</button>
@@ -1251,14 +1308,17 @@ describe('HasOne Relations', () => {
 				)
 
 				if (article.isLoading) {
+					return <div>Loading...</div>
+				}
+				if (article.isError) {
 					return <div data-testid="loading">Loading...</div>
 				}
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.fields.author.id ?? 'null'}</span>
+						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
 						<span data-testid="is-dirty">{article.isDirty ? 'dirty' : 'clean'}</span>
-						<button data-testid="disconnect" onClick={() => article.fields.author.disconnect()}>
+						<button data-testid="disconnect" onClick={() => article.author.$disconnect()}>
 							Disconnect
 						</button>
 						<button data-testid="persist" onClick={() => article.persist()}>
