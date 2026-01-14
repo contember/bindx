@@ -144,6 +144,11 @@ export {
 	// Store
 	SnapshotStore,
 	ActionDispatcher,
+	// ID type detection
+	isTempId,
+	isPlaceholderId,
+	isPersistedId,
+	generatePlaceholderId,
 	// Persistence
 	BatchPersister,
 	ChangeRegistry,

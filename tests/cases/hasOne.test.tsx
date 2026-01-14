@@ -9,6 +9,8 @@ import {
 	defineSchema,
 	scalar,
 	hasOne,
+	isPlaceholderId,
+	isPersistedId,
 } from '@contember/react-bindx'
 
 afterEach(() => {
@@ -199,7 +201,7 @@ describe('HasOne Relations', () => {
 			})
 
 			// Should now be null
-			expect(getByTestId(container, 'author-id').textContent).toBe('null')
+			expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
 			expect(getByTestId(container, 'is-dirty').textContent).toBe('dirty')
 		})
 
@@ -256,7 +258,7 @@ describe('HasOne Relations', () => {
 				;(getByTestId(container, 'disconnect') as HTMLButtonElement).click()
 			})
 
-			expect(getByTestId(container, 'author-id').textContent).toBe('null')
+			expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
 		})
 
 		test('4. Disconnect + Connect different - new entity should be connected', async () => {
@@ -308,7 +310,7 @@ describe('HasOne Relations', () => {
 				;(getByTestId(container, 'disconnect') as HTMLButtonElement).click()
 			})
 
-			expect(getByTestId(container, 'author-id').textContent).toBe('null')
+			expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
 
 			// Connect to author-2
 			act(() => {
@@ -478,7 +480,7 @@ describe('HasOne Relations', () => {
 				;(getByTestId(container, 'disconnect') as HTMLButtonElement).click()
 			})
 
-			expect(getByTestId(container, 'author-id').textContent).toBe('null')
+			expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
 			expect(getByTestId(container, 'is-dirty').textContent).toBe('dirty')
 
 			// Reset
@@ -532,7 +534,7 @@ describe('HasOne Relations', () => {
 			})
 
 			// No author initially
-			expect(getByTestId(container, 'author-id').textContent).toBe('null')
+			expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
 			expect(getByTestId(container, 'placeholder-name').textContent).toBe('empty')
 
 			// Set placeholder name
@@ -630,14 +632,15 @@ describe('HasOne Relations', () => {
 				}
 
 				// Pattern from ArticleWithAuthorSelectExample
-				const currentAuthorId = article.fields.author.id ?? ''
+				const currentAuthorId = article.fields.author.id
+				const isConnected = isPersistedId(currentAuthorId)
 				const authorEntity = article.fields.author.entity
 
 				return (
 					<div>
 						<select
 							data-testid="author-select"
-							value={currentAuthorId}
+							value={isConnected ? currentAuthorId : ''}
 							onChange={e => {
 								if (e.target.value === '') {
 									article.fields.author.disconnect()
@@ -653,9 +656,9 @@ describe('HasOne Relations', () => {
 								</option>
 							))}
 						</select>
-						<span data-testid="author-id">{currentAuthorId || 'null'}</span>
+						<span data-testid="author-id">{currentAuthorId}</span>
 						<span data-testid="author-name">
-							{currentAuthorId ? authorEntity.fields.name.value : 'N/A'}
+							{isConnected ? authorEntity.fields.name.value : 'N/A'}
 						</span>
 					</div>
 				)
@@ -690,7 +693,7 @@ describe('HasOne Relations', () => {
 				select.value = ''
 				select.dispatchEvent(new Event('change', { bubbles: true }))
 			})
-			expect(getByTestId(container, 'author-id').textContent).toBe('null')
+			expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
 			expect(getByTestId(container, 'author-name').textContent).toBe('N/A')
 
 			// Reconnect to author-1
@@ -912,7 +915,7 @@ describe('HasOne Relations', () => {
 			})
 
 			// Should be dirty
-			expect(getByTestId(container, 'author-id').textContent).toBe('null')
+			expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
 			expect(getByTestId(container, 'relation-dirty').textContent).toBe('dirty')
 			expect(getByTestId(container, 'entity-dirty').textContent).toBe('dirty')
 		})
@@ -1097,7 +1100,7 @@ describe('HasOne Relations', () => {
 			act(() => {
 				;(getByTestId(container, 'disconnect') as HTMLButtonElement).click()
 			})
-			expect(getByTestId(container, 'author-id').textContent).toBe('null')
+			expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
 			expect(getByTestId(container, 'relation-dirty').textContent).toBe('dirty')
 
 			// Connect back to original - should be clean
@@ -1282,7 +1285,7 @@ describe('HasOne Relations', () => {
 			act(() => {
 				;(getByTestId(container, 'disconnect') as HTMLButtonElement).click()
 			})
-			expect(getByTestId(container, 'author-id').textContent).toBe('null')
+			expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
 			expect(getByTestId(container, 'is-dirty').textContent).toBe('dirty')
 
 			// Persist changes

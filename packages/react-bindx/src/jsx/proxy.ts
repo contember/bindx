@@ -1,5 +1,5 @@
 import type { SnapshotStore } from '@contember/bindx'
-import { SelectionScope } from '@contember/bindx'
+import { SelectionScope, generatePlaceholderId } from '@contember/bindx'
 import {
 	type EntityRef,
 	type EntityFields,
@@ -159,7 +159,7 @@ function createCollectorFieldRef(
 		interceptItemDisconnecting: () => () => {},
 
 		// HasOneRef properties
-		id: null,
+		id: generatePlaceholderId(),
 		fields: new Proxy({} as EntityFields<unknown>, {
 			get(_, nestedFieldName: string) {
 				// Get child scope (upgrades to relation)
@@ -428,7 +428,8 @@ function createRuntimeFieldRef(
 			if (typeof value === 'object' && value !== null && 'id' in value) {
 				return (value as { id: string }).id
 			}
-			return null
+			// Return placeholder ID when disconnected
+			return this.entity.id
 		},
 		get fields() {
 			const value = getValue()
@@ -460,7 +461,7 @@ function createRuntimeFieldRef(
 		get entity(): EntityRef<unknown> {
 			const value = getValue()
 			if (typeof value !== 'object' || value === null || !('id' in value)) {
-				// Return placeholder accessor with id=null
+				// Return placeholder accessor with placeholder ID
 				return createPlaceholderAccessor<unknown>()
 			}
 			const relatedId = (value as { id: string }).id
@@ -618,12 +619,12 @@ function createPlaceholderAccessor<T>(): EntityRef<T> {
 	})
 
 	return {
-		id: null,
+		id: generatePlaceholderId(),
 		fields: fieldsProxy,
 		data: null,
 		isDirty: false,
 		persistedId: null,
-		isNew: false,
+		isNew: true,
 		__entityType: undefined as unknown as T,
 		__entityName: '__placeholder__',
 		__availableRoles: [] as readonly string[],

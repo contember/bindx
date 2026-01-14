@@ -358,8 +358,8 @@ export interface HasOneRef<TEntity, TSelected = TEntity, TBrand extends AnyBrand
 	/** Internal metadata for collection phase */
 	readonly [FIELD_REF_META]: FieldRefMeta
 
-	/** Entity ID (null if disconnected) */
-	readonly id: string | null
+	/** Entity ID (placeholder ID if disconnected) */
+	readonly id: string
 
 	/** Whether relation is dirty */
 	readonly isDirty: boolean
@@ -367,7 +367,7 @@ export interface HasOneRef<TEntity, TSelected = TEntity, TBrand extends AnyBrand
 	/** Nested entity fields - only selected fields are accessible */
 	readonly fields: SelectedEntityFields<TEntity, TSelected, TAvailableRoles>
 
-	/** Related entity reference (always available, may be placeholder with id=null) */
+	/** Related entity reference (always available, may be placeholder with placeholder ID) */
 	readonly entity: EntityRef<TEntity, TSelected, TBrand, string, TAvailableRoles>
 
 	/** Connect to existing entity */
@@ -444,8 +444,8 @@ export interface EntityRef<
 	TEntityName extends string = string,
 	TAvailableRoles extends readonly string[] = readonly string[],
 > {
-	/** Entity ID (null for placeholder entities) */
-	readonly id: string | null
+	/** Entity ID (placeholder ID for placeholder entities) */
+	readonly id: string
 
 	/** Typed field accessors - only selected fields are accessible */
 	readonly fields: SelectedEntityFields<TEntity, TSelected, TAvailableRoles>

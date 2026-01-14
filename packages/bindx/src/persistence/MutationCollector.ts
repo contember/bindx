@@ -1,4 +1,4 @@
-import type { SnapshotStore } from '../store/SnapshotStore.js'
+import { type SnapshotStore, isPersistedId } from '../store/SnapshotStore.js'
 import type { EntitySnapshot } from '../store/snapshots.js'
 import type { MutationSchemaProvider } from './MutationSchemaProvider.js'
 import type { MutationDataCollector } from './types.js'
@@ -620,9 +620,9 @@ export class MutationCollector implements MutationDataCollector {
 	}
 
 	/**
-	 * Checks if an entity ID represents an existing entity (not temp).
+	 * Checks if an entity ID represents an existing entity (persisted, not temp or placeholder).
 	 */
 	private isExistingEntity(id: string): boolean {
-		return !id.startsWith('__temp_')
+		return isPersistedId(id)
 	}
 }

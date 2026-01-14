@@ -1,7 +1,7 @@
 import { EntityRelatedHandle } from './BaseHandle.js'
 import { FieldHandle } from './FieldHandle.js'
 import type { ActionDispatcher } from '../core/ActionDispatcher.js'
-import type { SnapshotStore } from '../store/SnapshotStore.js'
+import { type SnapshotStore, generatePlaceholderId } from '../store/SnapshotStore.js'
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 import type { EntitySnapshot } from '../store/snapshots.js'
 import {
@@ -589,10 +589,11 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 
 	/**
 	 * Gets the related entity ID.
-	 * Alias for relatedId - implements HasOneRef interface.
+	 * Returns the actual ID if connected, or placeholder ID if disconnected.
+	 * Implements HasOneRef interface.
 	 */
-	get id(): string | null {
-		return this.relatedId
+	get id(): string {
+		return this.entity.id
 	}
 
 	/**
@@ -607,7 +608,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	/**
 	 * Gets the related entity reference.
 	 * Implements HasOneRef.entity - returns EntityRef for the related entity.
-	 * Returns PlaceholderHandle (with id=null) if the relation is disconnected.
+	 * Returns PlaceholderHandle (with placeholder ID) if the relation is disconnected.
 	 */
 	get entity(): EntityRef<TEntity, TSelected> {
 		const id = this.relatedId
@@ -1234,7 +1235,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 
 /**
  * PlaceholderHandle provides access to a placeholder entity (for creating new entities).
- * Implements EntityRef interface with id = null.
+ * Implements EntityRef interface with a placeholder ID.
  * Reads/writes from placeholderData in the relation state.
  *
  * @typeParam TEntity - The full entity type
@@ -1246,6 +1247,9 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
 
+	/** Placeholder ID for this handle */
+	private readonly placeholderId: string
+
 	constructor(
 		private readonly parentEntityType: string,
 		private readonly parentEntityId: string,
@@ -1256,13 +1260,14 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 		brands?: Set<symbol>,
 	) {
 		this.__brands = brands
+		this.placeholderId = generatePlaceholderId()
 	}
 
 	/**
-	 * Placeholder entities have no ID.
+	 * Gets the placeholder ID.
 	 */
-	get id(): null {
-		return null
+	get id(): string {
+		return this.placeholderId
 	}
 
 	/**
@@ -1327,7 +1332,7 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 			get [FIELD_REF_META](): FieldRefMeta {
 				return {
 					entityType: self.targetType,
-					entityId: '', // Placeholder has no ID
+					entityId: self.placeholderId,
 					path: [fieldName],
 					fieldName,
 					isArray: false,

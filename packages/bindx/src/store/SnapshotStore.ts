@@ -64,6 +64,36 @@ export interface StoredRelationState {
 	version: number
 }
 
+// ==================== ID Type Detection ====================
+
+/**
+ * Checks if an ID is a temporary ID (created locally, not yet persisted).
+ */
+export function isTempId(id: string): boolean {
+	return id.startsWith('__temp_')
+}
+
+/**
+ * Checks if an ID is a placeholder ID (disconnected relation placeholder).
+ */
+export function isPlaceholderId(id: string): boolean {
+	return id.startsWith('__placeholder_')
+}
+
+/**
+ * Checks if an ID is a persisted/real ID from the server.
+ */
+export function isPersistedId(id: string): boolean {
+	return !isTempId(id) && !isPlaceholderId(id)
+}
+
+/**
+ * Generates a new placeholder ID.
+ */
+export function generatePlaceholderId(): string {
+	return `__placeholder_${crypto.randomUUID()}`
+}
+
 /**
  * SnapshotStore manages immutable snapshots for React integration.
  *
@@ -424,18 +454,24 @@ export class SnapshotStore {
 
 	/**
 	 * Gets the persisted ID for an entity.
-	 * Returns the ID itself if it's already a real ID, null if it's a temp ID without mapping.
+	 * Returns the ID itself if it's already a real ID, null if it's a temp/placeholder ID without mapping.
 	 *
 	 * @param entityType - The entity type name
-	 * @param id - The entity ID (can be temp or real)
+	 * @param id - The entity ID (can be temp, placeholder, or real)
 	 * @returns The persisted ID or null if not yet persisted
 	 */
 	getPersistedId(entityType: string, id: string): string | null {
-		// If ID doesn't start with __temp_, it's already a real ID
-		if (!id.startsWith('__temp_')) {
+		// Placeholder IDs are never persisted
+		if (isPlaceholderId(id)) {
+			return null
+		}
+
+		// Real IDs are already persisted
+		if (isPersistedId(id)) {
 			return id
 		}
 
+		// Temp IDs may have a mapping to persisted ID
 		const key = this.getEntityKey(entityType, id)
 		return this.tempToPersistedId.get(key) ?? null
 	}
@@ -448,12 +484,17 @@ export class SnapshotStore {
 	 * @returns true if the entity is new (has temp ID and no persisted mapping)
 	 */
 	isNewEntity(entityType: string, id: string): boolean {
-		// If ID doesn't start with __temp_, it's not a new entity
-		if (!id.startsWith('__temp_')) {
+		// Placeholder IDs are considered "new" (not yet on server)
+		if (isPlaceholderId(id)) {
+			return true
+		}
+
+		// Real IDs are not new
+		if (isPersistedId(id)) {
 			return false
 		}
 
-		// Check if we have a persisted mapping - if so, it's no longer "new"
+		// Temp IDs are new if they don't have a persisted mapping
 		const key = this.getEntityKey(entityType, id)
 		return !this.tempToPersistedId.has(key)
 	}

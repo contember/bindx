@@ -148,7 +148,7 @@ export { createEntityLoader, resolveSelectionMeta, buildQuery } from './core/ind
 export { setEntityData, setLoadState, setField, resetEntity, commitEntity } from './core/actions.js'
 
 // Store
-export { SnapshotStore, type HasManyRemovalType } from './store/SnapshotStore.js'
+export { SnapshotStore, type HasManyRemovalType, isTempId, isPlaceholderId, isPersistedId, generatePlaceholderId } from './store/SnapshotStore.js'
 export { ActionDispatcher } from './core/ActionDispatcher.js'
 
 // Persistence
