@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test'
-import { SnapshotStore, MutationCollector, type SchemaNames, type HasManyRemovalType } from '@contember/bindx'
+import { SnapshotStore, MutationCollector, ContemberSchemaMutationAdapter, type SchemaNames, type HasManyRemovalType } from '@contember/bindx'
 
 // Test schema
 const testSchema: SchemaNames = {
@@ -42,7 +42,8 @@ describe('MutationCollector', () => {
 
 	beforeEach(() => {
 		store = new SnapshotStore()
-		collector = new MutationCollector(store, testSchema)
+		const schemaAdapter = new ContemberSchemaMutationAdapter(testSchema)
+		collector = new MutationCollector(store, schemaAdapter)
 	})
 
 	describe('scalar field changes', () => {
