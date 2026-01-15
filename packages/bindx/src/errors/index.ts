@@ -1,11 +1,16 @@
 export {
 	type ExecutionErrorType,
+	type ErrorCategory,
 	type BindxError,
 	type ClientError,
 	type ServerError,
 	type FieldError,
 	type ErrorState,
 	type ErrorInput,
+	ExecutionErrorTypes,
+	isExecutionErrorType,
+	classifyError,
+	isRetryableCategory,
 	createClientError,
 	createServerError,
 	isClientError,
@@ -16,6 +21,8 @@ export {
 
 export {
 	type PathElement,
+	type PathSegment,
+	type ParsedPath,
 	type ContemberMutationError,
 	type ContemberValidationError,
 	type MappedError,
@@ -23,4 +30,6 @@ export {
 	mapMutationError,
 	mapValidationError,
 	extractMappedErrors,
+	isNestedError,
+	getErrorPathString,
 } from './pathMapper.js'

@@ -5,18 +5,75 @@
  * from Contember mutations.
  */
 
+import { Result } from '@contember/schema'
+
 /**
  * Execution error types from Contember.
- * These represent database-level constraint violations.
+ * Re-exported from @contember/schema to ensure type compatibility.
  */
-export type ExecutionErrorType =
-	| 'NotNullConstraintViolation'
-	| 'UniqueConstraintViolation'
-	| 'ForeignKeyConstraintViolation'
-	| 'NotFoundOrDenied'
-	| 'NonUniqueWhereInput'
-	| 'InvalidDataInput'
-	| 'SqlError'
+export type ExecutionErrorType = `${Result.ExecutionErrorType}`
+
+/**
+ * All possible execution error type values.
+ * Used for runtime validation and error classification.
+ */
+export const ExecutionErrorTypes: Record<ExecutionErrorType, ExecutionErrorType> = {
+	NotNullConstraintViolation: 'NotNullConstraintViolation',
+	UniqueConstraintViolation: 'UniqueConstraintViolation',
+	ForeignKeyConstraintViolation: 'ForeignKeyConstraintViolation',
+	NotFoundOrDenied: 'NotFoundOrDenied',
+	NonUniqueWhereInput: 'NonUniqueWhereInput',
+	InvalidDataInput: 'InvalidDataInput',
+	SqlError: 'SqlError',
+}
+
+/**
+ * Checks if a string is a valid ExecutionErrorType.
+ */
+export function isExecutionErrorType(value: string): value is ExecutionErrorType {
+	return value in ExecutionErrorTypes
+}
+
+/**
+ * Error classification for retry logic.
+ */
+export type ErrorCategory = 'validation' | 'constraint' | 'not_found' | 'transient' | 'unknown'
+
+/**
+ * Classifies an execution error type into a category.
+ * - 'validation': Data validation errors (not retryable)
+ * - 'constraint': Database constraint violations (not retryable without data change)
+ * - 'not_found': Entity not found or access denied (not retryable)
+ * - 'transient': Temporary errors that may succeed on retry
+ * - 'unknown': Unclassified errors
+ */
+export function classifyError(errorType?: ExecutionErrorType): ErrorCategory {
+	if (!errorType) return 'unknown'
+
+	switch (errorType) {
+		case 'NotNullConstraintViolation':
+		case 'UniqueConstraintViolation':
+		case 'ForeignKeyConstraintViolation':
+			return 'constraint'
+		case 'InvalidDataInput':
+		case 'NonUniqueWhereInput':
+			return 'validation'
+		case 'NotFoundOrDenied':
+			return 'not_found'
+		case 'SqlError':
+			// SQL errors could be transient (deadlock, connection issues) or permanent
+			return 'transient'
+		default:
+			return 'unknown'
+	}
+}
+
+/**
+ * Checks if an error category is potentially retryable.
+ */
+export function isRetryableCategory(category: ErrorCategory): boolean {
+	return category === 'transient' || category === 'unknown'
+}
 
 /**
  * Base interface for all bindx errors.
@@ -44,6 +101,10 @@ export interface ServerError extends BindxError {
 	readonly source: 'server'
 	/** Contember execution error type for database errors */
 	readonly type?: ExecutionErrorType
+	/** Error category for classification */
+	readonly category: ErrorCategory
+	/** Whether this error might succeed on retry */
+	readonly retryable: boolean
 }
 
 /**
@@ -76,17 +137,21 @@ export function createClientError(input: ErrorInput): ClientError {
 
 /**
  * Creates a ServerError from Contember error data.
+ * Automatically computes error category and retryable flag.
  */
 export function createServerError(
 	message: string,
 	type?: ExecutionErrorType,
 	code?: string,
 ): ServerError {
+	const category = classifyError(type)
 	return {
 		source: 'server',
 		message,
 		type,
 		code,
+		category,
+		retryable: isRetryableCategory(category),
 	}
 }
 

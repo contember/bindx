@@ -11,6 +11,7 @@ import type {
 	EventListener,
 	Interceptor,
 } from '../events/types.js'
+import { createAliasProxy } from './proxyFactory.js'
 
 /**
  * FieldHandle provides stable access to a scalar field.
@@ -31,6 +32,10 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle implements Fie
 		dispatcher: ActionDispatcher,
 	) {
 		super(entityType, entityId, store, dispatcher)
+
+		// Return a Proxy that supports $ aliasing
+		// eslint-disable-next-line no-constructor-return
+		return createAliasProxy(this) as FieldHandle<T>
 	}
 
 	/**
@@ -203,30 +208,6 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle implements Fie
 		)
 	}
 
-	// ==================== $ Prefixed Aliases ====================
-
-	/** Alias for value */
-	get $value(): T | null { return this.value }
-	/** Alias for serverValue */
-	get $serverValue(): T | null { return this.serverValue }
-	/** Alias for isDirty */
-	get $isDirty(): boolean { return this.isDirty }
-	/** Alias for inputProps */
-	get $inputProps(): InputProps<T> { return this.inputProps }
-	/** Alias for errors */
-	get $errors(): readonly FieldError[] { return this.errors }
-	/** Alias for hasError */
-	get $hasError(): boolean { return this.hasError }
-	/** Alias for setValue */
-	$setValue(value: T | null): void { this.setValue(value) }
-	/** Alias for addError */
-	$addError(error: ErrorInput): void { this.addError(error) }
-	/** Alias for clearErrors */
-	$clearErrors(): void { this.clearErrors() }
-	/** Alias for onChange */
-	$onChange(listener: EventListener<FieldChangedEvent>): Unsubscribe { return this.onChange(listener) }
-	/** Alias for onChanging */
-	$onChanging(interceptor: Interceptor<FieldChangingEvent>): Unsubscribe { return this.onChanging(interceptor) }
 }
 
 // ==================== Helper Functions ====================

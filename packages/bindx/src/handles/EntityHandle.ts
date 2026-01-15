@@ -33,46 +33,10 @@ import type {
 	HasManyConnectingEvent,
 	HasManyDisconnectingEvent,
 } from '../events/types.js'
+import { createHandleProxy, createAliasProxy, ENTITY_HANDLE_PROPERTIES, HAS_ONE_HANDLE_PROPERTIES } from './proxyFactory.js'
 
 // Type for relation handle cache
 type RelationHandle = HasOneHandle<object> | HasManyListHandle<object>
-
-/**
- * Known properties on EntityHandle that should NOT be treated as field access.
- * Properties like `fields`, `data`, `errors` are NOT included - use $ prefix for those.
- * This allows direct field access for entity fields with these names.
- */
-const ENTITY_HANDLE_PROPERTIES = new Set([
-	// Special case: id is always the entity ID, not a field handle
-	'id',
-	// Type brands (phantom types)
-	'__entityType', '__entityName', '__availableRoles', '__brands',
-	// Internal implementation details
-	'type', 'entityType', 'entityId', 'store', 'dispatcher', 'schema',
-	'fieldHandleCache', 'relationHandleCache', 'getEntityData', 'getServerData',
-	'assertNotDisposed', 'isDisposed',
-	// Internal methods (unlikely to be field names)
-	'field', 'hasOne', 'hasMany', 'getSnapshot',
-	'reset', 'commit', 'dispose', 'subscribe',
-	'getDirtyFields', 'getDirtyRelations',
-])
-
-/**
- * Known properties on HasOneHandle that should NOT be treated as field access.
- * Properties like `fields`, `entity`, `errors`, `state` are NOT included - they require $ prefix.
- */
-const HAS_ONE_HANDLE_PROPERTIES = new Set([
-	// Type brands (phantom types)
-	'__entityType', '__brands',
-	// Symbol
-	FIELD_REF_META,
-	// Internal implementation details
-	'entityType', 'entityId', 'fieldName', 'targetType', 'store', 'dispatcher', 'schema',
-	'entityHandleCache', 'placeholderCache', 'getEntityData', 'getServerData',
-	'assertNotDisposed', 'isDisposed', 'ensureRelatedEntitySnapshot', 'relatedId',
-	// Methods that are unlikely to be field names (kept for internal use)
-	'connect', 'disconnect', 'delete', 'reset', 'dispose', 'subscribe',
-])
 
 /**
  * EntityHandle provides stable access to an entity.
@@ -101,6 +65,22 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
 
+	// $ aliases - handled by proxy at runtime, declared for TypeScript
+	declare readonly $fields: SelectedEntityFields<T, TSelected>
+	declare readonly $data: TSelected | null
+	declare readonly $isDirty: boolean
+	declare readonly $persistedId: string | null
+	declare readonly $isNew: boolean
+	declare readonly $errors: readonly FieldError[]
+	declare readonly $hasError: boolean
+	declare $addError: (error: ErrorInput) => void
+	declare $clearErrors: () => void
+	declare $clearAllErrors: () => void
+	declare $on: <E extends AfterEventTypes>(eventType: E, listener: EventListener<EventTypeMap[E]>) => Unsubscribe
+	declare $intercept: <E extends BeforeEventTypes>(eventType: E, interceptor: Interceptor<EventTypeMap[E]>) => Unsubscribe
+	declare $onPersisted: (listener: EventListener<EntityPersistedEvent>) => Unsubscribe
+	declare $interceptPersisting: (interceptor: Interceptor<EntityPersistingEvent>) => Unsubscribe
+
 	constructor(
 		id: string,
 		entityType: string,
@@ -114,7 +94,10 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 
 		// Return a Proxy that supports direct field access
 		// eslint-disable-next-line no-constructor-return
-		return createEntityHandleProxy(this) as EntityHandle<T, TSelected>
+		return createHandleProxy(this, {
+			knownProperties: ENTITY_HANDLE_PROPERTIES,
+			getFields: (target) => target.fields,
+		}) as EntityHandle<T, TSelected>
 	}
 
 	/**
@@ -219,8 +202,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 				}
 			} else if (relationType === 'hasMany') {
 				const handle = this.hasMany(fieldName)
-				// Use $isDirty since isDirty is not in HasMany handle properties
-				if (handle.$isDirty) {
+				if (handle.isDirty) {
 					return true
 				}
 			}
@@ -532,98 +514,8 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 		return this.intercept('entity:persisting', interceptor)
 	}
 
-	// ==================== $ Prefixed Aliases ====================
-
-	/** Alias for id */
-	get $id(): string { return this.id }
-	/** Alias for data */
-	get $data(): TSelected | null { return this.data }
-	/** Alias for isDirty */
-	get $isDirty(): boolean { return this.isDirty }
-	/** Alias for persistedId */
-	get $persistedId(): string | null { return this.persistedId }
-	/** Alias for isNew */
-	get $isNew(): boolean { return this.isNew }
-	/** Alias for fields */
-	get $fields(): SelectedEntityFields<T, TSelected> { return this.fields }
-	/** Alias for errors */
-	get $errors(): readonly FieldError[] { return this.errors }
-	/** Alias for hasError */
-	get $hasError(): boolean { return this.hasError }
-	/** Alias for addError */
-	$addError(error: ErrorInput): void { this.addError(error) }
-	/** Alias for clearErrors */
-	$clearErrors(): void { this.clearErrors() }
-	/** Alias for clearAllErrors */
-	$clearAllErrors(): void { this.clearAllErrors() }
-	/** Alias for on */
-	$on<E extends AfterEventTypes>(eventType: E, listener: EventListener<EventTypeMap[E]>): Unsubscribe {
-		return this.on(eventType, listener)
-	}
-	/** Alias for intercept */
-	$intercept<E extends BeforeEventTypes>(eventType: E, interceptor: Interceptor<EventTypeMap[E]>): Unsubscribe {
-		return this.intercept(eventType, interceptor)
-	}
-	/** Alias for onPersisted */
-	$onPersisted(listener: EventListener<EntityPersistedEvent>): Unsubscribe {
-		return this.onPersisted(listener)
-	}
-	/** Alias for interceptPersisting */
-	$interceptPersisting(interceptor: Interceptor<EntityPersistingEvent>): Unsubscribe {
-		return this.interceptPersisting(interceptor)
-	}
 }
 
-/**
- * Creates a Proxy around an EntityHandle that supports direct field access.
- * - `entity.fieldName` is equivalent to `entity.$fields.fieldName`
- * - `entity.$propertyName` accesses handle properties with $ prefix
- * - `entity.id` is special - always returns the entity ID (cannot collide with field names)
- */
-function createEntityHandleProxy<T extends object, TSelected>(
-	handle: EntityHandle<T, TSelected>,
-): EntityHandle<T, TSelected> {
-	return new Proxy(handle, {
-		get(target, prop, _receiver) {
-			// Symbols and non-string props - pass through
-			if (typeof prop !== 'string') {
-				return Reflect.get(target, prop, target)
-			}
-
-			// $ prefixed - strip $ and access handle property
-			if (prop.startsWith('$')) {
-				const realProp = prop.slice(1)
-				// Use target as receiver so getters use target as `this`, not the Proxy
-				const value = Reflect.get(target, realProp, target)
-				// Bind methods to preserve `this`
-				if (typeof value === 'function') {
-					return value.bind(target)
-				}
-				return value
-			}
-
-			// Known handle properties - pass through for backwards compatibility
-			if (ENTITY_HANDLE_PROPERTIES.has(prop)) {
-				const value = Reflect.get(target, prop, target)
-				if (typeof value === 'function') {
-					return value.bind(target)
-				}
-				return value
-			}
-
-			// Otherwise, treat as field access
-			return target.fields[prop as keyof SelectedEntityFields<T, TSelected>]
-		},
-
-		has(target, prop) {
-			if (typeof prop === 'string' && !ENTITY_HANDLE_PROPERTIES.has(prop) && !prop.startsWith('$')) {
-				// Check if it's a field
-				return prop in target.fields
-			}
-			return Reflect.has(target, prop)
-		},
-	})
-}
 
 /**
  * HasOneHandle provides access to a has-one relation.
@@ -638,6 +530,25 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
+
+	// $ aliases - handled by proxy at runtime, declared for TypeScript
+	declare readonly $id: string
+	declare readonly $isDirty: boolean
+	declare readonly $state: 'connected' | 'disconnected' | 'deleted' | 'creating'
+	declare readonly $fields: SelectedEntityFields<TEntity, TSelected>
+	declare readonly $entity: EntityAccessor<TEntity, TSelected>
+	declare readonly $errors: readonly FieldError[]
+	declare readonly $hasError: boolean
+	declare $connect: (id: string) => void
+	declare $disconnect: () => void
+	declare $delete: () => void
+	declare $reset: () => void
+	declare $addError: (error: ErrorInput) => void
+	declare $clearErrors: () => void
+	declare $onConnect: (listener: EventListener<RelationConnectedEvent>) => Unsubscribe
+	declare $onDisconnect: (listener: EventListener<RelationDisconnectedEvent>) => Unsubscribe
+	declare $interceptConnect: (interceptor: Interceptor<RelationConnectingEvent>) => Unsubscribe
+	declare $interceptDisconnect: (interceptor: Interceptor<RelationDisconnectingEvent>) => Unsubscribe
 
 	constructor(
 		parentEntityType: string,
@@ -654,7 +565,10 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 
 		// Return a Proxy that supports direct field access
 		// eslint-disable-next-line no-constructor-return
-		return createHasOneHandleProxy(this) as HasOneHandle<TEntity, TSelected>
+		return createHandleProxy(this, {
+			knownProperties: HAS_ONE_HANDLE_PROPERTIES,
+			getFields: (target) => target.entity.$fields,
+		}) as HasOneHandle<TEntity, TSelected>
 	}
 
 	/**
@@ -1045,94 +959,8 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		return this.entity.$interceptPersisting(interceptor)
 	}
 
-	// ==================== $ Prefixed Aliases ====================
-
-	/** Alias for id */
-	get $id(): string { return this.id }
-	/** Alias for isDirty */
-	get $isDirty(): boolean { return this.isDirty }
-	/** Alias for state */
-	get $state(): 'connected' | 'disconnected' | 'deleted' | 'creating' { return this.state }
-	/** Alias for fields */
-	get $fields(): SelectedEntityFields<TEntity, TSelected> { return this.fields }
-	/** Alias for entity */
-	get $entity(): EntityAccessor<TEntity, TSelected> { return this.entity }
-	/** Alias for errors */
-	get $errors(): readonly FieldError[] { return this.errors }
-	/** Alias for hasError */
-	get $hasError(): boolean { return this.hasError }
-	/** Alias for connect */
-	$connect(id: string): void { this.connect(id) }
-	/** Alias for disconnect */
-	$disconnect(): void { this.disconnect() }
-	/** Alias for delete */
-	$delete(): void { this.delete() }
-	/** Alias for reset */
-	$reset(): void { this.reset() }
-	/** Alias for addError */
-	$addError(error: ErrorInput): void { this.addError(error) }
-	/** Alias for clearErrors */
-	$clearErrors(): void { this.clearErrors() }
-	/** Alias for onConnect */
-	$onConnect(listener: EventListener<RelationConnectedEvent>): Unsubscribe { return this.onConnect(listener) }
-	/** Alias for onDisconnect */
-	$onDisconnect(listener: EventListener<RelationDisconnectedEvent>): Unsubscribe { return this.onDisconnect(listener) }
-	/** Alias for interceptConnect */
-	$interceptConnect(interceptor: Interceptor<RelationConnectingEvent>): Unsubscribe { return this.interceptConnect(interceptor) }
-	/** Alias for interceptDisconnect */
-	$interceptDisconnect(interceptor: Interceptor<RelationDisconnectingEvent>): Unsubscribe { return this.interceptDisconnect(interceptor) }
 }
 
-/**
- * Creates a Proxy around a HasOneHandle that supports direct field access.
- * - `hasOne.fieldName` is equivalent to `hasOne.$entity.$fields.fieldName`
- * - `hasOne.$propertyName` accesses handle properties with $ prefix
- * - Handle properties only available with $ prefix to avoid collision with field names
- */
-function createHasOneHandleProxy<TEntity extends object, TSelected>(
-	handle: HasOneHandle<TEntity, TSelected>,
-): HasOneHandle<TEntity, TSelected> {
-	return new Proxy(handle, {
-		get(target, prop, _receiver) {
-			// Symbols - pass through
-			if (typeof prop !== 'string') {
-				return Reflect.get(target, prop, target)
-			}
-
-			// $ prefixed - strip $ and access handle property
-			if (prop.startsWith('$')) {
-				const realProp = prop.slice(1)
-				// Use target as receiver so getters use target as `this`, not the Proxy
-				const value = Reflect.get(target, realProp, target)
-				// Bind methods to preserve `this`
-				if (typeof value === 'function') {
-					return value.bind(target)
-				}
-				return value
-			}
-
-			// Known handle properties - pass through for backwards compatibility
-			if (HAS_ONE_HANDLE_PROPERTIES.has(prop)) {
-				const value = Reflect.get(target, prop, target)
-				if (typeof value === 'function') {
-					return value.bind(target)
-				}
-				return value
-			}
-
-			// Otherwise, treat as field access on the related entity
-			return target.entity.$fields[prop as keyof SelectedEntityFields<TEntity, TSelected>]
-		},
-
-		has(target, prop) {
-			if (typeof prop === 'string' && !HAS_ONE_HANDLE_PROPERTIES.has(prop) && !prop.startsWith('$')) {
-				// Check if it's a field on the related entity
-				return prop in target.entity.$fields
-			}
-			return Reflect.has(target, prop)
-		},
-	})
-}
 
 /**
  * HasManyListHandle provides access to a has-many relation (list of entities).
@@ -1159,6 +987,10 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	) {
 		super(parentEntityType, parentEntityId, store, dispatcher)
 		this.__brands = brands
+
+		// Return a Proxy that supports $ aliasing
+		// eslint-disable-next-line no-constructor-return
+		return createAliasProxy(this) as HasManyListHandle<TEntity, TSelected>
 	}
 
 	/**
@@ -1510,44 +1342,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		)
 	}
 
-	// ==================== $ Prefixed Aliases ====================
-
-	/** Alias for length */
-	get $length(): number { return this.length }
-	/** Alias for isDirty */
-	get $isDirty(): boolean { return this.isDirty }
-	/** Alias for items */
-	get $items(): EntityAccessor<TEntity, TSelected>[] { return this.items }
-	/** Alias for errors */
-	get $errors(): readonly FieldError[] { return this.errors }
-	/** Alias for hasError */
-	get $hasError(): boolean { return this.hasError }
-	/** Alias for map */
-	$map<R>(fn: (item: EntityAccessor<TEntity, TSelected>, index: number) => R): R[] { return this.map(fn) }
-	/** Alias for add */
-	$add(data?: Partial<TEntity>): string { return this.add(data) }
-	/** Alias for remove */
-	$remove(itemId: string): void { this.remove(itemId) }
-	/** Alias for move */
-	$move(fromIndex: number, toIndex: number): void { this.move(fromIndex, toIndex) }
-	/** Alias for connect */
-	$connect(itemId: string): void { this.connect(itemId) }
-	/** Alias for disconnect */
-	$disconnect(itemId: string): void { this.disconnect(itemId) }
-	/** Alias for reset */
-	$reset(): void { this.reset() }
-	/** Alias for addError */
-	$addError(error: ErrorInput): void { this.addError(error) }
-	/** Alias for clearErrors */
-	$clearErrors(): void { this.clearErrors() }
-	/** Alias for onItemConnected */
-	$onItemConnected(listener: EventListener<HasManyConnectedEvent>): Unsubscribe { return this.onItemConnected(listener) }
-	/** Alias for onItemDisconnected */
-	$onItemDisconnected(listener: EventListener<HasManyDisconnectedEvent>): Unsubscribe { return this.onItemDisconnected(listener) }
-	/** Alias for interceptItemConnecting */
-	$interceptItemConnecting(interceptor: Interceptor<HasManyConnectingEvent>): Unsubscribe { return this.interceptItemConnecting(interceptor) }
-	/** Alias for interceptItemDisconnecting */
-	$interceptItemDisconnecting(interceptor: Interceptor<HasManyDisconnectingEvent>): Unsubscribe { return this.interceptItemDisconnecting(interceptor) }
 }
 
 // ==================== Placeholder Handle ====================
@@ -1569,6 +1363,22 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	/** Placeholder ID for this handle */
 	private readonly placeholderId: string
 
+	// $ aliases - handled by proxy at runtime, declared for TypeScript
+	declare readonly $fields: SelectedEntityFields<TEntity, TSelected>
+	declare readonly $data: TSelected | null
+	declare readonly $isDirty: boolean
+	declare readonly $persistedId: null
+	declare readonly $isNew: boolean
+	declare readonly $errors: readonly FieldError[]
+	declare readonly $hasError: boolean
+	declare $addError: (error: ErrorInput) => void
+	declare $clearErrors: () => void
+	declare $clearAllErrors: () => void
+	declare $on: <E extends AfterEventTypes>(eventType: E, listener: EventListener<EventTypeMap[E]>) => Unsubscribe
+	declare $intercept: <E extends BeforeEventTypes>(eventType: E, interceptor: Interceptor<EventTypeMap[E]>) => Unsubscribe
+	declare $onPersisted: (listener: EventListener<EntityPersistedEvent>) => Unsubscribe
+	declare $interceptPersisting: (interceptor: Interceptor<EntityPersistingEvent>) => Unsubscribe
+
 	constructor(
 		private readonly parentEntityType: string,
 		private readonly parentEntityId: string,
@@ -1580,6 +1390,10 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	) {
 		this.__brands = brands
 		this.placeholderId = generatePlaceholderId()
+
+		// Return a Proxy that supports $ aliasing
+		// eslint-disable-next-line no-constructor-return
+		return createAliasProxy(this) as PlaceholderHandle<TEntity, TSelected>
 	}
 
 	/**
@@ -1827,36 +1641,4 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 		return () => {}
 	}
 
-	// ==================== $ Prefixed Aliases ====================
-
-	/** Alias for id */
-	get $id(): string { return this.id }
-	/** Alias for data */
-	get $data(): TSelected | null { return this.data }
-	/** Alias for isDirty */
-	get $isDirty(): boolean { return this.isDirty }
-	/** Alias for persistedId */
-	get $persistedId(): null { return this.persistedId }
-	/** Alias for isNew */
-	get $isNew(): boolean { return this.isNew }
-	/** Alias for fields */
-	get $fields(): SelectedEntityFields<TEntity, TSelected> { return this.fields }
-	/** Alias for errors */
-	get $errors(): readonly FieldError[] { return this.errors }
-	/** Alias for hasError */
-	get $hasError(): boolean { return this.hasError }
-	/** Alias for addError */
-	$addError(error: ErrorInput): void { this.addError(error) }
-	/** Alias for clearErrors */
-	$clearErrors(): void { this.clearErrors() }
-	/** Alias for clearAllErrors */
-	$clearAllErrors(): void { this.clearAllErrors() }
-	/** Alias for on */
-	$on<E extends AfterEventTypes>(_eventType: E, _listener: EventListener<EventTypeMap[E]>): Unsubscribe { return () => {} }
-	/** Alias for intercept */
-	$intercept<E extends BeforeEventTypes>(_eventType: E, _interceptor: Interceptor<EventTypeMap[E]>): Unsubscribe { return () => {} }
-	/** Alias for onPersisted */
-	$onPersisted(_listener: EventListener<EntityPersistedEvent>): Unsubscribe { return () => {} }
-	/** Alias for interceptPersisting */
-	$interceptPersisting(_interceptor: Interceptor<EntityPersistingEvent>): Unsubscribe { return () => {} }
 }

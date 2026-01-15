@@ -21,16 +21,41 @@ export { SCOPE_REF }
 type NotifyChange = () => void
 
 /**
- * Known properties on collector proxy that should NOT be treated as field access.
+ * Known properties on entity accessor that should NOT be treated as field access.
  * Properties are accessed with $ prefix for consistency with EntityHandle.
+ * Used by both collector and runtime proxies.
  */
-const COLLECTOR_PROPERTIES = new Set([
+const ENTITY_ACCESSOR_PROPERTIES = new Set([
 	'id',
 	'$fields', '$data', '$isDirty', '$persistedId', '$isNew',
 	'$errors', '$hasError', '$addError', '$clearErrors', '$clearAllErrors',
 	'$on', '$intercept', '$onPersisted', '$interceptPersisting',
 	'__entityType', '__entityName', '__availableRoles',
 ])
+
+/**
+ * Wraps an EntityRef in a Proxy that supports direct field access.
+ * - `entity.fieldName` is equivalent to `entity.$fields.fieldName`
+ * - Known accessor properties pass through to the target
+ */
+function wrapEntityRefWithFieldAccessProxy<T>(ref: EntityRef<T>): EntityAccessor<T> {
+	return new Proxy(ref, {
+		get(target, prop) {
+			// Symbols - pass through
+			if (typeof prop !== 'string') {
+				return Reflect.get(target, prop)
+			}
+
+			// Known accessor properties - pass through
+			if (ENTITY_ACCESSOR_PROPERTIES.has(prop)) {
+				return Reflect.get(target, prop)
+			}
+
+			// Otherwise, treat as field access
+			return target.$fields[prop as keyof EntityFields<T>]
+		},
+	}) as EntityAccessor<T>
+}
 
 /**
  * Creates a collector proxy for the collection phase.
@@ -80,23 +105,8 @@ export function createCollectorProxy<T>(
 	// This is an internal implementation detail, not part of public EntityRef interface
 	;(ref as unknown as Record<symbol, unknown>)[SCOPE_REF] = scope
 
-	// Wrap in Proxy to support direct field access: entity.fieldName -> entity.$fields.fieldName
-	return new Proxy(ref, {
-		get(target, prop) {
-			// Symbols - pass through (including SCOPE_REF)
-			if (typeof prop !== 'string') {
-				return Reflect.get(target, prop)
-			}
-
-			// Known collector properties - pass through
-			if (COLLECTOR_PROPERTIES.has(prop)) {
-				return Reflect.get(target, prop)
-			}
-
-			// Otherwise, treat as field access
-			return target.$fields[prop as keyof EntityFields<T>]
-		},
-	}) as EntityAccessor<T>
+	// Wrap in Proxy to support direct field access
+	return wrapEntityRefWithFieldAccessProxy(ref)
 }
 
 /**
@@ -168,73 +178,52 @@ function createCollectorFieldRef(
 	return {
 		[FIELD_REF_META]: meta,
 
-		// FieldRef properties (both versions)
+		// FieldRef properties (non-$ versions)
 		value: null,
-		$value: null,
 		serverValue: null,
-		$serverValue: null,
 		isDirty: false,
-		$isDirty: false,
 		setValue: () => {},
-		$setValue: () => {},
 		inputProps: { value: null, setValue: () => {} },
-		$inputProps: { value: null, setValue: () => {} },
-		// FieldRef error properties (both versions)
 		errors: [],
-		$errors: [],
 		hasError: false,
-		$hasError: false,
 		addError: () => {},
-		$addError: () => {},
 		clearErrors: () => {},
-		$clearErrors: () => {},
-		// FieldRef event methods (both versions)
 		onChange: noop,
-		$onChange: noop,
 		onChanging: noop,
-		$onChanging: noop,
 
-		// HasManyRef properties (both versions)
+		// HasManyRef properties (non-$ versions)
 		length: 0,
-		$length: 0,
 		items: [],
-		$items: [],
 		map: mapFn,
-		$map: mapFn,
 		add: () => '',
-		$add: () => '',
 		remove: () => {},
-		$remove: () => {},
 		move: () => {},
-		$move: () => {},
 		connect: () => {},
-		$connect: () => {},
 		disconnect: () => {},
-		$disconnect: () => {},
 		reset: () => {},
-		$reset: () => {},
-		// HasManyRef event methods (both versions)
 		onItemConnected: noop,
-		$onItemConnected: noop,
 		onItemDisconnected: noop,
-		$onItemDisconnected: noop,
 		interceptItemConnecting: noop,
-		$interceptItemConnecting: noop,
 		interceptItemDisconnecting: noop,
-		$interceptItemDisconnecting: noop,
 
-		// HasOneRef properties ($ prefix only)
+		// HasOneRef properties ($ prefix only - for collision safety)
 		$state: 'disconnected' as const,
 		$id: placeholderId,
+		$isDirty: false,
 		$fields: hasOneFieldsProxy,
 		get $entity(): EntityAccessor<unknown> {
 			// Get child scope (upgrades to relation) and return proxy with scope
 			const scope = getChildScope()
 			return createCollectorProxy<unknown>(scope)
 		},
-		// HasOneRef methods ($ prefix only, except connect/disconnect/reset which are shared with HasMany)
 		$delete: () => {},
-		// HasOneRef event methods ($ prefix only)
+		$errors: [],
+		$hasError: false,
+		$addError: () => {},
+		$clearErrors: () => {},
+		$connect: () => {},
+		$disconnect: () => {},
+		$reset: () => {},
 		$onConnect: noop,
 		$onDisconnect: noop,
 		$interceptConnect: noop,
@@ -258,16 +247,6 @@ function createCollectorFieldRef(
 	}
 }
 
-/**
- * Known properties on runtime accessor that should NOT be treated as field access.
- */
-const RUNTIME_ACCESSOR_PROPERTIES = new Set([
-	'id',
-	'$fields', '$data', '$isDirty', '$persistedId', '$isNew',
-	'$errors', '$hasError', '$addError', '$clearErrors', '$clearAllErrors',
-	'$on', '$intercept', '$onPersisted', '$interceptPersisting',
-	'__entityType', '__entityName', '__availableRoles',
-])
 
 /**
  * Creates a runtime accessor with real data from SnapshotStore.
@@ -332,23 +311,8 @@ export function createRuntimeAccessor<T>(
 		$interceptPersisting: noop,
 	}
 
-	// Wrap in Proxy to support direct field access: entity.fieldName -> entity.$fields.fieldName
-	return new Proxy(ref, {
-		get(target, prop) {
-			// Symbols - pass through
-			if (typeof prop !== 'string') {
-				return Reflect.get(target, prop)
-			}
-
-			// Known accessor properties - pass through
-			if (RUNTIME_ACCESSOR_PROPERTIES.has(prop)) {
-				return Reflect.get(target, prop)
-			}
-
-			// Otherwise, treat as field access
-			return target.$fields[prop as keyof EntityFields<T>]
-		},
-	}) as EntityAccessor<T>
+	// Wrap in Proxy to support direct field access
+	return wrapEntityRefWithFieldAccessProxy(ref)
 }
 
 /**
@@ -614,97 +578,56 @@ function createRuntimeFieldRef(
 	return {
 		[FIELD_REF_META]: meta,
 
-		// FieldRef properties (both versions)
+		// FieldRef properties (non-$ versions)
 		get value() {
-			return getValueOrNull()
-		},
-		get $value() {
 			return getValueOrNull()
 		},
 		get serverValue() {
 			return getServerValueOrNull()
 		},
-		get $serverValue() {
-			return getServerValueOrNull()
-		},
 		get isDirty() {
 			return getIsDirty()
 		},
-		get $isDirty() {
-			return getIsDirty()
-		},
 		setValue,
-		$setValue: setValue,
 		get inputProps() {
 			return getInputProps()
 		},
-		get $inputProps() {
-			return getInputProps()
-		},
-		// FieldRef error properties (both versions)
 		get errors() {
-			return getErrors()
-		},
-		get $errors() {
 			return getErrors()
 		},
 		get hasError() {
 			return getHasError()
 		},
-		get $hasError() {
-			return getHasError()
-		},
 		addError: addErrorFn,
-		$addError: addErrorFn,
 		clearErrors: clearErrorsFn,
-		$clearErrors: clearErrorsFn,
-		// FieldRef event methods (both versions)
 		onChange: noop,
-		$onChange: noop,
 		onChanging: noop,
-		$onChanging: noop,
 
-		// HasManyRef properties (both versions)
+		// HasManyRef properties (non-$ versions)
 		get length() {
-			return getLength()
-		},
-		get $length() {
 			return getLength()
 		},
 		get items() {
 			return getItems()
 		},
-		get $items() {
-			return getItems()
-		},
 		map: mapFn,
-		$map: mapFn,
 		add: addFn,
-		$add: addFn,
 		remove: removeFn,
-		$remove: removeFn,
 		move: moveFn,
-		$move: moveFn,
-		// Shared methods for HasManyRef and HasOneRef (both versions)
 		connect: connectFn,
-		$connect: connectFn,
 		disconnect: disconnectFn,
-		$disconnect: disconnectFn,
 		reset: resetFn,
-		$reset: resetFn,
-		// HasManyRef event methods (both versions)
 		onItemConnected: noop,
-		$onItemConnected: noop,
 		onItemDisconnected: noop,
-		$onItemDisconnected: noop,
 		interceptItemConnecting: noop,
-		$interceptItemConnecting: noop,
 		interceptItemDisconnecting: noop,
-		$interceptItemDisconnecting: noop,
 
-		// HasOneRef properties ($ prefix only)
+		// HasOneRef properties ($ prefix only - for collision safety)
 		get $id() {
 			return getHasOneId()
+		},
+		get $isDirty() {
+			return getIsDirty()
 		},
 		get $fields() {
 			return getFieldsProxy()
@@ -715,9 +638,14 @@ function createRuntimeFieldRef(
 		get $state() {
 			return getState()
 		},
-		// HasOneRef methods ($ prefix only, except connect/disconnect/reset which are shared with HasMany)
 		$delete: deleteFn,
-		// HasOneRef event methods ($ prefix only)
+		$errors: [],
+		$hasError: false,
+		$addError: addErrorFn,
+		$clearErrors: clearErrorsFn,
+		$connect: connectFn,
+		$disconnect: disconnectFn,
+		$reset: resetFn,
 		$onConnect: noop,
 		$onDisconnect: noop,
 		$interceptConnect: noop,
@@ -770,31 +698,18 @@ function createNullFieldRef(path: string[], fieldName: string): FieldRef<unknown
 			isArray: false,
 			isRelation: false,
 		},
-		// FieldRef properties (both versions)
+		// FieldRef properties (non-$ versions)
 		value: null,
-		$value: null,
 		serverValue: null,
-		$serverValue: null,
 		isDirty: false,
-		$isDirty: false,
 		setValue: setValueFn,
-		$setValue: setValueFn,
 		inputProps: inputPropsValue,
-		$inputProps: inputPropsValue,
-		// Error properties (both versions)
 		errors: [],
-		$errors: [],
 		hasError: false,
-		$hasError: false,
 		addError: noopFn,
-		$addError: noopFn,
 		clearErrors: noopFn,
-		$clearErrors: noopFn,
-		// Event methods (both versions)
 		onChange: noop,
-		$onChange: noop,
 		onChanging: noop,
-		$onChanging: noop,
 	}
 }
 
@@ -835,29 +750,18 @@ function createPlaceholderAccessor<T>(): EntityAccessor<T> {
 					isArray: false,
 					isRelation: false,
 				},
-				// FieldRef properties (both versions)
+				// FieldRef properties (non-$ versions)
 				value: null,
-				$value: null,
 				serverValue: null,
-				$serverValue: null,
 				isDirty: false,
-				$isDirty: false,
 				setValue: () => {},
-				$setValue: () => {},
 				inputProps,
-				$inputProps: inputProps,
 				errors: [] as FieldError[],
-				$errors: [] as FieldError[],
 				hasError: false,
-				$hasError: false,
 				addError: () => {},
-				$addError: () => {},
 				clearErrors: () => {},
-				$clearErrors: () => {},
 				onChange: noop,
-				$onChange: noop,
 				onChanging: noop,
-				$onChanging: noop,
 			}
 		},
 	})
@@ -884,16 +788,6 @@ function createPlaceholderAccessor<T>(): EntityAccessor<T> {
 	}
 
 	// Wrap in Proxy to support direct field access
-	return new Proxy(ref, {
-		get(target, prop) {
-			if (typeof prop !== 'string') {
-				return Reflect.get(target, prop)
-			}
-			if (RUNTIME_ACCESSOR_PROPERTIES.has(prop)) {
-				return Reflect.get(target, prop)
-			}
-			return target.$fields[prop as keyof EntityFields<T>]
-		},
-	}) as EntityAccessor<T>
+	return wrapEntityRefWithFieldAccessProxy(ref)
 }
 

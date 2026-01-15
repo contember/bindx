@@ -3,6 +3,7 @@ import { ContentClient, ContentQueryBuilder, ContentEntitySelection, SchemaNames
 import type { QuerySpec, QueryFieldSpec } from '../selection/buildQuery.js'
 import type { BackendAdapter, Query, QueryResult, QueryOptions, GetQuery, ListQuery, PersistResult, CreateResult, DeleteResult } from './types.js'
 import type { ContemberMutationResult } from '../errors/pathMapper.js'
+import { isExecutionErrorType, type ExecutionErrorType } from '../errors/types.js'
 
 /**
  * Options for ContemberAdapter
@@ -157,7 +158,8 @@ export class ContemberAdapter implements BackendAdapter {
 			errors: result.errors.map(e => ({
 				paths: e.paths,
 				message: e.message,
-				type: e.type as any,
+				// Type comes from Contember as string, we validate it's a known ExecutionErrorType
+				type: this.parseExecutionErrorType(e.type),
 			})),
 			validation: {
 				valid: result.validation.valid,
@@ -167,6 +169,20 @@ export class ContemberAdapter implements BackendAdapter {
 				})),
 			},
 		}
+	}
+
+	/**
+	 * Parses and validates an execution error type string.
+	 * Returns the typed value if valid, or logs a warning and returns the string as-is for forward compatibility.
+	 */
+	private parseExecutionErrorType(type: string): ExecutionErrorType {
+		if (isExecutionErrorType(type)) {
+			return type
+		}
+		// Unknown error type - could be a new type added in a newer Contember version
+		// Log warning but don't fail - forward compatibility
+		console.warn(`[ContemberAdapter] Unknown execution error type: ${type}. This may be a new error type from a newer Contember version.`)
+		return type as ExecutionErrorType
 	}
 
 	/**

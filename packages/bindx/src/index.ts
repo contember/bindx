@@ -245,6 +245,7 @@ export { EventEmitter } from './events/index.js'
 // Error types
 export type {
 	ExecutionErrorType,
+	ErrorCategory,
 	BindxError,
 	ClientError,
 	ServerError,
@@ -252,6 +253,8 @@ export type {
 	ErrorState,
 	ErrorInput,
 	PathElement,
+	PathSegment,
+	ParsedPath,
 	ContemberMutationError,
 	ContemberValidationError,
 	MappedError,
@@ -259,6 +262,10 @@ export type {
 } from './errors/index.js'
 
 export {
+	ExecutionErrorTypes,
+	isExecutionErrorType,
+	classifyError,
+	isRetryableCategory,
 	createClientError,
 	createServerError,
 	isClientError,
@@ -268,6 +275,8 @@ export {
 	mapMutationError,
 	mapValidationError,
 	extractMappedErrors,
+	isNestedError,
+	getErrorPathString,
 } from './errors/index.js'
 
 

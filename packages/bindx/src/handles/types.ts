@@ -232,7 +232,7 @@ export interface InputProps<T> {
 /**
  * Reference to a scalar field - works in both collection and runtime phases.
  *
- * All properties are also available with $ prefix for consistency with relation handles:
+ * Properties are available both with and without $ prefix (via proxy):
  * - `field.value` and `field.$value` are equivalent
  * - `field.setValue(v)` and `field.$setValue(v)` are equivalent
  */
@@ -242,74 +242,49 @@ export interface FieldRef<T> {
 
 	/** Current value (null in collection phase, real value in runtime) */
 	readonly value: T | null
-	/** Alias for value */
-	readonly $value: T | null
 
 	/** Server value for dirty tracking */
 	readonly serverValue: T | null
-	/** Alias for serverValue */
-	readonly $serverValue: T | null
 
 	/** Whether value differs from server */
 	readonly isDirty: boolean
-	/** Alias for isDirty */
-	readonly $isDirty: boolean
 
 	/** Update the value */
 	setValue(value: T | null): void
-	/** Alias for setValue */
-	$setValue(value: T | null): void
 
 	/** Input binding props */
 	readonly inputProps: {
 		value: T | null
 		setValue: (value: T | null) => void
 	}
-	/** Alias for inputProps */
-	readonly $inputProps: {
-		value: T | null
-		setValue: (value: T | null) => void
-	}
 
 	/** List of errors on this field */
 	readonly errors: readonly FieldError[]
-	/** Alias for errors */
-	readonly $errors: readonly FieldError[]
 
 	/** Whether this field has any errors */
 	readonly hasError: boolean
-	/** Alias for hasError */
-	readonly $hasError: boolean
 
 	/** Add a client-side error to this field */
 	addError(error: ErrorInput): void
-	/** Alias for addError */
-	$addError(error: ErrorInput): void
 
 	/** Clear all errors from this field */
 	clearErrors(): void
-	/** Alias for clearErrors */
-	$clearErrors(): void
 
 	// ==================== Event Subscriptions ====================
 
 	/** Subscribe to field value changes */
 	onChange(listener: EventListener<FieldChangedEvent>): UnsubscribeType
-	/** Alias for onChange */
-	$onChange(listener: EventListener<FieldChangedEvent>): UnsubscribeType
 
 	/** Intercept field value changes (can cancel or modify) */
 	onChanging(interceptor: Interceptor<FieldChangingEvent>): UnsubscribeType
-	/** Alias for onChanging */
-	$onChanging(interceptor: Interceptor<FieldChangingEvent>): UnsubscribeType
 }
 
 /**
  * Reference to a has-many relation - selection-aware version.
  *
- * All handle properties are available with $ prefix for consistency:
- * - `hasMany.$items`, `hasMany.$length`, `hasMany.$add()`, etc.
- * - Non-prefixed versions also work for backwards compatibility.
+ * Properties are available both with and without $ prefix (via proxy):
+ * - `hasMany.items` and `hasMany.$items` are equivalent
+ * - `hasMany.add()` and `hasMany.$add()` are equivalent
  *
  * @typeParam TEntity - The full entity type
  * @typeParam TSelected - The selected subset of fields (defaults to TEntity for backwards compatibility)
@@ -322,53 +297,33 @@ export interface HasManyRef<TEntity, TSelected = TEntity, TBrand extends AnyBran
 
 	/** Number of items */
 	readonly length: number
-	/** Alias for length */
-	readonly $length: number
 
 	/** Whether any item has been modified */
 	readonly isDirty: boolean
-	/** Alias for isDirty */
-	readonly $isDirty: boolean
 
 	/** Direct access to items array - returns selection-aware entity accessors with direct field access */
 	readonly items: EntityAccessor<TEntity, TSelected, TBrand, string, TAvailableRoles>[]
-	/** Alias for items */
-	readonly $items: EntityAccessor<TEntity, TSelected, TBrand, string, TAvailableRoles>[]
 
 	/** Iterate over items - returns selection-aware entity accessors with direct field access */
 	map<R>(fn: (item: EntityAccessor<TEntity, TSelected, TBrand, string, TAvailableRoles>, index: number) => R): R[]
-	/** Alias for map */
-	$map<R>(fn: (item: EntityAccessor<TEntity, TSelected, TBrand, string, TAvailableRoles>, index: number) => R): R[]
 
 	/** Add a new item - returns the new entity's ID (temp ID) */
 	add(data?: Partial<TEntity>): string
-	/** Alias for add */
-	$add(data?: Partial<TEntity>): string
 
 	/** Remove item by ID */
 	remove(itemId: string): void
-	/** Alias for remove */
-	$remove(itemId: string): void
 
 	/** Move item from one position to another */
 	move(fromIndex: number, toIndex: number): void
-	/** Alias for move */
-	$move(fromIndex: number, toIndex: number): void
 
 	/** Connect an existing entity to this has-many relation */
 	connect(itemId: string): void
-	/** Alias for connect */
-	$connect(itemId: string): void
 
 	/** Disconnect an entity from this has-many relation */
 	disconnect(itemId: string | null): void
-	/** Alias for disconnect */
-	$disconnect(itemId: string | null): void
 
 	/** Reset the relation to server state */
 	reset(): void
-	/** Alias for reset */
-	$reset(): void
 
 	/** Type brand - ensures HasManyRef<Author> is not assignable to HasManyRef<Tag> */
 	readonly __entityType: TEntity
@@ -378,45 +333,29 @@ export interface HasManyRef<TEntity, TSelected = TEntity, TBrand extends AnyBran
 
 	/** List of errors on this relation */
 	readonly errors: readonly FieldError[]
-	/** Alias for errors */
-	readonly $errors: readonly FieldError[]
 
 	/** Whether this relation has any errors */
 	readonly hasError: boolean
-	/** Alias for hasError */
-	readonly $hasError: boolean
 
 	/** Add a client-side error to this relation */
 	addError(error: ErrorInput): void
-	/** Alias for addError */
-	$addError(error: ErrorInput): void
 
 	/** Clear all errors from this relation */
 	clearErrors(): void
-	/** Alias for clearErrors */
-	$clearErrors(): void
 
 	// ==================== Event Subscriptions ====================
 
 	/** Subscribe to item connected events */
 	onItemConnected(listener: EventListener<HasManyConnectedEvent>): UnsubscribeType
-	/** Alias for onItemConnected */
-	$onItemConnected(listener: EventListener<HasManyConnectedEvent>): UnsubscribeType
 
 	/** Subscribe to item disconnected events */
 	onItemDisconnected(listener: EventListener<HasManyDisconnectedEvent>): UnsubscribeType
-	/** Alias for onItemDisconnected */
-	$onItemDisconnected(listener: EventListener<HasManyDisconnectedEvent>): UnsubscribeType
 
 	/** Intercept item connection (can cancel) */
 	interceptItemConnecting(interceptor: Interceptor<HasManyConnectingEvent>): UnsubscribeType
-	/** Alias for interceptItemConnecting */
-	$interceptItemConnecting(interceptor: Interceptor<HasManyConnectingEvent>): UnsubscribeType
 
 	/** Intercept item disconnection (can cancel) */
 	interceptItemDisconnecting(interceptor: Interceptor<HasManyDisconnectingEvent>): UnsubscribeType
-	/** Alias for interceptItemDisconnecting */
-	$interceptItemDisconnecting(interceptor: Interceptor<HasManyDisconnectingEvent>): UnsubscribeType
 }
 
 /**

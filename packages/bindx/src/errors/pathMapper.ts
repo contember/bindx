@@ -33,12 +33,41 @@ export interface ContemberValidationError {
 }
 
 /**
+ * Segment of a parsed error path.
+ */
+export interface PathSegment {
+	readonly field: string
+	readonly index?: number
+	readonly alias?: string | null
+}
+
+/**
+ * Full parsed path information.
+ */
+export interface ParsedPath {
+	/** The root field/relation name on the entity */
+	readonly rootField: string
+	/** Whether the root is a relation (vs scalar field) */
+	readonly isRelation: boolean
+	/** The target entity type of the relation (if isRelation) */
+	readonly targetEntityType?: string
+	/** Full path segments for nested errors */
+	readonly segments: PathSegment[]
+	/** Human-readable path string like "articles[0].author.name" */
+	readonly pathString: string
+	/** The final field name in the path (innermost) */
+	readonly leafField?: string
+}
+
+/**
  * Result of mapping an error to a field/relation.
  */
 export interface MappedError {
 	readonly type: 'field' | 'relation' | 'entity'
 	readonly name?: string
 	readonly error: ServerError
+	/** Parsed path information for nested errors */
+	readonly path?: ParsedPath
 }
 
 /**
@@ -92,7 +121,52 @@ export function mapValidationError(
 }
 
 /**
- * Maps a path array to a field/relation name.
+ * Parses a path array into structured segments.
+ */
+function parsePath(path: PathElement[]): PathSegment[] {
+	const segments: PathSegment[] = []
+	let currentSegment: PathSegment | null = null
+
+	for (const element of path) {
+		if ('field' in element) {
+			// Start a new segment
+			if (currentSegment) {
+				segments.push(currentSegment)
+			}
+			currentSegment = { field: element.field }
+		} else if ('index' in element && currentSegment) {
+			// Add index to current segment
+			currentSegment = {
+				field: currentSegment.field,
+				index: element.index,
+				alias: element.alias,
+			}
+		}
+	}
+
+	// Push the last segment
+	if (currentSegment) {
+		segments.push(currentSegment)
+	}
+
+	return segments
+}
+
+/**
+ * Converts path segments to a human-readable string.
+ */
+function pathToString(segments: PathSegment[]): string {
+	return segments.map((seg, i) => {
+		let str = i === 0 ? seg.field : `.${seg.field}`
+		if (seg.index !== undefined) {
+			str += `[${seg.index}]`
+		}
+		return str
+	}).join('')
+}
+
+/**
+ * Maps a path array to a field/relation name with full path information.
  */
 function mapPath(
 	path: PathElement[],
@@ -105,38 +179,63 @@ function mapPath(
 		return null
 	}
 
-	// Get the first path element - this is the field/relation on the root entity
-	const firstElement = path[0]
-	if (!firstElement || !('field' in firstElement)) {
+	// Parse the path into segments
+	const segments = parsePath(path)
+	if (segments.length === 0) {
 		return null
 	}
 
-	const fieldName = firstElement.field
+	const rootSegment = segments[0]!
+	const rootField = rootSegment.field
+	const pathString = pathToString(segments)
+	const leafField = segments.length > 1 ? segments[segments.length - 1]?.field : undefined
+
+	// Enhance error message with path info for nested errors
+	const enhancedMessage = segments.length > 1
+		? `${message} (at ${pathString})`
+		: message
 
 	// Determine if this is a field or a relation
-	const fieldDef = schema.getFieldDef(entityType, fieldName)
+	const fieldDef = schema.getFieldDef(entityType, rootField)
+
+	// Build parsed path info
+	const parsedPath: ParsedPath = {
+		rootField,
+		isRelation: fieldDef?.type !== 'scalar',
+		targetEntityType: fieldDef?.type === 'hasOne' || fieldDef?.type === 'hasMany'
+			? fieldDef.target
+			: undefined,
+		segments,
+		pathString,
+		leafField,
+	}
+
 	if (!fieldDef) {
 		// Unknown field - return as field error anyway
 		return {
 			type: 'field',
-			name: fieldName,
-			error: createServerError(message, errorType, getErrorCode(errorType)),
+			name: rootField,
+			error: createServerError(enhancedMessage, errorType, getErrorCode(errorType)),
+			path: parsedPath,
 		}
 	}
 
 	if (fieldDef.type === 'scalar') {
 		return {
 			type: 'field',
-			name: fieldName,
+			name: rootField,
 			error: createServerError(message, errorType, getErrorCode(errorType)),
+			path: parsedPath,
 		}
 	}
 
 	// It's a relation (hasOne or hasMany)
+	// For nested errors, try to get more specific info about where the error occurred
 	return {
 		type: 'relation',
-		name: fieldName,
-		error: createServerError(message, errorType, getErrorCode(errorType)),
+		name: rootField,
+		error: createServerError(enhancedMessage, errorType, getErrorCode(errorType)),
+		path: parsedPath,
 	}
 }
 
@@ -202,4 +301,18 @@ export function extractMappedErrors(
 	}
 
 	return mappedErrors
+}
+
+/**
+ * Utility to check if an error is from a nested path (more than one segment).
+ */
+export function isNestedError(mappedError: MappedError): boolean {
+	return (mappedError.path?.segments.length ?? 0) > 1
+}
+
+/**
+ * Gets the full path string from a mapped error.
+ */
+export function getErrorPathString(mappedError: MappedError): string | undefined {
+	return mappedError.path?.pathString
 }
