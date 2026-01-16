@@ -233,7 +233,8 @@ export type JSONArray = readonly JSONValue[]
 		const entityPerms = permissions[entity.name]
 		let code = `export interface ${roleTypeName}${entity.name} {\n`
 
-		let columnsCode = ''
+		// Always include id field - it's always readable if entity is accessible
+		let columnsCode = `\t\tid: string\n`
 		let hasOneCode = ''
 		let hasManyCode = ''
 
@@ -261,6 +262,10 @@ export type JSONArray = readonly JSONValue[]
 				hasOneCode += `\t\t${ctx.relation.name}: ${roleTypeName}${ctx.targetEntity.name}\n`
 			},
 			visitColumn: ctx => {
+				// Skip id field - it's always included above
+				if (ctx.column.name === 'id') {
+					return
+				}
 				if (!hasFieldReadPermission(entityPerms, ctx.column.name, this.options.allowPredicateAccess)) {
 					return
 				}

@@ -18,4 +18,9 @@ export {
 	type EntityRefFor,
 	type EntityAccessor,
 	type Unsubscribe,
+	// Type extraction helpers
+	type ExtractHasOneEntityName,
+	type ExtractHasOneRoles,
+	type ExtractHasManyEntityName,
+	type ExtractHasManyRoles,
 } from './types.js'

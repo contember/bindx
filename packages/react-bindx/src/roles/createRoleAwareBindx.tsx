@@ -4,7 +4,7 @@
  * This provides type-safe data binding with role-based schema narrowing.
  */
 
-import React, { useMemo, memo, type ReactNode, type ReactElement, type ComponentType } from 'react'
+import React, { useMemo, memo, useCallback, useEffect, useRef, useSyncExternalStore, type ReactNode, type ReactElement, type ComponentType } from 'react'
 import {
 	type IntersectRoleSchemas,
 	type EntityForRoles,
@@ -18,6 +18,7 @@ import {
 	type SelectionBuilder,
 	type FluentFragment,
 	type SelectionMeta,
+	type SelectionFieldMeta,
 	createSelectionBuilder,
 	SELECTION_META,
 	ComponentBrand,
@@ -25,6 +26,8 @@ import {
 	type RolesAreSubset,
 	type SchemaDefinition,
 	ContemberSchema,
+	type EntityWhere,
+	type EntityOrderBy,
 } from '@contember/bindx'
 import {
 	createRoleContext,
@@ -75,8 +78,9 @@ type RoleSchemasBase<T> = { [K in keyof T]: { [E: string]: object } }
 
 /**
  * Helper type to extract entity type with object constraint.
+ * Ensures the result is always an object type, falling back to `object` if the entity doesn't exist.
  */
-type EntityForRolesObject<
+export type EntityForRolesObject<
 	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
 	TRoles extends readonly (keyof TRoleSchemas)[],
 	TEntityName extends string,
@@ -295,33 +299,17 @@ export type RoleAwareCreateComponent<TRoleSchemas extends RoleSchemasBase<TRoleS
 // Entity Component Types
 // ============================================================================
 
+// --- By Mode Props (edit/fetch existing entity) ---
+
 /**
- * Props for Entity component with optional roles.
+ * Base props for Entity "by" mode (fetching existing entity).
  */
-export interface RoleAwareEntityProps<
-	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
-	TEntityName extends string,
-	TRoles extends readonly (keyof TRoleSchemas & string)[] | undefined,
-> {
+interface RoleAwareEntityByPropsBase<TEntityName extends string> {
 	/** Entity type name */
 	name: TEntityName
 
 	/** Unique field(s) to identify the entity (e.g., { id: '...' } or { slug: '...' }) */
 	by: Record<string, unknown>
-
-	/** Optional roles - when provided, entity type is narrowed to intersection of these roles */
-	roles?: TRoles
-
-	/** Render function receiving typed entity accessor with direct field access */
-	children: TRoles extends readonly (keyof TRoleSchemas & string)[]
-		? (entity: EntityAccessor<
-				EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
-				EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
-				AnyBrand,
-				TEntityName,
-				TRoles
-			>) => ReactNode
-		: (entity: EntityAccessor<object, object, AnyBrand, TEntityName, readonly string[]>) => ReactNode
 
 	/** Loading fallback */
 	loading?: ReactNode
@@ -331,17 +319,196 @@ export interface RoleAwareEntityProps<
 
 	/** Not found fallback */
 	notFound?: ReactNode
+
+	/** Discriminator - create mode not allowed */
+	create?: never
+
+	/** Discriminator - onPersisted not allowed in by mode */
+	onPersisted?: never
 }
 
 /**
- * Entity component type that accepts optional roles prop.
+ * Props for Entity "by" mode with roles specified.
  */
-export type RoleAwareEntityComponent<TRoleSchemas extends RoleSchemasBase<TRoleSchemas>> = <
+export interface RoleAwareEntityByPropsWithRoles<
+	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
 	TEntityName extends string,
-	const TRoles extends readonly (keyof TRoleSchemas & string)[] | undefined = undefined,
->(
-	props: RoleAwareEntityProps<TRoleSchemas, TEntityName, TRoles>,
-) => ReactElement | null
+	TRoles extends readonly (keyof TRoleSchemas & string)[],
+> extends RoleAwareEntityByPropsBase<TEntityName> {
+	/** Roles for entity type narrowing */
+	roles: TRoles
+
+	/** Render function receiving typed entity accessor with direct field access */
+	children: (entity: EntityAccessor<
+		EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
+		EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
+		AnyBrand,
+		TEntityName,
+		TRoles,
+		IntersectRoleSchemas<TRoleSchemas, TRoles>
+	>) => ReactNode
+}
+
+/**
+ * Props for Entity "by" mode without roles.
+ */
+export interface RoleAwareEntityByPropsWithoutRoles<
+	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
+	TEntityName extends string,
+> extends RoleAwareEntityByPropsBase<TEntityName> {
+	/** Optional roles */
+	roles?: undefined
+
+	/** Render function receiving untyped entity accessor */
+	children: (entity: EntityAccessor<object, object, AnyBrand, TEntityName, readonly string[]>) => ReactNode
+}
+
+// --- Create Mode Props ---
+
+/**
+ * Base props for Entity "create" mode (creating new entity).
+ */
+interface RoleAwareEntityCreatePropsBase<TEntityName extends string> {
+	/** Entity type name */
+	name: TEntityName
+
+	/** Create a new entity instead of fetching an existing one */
+	create: true
+
+	/** Callback when entity is persisted and receives server-assigned ID */
+	onPersisted?: (id: string) => void
+
+	/** Error fallback */
+	error?: (error: Error) => ReactNode
+
+	/** Discriminator - by not allowed in create mode */
+	by?: never
+
+	/** Discriminator - loading not applicable in create mode */
+	loading?: never
+
+	/** Discriminator - notFound not applicable in create mode */
+	notFound?: never
+}
+
+/**
+ * Props for Entity "create" mode with roles specified.
+ */
+export interface RoleAwareEntityCreatePropsWithRoles<
+	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
+	TEntityName extends string,
+	TRoles extends readonly (keyof TRoleSchemas & string)[],
+> extends RoleAwareEntityCreatePropsBase<TEntityName> {
+	/** Roles for entity type narrowing */
+	roles: TRoles
+
+	/** Render function receiving typed entity accessor with direct field access */
+	children: (entity: EntityAccessor<
+		EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
+		EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
+		AnyBrand,
+		TEntityName,
+		TRoles,
+		IntersectRoleSchemas<TRoleSchemas, TRoles>
+	>) => ReactNode
+}
+
+/**
+ * Props for Entity "create" mode without roles.
+ */
+export interface RoleAwareEntityCreatePropsWithoutRoles<
+	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
+	TEntityName extends string,
+> extends RoleAwareEntityCreatePropsBase<TEntityName> {
+	/** Optional roles */
+	roles?: undefined
+
+	/** Render function receiving untyped entity accessor */
+	children: (entity: EntityAccessor<object, object, AnyBrand, TEntityName, readonly string[]>) => ReactNode
+}
+
+// --- Legacy aliases for backward compatibility ---
+
+/** @deprecated Use RoleAwareEntityByPropsWithRoles instead */
+export type RoleAwareEntityPropsWithRoles<
+	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
+	TEntityName extends string,
+	TRoles extends readonly (keyof TRoleSchemas & string)[],
+> = RoleAwareEntityByPropsWithRoles<TRoleSchemas, TEntityName, TRoles>
+
+/** @deprecated Use RoleAwareEntityByPropsWithoutRoles instead */
+export type RoleAwareEntityPropsWithoutRoles<
+	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
+	TEntityName extends string,
+> = RoleAwareEntityByPropsWithoutRoles<TRoleSchemas, TEntityName>
+
+// --- Union Types ---
+
+/**
+ * All Entity props variants with roles.
+ */
+export type RoleAwareEntityAllPropsWithRoles<
+	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
+	TEntityName extends string,
+	TRoles extends readonly (keyof TRoleSchemas & string)[],
+> = RoleAwareEntityByPropsWithRoles<TRoleSchemas, TEntityName, TRoles>
+	| RoleAwareEntityCreatePropsWithRoles<TRoleSchemas, TEntityName, TRoles>
+
+/**
+ * All Entity props variants without roles.
+ */
+export type RoleAwareEntityAllPropsWithoutRoles<
+	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
+	TEntityName extends string,
+> = RoleAwareEntityByPropsWithoutRoles<TRoleSchemas, TEntityName>
+	| RoleAwareEntityCreatePropsWithoutRoles<TRoleSchemas, TEntityName>
+
+/**
+ * Props for Entity component with optional roles.
+ * This is a conditional type - for generic contexts, use RoleAwareEntityByPropsWithRoles directly.
+ */
+export type RoleAwareEntityProps<
+	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
+	TEntityName extends string,
+	TRoles extends readonly (keyof TRoleSchemas & string)[] | undefined,
+> = TRoles extends readonly (keyof TRoleSchemas & string)[]
+	? RoleAwareEntityAllPropsWithRoles<TRoleSchemas, TEntityName, TRoles>
+	: RoleAwareEntityAllPropsWithoutRoles<TRoleSchemas, TEntityName>
+
+/**
+ * Entity component type that accepts optional roles prop.
+ * Has overloads for both with-roles and without-roles variants to support generic contexts.
+ * Supports both "by" mode (fetch existing) and "create" mode (create new).
+ */
+export interface RoleAwareEntityComponent<TRoleSchemas extends RoleSchemasBase<TRoleSchemas>> {
+	// Overload for "by" mode with roles specified
+	<
+		TEntityName extends string,
+		TRoles extends readonly (keyof TRoleSchemas & string)[],
+	>(props: RoleAwareEntityByPropsWithRoles<TRoleSchemas, TEntityName, TRoles>): ReactElement | null
+
+	// Overload for "by" mode without roles
+	<TEntityName extends string>(
+		props: RoleAwareEntityByPropsWithoutRoles<TRoleSchemas, TEntityName>,
+	): ReactElement | null
+
+	// Overload for "create" mode with roles specified
+	<
+		TEntityName extends string,
+		TRoles extends readonly (keyof TRoleSchemas & string)[],
+	>(props: RoleAwareEntityCreatePropsWithRoles<TRoleSchemas, TEntityName, TRoles>): ReactElement | null
+
+	// Overload for "create" mode without roles
+	<TEntityName extends string>(
+		props: RoleAwareEntityCreatePropsWithoutRoles<TRoleSchemas, TEntityName>,
+	): ReactElement | null
+
+	// General overload with conditional type (for backward compatibility)
+	<
+		TEntityName extends string,
+		const TRoles extends readonly (keyof TRoleSchemas & string)[] | undefined = undefined,
+	>(props: RoleAwareEntityProps<TRoleSchemas, TEntityName, TRoles>): ReactElement | null
+}
 
 // ============================================================================
 // EntityList Component Types
@@ -358,8 +525,10 @@ export interface RoleAwareEntityListProps<
 	/** Entity type name */
 	name: TEntityName
 
-	/** Optional filter criteria */
-	filter?: Record<string, unknown>
+	/** Optional filter criteria - type-safe based on entity schema when roles are provided */
+	filter?: TRoles extends readonly (keyof TRoleSchemas & string)[]
+		? EntityWhere<EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>>
+		: Record<string, unknown>
 
 	/** Optional roles - when provided, entity type is narrowed to intersection of these roles */
 	roles?: TRoles
@@ -371,7 +540,8 @@ export interface RoleAwareEntityListProps<
 				EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
 				AnyBrand,
 				TEntityName,
-				TRoles
+				TRoles,
+				IntersectRoleSchemas<TRoleSchemas, TRoles>
 			>, index: number) => ReactNode
 		: (entity: EntityAccessor<object, object, AnyBrand, TEntityName, readonly string[]>, index: number) => ReactNode
 
@@ -386,14 +556,94 @@ export interface RoleAwareEntityListProps<
 }
 
 /**
- * EntityList component type that accepts optional roles prop.
+ * Props for EntityList component with roles specified (non-conditional).
+ * Use this when you need to pass props in generic contexts where conditional types can't be resolved.
  */
-export type RoleAwareEntityListComponent<TRoleSchemas extends RoleSchemasBase<TRoleSchemas>> = <
+export interface RoleAwareEntityListPropsWithRoles<
+	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
 	TEntityName extends string,
-	const TRoles extends readonly (keyof TRoleSchemas & string)[] | undefined = undefined,
->(
-	props: RoleAwareEntityListProps<TRoleSchemas, TEntityName, TRoles>,
-) => ReactElement | null
+	TRoles extends readonly (keyof TRoleSchemas & string)[],
+> {
+	/** Entity type name */
+	name: TEntityName
+
+	/** Filter criteria - type-safe based on entity schema */
+	filter?: EntityWhere<EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>>
+
+	/** Roles for entity type narrowing */
+	roles: TRoles
+
+	/** Render function receiving typed entity accessor with direct field access and index */
+	children: (entity: EntityAccessor<
+		EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
+		EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
+		AnyBrand,
+		TEntityName,
+		TRoles,
+		IntersectRoleSchemas<TRoleSchemas, TRoles>
+	>, index: number) => ReactNode
+
+	/** Loading fallback */
+	loading?: ReactNode
+
+	/** Error fallback */
+	error?: (error: Error) => ReactNode
+
+	/** Empty state fallback */
+	empty?: ReactNode
+}
+
+/**
+ * Props for EntityList component without roles (non-conditional).
+ */
+export interface RoleAwareEntityListPropsWithoutRoles<
+	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
+	TEntityName extends string,
+> {
+	/** Entity type name */
+	name: TEntityName
+
+	/** Filter criteria */
+	filter?: Record<string, unknown>
+
+	/** Optional roles */
+	roles?: undefined
+
+	/** Render function receiving untyped entity accessor */
+	children: (entity: EntityAccessor<object, object, AnyBrand, TEntityName, readonly string[]>, index: number) => ReactNode
+
+	/** Loading fallback */
+	loading?: ReactNode
+
+	/** Error fallback */
+	error?: (error: Error) => ReactNode
+
+	/** Empty state fallback */
+	empty?: ReactNode
+}
+
+/**
+ * EntityList component type that accepts optional roles prop.
+ * Has overloads for both with-roles and without-roles variants to support generic contexts.
+ */
+export interface RoleAwareEntityListComponent<TRoleSchemas extends RoleSchemasBase<TRoleSchemas>> {
+	// Overload for with roles specified (non-conditional children type)
+	<
+		TEntityName extends string,
+		TRoles extends readonly (keyof TRoleSchemas & string)[],
+	>(props: RoleAwareEntityListPropsWithRoles<TRoleSchemas, TEntityName, TRoles>): ReactElement | null
+
+	// Overload for without roles
+	<TEntityName extends string>(
+		props: RoleAwareEntityListPropsWithoutRoles<TRoleSchemas, TEntityName>,
+	): ReactElement | null
+
+	// General overload with conditional type (for backward compatibility)
+	<
+		TEntityName extends string,
+		const TRoles extends readonly (keyof TRoleSchemas & string)[] | undefined = undefined,
+	>(props: RoleAwareEntityListProps<TRoleSchemas, TEntityName, TRoles>): ReactElement | null
+}
 
 // ============================================================================
 // HasRole Component Types
@@ -443,6 +693,7 @@ export interface HasRoleProps<
 
 	/** Render function receiving entity accessor with narrowed type and direct field access.
 	 * Type is looked up from role schemas if entity name is known, otherwise uses the input entity type.
+	 * Schema is passed through for proper entity name resolution in nested relations.
 	 */
 	children: (
 		entity: EntityAccessor<
@@ -450,7 +701,8 @@ export interface HasRoleProps<
 			EntityTypeForRolesOrFallback<TRoleSchemas, TNewRoles, ExtractEntityName<TEntityRef>, ExtractEntityType<TEntityRef>>,
 			AnyBrand,
 			ExtractEntityName<TEntityRef>,
-			TNewRoles
+			TNewRoles,
+			IntersectRoleSchemas<TRoleSchemas, TNewRoles>
 		>,
 	) => ReactNode
 }
@@ -708,11 +960,54 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 	/**
 	 * Entity component with optional roles prop.
 	 * Uses proper JSX selection collection like standard Entity.
+	 * Supports both "by" mode (fetch existing) and "create" mode (create new).
 	 */
 	function EntityComponent<
 		TEntityName extends string,
 		const TRoles extends readonly (keyof TRoleSchemas & string)[] | undefined = undefined,
-	>({
+	>(props: RoleAwareEntityProps<TRoleSchemas, TEntityName, TRoles>): ReactElement | null {
+		// Check if we're in create mode
+		const isCreateMode = 'create' in props && props.create === true
+
+		if (isCreateMode) {
+			return <EntityCreateModeImpl
+				name={props.name}
+				roles={(props as any).roles}
+				children={props.children as any}
+				error={props.error}
+				onPersisted={(props as any).onPersisted}
+			/>
+		}
+
+		const byProps = props as any
+		return <EntityByModeImpl
+			name={byProps.name}
+			by={byProps.by}
+			roles={byProps.roles}
+			children={byProps.children}
+			loading={byProps.loading}
+			error={byProps.error}
+			notFound={byProps.notFound}
+		/>
+	}
+
+	/**
+	 * Internal props for by mode implementation.
+	 */
+	interface EntityByModeImplProps {
+		name: string
+		by: Record<string, unknown>
+		roles: readonly string[] | undefined
+		children: (entity: JsxEntityAccessor<object>) => ReactNode
+		loading?: ReactNode
+		error?: (error: Error) => ReactNode
+		notFound?: ReactNode
+	}
+
+	/**
+	 * Internal component for "by" mode (fetching existing entity).
+	 */
+	function EntityByModeImpl({
 		name,
 		by,
 		roles,
@@ -720,23 +1015,22 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 		loading,
 		error: errorFallback,
 		notFound,
-	}: RoleAwareEntityProps<TRoleSchemas, TEntityName, TRoles>): ReactElement | null {
+	}: EntityByModeImplProps): ReactElement | null {
 		const { store } = useBindxContext()
-		const entityType = name as string
 
 		// Stable key for the 'by' clause
 		const byKey = useMemo(() => JSON.stringify(by), [by])
 
 		// Phase 1: Collect JSX selection (same as standard Entity)
 		const { selection, queryKey } = useSelectionCollection({
-			entityType,
+			entityType: name,
 			entityId: byKey,
-			children: renderFn as (entity: JsxEntityAccessor<object>) => ReactNode,
+			children: renderFn,
 		})
 
 		// Phase 2: Load data using core hook (same as standard Entity)
 		const result = useEntityCore({
-			entityType,
+			entityType: name,
 			by,
 			selectionMeta: selection,
 			queryKey,
@@ -756,14 +1050,14 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 
 		if (result.status === 'not_found') {
 			const byDescription = Object.entries(by).map(([k, v]) => `${k}="${v}"`).join(', ')
-			return <>{notFound ?? <div className="bindx-not-found">{entityType} with {byDescription} not found</div>}</>
+			return <>{notFound ?? <div className="bindx-not-found">{name} with {byDescription} not found</div>}</>
 		}
 
 		// Phase 3: Runtime render with real data (same as standard Entity)
 		// Get ID from loaded snapshot data
 		const entityId = (result.snapshot?.data as Record<string, unknown> | undefined)?.['id'] as string
 		const accessor = createRuntimeAccessor<object>(
-			entityType,
+			name,
 			entityId,
 			store,
 			() => {}, // Changes are automatically handled by useSyncExternalStore
@@ -774,7 +1068,7 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 		const roleAwareAccessor = new Proxy(accessor, {
 			get(target, prop) {
 				if (prop === '__availableRoles') {
-					return (roles ?? []) as TRoles extends readonly string[] ? TRoles : readonly string[]
+					return roles ?? []
 				}
 				return Reflect.get(target, prop)
 			},
@@ -782,14 +1076,137 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 
 		// Provide entity context for HasRole
 		const entityContext: EntityContextValue = {
-			entityType,
+			entityType: name,
 			entityId,
-			storeKey: `${entityType}:${entityId}`,
+			storeKey: `${name}:${entityId}`,
 		}
 
 		return (
 			<EntityContext.Provider value={entityContext}>
-				{(renderFn as unknown as (entity: typeof roleAwareAccessor) => ReactNode)(roleAwareAccessor)}
+				{renderFn(roleAwareAccessor as any)}
+			</EntityContext.Provider>
+		)
+	}
+
+	/**
+	 * Snapshot type for create mode subscription
+	 */
+	interface CreateModeSnapshot {
+		version: number
+		persistedId: string | null
+	}
+
+	/**
+	 * Internal props for create mode implementation.
+	 */
+	interface EntityCreateModeImplProps {
+		name: string
+		roles: readonly string[] | undefined
+		children: (entity: JsxEntityAccessor<object>) => ReactNode
+		error?: (error: Error) => ReactNode
+		onPersisted?: (id: string) => void
+	}
+
+	/**
+	 * Internal component for "create" mode (creating new entity).
+	 */
+	function EntityCreateModeImpl({
+		name,
+		roles,
+		children: renderFn,
+		error: errorFallback,
+		onPersisted,
+	}: EntityCreateModeImplProps): ReactElement {
+		const { store } = useBindxContext()
+		const tempIdRef = useRef<string | null>(null)
+
+		// Create entity once on mount (using ref to ensure only one creation)
+		const tempId = useMemo(() => {
+			if (tempIdRef.current) {
+				return tempIdRef.current
+			}
+			const id = store.createEntity(name)
+			tempIdRef.current = id
+			return id
+		}, [name, store])
+
+		// Subscribe to store changes for this entity
+		const subscribe = useCallback(
+			(callback: () => void) => store.subscribeToEntity(name, tempId, callback),
+			[store, name, tempId],
+		)
+
+		// Cache ref for snapshot stability
+		const snapshotCacheRef = useRef<CreateModeSnapshot | null>(null)
+
+		const getSnapshot = useCallback((): CreateModeSnapshot => {
+			const entitySnapshot = store.getEntitySnapshot(name, tempId)
+			const persistedId = store.getPersistedId(name, tempId)
+			const version = entitySnapshot?.version ?? 0
+
+			// Return cached snapshot if values haven't changed
+			const cached = snapshotCacheRef.current
+			if (cached && cached.version === version && cached.persistedId === persistedId) {
+				return cached
+			}
+
+			// Create new snapshot and cache it
+			const newSnapshot: CreateModeSnapshot = { version, persistedId }
+			snapshotCacheRef.current = newSnapshot
+			return newSnapshot
+		}, [store, name, tempId])
+
+		const { persistedId } = useSyncExternalStore(
+			subscribe,
+			getSnapshot,
+			getSnapshot, // Server snapshot same as client for create mode
+		)
+
+		// Track previous persistedId to call onPersisted only once
+		const prevPersistedIdRef = useRef<string | null>(null)
+
+		useEffect(() => {
+			if (persistedId && persistedId !== prevPersistedIdRef.current) {
+				prevPersistedIdRef.current = persistedId
+				onPersisted?.(persistedId)
+			}
+		}, [persistedId, onPersisted])
+
+		// Selection collection still works for building mutations
+		useSelectionCollection({
+			entityType: name,
+			entityId: tempId,
+			children: renderFn,
+		})
+
+		// Create runtime accessor
+		const accessor = createRuntimeAccessor<object>(
+			name,
+			tempId,
+			store,
+			() => {}, // Changes are automatically handled by useSyncExternalStore
+		)
+
+		// Role-aware addition: wrap in Proxy to inject __availableRoles while preserving direct field access
+		const roleAwareAccessor = new Proxy(accessor, {
+			get(target, prop) {
+				if (prop === '__availableRoles') {
+					return roles ?? []
+				}
+				return Reflect.get(target, prop)
+			},
+		})
+
+		// Provide entity context for HasRole
+		const entityContext: EntityContextValue = {
+			entityType: name,
+			entityId: tempId,
+			storeKey: `${name}:${tempId}`,
+		}
+
+		return (
+			<EntityContext.Provider value={entityContext}>
+				{renderFn(roleAwareAccessor as any)}
 			</EntityContext.Provider>
 		)
 	}
@@ -908,10 +1325,10 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 			}
 		}
 
-		// Runtime check - does user have ALL requested roles?
-		const missingRoles = requestedRoles.filter(role => !hasRole(role))
-		if (missingRoles.length > 0) {
-			return null // User doesn't have all required roles
+		// Runtime check - does user have ANY of the requested roles?
+		const hasAnyRole = requestedRoles.some(role => hasRole(role))
+		if (!hasAnyRole) {
+			return null // User doesn't have any of the requested roles
 		}
 
 		// Create new entity accessor with narrowed available roles using Proxy
@@ -926,6 +1343,35 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 		})
 
 		return <>{renderFn(narrowedEntityRef as any)}</>
+	}
+
+	// Wrap in memo to make it an object (required for getSelection detection in analyzer)
+	const MemoizedHasRole = memo(HasRoleComponent) as typeof HasRoleComponent
+
+	// Add getSelection to HasRoleComponent for JSX analysis
+	// This allows the analyzer to collect field selections from HasRole children
+	const hasRoleWithSelection = MemoizedHasRole as typeof MemoizedHasRole & SelectionProvider
+	hasRoleWithSelection.getSelection = (
+		props: Record<string, unknown>,
+		collectNested: (element: ReactNode) => void,
+	): SelectionFieldMeta[] | null => {
+		const typedProps = props as unknown as HasRoleProps<TRoleSchemas, EntityRef<any, any, any, any, any>, readonly string[]>
+		// Call children with the entity to trigger field accesses on the collector proxy
+		// During collection phase, props.entity is a collector proxy, so accessing fields
+		// will record them in the parent scope
+		const childrenJsx = typedProps.children(typedProps.entity as any)
+
+		// Analyze the returned JSX for nested component selections
+		// The collectNested function actually returns SelectionMeta despite the local interface signature
+		const childSelection = (collectNested as (children: ReactNode) => SelectionMeta)(childrenJsx)
+
+		// Return all fields from the child selection
+		const result: SelectionFieldMeta[] = []
+		for (const field of childSelection.fields.values()) {
+			result.push(field)
+		}
+
+		return result.length > 0 ? result : null
 	}
 
 	/**
@@ -957,7 +1403,7 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 		RoleAwareProvider: HasRoleProvider,
 		Entity: EntityComponent as RoleAwareEntityComponent<TRoleSchemas>,
 		EntityList: EntityListComponent as RoleAwareEntityListComponent<TRoleSchemas>,
-		HasRole: HasRoleComponent as HasRoleComponent<TRoleSchemas>,
+		HasRole: MemoizedHasRole as HasRoleComponent<TRoleSchemas>,
 		useEntity: useEntityHook as RoleAwareUseEntity<TRoleSchemas>,
 		useEntityList: useEntityListHook as RoleAwareUseEntityList<TRoleSchemas>,
 		useRoleContext,
@@ -967,3 +1413,35 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 
 // Re-export for backwards compatibility
 export { HasRoleProvider as RoleAwareProvider } from './RoleContext.js'
+
+// ============================================================================
+// Helper Types for Generic Contexts
+// ============================================================================
+
+/**
+ * Helper type to get EntityAccessor type for a given entity name and roles.
+ * Useful for typing components that render entities in generic contexts.
+ *
+ * @example
+ * ```typescript
+ * type CommentAccessor = EntityAccessorForRoles<RoleSchemas, 'Comment', typeof roles>
+ *
+ * interface MyComponentProps<TEntityName extends string> {
+ *   entityName: TEntityName
+ *   children: (entity: EntityAccessorForRoles<RoleSchemas, TEntityName, typeof roles>) => ReactNode
+ * }
+ * ```
+ */
+export type EntityAccessorForRoles<
+	TRoleSchemas extends RoleSchemasBase<TRoleSchemas>,
+	TEntityName extends string,
+	TRoles extends readonly (keyof TRoleSchemas & string)[],
+> = EntityAccessor<
+	EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
+	EntityForRolesObject<TRoleSchemas, TRoles, TEntityName>,
+	AnyBrand,
+	TEntityName,
+	TRoles,
+	IntersectRoleSchemas<TRoleSchemas, TRoles>
+>
+

@@ -22,8 +22,18 @@ export {
 
 export type {
 	RoleAwareEntityProps,
+	RoleAwareEntityPropsWithRoles,
+	RoleAwareEntityPropsWithoutRoles,
+	RoleAwareEntityByPropsWithRoles,
+	RoleAwareEntityByPropsWithoutRoles,
+	RoleAwareEntityCreatePropsWithRoles,
+	RoleAwareEntityCreatePropsWithoutRoles,
+	RoleAwareEntityAllPropsWithRoles,
+	RoleAwareEntityAllPropsWithoutRoles,
 	RoleAwareEntityComponent,
 	RoleAwareEntityListProps,
+	RoleAwareEntityListPropsWithRoles,
+	RoleAwareEntityListPropsWithoutRoles,
 	RoleAwareEntityListComponent,
 	HasRoleProps,
 	HasRoleComponent,
@@ -40,6 +50,9 @@ export type {
 	RoleAwareCreateComponent,
 	SchemaInput,
 	ContemberSchemaLike,
+	// Helper types for generic contexts
+	EntityAccessorForRoles,
+	EntityForRolesObject,
 } from './createRoleAwareBindx.js'
 
 export {

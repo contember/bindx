@@ -11,6 +11,8 @@ export type {
 	RoleSchemaMap,
 	RoleNames,
 	IntersectRoleSchemas,
+	IntersectSchemaEntities,
+	PickCommonProperties,
 	EntityForRoles,
 	SchemaForRole,
 	EntityNamesForRoles,

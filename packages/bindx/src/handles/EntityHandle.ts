@@ -65,6 +65,9 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
 
+	/** Type brand for schema - placeholder at runtime */
+	declare readonly __schema: Record<string, object>
+
 	// $ aliases - handled by proxy at runtime, declared for TypeScript
 	declare readonly $fields: SelectedEntityFields<T, TSelected>
 	declare readonly $data: TSelected | null
@@ -531,6 +534,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
 
+	/** Type brand for schema - placeholder at runtime */
+	declare readonly __schema: Record<string, object>
+
 	// $ aliases - handled by proxy at runtime, declared for TypeScript
 	declare readonly $id: string
 	declare readonly $isDirty: boolean
@@ -975,6 +981,30 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
 
+	/**
+	 * Type brand - entity name for type inference.
+	 * Implements HasManyRef.__entityName.
+	 */
+	get __entityName(): string {
+		return this.itemType
+	}
+
+	/**
+	 * Type brand - available roles for type inference.
+	 * Returns empty array at runtime; role checking is compile-time only.
+	 */
+	get __availableRoles(): readonly string[] {
+		return []
+	}
+
+	/**
+	 * Type brand - schema for type inference.
+	 * Returns undefined at runtime; schema type is compile-time only.
+	 */
+	get __schema(): undefined {
+		return undefined
+	}
+
 	constructor(
 		parentEntityType: string,
 		parentEntityId: string,
@@ -1359,6 +1389,9 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 {
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
+
+	/** Type brand for schema - placeholder at runtime */
+	declare readonly __schema: Record<string, object>
 
 	/** Placeholder ID for this handle */
 	private readonly placeholderId: string

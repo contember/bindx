@@ -50,6 +50,11 @@ export type {
 	HasOneRef,
 	EntityRef,
 	EntityRefFor,
+	// Type extraction helpers
+	ExtractHasOneEntityName,
+	ExtractHasOneRoles,
+	ExtractHasManyEntityName,
+	ExtractHasManyRoles,
 	// Adapter types
 	BackendAdapter,
 	QueryOptions,
@@ -310,8 +315,18 @@ export type {
 	HasRoleProviderValue,
 	HasRoleProviderProps,
 	RoleAwareEntityProps,
+	RoleAwareEntityPropsWithRoles,
+	RoleAwareEntityPropsWithoutRoles,
+	RoleAwareEntityByPropsWithRoles,
+	RoleAwareEntityByPropsWithoutRoles,
+	RoleAwareEntityCreatePropsWithRoles,
+	RoleAwareEntityCreatePropsWithoutRoles,
+	RoleAwareEntityAllPropsWithRoles,
+	RoleAwareEntityAllPropsWithoutRoles,
 	RoleAwareEntityComponent,
 	RoleAwareEntityListProps,
+	RoleAwareEntityListPropsWithRoles,
+	RoleAwareEntityListPropsWithoutRoles,
 	RoleAwareEntityListComponent,
 	HasRoleProps,
 	HasRoleComponent,
@@ -324,6 +339,11 @@ export type {
 	RoleAwareExplicitFragmentComponent,
 	RoleAwareCreateComponentOptions,
 	RoleAwareCreateComponent,
+	SchemaInput,
+	ContemberSchemaLike,
+	// Helper types for generic contexts
+	EntityAccessorForRoles,
+	EntityForRolesObject,
 } from './roles/index.js'
 
 export {
@@ -343,6 +363,8 @@ export type {
 	RoleSchemaMap,
 	RoleNames,
 	IntersectRoleSchemas,
+	IntersectSchemaEntities,
+	PickCommonProperties,
 	EntityForRoles,
 	SchemaForRole,
 	EntityNamesForRoles,

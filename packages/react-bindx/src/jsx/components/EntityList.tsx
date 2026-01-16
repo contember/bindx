@@ -1,4 +1,5 @@
 import React, { memo, type ReactElement } from 'react'
+import { type EntityWhere, type EntityOrderBy } from '@contember/bindx'
 import { useBindxContext } from '../../hooks/BackendAdapterContext.js'
 import { useEntityListCore } from '../../hooks/useEntityListCore.js'
 import { useSelectionCollectionForList } from '../../hooks/useSelectionCollectionForList.js'
@@ -11,10 +12,10 @@ import type { EntityAccessor } from '../types.js'
 export interface EntityListProps<TSchema, K extends keyof TSchema> {
 	/** Entity type name */
 	name: K
-	/** Optional filter criteria */
-	filter?: Record<string, unknown>
-	/** Optional ordering */
-	orderBy?: readonly Record<string, unknown>[]
+	/** Optional filter criteria - type-safe based on entity schema */
+	filter?: EntityWhere<TSchema[K]>
+	/** Optional ordering - type-safe based on entity schema */
+	orderBy?: readonly EntityOrderBy<TSchema[K]>[]
 	/** Optional limit */
 	limit?: number
 	/** Optional offset */

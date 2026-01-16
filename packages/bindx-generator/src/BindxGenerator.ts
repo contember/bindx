@@ -6,6 +6,7 @@
  */
 
 import { Acl, Model } from '@contember/schema'
+import { acceptEveryFieldVisitor } from '@contember/schema-utils'
 import { EntityTypeSchemaGenerator } from './EntityTypeSchemaGenerator'
 import { EnumTypeSchemaGenerator } from './EnumTypeSchemaGenerator'
 import { NameSchemaGenerator } from './NameSchemaGenerator'
@@ -94,31 +95,24 @@ export const { useEntity, useEntityList, Entity, createComponent } = createBindx
 
 		const typesCode = this.generateTypesFile()
 
+		// Generate schema definition
+		const schemaDefinition = this.generateSchemaDefinition(model)
+
 		const indexCode = `export * from './enums'
 export * from './entities'
 export * from './types'
 
 import type { RoleSchemas } from './entities'
-import type { SchemaInput, RoleAwareBindx } from '@contember/react-bindx'
 import { createRoleAwareBindx } from '@contember/react-bindx'
+import { scalar, hasOne, hasMany } from '@contember/bindx'
+
+const schemaDefinition = ${schemaDefinition}
 
 /**
- * Creates a typed role-aware bindx instance for this schema.
+ * Pre-configured role-aware bindx instance
  *
- * @param schema - Schema loaded from API (ContemberSchema), binding-common Schema,
- *                 or a SchemaRegistry instance
- *
- * @example
+ * Usage:
  * \`\`\`tsx
- * // With binding-common's Schema (from useEnvironment)
- * const schema = useEnvironment().getSchema()
- * const { RoleAwareProvider, Entity, HasRole } = createBindx(schema)
- *
- * // With SchemaLoader
- * const schema = await SchemaLoader.loadSchema(client)
- * const { RoleAwareProvider, Entity, HasRole } = createBindx(schema)
- *
- * // Usage:
  * <RoleAwareProvider hasRole={(role) => userRoles.has(role)}>
  *   <Entity name="Article" id={id}>
  *     {entity => <HasRole role="admin">{adminEntity => ...}</HasRole>}
@@ -126,9 +120,16 @@ import { createRoleAwareBindx } from '@contember/react-bindx'
  * </RoleAwareProvider>
  * \`\`\`
  */
-export function createBindx(schema: SchemaInput): RoleAwareBindx<RoleSchemas> {
-	return createRoleAwareBindx<RoleSchemas>(schema)
-}
+export const {
+	schemaRegistry,
+	RoleAwareProvider,
+	Entity,
+	EntityList,
+	HasRole,
+	useEntity,
+	useEntityList,
+	createComponent,
+} = createRoleAwareBindx<RoleSchemas>(schemaDefinition)
 `
 
 		return {
@@ -137,6 +138,33 @@ export function createBindx(schema: SchemaInput): RoleAwareBindx<RoleSchemas> {
 			'types.ts': typesCode,
 			'index.ts': indexCode,
 		}
+	}
+
+	/**
+	 * Generate schema definition code using scalar(), hasOne(), hasMany()
+	 */
+	private generateSchemaDefinition(model: Model.Schema): string {
+		const entities: string[] = []
+
+		for (const entity of Object.values(model.entities)) {
+			const fields: string[] = []
+
+			acceptEveryFieldVisitor(model, entity, {
+				visitColumn: ctx => {
+					fields.push(`\t\t\t\t${ctx.column.name}: scalar(),`)
+				},
+				visitHasOne: ctx => {
+					fields.push(`\t\t\t\t${ctx.relation.name}: hasOne('${ctx.targetEntity.name}'),`)
+				},
+				visitHasMany: ctx => {
+					fields.push(`\t\t\t\t${ctx.relation.name}: hasMany('${ctx.targetEntity.name}'),`)
+				},
+			})
+
+			entities.push(`\t\t${entity.name}: {\n\t\t\tfields: {\n${fields.join('\n')}\n\t\t\t},\n\t\t},`)
+		}
+
+		return `{\n\tentities: {\n${entities.join('\n')}\n\t},\n}`
 	}
 
 	private generateTypesFile(): string {

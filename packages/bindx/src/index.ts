@@ -57,6 +57,11 @@ export type {
 	EntityRef,
 	EntityRefFor,
 	EntityAccessor,
+	// Type extraction helpers
+	ExtractHasOneEntityName,
+	ExtractHasOneRoles,
+	ExtractHasManyEntityName,
+	ExtractHasManyRoles,
 } from './handles/index.js'
 
 // Brand types
@@ -289,6 +294,8 @@ export type {
 	RoleSchemaMap,
 	RoleNames,
 	IntersectRoleSchemas,
+	IntersectSchemaEntities,
+	PickCommonProperties,
 	EntityForRoles,
 	SchemaForRole,
 	EntityNamesForRoles,

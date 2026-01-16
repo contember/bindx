@@ -229,8 +229,7 @@ export type SetScalarProps<
 /**
  * Build EntityAccessor props from entity config.
  * Uses EntityAccessor to support direct field access (entity.fieldName.value).
- * Uses string for entity name to accept entities from various sources (Entity callbacks, relation accessors, etc.).
- * HasRole inside createComponent uses the fallback mechanism based on entity type when name is unknown.
+ * Preserves entity name literal and schema for proper type narrowing in HasRole and relations.
  */
 export type BuildEntityProps<
 	TEntityProps extends Record<string, AnyEntityPropConfig>,
@@ -246,11 +245,12 @@ export type BuildEntityProps<
 				TEntityName extends keyof TSchema ? TSchema[TEntityName] : object,
 				TSelected,
 				AnyBrand,
-				string,  // Use string to accept entities from various sources
-				TRoles
+				TEntityName,  // Preserve entity name literal for HasRole type narrowing
+				TRoles,
+				TSchema  // Pass schema for relation entity name lookups
 			>
 		: TEntityProps[K] extends InterfaceEntityPropConfig<infer TInterface, infer _TIsImplicit>
-			? EntityAccessor<TInterface, TInterface, AnyBrand, string, TRoles>
+			? EntityAccessor<TInterface, TInterface, AnyBrand, string, TRoles, TSchema>
 			: never
 }
 

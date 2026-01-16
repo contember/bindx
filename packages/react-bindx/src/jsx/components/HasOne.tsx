@@ -24,8 +24,10 @@ function HasOneImpl<
 	TEntity,
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
+	TEntityName extends string = string,
 	TAvailableRoles extends readonly string[] = readonly string[],
->({ field, children }: HasOneProps<TEntity, TSelected, TBrand, TAvailableRoles>): ReactElement {
+	TSchema extends Record<string, object> = Record<string, object>,
+>({ field, children }: HasOneProps<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>): ReactElement {
 	// Get the related entity reference (always available, may be placeholder with id=null)
 	return <>{children(field.$entity)}</>
 }

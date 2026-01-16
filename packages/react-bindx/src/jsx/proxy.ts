@@ -88,6 +88,7 @@ export function createCollectorProxy<T>(
 		__entityType: undefined as unknown as T,
 		__entityName: '__collector__',
 		__availableRoles: [] as readonly string[],
+		__schema: {} as Record<string, object>,
 		// Error properties (stubs for collection phase)
 		$errors: [],
 		$hasError: false,
@@ -236,6 +237,7 @@ function createCollectorFieldRef(
 		$persistedId: null,
 		__entityName: '',
 		__availableRoles: [] as readonly string[],
+		__schema: {} as Record<string, object>,
 		$clearAllErrors: () => {},
 		$on: noop,
 		$intercept: noop,
@@ -288,6 +290,7 @@ export function createRuntimeAccessor<T>(
 		__entityType: undefined as unknown as T,
 		__entityName: entityType,
 		__availableRoles: [] as readonly string[],
+		__schema: {} as Record<string, object>,
 		// Error properties
 		get $errors() {
 			return store.getEntityErrors(entityType, entityId)
@@ -666,6 +669,7 @@ function createRuntimeFieldRef(
 		},
 		__entityName: '',
 		__availableRoles: [] as readonly string[],
+		__schema: {} as Record<string, object>,
 		$clearAllErrors: () => {},
 		$on: noop,
 		$intercept: noop,
@@ -776,6 +780,7 @@ function createPlaceholderAccessor<T>(): EntityAccessor<T> {
 		__entityType: undefined as unknown as T,
 		__entityName: '__placeholder__',
 		__availableRoles: [] as readonly string[],
+		__schema: {} as Record<string, object>,
 		$errors: [] as FieldError[],
 		$hasError: false,
 		$addError: () => {},

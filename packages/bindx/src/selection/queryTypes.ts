@@ -53,7 +53,9 @@ type IsPlainObject<T> =
 export type FieldsWhere<TEntity> = {
 	readonly [K in keyof TEntity]?:
 		NonNullable<TEntity[K]> extends Array<infer U>
-			? EntityWhere<U> | null  // has-many: filter on related items
+			? IsPlainObject<U> extends true
+				? EntityWhere<U> | null  // has-many: filter on related items (array of entities)
+				: Input.Condition<NonNullable<TEntity[K]>> | null  // scalar array: use Input.Condition on the array (supports hasSome, contains, etc.)
 			: IsPlainObject<NonNullable<TEntity[K]>> extends true
 				? EntityWhere<NonNullable<TEntity[K]>> | null  // has-one: filter on related entity
 				: Input.Condition<NonNullable<TEntity[K]>> | null  // scalar: use Input.Condition

@@ -290,7 +290,9 @@ describe('createRoleAwareBindx', () => {
 		expect(schemaRegistry).toBeDefined()
 		expect(RoleAwareProvider).toBeInstanceOf(Function)
 		expect(Entity).toBeInstanceOf(Function)
-		expect(HasRole).toBeInstanceOf(Function)
+		// HasRole is now memo-wrapped (object with $$typeof), not a raw function
+		expect(HasRole).toBeDefined()
+		expect((HasRole as unknown as { $$typeof: symbol }).$$typeof).toBe(Symbol.for('react.memo'))
 		expect(useEntity).toBeInstanceOf(Function)
 	})
 
@@ -1172,9 +1174,9 @@ describe('HasRole inside createComponent', () => {
 					<span>{article.$fields.title.value}</span>
 					<HasRole roles={['admin']} entity={article}>
 						{(adminArticle) => {
-							// Entity name is string (inherited from input entity ref)
+							// Entity name is preserved as literal from the component's entity prop
 							type EntityNameType = typeof adminArticle.__entityName
-							const _nameCheck: EntityNameType = 'some-string' as string
+							const _nameCheck: EntityNameType = 'Article'
 							// Can access fields from the admin role (via entity type fallback)
 							return <span>{adminArticle.$data?.internalNotes}</span>
 						}}
@@ -1255,5 +1257,37 @@ describe('HasRole inside createComponent', () => {
 
 		expect(ArticleCard.$article).toBeDefined()
 		expect(ArticleCard.$article.__roles).toEqual(['admin'])
+	})
+
+	test('HasRole inside createComponent collects field selection from children', () => {
+		const { createComponent, HasRole } = createRoleAwareBindx<RoleSchemas>(adminSchema)
+
+		// Create component where fields are only accessed inside HasRole
+		const ArticleCardWithHasRole = createComponent({ roles: ['admin'] as const })
+			.entity('article', 'Article')
+			.render(({ article }) => (
+				<div>
+					{/* title accessed at root level */}
+					<span>{article.$fields.title.value}</span>
+					<HasRole roles={['admin']} entity={article}>
+						{(adminArticle) => (
+							// internalNotes ONLY accessed inside HasRole children
+							<span>{adminArticle.$fields.internalNotes.value}</span>
+						)}
+					</HasRole>
+				</div>
+			))
+
+		// Fragment should have selection metadata
+		const fragment = ArticleCardWithHasRole.$article
+		expect(fragment.__meta).toBeDefined()
+		expect(fragment.__meta.fields).toBeDefined()
+
+		// Selection should contain fields from BOTH root and HasRole children
+		const fieldNames = Array.from(fragment.__meta.fields.values()).map(f => f.fieldName)
+		expect(fieldNames).toContain('title')
+		// This is the key assertion - internalNotes is only accessed inside HasRole,
+		// so if selection collection for HasRole works, it should be included
+		expect(fieldNames).toContain('internalNotes')
 	})
 })
