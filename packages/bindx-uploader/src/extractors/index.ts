@@ -1,0 +1,5 @@
+export { getFileUrlDataExtractor, type FileUrlDataExtractorProps } from './getFileUrlDataExtractor.js'
+export { getGenericFileMetadataExtractor, type GenericFileMetadataExtractorProps } from './getGenericFileMetadataExtractor.js'
+export { getImageFileDataExtractor, type ImageFileDataExtractorProps } from './getImageFileDataExtractor.js'
+export { getVideoFileDataExtractor, type VideoFileDataExtractorProps } from './getVideoFileDataExtractor.js'
+export { getAudioFileDataExtractor, type AudioFileDataExtractorProps } from './getAudioFileDataExtractor.js'

@@ -30,7 +30,7 @@ function dataAttribute(value: boolean): '' | undefined {
  * - Sets data-invalid, data-dirty attributes
  * - Uses same name across radio group via htmlId
  */
-export function FormRadioInput<T = string>({
+export function FormRadioInput<T>({
 	field,
 	value,
 	children,

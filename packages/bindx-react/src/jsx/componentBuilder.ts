@@ -152,6 +152,7 @@ export class ComponentBuilderImpl<
 			this.roles,
 			renderFn,
 			this.hasInterfacesMode,
+			this.schemaRegistry,
 		)
 	}
 }
@@ -171,6 +172,7 @@ function buildComponent<TProps extends object>(
 	roles: readonly string[],
 	renderFn: (props: TProps) => ReactNode,
 	hasInterfacesMode: boolean,
+	schemaRegistry: SchemaRegistry<Record<string, object>> | null,
 ): unknown {
 	const selectionsMap = new Map<string, SelectionPropMeta>()
 
@@ -202,7 +204,7 @@ function buildComponent<TProps extends object>(
 			return
 		}
 		implicitCollected = true
-		collectImplicitSelections(implicitConfigs, renderFn, selectionsMap, componentBrand, roles, hasInterfacesMode)
+		collectImplicitSelections(implicitConfigs, renderFn, selectionsMap, componentBrand, roles, hasInterfacesMode, schemaRegistry)
 	}
 
 	// 3. Create React component
@@ -326,8 +328,10 @@ function collectImplicitSelections<TProps extends object>(
 	componentBrand: ComponentBrand,
 	roles: readonly string[],
 	hasInterfacesMode: boolean,
+	schemaRegistry: SchemaRegistry<Record<string, object>> | null,
 ): void {
 	const propScopes = new Map<string, SelectionScope>()
+	const implicitConfigsMap = new Map(implicitConfigs)
 	const implicitPropNames = new Set(implicitConfigs.map(([name]) => name))
 	const explicitPropNames = new Set(
 		[...selectionsMap.keys()].filter(name => !implicitPropNames.has(name)),
@@ -350,7 +354,8 @@ function collectImplicitSelections<TProps extends object>(
 			if (implicitPropNames.has(propName)) {
 				const scope = new SelectionScope()
 				propScopes.set(propName, scope)
-				return createCollectorProxy(scope)
+				const entityName = implicitConfigsMap.get(propName)?.entityName ?? null
+				return createCollectorProxy(scope, entityName, schemaRegistry)
 			}
 
 			// In interfaces mode, any unknown prop could be an interface entity prop
@@ -358,7 +363,7 @@ function collectImplicitSelections<TProps extends object>(
 			if (hasInterfacesMode) {
 				const scope = new SelectionScope()
 				propScopes.set(propName, scope)
-				return createCollectorProxy(scope)
+				return createCollectorProxy(scope, null, schemaRegistry)
 			}
 
 			// Scalar prop - return undefined

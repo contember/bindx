@@ -29,7 +29,7 @@ function dataAttribute(value: boolean): '' | undefined {
  * - Sets data-invalid, data-dirty, data-required attributes
  * - Integrates with FormFieldState context for htmlId
  */
-export function FormInput<T = string>({
+export function FormInput<T>({
 	field,
 	children,
 	formatValue: formatValueProp,

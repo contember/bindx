@@ -1,0 +1,30 @@
+{
+	"name": "@contember/bindx-uploader",
+	"version": "0.1.0",
+	"description": "File upload components for bindx data binding",
+	"type": "module",
+	"main": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"build": "tsc --build",
+		"typecheck": "tsc --build"
+	},
+	"peerDependencies": {
+		"react": ">=18.0.0"
+	},
+	"dependencies": {
+		"@contember/bindx": "workspace:*",
+		"@contember/bindx-react": "workspace:*",
+		"@contember/bindx-repeater": "workspace:*",
+		"@contember/graphql-client": "*",
+		"@radix-ui/react-slot": "^1.2.3",
+		"react-dropzone": "^14.3.8"
+	},
+	"files": [
+		"dist",
+		"src"
+	],
+	"license": "MIT"
+}

@@ -69,9 +69,9 @@ export type TypeHandlerMap = Partial<Record<ColumnType, FormInputHandlerFactory>
 /**
  * Props for FormFieldScope component
  */
-export interface FormFieldScopeProps {
+export interface FormFieldScopeProps<T = unknown> {
 	/** Field handle from entity */
-	readonly field: FieldRef<any>
+	readonly field: FieldRef<T>
 	/** Children to render */
 	readonly children: ReactNode
 	/** Override required detection */
@@ -87,9 +87,9 @@ export interface FormFieldStateProviderProps extends Partial<FormFieldState> {
 
 /**
  * Props for FormInput component
- * @typeParam T - The field value type (defaults to string for text inputs)
+ * @typeParam T - The field value type
  */
-export interface FormInputProps<T = string> {
+export interface FormInputProps<T> {
 	/** Field handle from entity */
 	readonly field: FieldRef<T>
 	/** Child element (input) to enhance */
@@ -114,11 +114,11 @@ export interface FormCheckboxProps {
  * Props for FormRadioInput component
  * @typeParam T - The field value type
  */
-export interface FormRadioInputProps<T = string> {
+export interface FormRadioInputProps<T> {
 	/** Field handle from entity */
 	readonly field: FieldRef<T>
 	/** Value this radio represents */
-	readonly value: T
+	readonly value: T | null
 	/** Child element (input type="radio") to enhance */
 	readonly children: React.ReactElement
 }

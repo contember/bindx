@@ -1,4 +1,4 @@
-import type { SnapshotStore, FieldError } from '@contember/bindx'
+import type { SnapshotStore, FieldError, SchemaRegistry } from '@contember/bindx'
 import { SelectionScope, generatePlaceholderId } from '@contember/bindx'
 import {
 	type EntityRef,
@@ -63,16 +63,20 @@ function wrapEntityRefWithFieldAccessProxy<T>(ref: EntityRef<T>): EntityAccessor
  * Supports direct field access: `entity.fieldName` is equivalent to `entity.$fields.fieldName`.
  *
  * @param scope - The SelectionScope to collect fields into
+ * @param entityName - The entity type name (e.g., 'Task'), used for schema lookups
+ * @param schemaRegistry - The schema registry for field type information
  */
 export function createCollectorProxy<T>(
 	scope: SelectionScope,
+	entityName: string | null = null,
+	schemaRegistry: SchemaRegistry<Record<string, object>> | null = null,
 ): EntityAccessor<T> {
 	const fieldsProxy = new Proxy({} as EntityFields<T>, {
 		get(_, fieldName: string): FieldRef<unknown> | HasManyRef<unknown> | HasOneRef<unknown> {
 			// Return a collector ref that works for all field types
 			// The actual type (scalar/hasMany/hasOne) will be determined
-			// by how it's used in components
-			return createCollectorFieldRef(scope, fieldName)
+			// by how it's used in components or by schema lookup
+			return createCollectorFieldRef(scope, fieldName, entityName, schemaRegistry)
 		},
 	})
 
@@ -122,16 +126,39 @@ type CollectorRef = FieldRef<unknown> & HasManyRef<unknown> & HasOneRef<unknown>
  * - Initially marks field as scalar
  * - Lazily creates child scope when relation access happens (.fields, .entity, .map)
  * - Child scope creation automatically upgrades from scalar to relation
+ * - Uses schema to determine field type and enable direct field access for hasOne relations
  *
  * @param parentScope - The parent SelectionScope
  * @param fieldName - The field being accessed
+ * @param entityName - The parent entity type name (e.g., 'Task')
+ * @param schemaRegistry - The schema registry for field type lookups
  */
 function createCollectorFieldRef(
 	parentScope: SelectionScope,
 	fieldName: string,
+	entityName: string | null,
+	schemaRegistry: SchemaRegistry<Record<string, object>> | null,
 ): CollectorRef {
+	// Look up field type from schema if available
+	const fieldDef = entityName && schemaRegistry
+		? schemaRegistry.getFieldDef(entityName, fieldName)
+		: null
+	const isHasOneRelation = fieldDef?.type === 'hasOne'
+	const isHasManyRelation = fieldDef?.type === 'hasMany'
+	const targetEntityName = (fieldDef?.type === 'hasOne' || fieldDef?.type === 'hasMany')
+		? fieldDef.target
+		: null
+
 	// Initially add as scalar (will be upgraded to relation if .fields/.entity/.map is accessed)
-	parentScope.addScalar(fieldName)
+	// Or immediately mark as relation if schema tells us it is one
+	if (isHasOneRelation || isHasManyRelation) {
+		parentScope.child(fieldName) // This upgrades to relation
+		if (isHasManyRelation) {
+			parentScope.markAsArray(fieldName)
+		}
+	} else {
+		parentScope.addScalar(fieldName)
+	}
 
 	// Lazy child scope - created only when relation access happens
 	let childScope: SelectionScope | null = null
@@ -149,8 +176,8 @@ function createCollectorFieldRef(
 		entityId: '', // Collection phase - no entity
 		path: [fieldName],
 		fieldName,
-		isArray: false as boolean,
-		isRelation: false as boolean,
+		isArray: isHasManyRelation,
+		isRelation: isHasOneRelation || isHasManyRelation,
 	}
 
 	const noop = () => () => {}
@@ -160,8 +187,8 @@ function createCollectorFieldRef(
 		get(_, nestedFieldName: string) {
 			// Get child scope (upgrades to relation)
 			const scope = getChildScope()
-			// Create nested field ref in the child scope
-			return createCollectorFieldRef(scope, nestedFieldName)
+			// Create nested field ref in the child scope, passing target entity info
+			return createCollectorFieldRef(scope, nestedFieldName, targetEntityName, schemaRegistry)
 		},
 	})
 
@@ -169,14 +196,14 @@ function createCollectorFieldRef(
 		// Get child scope and mark as array relation
 		const scope = getChildScope()
 		parentScope.markAsArray(fieldName)
-		// Call fn once with collector to gather nested selection
-		fn(createCollectorProxy<unknown>(scope), 0)
+		// Call fn once with collector to gather nested selection, passing target entity info
+		fn(createCollectorProxy<unknown>(scope, targetEntityName, schemaRegistry), 0)
 		return []
 	}
 
-	// Return object that satisfies all ref interfaces
+	// Base object that satisfies all ref interfaces
 	// Components will use only the parts they need
-	return {
+	const refObject = {
 		[FIELD_REF_META]: meta,
 
 		// FieldRef properties (non-$ versions)
@@ -217,7 +244,7 @@ function createCollectorFieldRef(
 		get $entity(): EntityAccessor<unknown> {
 			// Get child scope (upgrades to relation) and return proxy with scope
 			const scope = getChildScope()
-			return createCollectorProxy<unknown>(scope)
+			return createCollectorProxy<unknown>(scope, targetEntityName, schemaRegistry)
 		},
 		$delete: () => {},
 		$errors: [],
@@ -237,7 +264,7 @@ function createCollectorFieldRef(
 		$data: null,
 		$isNew: false,
 		$persistedId: null,
-		__entityName: '',
+		__entityName: targetEntityName ?? '',
 		__availableRoles: [] as readonly string[],
 		__schema: {} as Record<string, object>,
 		$clearAllErrors: () => {},
@@ -249,6 +276,40 @@ function createCollectorFieldRef(
 		// Type brand (phantom property - only exists in type system)
 		__entityType: undefined as unknown,
 	}
+
+	// For hasOne relations, wrap in proxy to support direct field access (e.g., task.project.name)
+	if (isHasOneRelation) {
+		return wrapCollectorRefWithFieldAccessProxy(refObject, hasOneFieldsProxy)
+	}
+
+	return refObject
+}
+
+/**
+ * Wraps a collector ref in a Proxy that supports direct field access for hasOne relations.
+ * - `ref.fieldName` is equivalent to `ref.$fields.fieldName`
+ * - Known ref properties pass through to the target
+ */
+function wrapCollectorRefWithFieldAccessProxy(
+	ref: CollectorRef,
+	fieldsProxy: EntityFields<unknown>,
+): CollectorRef {
+	return new Proxy(ref, {
+		get(target, prop) {
+			// Symbols - pass through
+			if (typeof prop !== 'string') {
+				return Reflect.get(target, prop)
+			}
+
+			// Check if property exists on target - if so, pass through
+			if (prop in target) {
+				return Reflect.get(target, prop)
+			}
+
+			// Otherwise, treat as field access
+			return fieldsProxy[prop as keyof EntityFields<unknown>]
+		},
+	}) as CollectorRef
 }
 
 

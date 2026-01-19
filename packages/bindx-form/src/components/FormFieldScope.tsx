@@ -23,11 +23,11 @@ import type { FormFieldScopeProps } from '../types.js'
  * </Entity>
  * ```
  */
-export function FormFieldScope({
+export function FormFieldScope<T>({
 	field,
 	children,
 	required,
-}: FormFieldScopeProps): ReactNode {
+}: FormFieldScopeProps<T>): ReactNode {
 	// Get metadata from the field handle
 	const meta = field[FIELD_REF_META] as FieldRefMeta | undefined
 
