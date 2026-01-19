@@ -273,6 +273,12 @@ export interface FieldRef<T> {
 	/** Whether value differs from server */
 	readonly isDirty: boolean
 
+	/** Whether field has been touched (interacted with by user) */
+	readonly isTouched: boolean
+
+	/** Mark the field as touched */
+	touch(): void
+
 	/** Update the value */
 	setValue(value: T | null): void
 

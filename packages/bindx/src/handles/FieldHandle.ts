@@ -79,6 +79,23 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle implements Fie
 	}
 
 	/**
+	 * Checks if the field has been touched (interacted with by the user).
+	 * Useful for showing errors only after user interaction.
+	 */
+	get isTouched(): boolean {
+		return this.store.isFieldTouched(this.entityType, this.entityId, this.fieldName)
+	}
+
+	/**
+	 * Marks the field as touched.
+	 * Call this on blur or other interaction events.
+	 */
+	touch(): void {
+		this.assertNotDisposed()
+		this.store.setFieldTouched(this.entityType, this.entityId, this.fieldName, true)
+	}
+
+	/**
 	 * Sets the field value.
 	 * Also clears non-sticky client errors.
 	 */

@@ -59,6 +59,8 @@ export {
 	useInterceptField,
 } from './useBindxEvents.js'
 
+export { useEntityBeforePersist } from './useEntityBeforePersist.js'
+
 export {
 	useEntityErrors,
 	type EntityErrorsState,

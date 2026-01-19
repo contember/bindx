@@ -35,6 +35,8 @@ export {
 	useFormInputHandler,
 	getDefaultInputProps,
 	type UseFormInputHandlerOptions,
+	useFormInputValidationHandler,
+	type ValidationHandlerResult,
 } from './hooks/index.js'
 
 // Components

@@ -131,6 +131,9 @@ export class SnapshotStore {
 	/** Relation errors keyed by "entityType:id:relationName" */
 	private readonly relationErrors = new Map<string, ErrorState>()
 
+	/** Touched state keyed by "entityType:id:fieldName" */
+	private readonly touchedFields = new Map<string, boolean>()
+
 	/** Global version number for change detection */
 	private globalVersion = 0
 
@@ -1302,6 +1305,43 @@ export class SnapshotStore {
 		return false
 	}
 
+	// ==================== Touched State ====================
+
+	/**
+	 * Checks if a field has been touched (interacted with by the user).
+	 */
+	isFieldTouched(entityType: string, id: string, fieldName: string): boolean {
+		const key = this.getRelationKey(entityType, id, fieldName)
+		return this.touchedFields.get(key) ?? false
+	}
+
+	/**
+	 * Sets the touched state for a field.
+	 */
+	setFieldTouched(entityType: string, id: string, fieldName: string, touched: boolean): void {
+		const key = this.getRelationKey(entityType, id, fieldName)
+		const current = this.touchedFields.get(key) ?? false
+		if (current === touched) return
+
+		this.touchedFields.set(key, touched)
+		this.notifyEntitySubscribers(this.getEntityKey(entityType, id))
+	}
+
+	/**
+	 * Clears all touched state for an entity.
+	 */
+	clearEntityTouchedState(entityType: string, id: string): void {
+		const keyPrefix = `${entityType}:${id}:`
+
+		for (const key of [...this.touchedFields.keys()]) {
+			if (key.startsWith(keyPrefix)) {
+				this.touchedFields.delete(key)
+			}
+		}
+
+		this.notifyEntitySubscribers(this.getEntityKey(entityType, id))
+	}
+
 	// ==================== Relation State ====================
 
 	/**
@@ -2086,6 +2126,7 @@ export class SnapshotStore {
 		this.fieldErrors.clear()
 		this.entityErrors.clear()
 		this.relationErrors.clear()
+		this.touchedFields.clear()
 		this.globalVersion++
 
 		// Notify all subscribers

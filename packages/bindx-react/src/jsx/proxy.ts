@@ -183,6 +183,8 @@ function createCollectorFieldRef(
 		value: null,
 		serverValue: null,
 		isDirty: false,
+		isTouched: false,
+		touch: () => {},
 		setValue: () => {},
 		inputProps: { value: null, setValue: () => {} },
 		errors: [],
@@ -591,6 +593,12 @@ function createRuntimeFieldRef(
 		get isDirty() {
 			return getIsDirty()
 		},
+		get isTouched() {
+			return store.isFieldTouched(entityType, entityId, fieldName)
+		},
+		touch() {
+			store.setFieldTouched(entityType, entityId, fieldName, true)
+		},
 		setValue,
 		get inputProps() {
 			return getInputProps()
@@ -706,6 +714,8 @@ function createNullFieldRef(path: string[], fieldName: string): FieldRef<unknown
 		value: null,
 		serverValue: null,
 		isDirty: false,
+		isTouched: false,
+		touch: noopFn,
 		setValue: setValueFn,
 		inputProps: inputPropsValue,
 		errors: [],
@@ -758,6 +768,8 @@ function createPlaceholderAccessor<T>(): EntityAccessor<T> {
 				value: null,
 				serverValue: null,
 				isDirty: false,
+				isTouched: false,
+				touch: () => {},
 				setValue: () => {},
 				inputProps,
 				errors: [] as FieldError[],
