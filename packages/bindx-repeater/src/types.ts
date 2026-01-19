@@ -1,0 +1,127 @@
+import type { ReactNode } from 'react'
+import type { EntityAccessor, HasManyRef, AnyBrand } from '@contember/bindx'
+
+/**
+ * Index for adding items to the repeater.
+ * - number: Adds at the specified index
+ * - 'first': Adds at the beginning
+ * - 'last' or undefined: Adds at the end
+ */
+export type RepeaterAddItemIndex = number | 'first' | 'last' | undefined
+
+/**
+ * Index for moving items within the repeater.
+ * - number: Moves to the specified index
+ * - 'first': Moves to the beginning
+ * - 'last': Moves to the end
+ * - 'previous': Moves to the previous position
+ * - 'next': Moves to the next position
+ */
+export type RepeaterMoveItemIndex = number | 'first' | 'last' | 'previous' | 'next'
+
+/**
+ * Callback for preprocessing a newly created entity.
+ */
+export type RepeaterPreprocessCallback<T> = (entity: EntityAccessor<T>) => void
+
+/**
+ * Information about a single repeater item, passed to the map callback.
+ */
+export interface RepeaterItemInfo {
+	/** Index of the item in the sorted list */
+	index: number
+
+	/** Whether this is the first item */
+	isFirst: boolean
+
+	/** Whether this is the last item */
+	isLast: boolean
+
+	/** Remove this item from the repeater */
+	remove: () => void
+
+	/** Move this item up (to previous position). Only available when sortableBy is defined. */
+	moveUp: () => void
+
+	/** Move this item down (to next position). Only available when sortableBy is defined. */
+	moveDown: () => void
+}
+
+/**
+ * Items collection object passed to the repeater render function.
+ * Provides a type-safe map() method for iterating over items.
+ */
+export interface RepeaterItems<
+	TEntity,
+	TSelected = TEntity,
+	TBrand extends AnyBrand = AnyBrand,
+	TEntityName extends string = string,
+	TAvailableRoles extends readonly string[] = readonly string[],
+	TSchema extends Record<string, object> = Record<string, object>,
+> {
+	/**
+	 * Map over items with full type safety.
+	 * Each item receives the entity accessor and item info (index, isFirst, isLast, remove, moveUp, moveDown).
+	 */
+	map: <R>(
+		fn: (
+			entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>,
+			info: RepeaterItemInfo,
+		) => R
+	) => R[]
+
+	/** Number of items in the repeater */
+	length: number
+}
+
+/**
+ * Methods available at the repeater level for adding items.
+ */
+export interface RepeaterMethods<T = unknown> {
+	/**
+	 * Adds a new item to the repeater.
+	 * @param index - Where to add the item (default: 'last')
+	 * @param preprocess - Optional callback to preprocess the new entity
+	 */
+	addItem: (index?: RepeaterAddItemIndex, preprocess?: RepeaterPreprocessCallback<T>) => void
+
+	/** Whether the repeater is empty */
+	isEmpty: boolean
+}
+
+/**
+ * Render function type for the Repeater component.
+ */
+export type RepeaterRenderFn<
+	TEntity,
+	TSelected = TEntity,
+	TBrand extends AnyBrand = AnyBrand,
+	TEntityName extends string = string,
+	TAvailableRoles extends readonly string[] = readonly string[],
+	TSchema extends Record<string, object> = Record<string, object>,
+> = (
+	items: RepeaterItems<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>,
+	methods: RepeaterMethods<TEntity>,
+) => ReactNode
+
+/**
+ * Props for the Repeater component.
+ * Types flow from the field prop to the children callback for full type safety.
+ */
+export interface RepeaterProps<
+	TEntity,
+	TSelected = TEntity,
+	TBrand extends AnyBrand = AnyBrand,
+	TEntityName extends string = string,
+	TAvailableRoles extends readonly string[] = readonly string[],
+	TSchema extends Record<string, object> = Record<string, object>,
+> {
+	/** The has-many relation field */
+	field: HasManyRef<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>
+
+	/** Optional field name for sorting (must be a numeric field) */
+	sortableBy?: string
+
+	/** Render function that receives items collection and methods */
+	children: RepeaterRenderFn<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>
+}

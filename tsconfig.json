@@ -4,6 +4,7 @@
 		{ "path": "./tests" },
 		{ "path": "./packages/bindx" },
 		{ "path": "./packages/bindx-form" },
+		{ "path": "./packages/bindx-repeater" },
 		{ "path": "./packages/bindx-react" },
 		{ "path": "./packages/bindx-generator" },
 		{ "path": "./packages/bindx-generator/tests" },

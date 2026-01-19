@@ -213,6 +213,7 @@ export type {
 	HasManyComponentOptions,
 	ShowProps,
 	SelectionPropMeta,
+	SelectionProvider,
 	EntityPropKeys,
 	EntityFromProp,
 	SelectionFromProp,

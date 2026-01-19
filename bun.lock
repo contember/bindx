@@ -62,6 +62,17 @@
         "react": ">=18.0.0",
       },
     },
+    "packages/bindx-repeater": {
+      "name": "@contember/bindx-repeater",
+      "version": "0.1.0",
+      "dependencies": {
+        "@contember/bindx": "workspace:*",
+        "@contember/bindx-react": "workspace:*",
+      },
+      "peerDependencies": {
+        "react": ">=18.0.0",
+      },
+    },
     "packages/example": {
       "name": "@contember/bindx-example",
       "version": "0.1.0",
@@ -132,6 +143,8 @@
     "@contember/bindx-generator": ["@contember/bindx-generator@workspace:packages/bindx-generator"],
 
     "@contember/bindx-react": ["@contember/bindx-react@workspace:packages/bindx-react"],
+
+    "@contember/bindx-repeater": ["@contember/bindx-repeater@workspace:packages/bindx-repeater"],
 
     "@contember/client-content": ["@contember/client-content@2.1.0-alpha.30", "", { "dependencies": { "@contember/graphql-builder": "2.1.0-alpha.30", "@contember/graphql-client": "2.1.0-alpha.30", "@contember/schema": "2.1.0-alpha.30" } }, "sha512-OJwzMHny2NivVsBw9S9wbivWQlJq72f3buYGEI4Cyc65vjoODXN3dJI+oetnLLmYOTzq5JBqYcGhUEGBBYoQtQ=="],
 

@@ -17,6 +17,7 @@ export {
 	type SelectionMeta,
 	type SelectionFieldMeta,
 	type HasManyComponentOptions,
+	type SelectionProvider,
 } from './types.js'
 
 // Selection metadata
