@@ -273,3 +273,64 @@ export function isValidRole<TRoleSchemas>(
 // ============================================================================
 
 export type { SchemaDefinition, EntitySchemaDef }
+
+// ============================================================================
+// Single Schema Support
+// ============================================================================
+
+/**
+ * Wraps a single schema as a role schema map with a default role.
+ * This allows single-schema usage to be a special case of role-aware bindx.
+ *
+ * @example
+ * ```typescript
+ * type Models = { Article: ArticleType; Author: AuthorType }
+ *
+ * // Single schema becomes:
+ * type RoleSchemas = SingleSchemaRoles<Models>
+ * // = { _default: { Article: ArticleType; Author: AuthorType } }
+ *
+ * // IntersectRoleSchemas<RoleSchemas, ['_default']> = Models
+ * ```
+ */
+export type SingleSchemaRoles<TModels extends Record<string, object>> = {
+	_default: TModels
+}
+
+/**
+ * Check if TRoleSchemas represents a single-schema case.
+ * Returns true if the only key is '_default'.
+ *
+ * @example
+ * ```typescript
+ * type Test1 = IsSingleSchema<{ _default: Models }> // true
+ * type Test2 = IsSingleSchema<{ admin: AdminModels; public: PublicModels }> // false
+ * ```
+ */
+export type IsSingleSchema<TRoleSchemas> =
+	keyof TRoleSchemas extends '_default'
+		? '_default' extends keyof TRoleSchemas
+			? true
+			: false
+		: false
+
+/**
+ * Gets all role names from a role schema map as a readonly array type.
+ *
+ * @example
+ * ```typescript
+ * type Roles = AllRoles<{ admin: AdminModels; public: PublicModels }>
+ * // = readonly ('admin' | 'public')[]
+ * ```
+ */
+export type AllRoles<TRoleSchemas> = readonly (keyof TRoleSchemas & string)[]
+
+/**
+ * Default role name for single-schema case.
+ */
+export const DEFAULT_ROLE = '_default' as const
+
+/**
+ * Type for the default role name.
+ */
+export type DefaultRole = typeof DEFAULT_ROLE

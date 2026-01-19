@@ -314,36 +314,21 @@ export type {
 	EntityContextValue,
 	HasRoleProviderValue,
 	HasRoleProviderProps,
-	RoleAwareEntityProps,
-	RoleAwareEntityPropsWithRoles,
-	RoleAwareEntityPropsWithoutRoles,
-	RoleAwareEntityByPropsWithRoles,
-	RoleAwareEntityByPropsWithoutRoles,
-	RoleAwareEntityCreatePropsWithRoles,
-	RoleAwareEntityCreatePropsWithoutRoles,
-	RoleAwareEntityAllPropsWithRoles,
-	RoleAwareEntityAllPropsWithoutRoles,
-	RoleAwareEntityComponent,
-	RoleAwareEntityListProps,
-	RoleAwareEntityListPropsWithRoles,
-	RoleAwareEntityListPropsWithoutRoles,
-	RoleAwareEntityListComponent,
 	HasRoleProps,
 	HasRoleComponent,
-	RoleAwareUseEntity,
-	RoleAwareUseEntityList,
-	RoleAwareBindx,
-	RoleAwareFragmentFactory,
-	RoleAwareFragmentConfigToProps,
-	RoleAwareFragmentConfigToFragments,
-	RoleAwareExplicitFragmentComponent,
-	RoleAwareCreateComponentOptions,
-	RoleAwareCreateComponent,
 	SchemaInput,
 	ContemberSchemaLike,
-	// Helper types for generic contexts
-	EntityAccessorForRoles,
-	EntityForRolesObject,
+	UnifiedBindx,
+	RoleSchemasBase,
+	RoleAwareEntityByProps,
+	RoleAwareEntityCreateProps,
+	RoleAwareEntityProps,
+	RoleAwareEntityComponent,
+	RoleAwareEntityListProps,
+	RoleAwareEntityListComponent,
+	RoleAwareUseEntity,
+	RoleAwareUseEntityList,
+	RoleAwareCreateComponent,
 } from './roles/index.js'
 
 export {
@@ -354,8 +339,10 @@ export {
 	createRoleAwareBindx,
 	HasRoleProvider,
 	useHasRoleContext,
-	RoleAwareProvider,
 } from './roles/index.js'
+
+// Alias for backwards compatibility
+export { HasRoleProvider as RoleAwareProvider } from './roles/index.js'
 
 // Re-export role types from core
 export type {

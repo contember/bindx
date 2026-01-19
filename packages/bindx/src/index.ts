@@ -304,9 +304,13 @@ export type {
 	RolesAreSubset,
 	RequireRoleSubset,
 	AssertRoleCompatibility,
+	SingleSchemaRoles,
+	IsSingleSchema,
+	AllRoles,
+	DefaultRole,
 } from './roles/index.js'
 
-export { isValidRole, RoleSchemaRegistry } from './roles/index.js'
+export { isValidRole, RoleSchemaRegistry, DEFAULT_ROLE } from './roles/index.js'
 
 // ============================================================================
 // Internal API (for advanced use cases)

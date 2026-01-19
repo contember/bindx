@@ -5,6 +5,7 @@ import { useSelectionCollection } from '../../hooks/useSelectionCollection.js'
 import { createRuntimeAccessor } from '../proxy.js'
 import type { EntityAccessor } from '../types.js'
 import { type EntityUniqueWhere, type AnyBrand } from '@contember/bindx'
+import { EntityContext, type EntityContextValue } from '../../roles/RoleContext.js'
 
 // ==================== Props Types ====================
 
@@ -15,6 +16,8 @@ import { type EntityUniqueWhere, type AnyBrand } from '@contember/bindx'
 interface EntityBaseProps<TSchema, K extends keyof TSchema & string> {
 	/** Entity type name */
 	name: K
+	/** Optional roles for role-aware type narrowing. When omitted, uses all available roles. */
+	roles?: readonly string[]
 	/** Render function receiving typed entity accessor with direct field access */
 	children: (entity: EntityAccessor<TSchema[K], TSchema[K], AnyBrand, K>) => React.ReactNode
 	/** Error fallback */
@@ -60,6 +63,7 @@ export type EntityProps<TSchema, K extends keyof TSchema & string> =
 interface EntityByModeProps {
 	entityType: string
 	by: EntityUniqueWhere
+	roles?: readonly string[]
 	children: (entity: EntityAccessor<unknown>) => React.ReactNode
 	loading?: React.ReactNode
 	error?: (error: Error) => React.ReactNode
@@ -68,6 +72,7 @@ interface EntityByModeProps {
 
 interface EntityCreateModeProps {
 	entityType: string
+	roles?: readonly string[]
 	children: (entity: EntityAccessor<unknown>) => React.ReactNode
 	error?: (error: Error) => React.ReactNode
 	onPersisted?: (id: string) => void
@@ -81,6 +86,7 @@ interface EntityCreateModeProps {
 function EntityByMode({
 	entityType,
 	by,
+	roles,
 	children,
 	loading,
 	error: errorFallback,
@@ -132,7 +138,28 @@ function EntityByMode({
 		() => {}, // Changes are automatically handled by useSyncExternalStore
 	)
 
-	return <>{children(accessor)}</>
+	// Wrap accessor in Proxy to inject __availableRoles for role-aware components
+	const roleAwareAccessor = new Proxy(accessor, {
+		get(target, prop) {
+			if (prop === '__availableRoles') {
+				return roles ?? []
+			}
+			return Reflect.get(target, prop)
+		},
+	})
+
+	// Provide entity context for HasRole component
+	const entityContext: EntityContextValue = {
+		entityType,
+		entityId,
+		storeKey: `${entityType}:${entityId}`,
+	}
+
+	return (
+		<EntityContext.Provider value={entityContext}>
+			{children(roleAwareAccessor)}
+		</EntityContext.Provider>
+	)
 }
 
 // ==================== EntityCreateMode Component ====================
@@ -150,6 +177,7 @@ interface CreateModeSnapshot {
  */
 function EntityCreateMode({
 	entityType,
+	roles,
 	children,
 	error: errorFallback,
 	onPersisted,
@@ -224,7 +252,28 @@ function EntityCreateMode({
 		() => {}, // Changes are automatically handled by useSyncExternalStore
 	)
 
-	return <>{children(accessor)}</>
+	// Wrap accessor in Proxy to inject __availableRoles for role-aware components
+	const roleAwareAccessor = new Proxy(accessor, {
+		get(target, prop) {
+			if (prop === '__availableRoles') {
+				return roles ?? []
+			}
+			return Reflect.get(target, prop)
+		},
+	})
+
+	// Provide entity context for HasRole component
+	const entityContext: EntityContextValue = {
+		entityType,
+		entityId: tempId,
+		storeKey: `${entityType}:${tempId}`,
+	}
+
+	return (
+		<EntityContext.Provider value={entityContext}>
+			{children(roleAwareAccessor)}
+		</EntityContext.Provider>
+	)
 }
 
 // ==================== Main Entity Component ====================
@@ -273,6 +322,7 @@ function EntityImpl<TSchema, K extends keyof TSchema & string>(
 		return (
 			<EntityCreateMode
 				entityType={createProps.name as string}
+				roles={createProps.roles}
 				children={createProps.children as (entity: EntityAccessor<unknown>) => React.ReactNode}
 				error={createProps.error}
 				onPersisted={createProps.onPersisted}
@@ -285,6 +335,7 @@ function EntityImpl<TSchema, K extends keyof TSchema & string>(
 		<EntityByMode
 			entityType={byProps.name as string}
 			by={byProps.by}
+			roles={byProps.roles}
 			children={byProps.children as (entity: EntityAccessor<unknown>) => React.ReactNode}
 			loading={byProps.loading}
 			error={byProps.error}

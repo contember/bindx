@@ -20,45 +20,26 @@ export {
 	useHasRoleContext,
 } from './RoleContext.js'
 
-export type {
-	RoleAwareEntityProps,
-	RoleAwareEntityPropsWithRoles,
-	RoleAwareEntityPropsWithoutRoles,
-	RoleAwareEntityByPropsWithRoles,
-	RoleAwareEntityByPropsWithoutRoles,
-	RoleAwareEntityCreatePropsWithRoles,
-	RoleAwareEntityCreatePropsWithoutRoles,
-	RoleAwareEntityAllPropsWithRoles,
-	RoleAwareEntityAllPropsWithoutRoles,
-	RoleAwareEntityComponent,
-	RoleAwareEntityListProps,
-	RoleAwareEntityListPropsWithRoles,
-	RoleAwareEntityListPropsWithoutRoles,
-	RoleAwareEntityListComponent,
-	HasRoleProps,
-	HasRoleComponent,
-	RoleAwareUseEntity,
-	RoleAwareUseEntityList,
-	RoleAwareBindx,
-	RoleAwareFragmentFactory,
-	RoleAwareFragmentConfigToProps,
-	RoleAwareFragmentConfigToFragments,
-	RoleAwareExplicitFragmentComponent,
-	RoleAwareImplicitFragmentProperties,
-	RoleAwareImplicitComponent,
-	RoleAwareCreateComponentOptions,
-	RoleAwareCreateComponent,
-	SchemaInput,
-	ContemberSchemaLike,
-	// Helper types for generic contexts
-	EntityAccessorForRoles,
-	EntityForRolesObject,
-} from './createRoleAwareBindx.js'
-
+// Re-export everything from createBindx
 export {
+	createBindx,
 	createRoleAwareBindx,
-	RoleAwareProvider,
-} from './createRoleAwareBindx.js'
+	type HasRoleProps,
+	type HasRoleComponent,
+	type SchemaInput,
+	type ContemberSchemaLike,
+	type UnifiedBindx,
+	type RoleSchemasBase,
+	type RoleAwareEntityByProps,
+	type RoleAwareEntityCreateProps,
+	type RoleAwareEntityProps,
+	type RoleAwareEntityComponent,
+	type RoleAwareEntityListProps,
+	type RoleAwareEntityListComponent,
+	type RoleAwareUseEntity,
+	type RoleAwareUseEntityList,
+	type RoleAwareCreateComponent,
+} from '../hooks/createBindx.js'
 
-// Re-export EntityRefFor type helper from bindx
-export type { EntityRefFor } from '@contember/bindx'
+// Re-export type helpers from bindx
+export type { EntityRefFor, EntityForRoles } from '@contember/bindx'

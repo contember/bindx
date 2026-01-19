@@ -289,8 +289,10 @@ describe('createRoleAwareBindx', () => {
 
 		expect(schemaRegistry).toBeDefined()
 		expect(RoleAwareProvider).toBeInstanceOf(Function)
-		expect(Entity).toBeInstanceOf(Function)
-		// HasRole is now memo-wrapped (object with $$typeof), not a raw function
+		// Entity is memo-wrapped
+		expect(Entity).toBeDefined()
+		expect((Entity as unknown as { $$typeof: symbol }).$$typeof).toBe(Symbol.for('react.memo'))
+		// HasRole is also memo-wrapped
 		expect(HasRole).toBeDefined()
 		expect((HasRole as unknown as { $$typeof: symbol }).$$typeof).toBe(Symbol.for('react.memo'))
 		expect(useEntity).toBeInstanceOf(Function)

@@ -428,11 +428,11 @@ describe('BindxGenerator', () => {
 		// names.ts is no longer generated for role-aware schemas
 		expect(files['names.ts']).toBeUndefined()
 
-		// index.ts now exports a factory function instead of the bindx instance directly
+		// index.ts uses createRoleAwareBindx for role-based schemas
 		expect(files['index.ts']).toContain('createRoleAwareBindx')
-		expect(files['index.ts']).toContain('createBindx')
-		expect(files['index.ts']).toContain('SchemaInput')
-		expect(files['index.ts']).toContain('RoleAwareBindx<RoleSchemas>')
+		expect(files['index.ts']).toContain('createRoleAwareBindx<RoleSchemas>')
+		expect(files['index.ts']).toContain('RoleAwareProvider')
+		expect(files['index.ts']).toContain('HasRole')
 	})
 })
 

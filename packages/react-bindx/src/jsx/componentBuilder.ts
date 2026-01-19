@@ -468,12 +468,14 @@ function createGetSelection(
 export function createComponentBuilder<TSchema extends Record<string, object>>(
 	schemaRegistry: SchemaRegistry<Record<string, object>> | null,
 	roles: readonly string[] = [],
-): ComponentBuilder<TSchema, ComponentBuilderState<TSchema, Record<string, never>, object, typeof roles>> {
+// eslint-disable-next-line @typescript-eslint/ban-types
+): ComponentBuilder<TSchema, ComponentBuilderState<TSchema, {}, object, typeof roles>> {
 	return new ComponentBuilderImpl(
 		schemaRegistry,
 		new Map(),
 		roles,
-	) as unknown as ComponentBuilder<TSchema, ComponentBuilderState<TSchema, Record<string, never>, object, typeof roles>>
+	// eslint-disable-next-line @typescript-eslint/ban-types
+	) as unknown as ComponentBuilder<TSchema, ComponentBuilderState<TSchema, {}, object, typeof roles>>
 }
 
 // ============================================================================
