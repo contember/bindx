@@ -1,0 +1,27 @@
+{
+	"name": "@contember/bindx-react",
+	"version": "0.1.0",
+	"description": "Type-safe React data binding framework",
+	"type": "module",
+	"main": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"build": "tsc --build",
+		"typecheck": "tsc --build"
+	},
+	"peerDependencies": {
+		"react": ">=18.0.0"
+	},
+	"dependencies": {
+		"@contember/bindx": "workspace:*",
+		"@contember/client-content": "^2.1.0-alpha.30",
+		"@contember/graphql-client": "^2.1.0-alpha.30"
+	},
+	"files": [
+		"dist",
+		"src"
+	],
+	"license": "MIT"
+}

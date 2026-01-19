@@ -1,4 +1,4 @@
-import type { EntityListAccessorResult } from '@contember/react-bindx'
+import type { EntityListAccessorResult } from '@contember/bindx-react'
 
 export interface SelectOption {
 	id: string

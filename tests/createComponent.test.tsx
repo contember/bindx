@@ -14,7 +14,7 @@ import {
 	hasMany,
 	COMPONENT_MARKER,
 	COMPONENT_SELECTIONS,
-} from '@contember/react-bindx'
+} from '@contember/bindx-react'
 
 afterEach(() => {
 	cleanup()

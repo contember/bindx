@@ -11,7 +11,7 @@ import {
 	hasOne,
 	hasMany,
 	Field,
-} from '@contember/react-bindx'
+} from '@contember/bindx-react'
 
 afterEach(() => {
 	cleanup()
@@ -203,7 +203,7 @@ describe('Entity Create Mode', () => {
 			let storeRef: any
 
 			const TestComponent = () => {
-				const { store } = require('@contember/react-bindx').useBindxContext()
+				const { store } = require('@contember/bindx-react').useBindxContext()
 				storeRef = store
 				return null
 			}
@@ -240,7 +240,7 @@ describe('Entity Create Mode', () => {
 			let storeRef: any
 
 			const TestComponent = () => {
-				const { store } = require('@contember/react-bindx').useBindxContext()
+				const { store } = require('@contember/bindx-react').useBindxContext()
 				storeRef = store
 				return null
 			}
@@ -285,7 +285,7 @@ describe('Entity Create Mode', () => {
 			let storeRef: any
 
 			const TestComponent = () => {
-				const { store } = require('@contember/react-bindx').useBindxContext()
+				const { store } = require('@contember/bindx-react').useBindxContext()
 				storeRef = store
 				return null
 			}

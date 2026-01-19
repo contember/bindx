@@ -1,4 +1,4 @@
-import { createFragment } from '@contember/react-bindx'
+import { createFragment } from '@contember/bindx-react'
 import type { Author, Location, Tag, Article } from './types.js'
 
 /**

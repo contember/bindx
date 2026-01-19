@@ -1,5 +1,5 @@
 import { Entity, createComponent } from '../../bindx.js'
-import { Field, HasMany, HasOne } from '@contember/react-bindx'
+import { Field, HasMany, HasOne } from '@contember/bindx-react'
 
 // ============================================================================
 // Fragment Component Definitions

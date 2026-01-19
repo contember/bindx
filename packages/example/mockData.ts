@@ -1,4 +1,4 @@
-import type { MockDataStore } from '@contember/react-bindx'
+import type { MockDataStore } from '@contember/bindx-react'
 
 /**
  * Example mock data for testing

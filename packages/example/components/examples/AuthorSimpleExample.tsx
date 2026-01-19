@@ -1,5 +1,5 @@
 import { Entity } from '../../bindx.js'
-import { Field, HasMany, HasOne, If, Show } from '@contember/react-bindx'
+import { Field, HasMany, HasOne, If, Show } from '@contember/bindx-react'
 
 /**
  * Simple example using the two-pass JSX approach.

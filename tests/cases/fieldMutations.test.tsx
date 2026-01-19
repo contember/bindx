@@ -8,7 +8,7 @@ import {
 	MockAdapter,
 	defineSchema,
 	scalar,
-} from '@contember/react-bindx'
+} from '@contember/bindx-react'
 
 afterEach(() => {
 	cleanup()

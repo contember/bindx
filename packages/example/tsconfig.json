@@ -7,6 +7,6 @@
 	"include": ["./**/*"],
 	"exclude": ["dist"],
 	"references": [
-		{"path": "../react-bindx"}
+		{"path": "../bindx-react"}
 	]
 }

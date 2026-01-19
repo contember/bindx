@@ -1,4 +1,4 @@
-import type { FieldHandle } from '@contember/react-bindx'
+import type { FieldHandle } from '@contember/bindx-react'
 import { TextInput } from '../inputs/index.js'
 
 /**

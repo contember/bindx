@@ -31,7 +31,7 @@ import {
 	createRoleAwareBindx,
 	BindxProvider,
 	MockAdapter,
-} from '@contember/react-bindx'
+} from '@contember/bindx-react'
 
 /**
  * Helper to create mock EntityRef with $ prefixed properties.
@@ -207,7 +207,7 @@ describe('Role Schema Types', () => {
 		// The constraint is enforced when calling HasRole with an entity that has specific available roles
 
 		// Type-level test: HasRoleComponent takes just RoleSchemas
-		type TestHasRole = import('@contember/react-bindx').HasRoleComponent<RoleSchemas>
+		type TestHasRole = import('@contember/bindx-react').HasRoleComponent<RoleSchemas>
 
 		// HasRoleComponent is properly typed
 		const _hasRole: TestHasRole = (() => null) as TestHasRole
@@ -1097,7 +1097,7 @@ describe('Role-aware implicit createComponent', () => {
 		// If the import works, the test passes
 
 		// Import from react-bindx roles
-		type TestRef = import('@contember/react-bindx').EntityRefFor<RoleSchemas, ['admin'], 'Article'>
+		type TestRef = import('@contember/bindx-react').EntityRefFor<RoleSchemas, ['admin'], 'Article'>
 
 		// Should be a valid EntityRef type
 		type HasId = TestRef extends { id: string | null } ? true : false

@@ -11,7 +11,7 @@ import {
 	hasOne,
 	isPlaceholderId,
 	isPersistedId,
-} from '@contember/react-bindx'
+} from '@contember/bindx-react'
 
 afterEach(() => {
 	cleanup()

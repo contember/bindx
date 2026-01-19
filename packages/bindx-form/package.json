@@ -1,7 +1,7 @@
 {
-	"name": "@contember/react-bindx",
+	"name": "@contember/bindx-form",
 	"version": "0.1.0",
-	"description": "Type-safe React data binding framework",
+	"description": "Form components for React data binding",
 	"type": "module",
 	"main": "./src/index.ts",
 	"exports": {
@@ -16,8 +16,7 @@
 	},
 	"dependencies": {
 		"@contember/bindx": "workspace:*",
-		"@contember/client-content": "^2.1.0-alpha.30",
-		"@contember/graphql-client": "^2.1.0-alpha.30"
+		"@radix-ui/react-slot": "^1.2.4"
 	},
 	"files": [
 		"dist",

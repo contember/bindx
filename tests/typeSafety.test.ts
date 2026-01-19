@@ -18,7 +18,7 @@ import type {
 	SelectedEntityFields,
 	EntityFromProp,
 	SelectionFromProp,
-} from '@contember/react-bindx'
+} from '@contember/bindx-react'
 import {
 	createFragment,
 	createBindx,
@@ -27,7 +27,7 @@ import {
 	hasOne,
 	hasMany,
 	mergeFragments,
-} from '@contember/react-bindx'
+} from '@contember/bindx-react'
 
 // ============================================================================
 // Type Assertion Helpers
@@ -542,8 +542,8 @@ describe('Type Safety - Known Limitations', () => {
 
 	test('HasManyProps is selection-aware', () => {
 		type SelectedTag = { name: string }
-		type TagsRef = import('@contember/react-bindx').HasManyRef<Tag, SelectedTag>
-		type Props = import('@contember/react-bindx').HasManyProps<Tag, SelectedTag>
+		type TagsRef = import('@contember/bindx-react').HasManyRef<Tag, SelectedTag>
+		type Props = import('@contember/bindx-react').HasManyProps<Tag, SelectedTag>
 
 		// The field prop should be HasManyRef<Tag, SelectedTag>
 		assertTrue<AssertExtends<TagsRef, Props['field']>>()
@@ -559,8 +559,8 @@ describe('Type Safety - Known Limitations', () => {
 
 	test('HasOneProps is selection-aware', () => {
 		type SelectedAuthor = { name: string; email: string }
-		type AuthorRef = import('@contember/react-bindx').HasOneRef<Author, SelectedAuthor>
-		type Props = import('@contember/react-bindx').HasOneProps<Author, SelectedAuthor>
+		type AuthorRef = import('@contember/bindx-react').HasOneRef<Author, SelectedAuthor>
+		type Props = import('@contember/bindx-react').HasOneProps<Author, SelectedAuthor>
 
 		// The field prop should be HasOneRef<Author, SelectedAuthor>
 		assertTrue<AssertExtends<AuthorRef, Props['field']>>()

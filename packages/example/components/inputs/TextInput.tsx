@@ -1,4 +1,4 @@
-import type { FieldRef } from '@contember/react-bindx'
+import type { FieldRef } from '@contember/bindx-react'
 
 /**
  * Generic text input - doesn't know about models

@@ -1,4 +1,4 @@
-import { BindxProvider, MockAdapter } from '@contember/react-bindx'
+import { BindxProvider, MockAdapter } from '@contember/bindx-react'
 import { mockData } from './mockData.js'
 import {
 	ArticleEditor,

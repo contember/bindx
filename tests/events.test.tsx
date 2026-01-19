@@ -16,7 +16,7 @@ import {
 	useOnEntityEvent,
 	useOnFieldEvent,
 	createBindx,
-} from '@contember/react-bindx'
+} from '@contember/bindx-react'
 
 afterEach(() => {
 	cleanup()

@@ -1,5 +1,5 @@
 import React from 'react'
-import { useUndo } from '@contember/react-bindx'
+import { useUndo } from '@contember/bindx-react'
 import { useEntity } from '../bindx.js'
 import { TextInput } from './inputs/index.js'
 

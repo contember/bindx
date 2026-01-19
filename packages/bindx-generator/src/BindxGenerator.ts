@@ -69,7 +69,7 @@ export * from './types'
 
 import { schemaNames } from './names'
 import type { BindxSchema } from './entities'
-import { createBindx } from '@contember/react-bindx'
+import { createBindx } from '@contember/bindx-react'
 
 /**
  * Pre-configured bindx instance for this schema
@@ -103,7 +103,7 @@ export * from './entities'
 export * from './types'
 
 import type { RoleSchemas } from './entities'
-import { createRoleAwareBindx } from '@contember/react-bindx'
+import { createRoleAwareBindx } from '@contember/bindx-react'
 import { scalar, hasOne, hasMany } from '@contember/bindx'
 
 const schemaDefinition = ${schemaDefinition}

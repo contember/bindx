@@ -14,7 +14,7 @@
 	},
 	"devDependencies": {
 		"@contember/bindx": "workspace:*",
-		"@contember/react-bindx": "workspace:*",
+		"@contember/bindx-react": "workspace:*",
 		"@happy-dom/global-registrator": "^20.0.11",
 		"@testing-library/react": "^16.3.1",
 		"@types/react": "^19",

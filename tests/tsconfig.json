@@ -5,12 +5,14 @@
 		"types": ["bun-types"],
 		"paths": {
 			"@contember/bindx": ["../packages/bindx/src/index.ts"],
-			"@contember/react-bindx": ["../packages/react-bindx/src/index.ts"]
+			"@contember/bindx-form": ["../packages/bindx-form/src/index.ts"],
+			"@contember/bindx-react": ["../packages/bindx-react/src/index.ts"]
 		}
 	},
 	"include": ["./**/*"],
 	"references": [
 		{ "path": "../packages/bindx"},
-		{ "path": "../packages/react-bindx"},
+		{ "path": "../packages/bindx-form"},
+		{ "path": "../packages/bindx-react"}
 	]
 }

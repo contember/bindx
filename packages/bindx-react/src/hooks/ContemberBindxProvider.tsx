@@ -35,7 +35,7 @@ export interface ContemberBindxProviderProps {
  *
  * @example
  * ```tsx
- * import { ContemberBindxProvider, useUndo } from '@contember/react-bindx'
+ * import { ContemberBindxProvider, useUndo } from '@contember/bindx-react'
  * import { schema } from './generated/schema'
  *
  * function App() {

@@ -6,7 +6,7 @@
       "name": "@contember/bindx-monorepo",
       "devDependencies": {
         "@contember/bindx": "workspace:*",
-        "@contember/react-bindx": "workspace:*",
+        "@contember/bindx-react": "workspace:*",
         "@happy-dom/global-registrator": "^20.0.11",
         "@testing-library/react": "^16.3.1",
         "@types/react": "^19",
@@ -28,6 +28,17 @@
         "@contember/graphql-client": "^2.1.0-alpha.30",
       },
     },
+    "packages/bindx-form": {
+      "name": "@contember/bindx-form",
+      "version": "0.1.0",
+      "dependencies": {
+        "@contember/bindx": "workspace:*",
+        "@radix-ui/react-slot": "^1.2.4",
+      },
+      "peerDependencies": {
+        "react": ">=18.0.0",
+      },
+    },
     "packages/bindx-generator": {
       "name": "@contember/bindx-generator",
       "version": "0.1.0",
@@ -39,14 +50,26 @@
         "@types/node": "^25.0.3",
       },
     },
-    "packages/example": {
-      "name": "@contember/bindx-example",
+    "packages/bindx-react": {
+      "name": "@contember/bindx-react",
       "version": "0.1.0",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/client-content": "^2.1.0-alpha.30",
         "@contember/graphql-client": "^2.1.0-alpha.30",
-        "@contember/react-bindx": "workspace:*",
+      },
+      "peerDependencies": {
+        "react": ">=18.0.0",
+      },
+    },
+    "packages/example": {
+      "name": "@contember/bindx-example",
+      "version": "0.1.0",
+      "dependencies": {
+        "@contember/bindx": "workspace:*",
+        "@contember/bindx-react": "workspace:*",
+        "@contember/client-content": "^2.1.0-alpha.30",
+        "@contember/graphql-client": "^2.1.0-alpha.30",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
       },
@@ -56,18 +79,6 @@
         "@vitejs/plugin-react": "^5.1.2",
         "typescript": "^5.3.0",
         "vite": "^7.3.0",
-      },
-    },
-    "packages/react-bindx": {
-      "name": "@contember/react-bindx",
-      "version": "0.1.0",
-      "dependencies": {
-        "@contember/bindx": "workspace:*",
-        "@contember/client-content": "^2.1.0-alpha.30",
-        "@contember/graphql-client": "^2.1.0-alpha.30",
-      },
-      "peerDependencies": {
-        "react": ">=18.0.0",
       },
     },
   },
@@ -116,15 +127,17 @@
 
     "@contember/bindx-example": ["@contember/bindx-example@workspace:packages/example"],
 
+    "@contember/bindx-form": ["@contember/bindx-form@workspace:packages/bindx-form"],
+
     "@contember/bindx-generator": ["@contember/bindx-generator@workspace:packages/bindx-generator"],
+
+    "@contember/bindx-react": ["@contember/bindx-react@workspace:packages/bindx-react"],
 
     "@contember/client-content": ["@contember/client-content@2.1.0-alpha.30", "", { "dependencies": { "@contember/graphql-builder": "2.1.0-alpha.30", "@contember/graphql-client": "2.1.0-alpha.30", "@contember/schema": "2.1.0-alpha.30" } }, "sha512-OJwzMHny2NivVsBw9S9wbivWQlJq72f3buYGEI4Cyc65vjoODXN3dJI+oetnLLmYOTzq5JBqYcGhUEGBBYoQtQ=="],
 
     "@contember/graphql-builder": ["@contember/graphql-builder@2.1.0-alpha.30", "", { "dependencies": { "@contember/schema": "2.1.0-alpha.30" } }, "sha512-E5JyS1PreOs/UhmTRXOoB5j9+fO21JzKDsjbnwtX5wC2kv90ePxts5aeS8IGc9F9CpIh1+JGgTA47gocuuTpug=="],
 
     "@contember/graphql-client": ["@contember/graphql-client@2.1.0-alpha.30", "", {}, "sha512-wJhfy9Vj1VzsdVdNDyHooCDm2zu8SIeJVfSFDHfGDjJHDeUI0bBodTyFvwOxqGJxtjD7dE7u6qeQwmCPtFZDIw=="],
-
-    "@contember/react-bindx": ["@contember/react-bindx@workspace:packages/react-bindx"],
 
     "@contember/schema": ["@contember/schema@2.1.0-alpha.30", "", {}, "sha512-kKHxA67nFV969v5/fb49TGr1ujffwVpaOxPZBXJcDpeRNINzTqJ00XzF+uBk2R/349wScJnouyt3JNwZoDPZeg=="],
 
@@ -195,6 +208,10 @@
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
+
+    "@radix-ui/react-compose-refs": ["@radix-ui/react-compose-refs@1.1.2", "", { "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-z4eqJvfiNnFMHIIvXP3CY57y2WJs5g2v3X0zm9mEJkrkNv4rDxu+sg9Jh8EkXyeqBkB7SOcboo9dMVqhyrACIg=="],
+
+    "@radix-ui/react-slot": ["@radix-ui/react-slot@1.2.4", "", { "dependencies": { "@radix-ui/react-compose-refs": "1.1.2" }, "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-Jl+bCv8HxKnlTLVrcDE8zTMJ09R9/ukw4qBs/oZClOfoQk/cOTbDn+NceXfV7j09YPVQUryJPHurafcSg6EVKA=="],
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.0-beta.53", "", {}, "sha512-vENRlFU4YbrwVqNDZ7fLvy+JR1CRkyr01jhSiDpE1u6py3OMzQfztQU2jxykW3ALNxO4kSlqIDeYyD0Y9RcQeQ=="],
 

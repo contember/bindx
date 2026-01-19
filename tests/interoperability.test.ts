@@ -9,7 +9,7 @@
 import { describe, test, expect, beforeAll, afterEach } from 'bun:test'
 import React from 'react'
 import { renderToString } from 'react-dom/server'
-import type { EntityRef, FluentFragment, SelectionBuilder } from '@contember/react-bindx'
+import type { EntityRef, FluentFragment, SelectionBuilder } from '@contember/bindx-react'
 import {
 	createFragment,
 	createBindx,
@@ -23,7 +23,7 @@ import {
 	HasMany,
 	HasOne,
 	mergeFragments,
-} from '@contember/react-bindx'
+} from '@contember/bindx-react'
 
 // ============================================================================
 // Test Entity Types

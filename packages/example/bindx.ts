@@ -1,4 +1,4 @@
-import { createBindx, defineSchema, scalar, hasOne, hasMany } from '@contember/react-bindx'
+import { createBindx, defineSchema, scalar, hasOne, hasMany } from '@contember/bindx-react'
 import type { Article, Author, Tag, Location } from './types.js'
 
 /**

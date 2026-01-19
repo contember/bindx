@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test'
-import { createFragment, buildQueryFromSelection, __internal } from '@contember/react-bindx'
+import { createFragment, buildQueryFromSelection, __internal } from '@contember/bindx-react'
 
 const { createSelectionBuilder, getSelectionMeta } = __internal
 

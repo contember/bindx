@@ -1,5 +1,5 @@
 import { Entity, createComponent, useEntity } from '../../bindx.js'
-import { Field, HasMany, mergeFragments } from '@contember/react-bindx'
+import { Field, HasMany, mergeFragments } from '@contember/bindx-react'
 
 /**
  * Component with explicit selection - selection is defined upfront in the builder.

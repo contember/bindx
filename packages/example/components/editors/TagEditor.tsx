@@ -1,4 +1,4 @@
-import type { EntityRef, EntityListAccessorResult } from '@contember/react-bindx'
+import type { EntityRef, EntityListAccessorResult } from '@contember/bindx-react'
 import { TextInput } from '../inputs/index.js'
 
 interface TagData {

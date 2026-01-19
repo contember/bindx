@@ -1,4 +1,4 @@
-import type { EntityFields } from '@contember/react-bindx'
+import type { EntityFields } from '@contember/bindx-react'
 import type { Location } from '../../types.js'
 import { TextInput, CoordinatePicker } from '../inputs/index.js'
 
