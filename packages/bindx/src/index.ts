@@ -208,6 +208,7 @@ export type {
 
 // Utils
 export { deepEqual } from './utils/deepEqual.js'
+export { generateHasManyAlias } from './utils/aliasGenerator.js'
 
 // Contember integration
 export { MutationCollector, ContemberSchemaMutationAdapter } from './contember/index.js'

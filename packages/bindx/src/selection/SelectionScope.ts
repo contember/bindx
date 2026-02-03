@@ -1,4 +1,5 @@
 import type { SelectionMeta, SelectionFieldMeta } from './types.js'
+import { generateHasManyAlias } from '../utils/aliasGenerator.js'
 
 /**
  * HasMany parameters for filtering, ordering, pagination
@@ -151,6 +152,9 @@ export class SelectionScope {
 	/**
 	 * Convert this scope to SelectionMeta format for backwards compatibility.
 	 * This allows the new SelectionScope to be used with existing query builders.
+	 *
+	 * For has-many fields with params, generates auto-alias to allow multiple
+	 * HasMany components for the same field with different parameters.
 	 */
 	toSelectionMeta(): SelectionMeta {
 		const fields = new Map<string, SelectionFieldMeta>()
@@ -169,9 +173,15 @@ export class SelectionScope {
 		// Add relation fields with nested selections
 		for (const [fieldName, childScope] of this.children) {
 			const meta = this.relationMeta.get(fieldName)!
-			fields.set(fieldName, {
+
+			// Generate alias for has-many fields with params
+			const alias = meta.isArray && meta.params
+				? generateHasManyAlias(fieldName, meta.params)
+				: fieldName
+
+			fields.set(alias, {
 				fieldName,
-				alias: fieldName,
+				alias,
 				path: [fieldName],
 				isRelation: true,
 				isArray: meta.isArray,

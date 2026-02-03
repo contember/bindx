@@ -244,7 +244,8 @@ describe('Typed Query Parameters', () => {
 				),
 			)
 
-			const tagsField = fragment.__meta.fields.get('tags')
+			// Find the tags field by fieldName (key is auto-generated alias with params)
+			const tagsField = [...fragment.__meta.fields.values()].find(f => f.fieldName === 'tags')
 			expect(tagsField?.hasManyParams?.filter).toEqual({ color: { contains: 'blue' } })
 			expect(tagsField?.hasManyParams?.limit).toBe(5)
 		})

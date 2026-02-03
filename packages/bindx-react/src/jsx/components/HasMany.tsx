@@ -2,7 +2,7 @@ import React, { memo, type ReactElement, type ReactNode } from 'react'
 import type { HasManyProps, SelectionFieldMeta, SelectionMeta, SelectionProvider, EntityRef, AnyBrand, HasManyRef } from '../types.js'
 import { FIELD_REF_META, BINDX_COMPONENT, SCOPE_REF } from '../types.js'
 import { mergeSelections } from '../SelectionMeta.js'
-import { SelectionScope } from '@contember/bindx'
+import { SelectionScope, generateHasManyAlias } from '@contember/bindx'
 
 /**
  * HasMany component - renders a has-many relation
@@ -83,19 +83,25 @@ hasManyWithSelection.getSelection = (
 	const nestedSelection = result.childScope ? result.childScope.toSelectionMeta() : { fields: new Map() }
 	mergeSelections(nestedSelection, jsxSelection)
 
+	// Build hasManyParams object
+	const hasManyParams = {
+		filter: props.filter,
+		orderBy: props.orderBy,
+		limit: props.limit,
+		offset: props.offset,
+	}
+
+	// Generate alias based on params if any are provided
+	const alias = generateHasManyAlias(meta.fieldName, hasManyParams)
+
 	return {
 		fieldName: meta.fieldName,
-		alias: meta.fieldName,
+		alias,
 		path: meta.path,
 		isArray: true,
 		isRelation: true,
 		nested: nestedSelection,
-		hasManyParams: {
-			filter: props.filter,
-			orderBy: props.orderBy,
-			limit: props.limit,
-			offset: props.offset,
-		},
+		hasManyParams,
 	}
 }
 

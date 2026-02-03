@@ -7,6 +7,7 @@ import {
 	type HasManyOptions,
 } from './types.js'
 import { mergeSelections, SelectionMetaCollector } from './SelectionMetaCollector.js'
+import { generateHasManyAlias } from '../utils/aliasGenerator.js'
 
 /**
  * Creates a fluent selection builder for an entity type.
@@ -65,12 +66,10 @@ function createFieldMethod<TEntity, TSelected extends object, THasManyParams ext
 		// Parse arguments to determine what kind of selection this is
 		const { options, selector, fragment, fragments } = parseFieldArgs(args)
 
-		const alias = (options as { as?: string } | undefined)?.as ?? fieldName
-
 		// Build field metadata
 		const fieldMeta: SelectionFieldMeta = {
 			fieldName,
-			alias,
+			alias: fieldName, // Will be updated below
 			path: [fieldName],
 			isRelation: false,
 			isArray: false,
@@ -136,6 +135,19 @@ function createFieldMethod<TEntity, TSelected extends object, THasManyParams ext
 			}
 		}
 
+		// Determine alias:
+		// 1. Explicit alias from options takes priority
+		// 2. For has-many with params, auto-generate alias
+		// 3. Otherwise, use fieldName
+		const explicitAlias = (options as { as?: string } | undefined)?.as
+		if (explicitAlias) {
+			fieldMeta.alias = explicitAlias
+		} else if (fieldMeta.isArray && fieldMeta.hasManyParams) {
+			// Auto-generate alias for has-many with params
+			fieldMeta.alias = generateHasManyAlias(fieldName, fieldMeta.hasManyParams)
+		}
+		// else alias is already set to fieldName
+
 		// If it's a relation call without options but first arg is callback/fragment
 		// and there's no filter/orderBy, check if it's has-many by detecting array at runtime
 		// This is handled by the type system - if the field type is Array<T>, it will use HasManyMethod
@@ -144,7 +156,7 @@ function createFieldMethod<TEntity, TSelected extends object, THasManyParams ext
 		const newMeta: SelectionMeta = {
 			fields: new Map(currentMeta.fields),
 		}
-		newMeta.fields.set(alias, fieldMeta)
+		newMeta.fields.set(fieldMeta.alias, fieldMeta)
 
 		// Return new builder with accumulated selection
 		return createSelectionBuilder<TEntity, TSelected, THasManyParams>(newMeta)

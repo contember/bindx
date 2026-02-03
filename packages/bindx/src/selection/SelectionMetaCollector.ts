@@ -1,4 +1,5 @@
 import type { SelectionMeta, SelectionFieldMeta } from './types.js'
+import { generateHasManyAlias } from '../utils/aliasGenerator.js'
 
 /**
  * Class for collecting field selection metadata during collection phase
@@ -7,10 +8,38 @@ export class SelectionMetaCollector implements SelectionMeta {
 	readonly fields = new Map<string, SelectionFieldMeta>()
 
 	/**
-	 * Add a field to the selection
+	 * Add a field to the selection.
+	 *
+	 * For has-many fields with parameters (filter, orderBy, limit, offset),
+	 * uses alias as the key to allow multiple instances of the same field
+	 * with different parameters.
 	 */
 	addField(fieldMeta: SelectionFieldMeta): void {
-		const key = fieldMeta.path.join('.')
+		let key: string
+
+		// For has-many fields with parameters, use alias as the key
+		// This allows multiple HasMany for the same field with different params
+		if (fieldMeta.isArray && fieldMeta.hasManyParams) {
+			const hasParams = fieldMeta.hasManyParams.filter !== undefined ||
+				fieldMeta.hasManyParams.orderBy !== undefined ||
+				fieldMeta.hasManyParams.limit !== undefined ||
+				fieldMeta.hasManyParams.offset !== undefined
+
+			if (hasParams) {
+				// Generate auto-alias if alias equals fieldName
+				if (fieldMeta.alias === fieldMeta.fieldName) {
+					fieldMeta.alias = generateHasManyAlias(fieldMeta.fieldName, fieldMeta.hasManyParams)
+				}
+				// Use alias-based key for has-many with params
+				const pathWithAlias = [...fieldMeta.path.slice(0, -1), fieldMeta.alias]
+				key = pathWithAlias.join('.')
+			} else {
+				key = fieldMeta.path.join('.')
+			}
+		} else {
+			key = fieldMeta.path.join('.')
+		}
+
 		const existing = this.fields.get(key)
 
 		if (existing) {

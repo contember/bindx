@@ -506,14 +506,18 @@ export class SnapshotStore {
 
 	/**
 	 * Gets or creates has-many list state.
+	 *
+	 * @param alias - Optional alias for the relation. When multiple HasMany use the same field
+	 *                with different params, each needs a unique alias to store data separately.
 	 */
 	getOrCreateHasMany(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
 		serverIds?: string[],
+		alias?: string,
 	): StoredHasManyState {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 
 		if (!this.hasManyStates.has(key)) {
 			this.hasManyStates.set(key, {
@@ -531,26 +535,32 @@ export class SnapshotStore {
 
 	/**
 	 * Gets has-many list state.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	getHasMany(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
+		alias?: string,
 	): StoredHasManyState | undefined {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		return this.hasManyStates.get(key)
 	}
 
 	/**
 	 * Sets server IDs for a has-many relation.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	setHasManyServerIds(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
 		serverIds: string[],
+		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) {
@@ -576,6 +586,8 @@ export class SnapshotStore {
 
 	/**
 	 * Plans a removal for a has-many item.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	planHasManyRemoval(
 		parentType: string,
@@ -583,8 +595,9 @@ export class SnapshotStore {
 		fieldName: string,
 		itemId: string,
 		type: HasManyRemovalType,
+		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) {
@@ -625,14 +638,17 @@ export class SnapshotStore {
 
 	/**
 	 * Cancels a planned removal for a has-many item.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	cancelHasManyRemoval(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
 		itemId: string,
+		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) return
@@ -650,26 +666,32 @@ export class SnapshotStore {
 
 	/**
 	 * Gets planned removals for a has-many relation.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	getHasManyPlannedRemovals(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
+		alias?: string,
 	): Map<string, HasManyRemovalType> | undefined {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		return this.hasManyStates.get(key)?.plannedRemovals
 	}
 
 	/**
 	 * Plans a connection for a has-many item.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	planHasManyConnection(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
 		itemId: string,
+		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) {
@@ -706,14 +728,17 @@ export class SnapshotStore {
 
 	/**
 	 * Cancels a planned connection for a has-many item.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	cancelHasManyConnection(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
 		itemId: string,
+		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) return
@@ -731,26 +756,32 @@ export class SnapshotStore {
 
 	/**
 	 * Gets planned connections for a has-many relation.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	getHasManyPlannedConnections(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
+		alias?: string,
 	): Set<string> | undefined {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		return this.hasManyStates.get(key)?.plannedConnections
 	}
 
 	/**
 	 * Commits has-many state after successful persist.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	commitHasMany(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
 		newServerIds: string[],
+		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		const existing = this.hasManyStates.get(key)
 
 		this.hasManyStates.set(key, {
@@ -767,13 +798,16 @@ export class SnapshotStore {
 
 	/**
 	 * Resets has-many state to server state (clears planned operations).
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	resetHasMany(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
+		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) return
@@ -793,14 +827,17 @@ export class SnapshotStore {
 	/**
 	 * Adds a newly created entity to a has-many relation.
 	 * Used by HasManyListHandle.add() for inline entity creation.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	addToHasMany(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
 		itemId: string,
+		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) {
@@ -836,14 +873,17 @@ export class SnapshotStore {
 	 * Removes an entity from a has-many relation.
 	 * For newly created entities (via add()), cancels the connection.
 	 * For existing server entities, plans a disconnect.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	removeFromHasMany(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
 		itemId: string,
+		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) return
@@ -887,7 +927,7 @@ export class SnapshotStore {
 			this.hasManyStates.set(key, newState)
 		} else {
 			// Existing server entity - plan disconnect
-			this.planHasManyRemoval(parentType, parentId, fieldName, itemId, 'disconnect')
+			this.planHasManyRemoval(parentType, parentId, fieldName, itemId, 'disconnect', alias)
 			return // planHasManyRemoval already notifies
 		}
 
@@ -907,6 +947,8 @@ export class SnapshotStore {
 
 	/**
 	 * Moves an item within a has-many relation from one index to another.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	moveInHasMany(
 		parentType: string,
@@ -914,8 +956,9 @@ export class SnapshotStore {
 		fieldName: string,
 		fromIndex: number,
 		toIndex: number,
+		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) return
@@ -946,13 +989,16 @@ export class SnapshotStore {
 	/**
 	 * Gets the ordered list of item IDs for a has-many relation.
 	 * Computes the current ordered list based on state.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	getHasManyOrderedIds(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
+		alias?: string,
 	): string[] {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) return []
@@ -990,27 +1036,33 @@ export class SnapshotStore {
 
 	/**
 	 * Checks if an entity in a has-many relation was created via add().
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	isHasManyItemCreated(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
 		itemId: string,
+		alias?: string,
 	): boolean {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		const existing = this.hasManyStates.get(key)
 		return existing?.createdEntities.has(itemId) ?? false
 	}
 
 	/**
 	 * Gets the created entities set for a has-many relation.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	getHasManyCreatedEntities(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
+		alias?: string,
 	): Set<string> | undefined {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		return this.hasManyStates.get(key)?.createdEntities
 	}
 
@@ -1567,14 +1619,17 @@ export class SnapshotStore {
 	/**
 	 * Restores a has-many state from a captured snapshot.
 	 * Used in pessimistic mode after successful server confirmation.
+	 *
+	 * @param alias - Optional alias for the relation.
 	 */
 	restoreHasManyState(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
 		state: StoredHasManyState,
+		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		this.hasManyStates.set(key, {
 			serverIds: new Set(state.serverIds),
 			orderedIds: state.orderedIds ? [...state.orderedIds] : null,

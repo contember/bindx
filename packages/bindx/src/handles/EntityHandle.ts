@@ -287,9 +287,13 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 
 	/**
 	 * Gets a has-many relation handle.
+	 *
+	 * @param alias - Optional alias for the relation. When the same field is used multiple times
+	 *                with different parameters (filter, orderBy, limit), each needs a unique alias.
 	 */
-	hasMany<TItem extends object>(fieldName: string): HasManyListHandle<TItem> {
-		const cacheKey = `hasMany:${fieldName}`
+	hasMany<TItem extends object>(fieldName: string, alias?: string): HasManyListHandle<TItem> {
+		const effectiveAlias = alias ?? fieldName
+		const cacheKey = `hasMany:${effectiveAlias}`
 		const cached = this.relationHandleCache.get(cacheKey)
 
 		if (cached) {
@@ -311,6 +315,8 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			this.store,
 			this.dispatcher,
 			this.schema,
+			this.__brands,
+			effectiveAlias,
 		)
 		this.relationHandleCache.set(cacheKey, handle as RelationHandle)
 
@@ -1005,6 +1011,13 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		return undefined
 	}
 
+	/**
+	 * Alias for this has-many relation.
+	 * When the same field is used multiple times with different params,
+	 * each instance has a unique alias to store data separately.
+	 */
+	private readonly alias: string
+
 	constructor(
 		parentEntityType: string,
 		parentEntityId: string,
@@ -1014,9 +1027,11 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		dispatcher: ActionDispatcher,
 		private readonly schema: SchemaRegistry,
 		brands?: Set<symbol>,
+		alias?: string,
 	) {
 		super(parentEntityType, parentEntityId, store, dispatcher)
 		this.__brands = brands
+		this.alias = alias ?? fieldName
 
 		// Return a Proxy that supports $ aliasing
 		// eslint-disable-next-line no-constructor-return
@@ -1066,6 +1081,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			this.entityId,
 			this.fieldName,
 			serverIds,
+			this.alias,
 		)
 
 		// Use ordered IDs from store (handles removals, connections, and ordering)
@@ -1073,6 +1089,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			this.entityType,
 			this.entityId,
 			this.fieldName,
+			this.alias,
 		)
 
 		return orderedIds.map((id) => this.getItemHandle(id))
@@ -1145,6 +1162,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			this.entityType,
 			this.entityId,
 			this.fieldName,
+			this.alias,
 		)
 
 		if (!state) return false
@@ -1175,6 +1193,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			this.entityId,
 			this.fieldName,
 			itemId,
+			this.alias,
 		)
 	}
 
@@ -1189,6 +1208,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			this.fieldName,
 			itemId,
 			'disconnect',
+			this.alias,
 		)
 	}
 
@@ -1209,6 +1229,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			this.entityId,
 			this.fieldName,
 			tempId,
+			this.alias,
 		)
 
 		return tempId
@@ -1227,6 +1248,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			this.entityId,
 			this.fieldName,
 			itemId,
+			this.alias,
 		)
 	}
 
@@ -1244,6 +1266,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			this.fieldName,
 			fromIndex,
 			toIndex,
+			this.alias,
 		)
 	}
 
@@ -1257,6 +1280,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			this.entityType,
 			this.entityId,
 			this.fieldName,
+			this.alias,
 		)
 	}
 

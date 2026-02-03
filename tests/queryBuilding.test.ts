@@ -108,10 +108,12 @@ describe('Query Building with Fluent API', () => {
 			// 'id' is automatically added for all queries
 			expect(query.fields.length).toBe(2)
 			expect(query.fields[0]?.name).toBe('id')
-			expect(query.fields[1]?.name).toBe('tags')
-			expect(query.fields[1]?.isArray).toBe(true)
-			expect(query.fields[1]?.filter).toEqual({ name: { eq: 'featured' } })
-			expect(query.fields[1]?.limit).toBe(10)
+			// The name is the auto-generated alias (tags_xxx) but sourcePath is still ['tags']
+			const tagsField = query.fields[1]
+			expect(tagsField?.sourcePath).toEqual(['tags'])
+			expect(tagsField?.isArray).toBe(true)
+			expect(tagsField?.filter).toEqual({ name: { eq: 'featured' } })
+			expect(tagsField?.limit).toBe(10)
 		})
 	})
 

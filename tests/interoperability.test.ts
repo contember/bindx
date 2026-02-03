@@ -252,7 +252,8 @@ describe('Selection Resolution', () => {
 			e.tags({ filter: { color: { eq: 'red' } }, limit: 5 }, t => t.name()),
 		)
 
-		const tagsField = fragment.__meta.fields.get('tags')
+		// Find the tags field by fieldName (key is auto-generated alias with params)
+		const tagsField = [...fragment.__meta.fields.values()].find(f => f.fieldName === 'tags')
 		expect(tagsField?.hasManyParams?.filter).toEqual({ color: { eq: 'red' } })
 		expect(tagsField?.hasManyParams?.limit).toBe(5)
 	})
