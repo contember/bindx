@@ -1,4 +1,4 @@
-import { type SnapshotStore, isPersistedId } from '../store/SnapshotStore.js'
+import { type SnapshotStore, isPersistedId, isTempId } from '../store/SnapshotStore.js'
 import type { EntitySnapshot } from '../store/snapshots.js'
 import type { MutationSchemaProvider } from './MutationSchemaProvider.js'
 import type { MutationDataCollector } from './types.js'
@@ -356,10 +356,10 @@ export class MutationCollector implements MutationDataCollector {
 			const obj = value as Record<string, unknown>
 			const id = obj['id'] as string | undefined
 
-			if (id && !id.startsWith('__temp_') && this.isExistingEntity(id)) {
+			if (id && !isTempId(id) && this.isExistingEntity(id)) {
 				// Connect to existing entity
 				return { connect: { id } }
-			} else if (id && id.startsWith('__temp_')) {
+			} else if (id && isTempId(id)) {
 				// Create new entity (temp ID)
 				const createData = { ...obj }
 				delete createData['id']
@@ -471,7 +471,7 @@ export class MutationCollector implements MutationDataCollector {
 			const obj = item as Record<string, unknown>
 			const id = obj['id'] as string | undefined
 
-			if (id && !id.startsWith('__temp_') && this.isExistingEntity(id)) {
+			if (id && !isTempId(id) && this.isExistingEntity(id)) {
 				// Connect to existing entity
 				operations.push({ connect: { id } })
 			} else {
@@ -507,7 +507,7 @@ export class MutationCollector implements MutationDataCollector {
 				result[key] = value.map(item => {
 					if (typeof item === 'object' && item !== null) {
 						const itemObj = item as Record<string, unknown>
-						if (itemObj['id'] && !String(itemObj['id']).startsWith('__temp_')) {
+						if (itemObj['id'] && !isTempId(String(itemObj['id']))) {
 							// Existing item - connect
 							return { connect: { id: itemObj['id'] } }
 						} else {
@@ -521,10 +521,10 @@ export class MutationCollector implements MutationDataCollector {
 				})
 			} else if (typeof value === 'object') {
 				const obj = value as Record<string, unknown>
-				if (obj['id'] && !String(obj['id']).startsWith('__temp_')) {
+				if (obj['id'] && !isTempId(String(obj['id']))) {
 					// Has-one with existing entity - connect
 					result[key] = { connect: { id: obj['id'] } }
-				} else if (obj['id'] && String(obj['id']).startsWith('__temp_')) {
+				} else if (obj['id'] && isTempId(String(obj['id']))) {
 					// Has-one with temp entity - create
 					const createData = { ...obj }
 					delete createData['id']

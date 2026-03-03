@@ -11,6 +11,7 @@ import {
 	hasOne,
 	hasMany,
 	Field,
+	isTempId,
 } from '@contember/bindx-react'
 
 afterEach(() => {
@@ -121,7 +122,7 @@ describe('Entity Create Mode', () => {
 			})
 
 			expect(capturedId).toBeDefined()
-			expect(capturedId!.startsWith('__temp_')).toBe(true)
+			expect(isTempId(capturedId!)).toBe(true)
 		})
 
 		test('Field setValue works in create mode', async () => {
@@ -222,7 +223,7 @@ describe('Entity Create Mode', () => {
 			const tempId = storeRef.createEntity('Author')
 
 			// Verify temp ID format
-			expect(tempId.startsWith('__temp_')).toBe(true)
+			expect(isTempId(tempId)).toBe(true)
 
 			// Verify existsOnServer is false
 			expect(storeRef.existsOnServer('Author', tempId)).toBe(false)

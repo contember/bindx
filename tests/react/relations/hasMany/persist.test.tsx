@@ -2,7 +2,7 @@ import '../../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
 import { render, waitFor, act, cleanup } from '@testing-library/react'
 import React from 'react'
-import { BindxProvider, MockAdapter } from '@contember/bindx-react'
+import { BindxProvider, MockAdapter, isTempId } from '@contember/bindx-react'
 import { getByTestId, queryByTestId, createMockData, useEntity, schema } from './setup'
 
 afterEach(() => {
@@ -57,7 +57,7 @@ describe('HasMany Relations - Persistence', () => {
 		expect(parts.length).toBe(3)
 		expect(parts[0]).toBe('tag-1')
 		expect(parts[1]).toBe('tag-2')
-		expect(parts[2]!.startsWith('__temp_')).toBe(true)
+		expect(isTempId(parts[2]!)).toBe(true)
 		expect(getByTestId(container, 'tag-count').textContent).toBe('3')
 		expect(getByTestId(container, 'is-dirty').textContent).toBe('dirty')
 	})
@@ -103,7 +103,7 @@ describe('HasMany Relations - Persistence', () => {
 		})
 
 		expect(addedId).not.toBeNull()
-		expect(addedId!.startsWith('__temp_')).toBe(true)
+		expect(isTempId(addedId!)).toBe(true)
 	})
 
 	test('add() multiple times - all appear in list', async () => {

@@ -3,6 +3,7 @@ import type { ActionDispatcher } from '../core/ActionDispatcher.js'
 import type { MutationDataCollector } from './types.js'
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
+import { isTempId } from '../store/entityId.js'
 import type { UndoManager } from '../undo/UndoManager.js'
 import { ChangeRegistry, type DirtyEntity } from './ChangeRegistry.js'
 import type {
@@ -507,7 +508,7 @@ export class BatchPersister {
 		const createData: Record<string, unknown> = {}
 
 		for (const [key, value] of Object.entries(data)) {
-			if (key === 'id' && typeof value === 'string' && value.startsWith('__temp_')) {
+			if (key === 'id' && typeof value === 'string' && isTempId(value)) {
 				continue
 			}
 			if (value !== null && value !== undefined) {

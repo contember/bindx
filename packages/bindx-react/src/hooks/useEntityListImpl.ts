@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react'
 import type { SchemaRegistry, EntityAccessor } from '@contember/bindx'
-import { EntityHandle } from '@contember/bindx'
+import { EntityHandle, isTempId } from '@contember/bindx'
 import { useBindxContext } from './BackendAdapterContext.js'
 import { useStoreSubscription } from './useStoreSubscription.js'
 import { setEntityData, setLoadState } from '@contember/bindx'
@@ -197,7 +197,7 @@ export function useEntityListImpl<TResult extends object>(
 	const removeItem = useCallback(
 		(key: string): void => {
 			// Check if this is a newly created entity (temp ID, not on server)
-			const isNewEntity = key.startsWith('__temp_') && !store.existsOnServer(entityType, key)
+			const isNewEntity = isTempId(key) && !store.existsOnServer(entityType, key)
 
 			if (isNewEntity) {
 				// For newly created entities, remove from store entirely
