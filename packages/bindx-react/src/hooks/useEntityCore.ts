@@ -79,8 +79,12 @@ export function useEntityCore(options: UseEntityCoreOptions): EntityCoreResult {
 		return typeof firstValue === 'string' ? firstValue : String(firstValue)
 	}, [by])
 
-	// Stable key for the 'by' clause
+	// Stable key for the 'by' clause (used for dedup and effect deps)
 	const byKey = useMemo(() => JSON.stringify(by), [by])
+
+	// Ref to hold the current 'by' value, avoiding JSON.parse roundtrip in async callbacks
+	const byRef = useRef(by)
+	byRef.current = by
 
 	// Create stable query key from selection if not provided
 	const effectiveQueryKey = useMemo(() => {
@@ -148,8 +152,7 @@ export function useEntityCore(options: UseEntityCoreOptions): EntityCoreResult {
 		const fetchData = async () => {
 			try {
 				const spec = buildQueryFromSelection(selectionMeta)
-				// Parse byKey to get the by object (avoids stale closure issues)
-				const currentBy = JSON.parse(byKey) as Record<string, unknown>
+				const currentBy = byRef.current
 				const result = await batcher.enqueue(
 					{ type: 'get', entityType, by: currentBy, spec },
 					{ signal: abortController.signal },

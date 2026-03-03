@@ -16,7 +16,7 @@
 - [x] 009 - `inputProps` creates new object on every access
 - [x] 010 - Constructor anti-pattern with Proxy
 - [x] 011 - Static schema cache in SchemaLoader
-- [ ] 012 - `JSON.parse(byKey)` roundtrip hack
+- [x] 012 - `JSON.parse(byKey)` roundtrip hack
 
 ## Code Quality
 
