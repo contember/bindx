@@ -69,9 +69,17 @@ export interface ContemberSchemaLike {
 	getEntity(name: string): { fields: Map<string, { __typename: string; name: string; targetEntity?: string; type?: string }> } | undefined
 }
 
+function isSchemaDefinition(input: object): input is SchemaDefinition<Record<string, object>> {
+	return 'entities' in input && typeof input.entities === 'object'
+}
+
 function resolveSchemaRegistry(input: SchemaInput): SchemaRegistry {
 	if (input instanceof SchemaRegistry) {
 		return input
+	}
+
+	if (input instanceof ContemberSchema) {
+		return SchemaRegistry.fromContemberSchema(input)
 	}
 
 	if (typeof input !== 'object' || input === null) {
@@ -82,8 +90,8 @@ function resolveSchemaRegistry(input: SchemaInput): SchemaRegistry {
 		return SchemaRegistry.fromContemberSchema(input as ContemberSchema)
 	}
 
-	if ('entities' in input && typeof input.entities === 'object') {
-		return new SchemaRegistry(input as SchemaDefinition<Record<string, object>>)
+	if (isSchemaDefinition(input)) {
+		return new SchemaRegistry(input)
 	}
 
 	throw new Error('Invalid schema input: expected SchemaDefinition, ContemberSchema, or SchemaRegistry')
@@ -319,7 +327,7 @@ export function createBindx<TModels extends { [K in keyof TModels]: object }>(
 			entityType,
 			options,
 			selectionMeta,
-			schemaRegistry as SchemaRegistry<Record<string, object>>,
+			schemaRegistry,
 		)
 	}
 
@@ -337,21 +345,18 @@ export function createBindx<TModels extends { [K in keyof TModels]: object }>(
 			entityType,
 			options,
 			selectionMeta,
-			schemaRegistry as SchemaRegistry<Record<string, object>>,
+			schemaRegistry,
 		)
 	}
 
-	// Create typed Entity component interface
-	type TypedEntityComponent = <K extends keyof TModels & string>(
-		props: EntityProps<TModels, K>
-	) => ReactElement | null
-	const TypedEntity = Entity as TypedEntityComponent
+	// Typed wrapper components that restrict entity names to TModels keys
+	function TypedEntity<K extends keyof TModels & string>(props: EntityProps<TModels, K>): ReactElement | null {
+		return <Entity {...props} />
+	}
 
-	// Create typed EntityList component interface
-	type TypedEntityListComponent = <K extends keyof TModels & string>(
-		props: EntityListProps<TModels, K>
-	) => ReactElement | null
-	const TypedEntityList = EntityList as TypedEntityListComponent
+	function TypedEntityList<K extends keyof TModels & string>(props: EntityListProps<TModels, K>): ReactElement | null {
+		return <EntityList {...props} />
+	}
 
 	/**
 	 * Creates a component builder for defining bindx components.
@@ -365,12 +370,14 @@ export function createBindx<TModels extends { [K in keyof TModels]: object }>(
 	function createComponent(options?: CreateComponentOptions<readonly string[]>): ComponentBuilder<TModels, ComponentBuilderState<TModels>> {
 		const roles = options?.roles ?? []
 		return createComponentBuilder<TModels>(
-			schemaRegistry as SchemaRegistry<Record<string, object>>,
+			schemaRegistry,
 			roles,
-		) as ComponentBuilder<TModels, ComponentBuilderState<TModels>>
+		)
 	}
 
-	// HasRole with typed props for this schema
+	// HasRole cast is needed: HasRoleComponentProps uses `any`-typed EntityAccessor in children
+	// while HasRoleComponent narrows the type. The cast safely restricts the generic component
+	// to this schema's role types at the factory boundary.
 	const TypedHasRole = HasRoleBase as HasRoleComponent<SingleRoleSchemas>
 
 	return {
@@ -443,7 +450,7 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 			entityType,
 			options,
 			selectionMeta,
-			schemaRegistry as SchemaRegistry<Record<string, object>>,
+			schemaRegistry,
 		)
 	}
 
@@ -467,7 +474,7 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 			entityType,
 			restOptions,
 			selectionMeta,
-			schemaRegistry as SchemaRegistry<Record<string, object>>,
+			schemaRegistry,
 		)
 	}
 
@@ -492,26 +499,31 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 		// eslint-disable-next-line @typescript-eslint/ban-types
 		ComponentBuilderState<IntersectRoleSchemas<TRoleSchemas, TRoles>, {}, object, TRoles>
 	>
-	function createComponent(options?: { roles?: readonly string[] }): any {
+	// Implementation overload uses `unknown` return type because TypeScript cannot prove
+	// ComponentBuilder<IntersectRoleSchemas<...>> is assignable to a concrete type
+	// across all generic instantiations. Callers only see the typed overload signatures.
+	function createComponent(options?: { roles?: readonly string[] }): unknown {
 		const roles = options?.roles ?? []
 		return createComponentBuilder<Record<string, object>>(
-			schemaRegistry as SchemaRegistry<Record<string, object>>,
+			schemaRegistry,
 			roles,
 		)
 	}
 
-	// HasRole with typed props for this schema
+	// HasRole cast is needed: HasRoleComponentProps uses `any`-typed EntityAccessor in children
+	// while HasRoleComponent narrows the type. The cast safely restricts the generic component
+	// to this schema's role types at the factory boundary.
 	const TypedHasRole = HasRoleBase as HasRoleComponent<TRoleSchemas>
 
 	return {
 		schemaRegistry,
-		useEntity: useEntity as RoleAwareUseEntity<TRoleSchemas>,
-		useEntityList: useEntityList as RoleAwareUseEntityList<TRoleSchemas>,
+		useEntity,
+		useEntityList,
 		Entity: TypedEntity,
 		EntityList: TypedEntityList,
-		createComponent: createComponent as RoleAwareCreateComponent<TRoleSchemas>,
+		createComponent,
 		HasRole: TypedHasRole,
 		RoleAwareProvider: HasRoleProvider,
 		useRoleContext,
-	}
+	} satisfies UnifiedBindx<TRoleSchemas>
 }

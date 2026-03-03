@@ -22,7 +22,7 @@
 
 - [x] 013 - Large files exceeding 300-line guideline (SnapshotStore.ts split done, SnapshotStore.ts EntityMetaStore/TouchedStore/entityId split done, SnapshotStore.ts DirtyTracker split done, SnapshotStore.ts EntitySnapshotStore split done, EntityHandle.ts HasManyListHandle/HasOneHandle/PlaceholderHandle split done, proxy.ts split done, componentBuilder.ts split done; remaining files are facades/cohesive classes where further splitting would be over-engineering)
 - [x] 014 - `any` types in componentBuilder
-- [ ] 015 - `as` type casts in createBindx
+- [x] 015 - `as` type casts in createBindx
 - [ ] 016 - `as any` casts in ContemberAdapter
 - [ ] 017 - Hardcoded `__temp_` checks instead of `isTempId()`
 - [ ] 018 - Incomplete packages with TODOs
