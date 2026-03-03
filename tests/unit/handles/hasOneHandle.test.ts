@@ -62,7 +62,7 @@ describe('HasOneHandle', () => {
 	})
 
 	function createHasOneHandle(): HasOneHandle<TestAuthor> {
-		return new HasOneHandle<TestAuthor>(
+		return HasOneHandle.create<TestAuthor>(
 			'Article',
 			'a-1',
 			'author',

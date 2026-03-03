@@ -229,7 +229,7 @@ export function useEntityImpl<TEntity extends object, TSelected extends object>(
 
 	// Create stable handle (memoized on derivedId/type)
 	const handle = useMemo(
-		() => new EntityHandle<TEntity, TSelected>(derivedId, entityType, store, dispatcher, schema),
+		() => EntityHandle.create<TEntity, TSelected>(derivedId, entityType, store, dispatcher, schema),
 		[derivedId, entityType, store, dispatcher, schema],
 	)
 

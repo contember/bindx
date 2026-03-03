@@ -78,7 +78,7 @@ describe('EntityHandle', () => {
 	})
 
 	function createEntityHandle(id: string = 'a-1'): EntityHandle<TestArticle> {
-		return new EntityHandle<TestArticle>(id, 'Article', store, dispatcher, schema)
+		return EntityHandle.create<TestArticle>(id, 'Article', store, dispatcher, schema)
 	}
 
 	// ==================== Identity ====================
@@ -210,7 +210,7 @@ describe('EntityHandle', () => {
 	describe('New Entity', () => {
 		test('should detect new entity', () => {
 			const tempId = store.createEntity('Article', { title: 'New' })
-			const handle = new EntityHandle<TestArticle>(tempId, 'Article', store, dispatcher, schema)
+			const handle = EntityHandle.create<TestArticle>(tempId, 'Article', store, dispatcher, schema)
 
 			expect(handle.$isNew).toBe(true)
 		})
@@ -226,7 +226,7 @@ describe('EntityHandle', () => {
 			const tempId = store.createEntity('Article', { title: 'New' })
 			store.mapTempIdToPersistedId('Article', tempId, 'real-id-123')
 
-			const handle = new EntityHandle<TestArticle>(tempId, 'Article', store, dispatcher, schema)
+			const handle = EntityHandle.create<TestArticle>(tempId, 'Article', store, dispatcher, schema)
 
 			expect(handle.$persistedId).toBe('real-id-123')
 		})

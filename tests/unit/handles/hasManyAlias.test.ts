@@ -65,7 +65,7 @@ describe('HasMany with Alias Support', () => {
 	})
 
 	function createHasManyHandle(alias?: string): HasManyListHandle<TestTag> {
-		return new HasManyListHandle<TestTag>(
+		return HasManyListHandle.create<TestTag>(
 			'Article',
 			'a-1',
 			'tags',

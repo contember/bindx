@@ -253,8 +253,7 @@ export function useEntityListImpl<TResult extends object>(
 		} else {
 			// Build item handles
 			const items = state.items.map((item) => {
-				// EntityHandle constructor returns a Proxy that implements EntityAccessor
-				return new EntityHandle<TResult>(
+				return EntityHandle.create<TResult>(
 					item.id,
 					entityType,
 					store,

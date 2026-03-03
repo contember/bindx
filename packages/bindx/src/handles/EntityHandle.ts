@@ -87,7 +87,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	declare $onPersisted: (listener: EventListener<EntityPersistedEvent>) => Unsubscribe
 	declare $interceptPersisting: (interceptor: Interceptor<EntityPersistingEvent>) => Unsubscribe
 
-	constructor(
+	private constructor(
 		id: string,
 		entityType: string,
 		store: SnapshotStore,
@@ -97,13 +97,20 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	) {
 		super(entityType, id, store, dispatcher)
 		this.__brands = brands
+	}
 
-		// Return a Proxy that supports direct field access
-		// eslint-disable-next-line no-constructor-return
-		return createHandleProxy(this, {
+	static create<T extends object = object, TSelected = T>(
+		id: string,
+		entityType: string,
+		store: SnapshotStore,
+		dispatcher: ActionDispatcher,
+		schema: SchemaRegistry,
+		brands?: Set<symbol>,
+	): EntityHandle<T, TSelected> {
+		return createHandleProxy(new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands), {
 			knownProperties: ENTITY_HANDLE_PROPERTIES,
 			getFields: (target) => target.fields,
-		}) as EntityHandle<T, TSelected>
+		})
 	}
 
 	/**
@@ -244,7 +251,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			return cached as FieldHandle<T[K]>
 		}
 
-		const handle = new FieldHandle<T[K]>(
+		const handle = FieldHandle.create<T[K]>(
 			this.entityType,
 			this.entityId,
 			[cacheKey],
@@ -274,7 +281,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			)
 		}
 
-		const handle = new HasOneHandle<TRelated>(
+		const handle = HasOneHandle.create<TRelated>(
 			this.entityType,
 			this.entityId,
 			fieldName,
@@ -310,7 +317,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			)
 		}
 
-		const handle = new HasManyListHandle<TItem>(
+		const handle = HasManyListHandle.create<TItem>(
 			this.entityType,
 			this.entityId,
 			fieldName,
@@ -565,7 +572,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	declare $interceptConnect: (interceptor: Interceptor<RelationConnectingEvent>) => Unsubscribe
 	declare $interceptDisconnect: (interceptor: Interceptor<RelationDisconnectingEvent>) => Unsubscribe
 
-	constructor(
+	private constructor(
 		parentEntityType: string,
 		parentEntityId: string,
 		private readonly fieldName: string,
@@ -577,13 +584,22 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	) {
 		super(parentEntityType, parentEntityId, store, dispatcher)
 		this.__brands = brands
+	}
 
-		// Return a Proxy that supports direct field access
-		// eslint-disable-next-line no-constructor-return
-		return createHandleProxy(this, {
+	static create<TEntity extends object = object, TSelected = TEntity>(
+		parentEntityType: string,
+		parentEntityId: string,
+		fieldName: string,
+		targetType: string,
+		store: SnapshotStore,
+		dispatcher: ActionDispatcher,
+		schema: SchemaRegistry,
+		brands?: Set<symbol>,
+	): HasOneHandle<TEntity, TSelected> {
+		return createHandleProxy(new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands), {
 			knownProperties: HAS_ONE_HANDLE_PROPERTIES,
 			getFields: (target) => target.entity.$fields,
-		}) as HasOneHandle<TEntity, TSelected>
+		})
 	}
 
 	/**
@@ -692,7 +708,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 
 			// Connected - return real entity handle
 			if (!this.entityHandleCache || this.entityHandleCache.id !== id) {
-				this.entityHandleCache = new EntityHandle<TEntity, TSelected>(
+				this.entityHandleCache = EntityHandle.create<TEntity, TSelected>(
 					id,
 					this.targetType,
 					this.store,
@@ -707,7 +723,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 
 		// Disconnected - return placeholder handle
 		if (!this.placeholderCache) {
-			this.placeholderCache = new PlaceholderHandle<TEntity, TSelected>(
+			this.placeholderCache = PlaceholderHandle.create<TEntity, TSelected>(
 				this.entityType,
 				this.entityId,
 				this.fieldName,
@@ -1017,7 +1033,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 */
 	private readonly alias: string
 
-	constructor(
+	private constructor(
 		parentEntityType: string,
 		parentEntityId: string,
 		private readonly fieldName: string,
@@ -1031,10 +1047,20 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		super(parentEntityType, parentEntityId, store, dispatcher)
 		this.__brands = brands
 		this.alias = alias ?? fieldName
+	}
 
-		// Return a Proxy that supports $ aliasing
-		// eslint-disable-next-line no-constructor-return
-		return createAliasProxy(this) as HasManyListHandle<TEntity, TSelected>
+	static create<TEntity extends object = object, TSelected = TEntity>(
+		parentEntityType: string,
+		parentEntityId: string,
+		fieldName: string,
+		itemType: string,
+		store: SnapshotStore,
+		dispatcher: ActionDispatcher,
+		schema: SchemaRegistry,
+		brands?: Set<symbol>,
+		alias?: string,
+	): HasManyListHandle<TEntity, TSelected> {
+		return createAliasProxy(new HasManyListHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias))
 	}
 
 	/**
@@ -1138,7 +1164,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		let handle = this.itemHandleCache.get(itemId)
 
 		if (!handle) {
-			handle = new EntityHandle<TEntity, TSelected>(
+			handle = EntityHandle.create<TEntity, TSelected>(
 				itemId,
 				this.itemType,
 				this.store,
@@ -1435,7 +1461,7 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	declare $onPersisted: (listener: EventListener<EntityPersistedEvent>) => Unsubscribe
 	declare $interceptPersisting: (interceptor: Interceptor<EntityPersistingEvent>) => Unsubscribe
 
-	constructor(
+	private constructor(
 		private readonly parentEntityType: string,
 		private readonly parentEntityId: string,
 		private readonly fieldName: string,
@@ -1446,10 +1472,18 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	) {
 		this.__brands = brands
 		this.placeholderId = generatePlaceholderId()
+	}
 
-		// Return a Proxy that supports $ aliasing
-		// eslint-disable-next-line no-constructor-return
-		return createAliasProxy(this) as PlaceholderHandle<TEntity, TSelected>
+	static create<TEntity extends object = object, TSelected = TEntity>(
+		parentEntityType: string,
+		parentEntityId: string,
+		fieldName: string,
+		targetType: string,
+		store: SnapshotStore,
+		dispatcher: ActionDispatcher,
+		brands?: Set<symbol>,
+	): PlaceholderHandle<TEntity, TSelected> {
+		return createAliasProxy(new PlaceholderHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, brands))
 	}
 
 	/**

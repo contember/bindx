@@ -29,7 +29,7 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle implements Fie
 
 	private readonly _boundSetValue = (value: T | null): void => this.setValue(value)
 
-	constructor(
+	private constructor(
 		entityType: string,
 		entityId: string,
 		private readonly fieldPath: string[],
@@ -37,10 +37,16 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle implements Fie
 		dispatcher: ActionDispatcher,
 	) {
 		super(entityType, entityId, store, dispatcher)
+	}
 
-		// Return a Proxy that supports $ aliasing
-		// eslint-disable-next-line no-constructor-return
-		return createAliasProxy(this) as FieldHandle<T>
+	static create<T = unknown>(
+		entityType: string,
+		entityId: string,
+		fieldPath: string[],
+		store: SnapshotStore,
+		dispatcher: ActionDispatcher,
+	): FieldHandle<T> {
+		return createAliasProxy(new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher))
 	}
 
 	/**
@@ -193,7 +199,7 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle implements Fie
 	nested<K extends keyof NonNullable<T>>(
 		key: K,
 	): FieldHandle<NonNullable<T>[K]> {
-		return new FieldHandle<NonNullable<T>[K]>(
+		return FieldHandle.create<NonNullable<T>[K]>(
 			this.entityType,
 			this.entityId,
 			[...this.fieldPath, key as string],

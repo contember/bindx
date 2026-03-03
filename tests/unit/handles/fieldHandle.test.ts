@@ -15,7 +15,7 @@ describe('FieldHandle', () => {
 	})
 
 	function createFieldHandle<T>(fieldPath: string[]): FieldHandle<T> {
-		return new FieldHandle<T>('Article', 'a-1', fieldPath, store, dispatcher)
+		return FieldHandle.create<T>('Article', 'a-1', fieldPath, store, dispatcher)
 	}
 
 	// ==================== Value Access ====================
