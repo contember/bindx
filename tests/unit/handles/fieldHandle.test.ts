@@ -312,7 +312,7 @@ describe('FieldHandle', () => {
 			expect(listener).not.toHaveBeenCalled()
 		})
 
-		test('should intercept field changes via onChanging', async () => {
+		test('should intercept field changes via onChanging with dispatchAsync', async () => {
 			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Original' }, true)
 			const handle = createFieldHandle<string>(['title'])
 
@@ -327,6 +327,31 @@ describe('FieldHandle', () => {
 			})
 
 			expect(handle.value).toBe('Original')
+		})
+
+		test('should intercept field changes via onChanging with sync setValue', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Original' }, true)
+			const handle = createFieldHandle<string>(['title'])
+
+			handle.onChanging(() => ({ action: 'cancel' as const }))
+
+			handle.setValue('Updated')
+
+			expect(handle.value).toBe('Original')
+		})
+
+		test('should modify field value via onChanging with sync setValue', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Original' }, true)
+			const handle = createFieldHandle<string>(['title'])
+
+			handle.onChanging((event) => ({
+				action: 'modify' as const,
+				event: { ...event, newValue: 'Interceptor Value' },
+			}))
+
+			handle.setValue('Updated')
+
+			expect(handle.value).toBe('Interceptor Value')
 		})
 	})
 })

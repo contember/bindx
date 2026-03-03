@@ -274,6 +274,69 @@ describe('ActionDispatcher', () => {
 		})
 	})
 
+	// ==================== Sync Dispatch with Interceptors ====================
+
+	describe('Sync Dispatch with Interceptors', () => {
+		test('should cancel action when sync interceptor cancels', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Original' }, true)
+
+			eventEmitter.intercept('field:changing', () => ({ action: 'cancel' as const }))
+
+			dispatcher.dispatch(setField('Article', 'a-1', ['title'], 'Updated'))
+
+			expect(store.getEntitySnapshot('Article', 'a-1')?.data).toHaveProperty('title', 'Original')
+		})
+
+		test('should apply modified value from sync interceptor', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Original' }, true)
+
+			eventEmitter.intercept('field:changing', (event) => ({
+				action: 'modify' as const,
+				event: { ...event, newValue: 'Interceptor Modified' },
+			}))
+
+			dispatcher.dispatch(setField('Article', 'a-1', ['title'], 'Updated'))
+
+			expect(store.getEntitySnapshot('Article', 'a-1')?.data).toHaveProperty('title', 'Interceptor Modified')
+		})
+
+		test('should not emit after event when sync interceptor cancels', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Original' }, true)
+
+			eventEmitter.intercept('field:changing', () => ({ action: 'cancel' as const }))
+
+			const listener = mock(() => {})
+			eventEmitter.on('field:changed', listener)
+
+			dispatcher.dispatch(setField('Article', 'a-1', ['title'], 'Updated'))
+
+			expect(listener).not.toHaveBeenCalled()
+		})
+
+		test('should cancel CONNECT_RELATION when sync interceptor cancels', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
+
+			eventEmitter.intercept('relation:connecting', () => ({ action: 'cancel' as const }))
+
+			dispatcher.dispatch(connectRelation('Article', 'a-1', 'author', 'auth-1'))
+
+			const relation = store.getRelation('Article', 'a-1', 'author')
+			expect(relation).toBeUndefined()
+		})
+
+		test('should skip async interceptors with sync dispatch', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Original' }, true)
+
+			// Register an async interceptor that would cancel
+			eventEmitter.intercept('field:changing', async () => ({ action: 'cancel' as const }))
+
+			// Sync dispatch should skip the async interceptor and proceed
+			dispatcher.dispatch(setField('Article', 'a-1', ['title'], 'Updated'))
+
+			expect(store.getEntitySnapshot('Article', 'a-1')?.data).toHaveProperty('title', 'Updated')
+		})
+	})
+
 	// ==================== Middleware ====================
 
 	describe('Middleware', () => {

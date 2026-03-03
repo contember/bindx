@@ -278,6 +278,55 @@ export class EventEmitter {
 	}
 
 	/**
+	 * Runs interceptors for a before event synchronously.
+	 * Returns the (possibly modified) event or null if cancelled.
+	 * If an interceptor returns a Promise, logs a warning and skips it.
+	 */
+	runInterceptorsSync<T extends BeforeEvent>(event: T): T | null {
+		let currentEvent: T = event
+
+		// Get field name if this is a field-scoped event
+		const fieldName = this.getFieldNameFromEvent(event)
+
+		// Run scoped interceptors first (more specific takes precedence)
+		// Field-level interceptors
+		if (fieldName) {
+			const fieldKey = this.buildScopeKey(event.type, {
+				entityType: event.entityType,
+				entityId: event.entityId,
+				fieldName,
+			})
+			const result = this.runInterceptorSetSync(
+				this.scopedInterceptors.get(fieldKey),
+				currentEvent,
+			)
+			if (result === null) return null
+			currentEvent = result as T
+		}
+
+		// Entity-level interceptors
+		const entityKey = this.buildScopeKey(event.type, {
+			entityType: event.entityType,
+			entityId: event.entityId,
+		})
+		const entityResult = this.runInterceptorSetSync(
+			this.scopedInterceptors.get(entityKey),
+			currentEvent,
+		)
+		if (entityResult === null) return null
+		currentEvent = entityResult as T
+
+		// Global interceptors
+		const globalResult = this.runInterceptorSetSync(
+			this.globalInterceptors.get(event.type),
+			currentEvent,
+		)
+		if (globalResult === null) return null
+
+		return globalResult as T
+	}
+
+	/**
 	 * Runs all interceptors in a set.
 	 * Returns the (possibly modified) event or null if cancelled.
 	 */
@@ -291,6 +340,55 @@ export class EventEmitter {
 		for (const interceptor of interceptors) {
 			try {
 				const result = await interceptor(currentEvent)
+
+				// No explicit return or undefined means continue
+				if (result === undefined || result === null) {
+					continue
+				}
+
+				const typedResult = result as InterceptorResult<T>
+
+				if (typedResult.action === 'cancel') {
+					return null
+				}
+
+				if (typedResult.action === 'modify' && 'event' in typedResult) {
+					currentEvent = typedResult.event
+				}
+				// 'continue' - just proceed with current event
+			} catch (error) {
+				console.error('[Bindx EventEmitter] Interceptor error:', error)
+				// On error, cancel the action for safety
+				return null
+			}
+		}
+
+		return currentEvent
+	}
+
+	/**
+	 * Runs all interceptors in a set synchronously.
+	 * If an interceptor returns a Promise, logs a warning and skips it.
+	 */
+	private runInterceptorSetSync<T extends BeforeEvent>(
+		interceptors: Set<Interceptor<T>> | undefined,
+		event: T,
+	): T | null {
+		if (!interceptors || interceptors.size === 0) return event
+
+		let currentEvent = event
+		for (const interceptor of interceptors) {
+			try {
+				const result = interceptor(currentEvent)
+
+				// If the interceptor returned a Promise, skip it with a warning
+				if (result !== null && result !== undefined && typeof result === 'object' && 'then' in result) {
+					console.warn(
+						'[Bindx EventEmitter] Async interceptor used with synchronous dispatch. ' +
+						'Use dispatchAsync() for async interceptors.',
+					)
+					continue
+				}
 
 				// No explicit return or undefined means continue
 				if (result === undefined || result === null) {

@@ -7,6 +7,9 @@ import type { EntitySnapshot } from '../store/snapshots.js'
 import {
 	resetEntity,
 	commitEntity,
+	connectRelation,
+	disconnectRelation,
+	deleteRelation,
 	addEntityError,
 	clearEntityErrors,
 	clearAllErrors as clearAllErrorsAction,
@@ -778,11 +781,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 */
 	connect(targetId: string): void {
 		this.assertNotDisposed()
-		this.store.setRelation(this.entityType, this.entityId, this.fieldName, {
-			currentId: targetId,
-			state: 'connected',
-			placeholderData: {},
-		})
+		this.dispatcher.dispatch(
+			connectRelation(this.entityType, this.entityId, this.fieldName, targetId),
+		)
 	}
 
 	/**
@@ -790,11 +791,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 */
 	disconnect(): void {
 		this.assertNotDisposed()
-		this.store.setRelation(this.entityType, this.entityId, this.fieldName, {
-			currentId: null,
-			state: 'disconnected',
-			placeholderData: {},
-		})
+		this.dispatcher.dispatch(
+			disconnectRelation(this.entityType, this.entityId, this.fieldName),
+		)
 	}
 
 	/**
@@ -802,9 +801,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 */
 	delete(): void {
 		this.assertNotDisposed()
-		this.store.setRelation(this.entityType, this.entityId, this.fieldName, {
-			state: 'deleted',
-		})
+		this.dispatcher.dispatch(
+			deleteRelation(this.entityType, this.entityId, this.fieldName),
+		)
 	}
 
 	/**

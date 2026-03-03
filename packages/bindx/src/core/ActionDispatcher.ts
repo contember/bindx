@@ -38,8 +38,8 @@ export class ActionDispatcher {
 
 	/**
 	 * Dispatches an action to update the store.
-	 * This is the synchronous version that emits after events but does NOT run interceptors.
-	 * Use dispatchAsync() if you need interceptor support.
+	 * Runs synchronous interceptors (before-events) and emits after-events.
+	 * Async interceptors are skipped with a warning — use dispatchAsync() for those.
 	 */
 	dispatch(action: Action): void {
 		// Run through middlewares first
@@ -48,6 +48,20 @@ export class ActionDispatcher {
 			if (result === false) {
 				// Middleware can cancel the action
 				return
+			}
+		}
+
+		// Create and run before event through interceptors (synchronously)
+		const beforeEvent = createBeforeEvent(action, this.store)
+		if (beforeEvent) {
+			const result = this.eventEmitter.runInterceptorsSync(beforeEvent)
+			if (result === null) {
+				// Interceptor cancelled the action
+				return
+			}
+			// If event was modified, update action accordingly
+			if (result !== beforeEvent) {
+				action = this.updateActionFromEvent(action, result)
 			}
 		}
 
