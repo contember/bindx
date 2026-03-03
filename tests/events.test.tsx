@@ -672,7 +672,7 @@ describe('Event React Hooks', () => {
 	// Note: Field interceptor hooks (useInterceptField, useIntercept) work with
 	// async dispatch only. The FieldHandle.setValue() uses synchronous dispatch
 	// which emits after events but doesn't run interceptors. Interceptors work
-	// with entity lifecycle events (like entity:persisting in PersistenceManager)
+	// with entity lifecycle events (like entity:persisting in BatchPersister)
 	// which use dispatchAsync(). See EventEmitter unit tests for interceptor testing.
 
 	describe('cleanup on unmount', () => {

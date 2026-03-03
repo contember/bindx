@@ -17,7 +17,4 @@ export {
 } from './SelectionResolver.js'
 
 // Persistence
-export {
-	type MutationDataCollector,
-	type PersistenceManagerOptions,
-} from './PersistenceManager.js'
+export type { MutationDataCollector } from '../persistence/types.js'
