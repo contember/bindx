@@ -21,7 +21,7 @@ export const ENTITY_HANDLE_PROPERTIES = new Set<string | symbol>([
 	// Special case: id is always the entity ID, not a field handle
 	'id',
 	// Type brands (phantom types)
-	'__entityType', '__entityName', '__availableRoles', '__brands',
+	'__entityType', '__entityName', '__brands',
 	// Internal implementation details
 	'type', 'entityType', 'entityId', 'store', 'dispatcher', 'schema',
 	'fieldHandleCache', 'relationHandleCache', 'getEntityData', 'getServerData',
@@ -40,7 +40,7 @@ export const ENTITY_HANDLE_PROPERTIES = new Set<string | symbol>([
  */
 export const HAS_ONE_HANDLE_PROPERTIES = new Set<string | symbol>([
 	// Type brands (phantom types)
-	'__entityType', '__entityName', '__availableRoles', '__brands', '__schema',
+	'__entityType', '__entityName', '__brands', '__schema',
 	// Symbol
 	FIELD_REF_META,
 	// Internal implementation details
@@ -93,7 +93,7 @@ export const PLACEHOLDER_HANDLE_PROPERTIES = new Set<string | symbol>([
 	// Core properties
 	'id', 'data', 'isDirty', 'persistedId', 'isNew', 'fields', 'errors', 'hasError',
 	// Type brands
-	'__entityType', '__entityName', '__availableRoles', '__brands',
+	'__entityType', '__entityName', '__brands',
 	// Methods
 	'addError', 'clearErrors', 'clearAllErrors',
 	'on', 'intercept', 'onPersisted', 'interceptPersisting',

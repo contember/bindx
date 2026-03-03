@@ -407,21 +407,12 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	}
 
 	/**
-	 * Entity name for role-based type inference.
+	 * Entity name for type inference.
 	 * Carries the entity type name (e.g., 'Article', 'Author').
 	 * Implements EntityRef.__entityName.
 	 */
 	get __entityName(): string {
 		return this.entityType
-	}
-
-	/**
-	 * Available roles for HasRole constraint.
-	 * Default implementation returns empty array (no role constraints).
-	 * Role-aware code should create EntityRef with specific roles.
-	 */
-	get __availableRoles(): readonly string[] {
-		return []
 	}
 
 	/**

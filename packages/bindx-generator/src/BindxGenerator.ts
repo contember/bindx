@@ -1,27 +1,16 @@
 /**
  * Main bindx schema generator
- * 
- * Generates TypeScript schema files from Contember Model.Schema and Acl.Schema.
- * Supports both single-role and multi-role generation with ACL-based field filtering.
+ *
+ * Generates TypeScript schema files from Contember Model.Schema.
  */
 
-import { Acl, Model } from '@contember/schema'
-import { acceptEveryFieldVisitor } from '@contember/schema-utils'
+import { Model } from '@contember/schema'
 import { EntityTypeSchemaGenerator } from './EntityTypeSchemaGenerator'
 import { EnumTypeSchemaGenerator } from './EnumTypeSchemaGenerator'
 import { NameSchemaGenerator } from './NameSchemaGenerator'
-import { RoleSchemaGenerator, RoleSchemaGeneratorOptions } from './RoleSchemaGenerator'
-import { RoleNameSchemaGenerator } from './RoleNameSchemaGenerator'
-import { capitalizeFirstLetter } from './utils'
 
-export interface BindxGeneratorOptions extends RoleSchemaGeneratorOptions {
-	/**
-	 * Whether to generate role-based schemas.
-	 * When true, generates separate schema types for each role in acl.
-	 * When false, generates a single schema with all entities and fields.
-	 * Default: true if acl is provided, false otherwise
-	 */
-	roleAware?: boolean
+export interface BindxGeneratorOptions {
+	// Reserved for future options
 }
 
 export interface GeneratedFiles {
@@ -36,19 +25,15 @@ export class BindxGenerator {
 	private readonly entityTypeSchemaGenerator: EntityTypeSchemaGenerator
 	private readonly enumTypeSchemaGenerator: EnumTypeSchemaGenerator
 	private readonly nameSchemaGenerator: NameSchemaGenerator
-	private readonly roleSchemaGenerator: RoleSchemaGenerator
-	private readonly roleNameSchemaGenerator: RoleNameSchemaGenerator
 
 	constructor(private readonly options: BindxGeneratorOptions = {}) {
 		this.entityTypeSchemaGenerator = new EntityTypeSchemaGenerator()
 		this.enumTypeSchemaGenerator = new EnumTypeSchemaGenerator()
 		this.nameSchemaGenerator = new NameSchemaGenerator()
-		this.roleSchemaGenerator = new RoleSchemaGenerator(options)
-		this.roleNameSchemaGenerator = new RoleNameSchemaGenerator(options)
 	}
 
 	/**
-	 * Generate schema files without role-based ACL filtering
+	 * Generate schema files
 	 */
 	generate(model: Model.Schema): GeneratedFiles {
 		const enumsCode = this.enumTypeSchemaGenerator.generate(model)
@@ -86,87 +71,6 @@ export const { useEntity, useEntityList, Entity, createComponent } = createBindx
 		}
 	}
 
-	/**
-	 * Generate schema files with role-based ACL filtering
-	 */
-	generateWithRoles(model: Model.Schema, acl: Acl.Schema): GeneratedFiles {
-		const enumsCode = this.enumTypeSchemaGenerator.generate(model)
-		const entitiesCode = this.roleSchemaGenerator.generate(model, acl)
-
-		const typesCode = this.generateTypesFile()
-
-		// Generate schema definition
-		const schemaDefinition = this.generateSchemaDefinition(model)
-
-		const indexCode = `export * from './enums'
-export * from './entities'
-export * from './types'
-
-import type { RoleSchemas } from './entities'
-import { createRoleAwareBindx } from '@contember/bindx-react'
-import { scalar, hasOne, hasMany } from '@contember/bindx'
-
-const schemaDefinition = ${schemaDefinition}
-
-/**
- * Pre-configured role-aware bindx instance
- *
- * Usage:
- * \`\`\`tsx
- * <RoleAwareProvider hasRole={(role) => userRoles.has(role)}>
- *   <Entity name="Article" id={id}>
- *     {entity => <HasRole role="admin">{adminEntity => ...}</HasRole>}
- *   </Entity>
- * </RoleAwareProvider>
- * \`\`\`
- */
-export const {
-	schemaRegistry,
-	RoleAwareProvider,
-	Entity,
-	EntityList,
-	HasRole,
-	useEntity,
-	useEntityList,
-	createComponent,
-} = createRoleAwareBindx<RoleSchemas>(schemaDefinition)
-`
-
-		return {
-			'entities.ts': entitiesCode,
-			'enums.ts': enumsCode,
-			'types.ts': typesCode,
-			'index.ts': indexCode,
-		}
-	}
-
-	/**
-	 * Generate schema definition code using scalar(), hasOne(), hasMany()
-	 */
-	private generateSchemaDefinition(model: Model.Schema): string {
-		const entities: string[] = []
-
-		for (const entity of Object.values(model.entities)) {
-			const fields: string[] = []
-
-			acceptEveryFieldVisitor(model, entity, {
-				visitColumn: ctx => {
-					fields.push(`\t\t\t\t${ctx.column.name}: scalar(),`)
-				},
-				visitHasOne: ctx => {
-					fields.push(`\t\t\t\t${ctx.relation.name}: hasOne('${ctx.targetEntity.name}'),`)
-				},
-				visitHasMany: ctx => {
-					fields.push(`\t\t\t\t${ctx.relation.name}: hasMany('${ctx.targetEntity.name}'),`)
-				},
-			})
-
-			entities.push(`\t\t${entity.name}: {\n\t\t\tfields: {\n${fields.join('\n')}\n\t\t\t},\n\t\t},`)
-		}
-
-		return `{\n\tentities: {\n${entities.join('\n')}\n\t},\n}`
-	}
-
 	private generateTypesFile(): string {
 		return `/**
  * Shared types for bindx schema
@@ -197,26 +101,16 @@ export interface BindxSchemaNames {
 
 /**
  * Generate bindx schema files from Contember model
- * 
+ *
  * @example
  * ```ts
- * // Without ACL
  * const files = generate(model)
- * 
- * // With role-based ACL
- * const files = generate(model, acl)
  * ```
  */
 export function generate(
 	model: Model.Schema,
-	acl?: Acl.Schema,
 	options?: BindxGeneratorOptions,
 ): GeneratedFiles {
 	const generator = new BindxGenerator(options)
-
-	if (acl) {
-		return generator.generateWithRoles(model, acl)
-	}
-
 	return generator.generate(model)
 }

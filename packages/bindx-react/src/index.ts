@@ -49,12 +49,9 @@ export type {
 	HasManyRef,
 	HasOneRef,
 	EntityRef,
-	EntityRefFor,
 	// Type extraction helpers
 	ExtractHasOneEntityName,
-	ExtractHasOneRoles,
 	ExtractHasManyEntityName,
-	ExtractHasManyRoles,
 	// Adapter types
 	BackendAdapter,
 	QueryOptions,
@@ -309,62 +306,6 @@ export {
 	setBrandValidation,
 	validateBrand,
 } from './jsx/index.js'
-
-// ============================================================================
-// Role-based schema types and components
-// ============================================================================
-
-export type {
-	RoleContextValue,
-	EntityContextValue,
-	HasRoleProviderValue,
-	HasRoleProviderProps,
-	HasRoleProps,
-	HasRoleComponent,
-	SchemaInput,
-	ContemberSchemaLike,
-	UnifiedBindx,
-	RoleSchemasBase,
-	RoleAwareEntityByProps,
-	RoleAwareEntityCreateProps,
-	RoleAwareEntityProps,
-	RoleAwareEntityComponent,
-	RoleAwareEntityListProps,
-	RoleAwareEntityListComponent,
-	RoleAwareUseEntity,
-	RoleAwareUseEntityList,
-	RoleAwareCreateComponent,
-} from './roles/index.js'
-
-export {
-	EntityContext,
-	useEntityContext,
-	createRoleContext,
-	createUseRoleContext,
-	createRoleAwareBindx,
-	HasRoleProvider,
-	useHasRoleContext,
-} from './roles/index.js'
-
-// Alias for backwards compatibility
-export { HasRoleProvider as RoleAwareProvider } from './roles/index.js'
-
-// Re-export role types from core
-export type {
-	UnionToIntersection,
-	RoleSchemaMap,
-	RoleNames,
-	IntersectRoleSchemas,
-	IntersectSchemaEntities,
-	PickCommonProperties,
-	EntityForRoles,
-	SchemaForRole,
-	EntityNamesForRoles,
-	RoleSchemaDefinitions,
-	RoleBindxConfig,
-} from '@contember/bindx'
-
-export { isValidRole, RoleSchemaRegistry } from '@contember/bindx'
 
 // ============================================================================
 // Internal React API

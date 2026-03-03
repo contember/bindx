@@ -51,7 +51,7 @@ export function createCollectorProxy<T>(
 		$isNew: true,
 		__entityType: undefined as unknown as T,
 		__entityName: '__collector__',
-		__availableRoles: [] as readonly string[],
+
 		__schema: {} as Record<string, object>,
 		// Error properties (stubs for collection phase)
 		$errors: [],
@@ -225,7 +225,7 @@ function createCollectorFieldRef(
 		$isNew: false,
 		$persistedId: null,
 		__entityName: targetEntityName ?? '',
-		__availableRoles: [] as readonly string[],
+
 		__schema: {} as Record<string, object>,
 		$clearAllErrors: () => {},
 		$on: noop,

@@ -76,7 +76,7 @@ export function createRuntimeAccessor<T>(
 		},
 		__entityType: undefined as unknown as T,
 		__entityName: entityType,
-		__availableRoles: [] as readonly string[],
+
 		__schema: {} as Record<string, object>,
 		// Error properties
 		get $errors() {
@@ -451,7 +451,7 @@ function createRuntimeFieldRef(
 			return getEntity().$persistedId
 		},
 		__entityName: '',
-		__availableRoles: [] as readonly string[],
+
 		__schema: {} as Record<string, object>,
 		$clearAllErrors: () => {},
 		$on: noop,

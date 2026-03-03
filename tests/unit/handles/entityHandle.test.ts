@@ -430,10 +430,6 @@ describe('EntityHandle', () => {
 			expect(handle.__entityName).toBe('Article')
 		})
 
-		test('should return empty roles array', () => {
-			const handle = createEntityHandle()
-			expect(handle.__availableRoles).toEqual([])
-		})
 	})
 
 	// ==================== Dispose ====================

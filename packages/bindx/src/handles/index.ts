@@ -21,7 +21,6 @@ export {
 	type HasOneRef,
 	type HasOneAccessor,
 	type EntityRef,
-	type EntityRefFor,
 	type EntityAccessor,
 	// Base types (for implicit selection - no .value, .length, etc.)
 	type FieldRefBase,
@@ -33,7 +32,5 @@ export {
 	type Unsubscribe,
 	// Type extraction helpers
 	type ExtractHasOneEntityName,
-	type ExtractHasOneRoles,
 	type ExtractHasManyEntityName,
-	type ExtractHasManyRoles,
 } from './types.js'

@@ -239,18 +239,10 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	}
 
 	/**
-	 * Entity name for role-based type inference.
+	 * Entity name for type inference.
 	 */
 	get __entityName(): string {
 		return this.targetType
-	}
-
-	/**
-	 * Available roles for HasRole constraint.
-	 * Default implementation returns empty array (no role constraints).
-	 */
-	get __availableRoles(): readonly string[] {
-		return []
 	}
 
 	/**

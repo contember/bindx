@@ -56,7 +56,6 @@ export interface RepeaterItems<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
 > {
 	/**
@@ -65,7 +64,7 @@ export interface RepeaterItems<
 	 */
 	map: <R>(
 		fn: (
-			entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>,
+			entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>,
 			info: RepeaterItemInfo,
 		) => R
 	) => R[]
@@ -97,10 +96,9 @@ export type RepeaterRenderFn<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
 > = (
-	items: RepeaterItems<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>,
+	items: RepeaterItems<TEntity, TSelected, TBrand, TEntityName, TSchema>,
 	methods: RepeaterMethods<TEntity>,
 ) => ReactNode
 
@@ -113,15 +111,14 @@ export interface RepeaterProps<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
 > {
 	/** The has-many relation field */
-	field: HasManyRef<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>
+	field: HasManyRef<TEntity, TSelected, TBrand, TEntityName, TSchema>
 
 	/** Optional field name for sorting (must be a numeric field) */
 	sortableBy?: string
 
 	/** Render function that receives items collection and methods */
-	children: RepeaterRenderFn<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>
+	children: RepeaterRenderFn<TEntity, TSelected, TBrand, TEntityName, TSchema>
 }

@@ -1,7 +1,7 @@
 /**
  * Shared test fixtures for generator tests
  */
-import { Model, Acl } from '@contember/schema'
+import { Model } from '@contember/schema'
 
 // Test model schema
 export const testModel: Model.Schema = {
@@ -146,118 +146,6 @@ export const testModel: Model.Schema = {
 			unique: [],
 			indexes: [],
 			eventLog: { enabled: true },
-		},
-	},
-}
-
-// Test ACL schema with multiple roles
-export const testAcl: Acl.Schema = {
-	roles: {
-		public: {
-			stages: '*',
-			entities: {
-				Post: {
-					predicates: {},
-					operations: {
-						read: {
-							id: true,
-							title: true,
-							status: true,
-						},
-					},
-				},
-				Tag: {
-					predicates: {},
-					operations: {
-						read: {
-							id: true,
-							name: true,
-						},
-					},
-				},
-			},
-			variables: {},
-		},
-		editor: {
-			stages: '*',
-			entities: {
-				Author: {
-					predicates: {},
-					operations: {
-						read: {
-							id: true,
-							name: true,
-							email: true,
-							posts: true,
-						},
-					},
-				},
-				Post: {
-					predicates: {},
-					operations: {
-						read: {
-							id: true,
-							title: true,
-							content: true,
-							status: true,
-							author: true,
-							tags: true,
-						},
-					},
-				},
-				Tag: {
-					predicates: {},
-					operations: {
-						read: {
-							id: true,
-							name: true,
-							posts: true,
-						},
-					},
-				},
-			},
-			variables: {},
-		},
-		admin: {
-			stages: '*',
-			entities: {
-				Author: {
-					predicates: {},
-					operations: {
-						read: {
-							id: true,
-							name: true,
-							email: true,
-							salary: true,
-							posts: true,
-						},
-					},
-				},
-				Post: {
-					predicates: {},
-					operations: {
-						read: {
-							id: true,
-							title: true,
-							content: true,
-							status: true,
-							author: true,
-							tags: true,
-						},
-					},
-				},
-				Tag: {
-					predicates: {},
-					operations: {
-						read: {
-							id: true,
-							name: true,
-							posts: true,
-						},
-					},
-				},
-			},
-			variables: {},
 		},
 	},
 }

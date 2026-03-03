@@ -62,7 +62,7 @@ export function createInlineAccessor(
 		$isNew: false,
 		__entityType: undefined as unknown,
 		__entityName: '',
-		__availableRoles: [] as readonly string[],
+
 		__schema: {} as Record<string, object>,
 		$errors: [] as FieldError[],
 		$hasError: false,
@@ -213,7 +213,7 @@ function createInlineFieldRef(
 		$isNew: false,
 		$persistedId: null,
 		__entityName: '',
-		__availableRoles: [] as readonly string[],
+
 		__schema: {} as Record<string, object>,
 		$clearAllErrors: () => {},
 		$on: noop,

@@ -30,7 +30,7 @@ export const ENTITY_ACCESSOR_PROPERTIES = new Set([
 	'$fields', '$data', '$isDirty', '$persistedId', '$isNew',
 	'$errors', '$hasError', '$addError', '$clearErrors', '$clearAllErrors',
 	'$on', '$intercept', '$onPersisted', '$interceptPersisting',
-	'__entityType', '__entityName', '__availableRoles',
+	'__entityType', '__entityName',
 ])
 
 /**
@@ -172,7 +172,6 @@ export function createPlaceholderAccessor<T>(): EntityAccessor<T> {
 		$isNew: true,
 		__entityType: undefined as unknown as T,
 		__entityName: '__placeholder__',
-		__availableRoles: [] as readonly string[],
 		__schema: {} as Record<string, object>,
 		$errors: [] as FieldError[],
 		$hasError: false,

@@ -54,19 +54,18 @@ export function Repeater<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
 >({
 	field,
 	sortableBy,
 	children,
-}: RepeaterProps<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>): ReactElement {
+}: RepeaterProps<TEntity, TSelected, TBrand, TEntityName, TSchema>): ReactElement {
 	const sortedItems = useSortedItems(field, sortableBy)
 
 	// Create stable items collection object
-	const items = useMemo((): RepeaterItems<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema> => {
+	const items = useMemo((): RepeaterItems<TEntity, TSelected, TBrand, TEntityName, TSchema> => {
 		const createItemInfo = (
-			entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>,
+			entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>,
 			index: number,
 		): RepeaterItemInfo => {
 			const isFirst = index === 0
@@ -108,7 +107,7 @@ export function Repeater<
 		return {
 			map: <R,>(
 				fn: (
-					entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>,
+					entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>,
 					info: RepeaterItemInfo,
 				) => R,
 			): R[] => {

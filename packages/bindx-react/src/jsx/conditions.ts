@@ -81,12 +81,12 @@ type AnyScalarField<T> = FieldRefBase<T>
 /**
  * Base type for has-many - accepts both HasManyRef and HasManyRefBase.
  */
-type AnyHasManyField = HasManyRefBase<any, any, any, any, any, any>
+type AnyHasManyField = HasManyRefBase<any, any, any, any, any>
 
 /**
  * Base type for has-one - accepts both HasOneRef and HasOneRefBase.
  */
-type AnyHasOneField = HasOneRefBase<any, any, any, any, any, any>
+type AnyHasOneField = HasOneRefBase<any, any, any, any, any>
 
 // ============================================================================
 // Condition Builder Object

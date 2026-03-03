@@ -259,7 +259,6 @@ export type BuildEntityProps<
 					TSelected,
 					AnyBrand,
 					TEntityName,
-					TRoles,
 					TSchema
 				>
 			// Explicit selection -> full EntityAccessor (full access)
@@ -267,16 +266,15 @@ export type BuildEntityProps<
 					TEntityName extends keyof TSchema ? TSchema[TEntityName] : object,
 					TSelected,
 					AnyBrand,
-					TEntityName,  // Preserve entity name literal for HasRole type narrowing
-					TRoles,
-					TSchema  // Pass schema for relation entity name lookups
+					TEntityName,
+					TSchema
 				>
 		: TEntityProps[K] extends InterfaceEntityPropConfig<infer TInterface, infer TIsImplicit>
 			? TIsImplicit extends true
 				// Implicit interface -> restricted
-				? EntityAccessorBase<TInterface, TInterface, AnyBrand, string, TRoles, TSchema>
+				? EntityAccessorBase<TInterface, TInterface, AnyBrand, string, TSchema>
 				// Explicit interface -> full access
-				: EntityAccessor<TInterface, TInterface, AnyBrand, string, TRoles, TSchema>
+				: EntityAccessor<TInterface, TInterface, AnyBrand, string, TSchema>
 			: never
 }
 
@@ -303,11 +301,10 @@ export type BuildFragmentProps<
 		? FluentFragment<
 				TEntityName extends keyof TSchema ? TSchema[TEntityName] : object,
 				TSelected,
-				AnyBrand,
-				TRoles
+				AnyBrand
 			>
 		: TEntityProps[K] extends InterfaceEntityPropConfig<infer TInterface, infer _TIsImplicit>
-			? FluentFragment<TInterface, TInterface, AnyBrand, TRoles>
+			? FluentFragment<TInterface, TInterface, AnyBrand>
 			: never
 }
 

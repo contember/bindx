@@ -99,7 +99,6 @@ export interface HasManyComponentOptions {
  * @typeParam TSelected - The selected subset of fields (defaults to TEntity for backwards compatibility)
  * @typeParam TBrand - Component brand type for validation (defaults to AnyBrand)
  * @typeParam TEntityName - Entity name as string literal for type narrowing
- * @typeParam TAvailableRoles - Available roles for role-based type checking (defaults to readonly string[])
  * @typeParam TSchema - Schema for entity name lookup in nested relations
  */
 export interface HasManyProps<
@@ -107,11 +106,10 @@ export interface HasManyProps<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
 > {
-	field: HasManyRefBase<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>
-	children: (item: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>, index: number) => ReactNode
+	field: HasManyRefBase<TEntity, TSelected, TBrand, TEntityName, TSchema>
+	children: (item: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>, index: number) => ReactNode
 	filter?: unknown
 	orderBy?: unknown
 	limit?: number
@@ -127,7 +125,6 @@ export interface HasManyProps<
  * @typeParam TSelected - The selected subset of fields (defaults to TEntity for backwards compatibility)
  * @typeParam TBrand - Component brand type for validation (defaults to AnyBrand)
  * @typeParam TEntityName - Entity name as string literal for type narrowing
- * @typeParam TAvailableRoles - Available roles for role-based type checking (defaults to readonly string[])
  * @typeParam TSchema - Schema for entity name lookup in nested relations
  */
 export interface HasOneProps<
@@ -135,11 +132,10 @@ export interface HasOneProps<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
 > {
-	field: HasOneRefBase<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>
-	children: (entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>) => ReactNode
+	field: HasOneRefBase<TEntity, TSelected, TBrand, TEntityName, TSchema>
+	children: (entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>) => ReactNode
 }
 
 /**
@@ -150,7 +146,7 @@ export interface HasOneProps<
 export interface EntityComponentProps<TSchema extends Record<string, object>, K extends keyof TSchema & string> {
 	name: K
 	id: string
-	children: (entity: EntityAccessor<TSchema[K], TSchema[K], import('@contember/bindx').AnyBrand, K, readonly string[], TSchema>) => ReactNode
+	children: (entity: EntityAccessor<TSchema[K], TSchema[K], import('@contember/bindx').AnyBrand, K, TSchema>) => ReactNode
 }
 
 /**

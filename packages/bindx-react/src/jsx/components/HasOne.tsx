@@ -24,12 +24,11 @@ function HasOneImpl<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
->({ field, children }: HasOneProps<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>): ReactElement {
+>({ field, children }: HasOneProps<TEntity, TSelected, TBrand, TEntityName, TSchema>): ReactElement {
 	// At runtime, field is always a full HasOneRef (proxy provides all properties)
 	// Props accept HasOneRefBase for type compatibility with both implicit and explicit modes
-	const fullField = field as HasOneRef<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>
+	const fullField = field as HasOneRef<TEntity, TSelected, TBrand, TEntityName, TSchema>
 	// Get the related entity reference (always available, may be placeholder with id=null)
 	return <>{children(fullField.$entity)}</>
 }

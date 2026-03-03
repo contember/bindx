@@ -15,16 +15,15 @@ export function useSortedItems<
 	S = T,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
 >(
-	hasMany: HasManyRef<T, S, TBrand, TEntityName, TAvailableRoles, TSchema>,
+	hasMany: HasManyRef<T, S, TBrand, TEntityName, TSchema>,
 	orderField: string | undefined,
-): EntityAccessor<T, S, TBrand, TEntityName, TAvailableRoles, TSchema>[] {
+): EntityAccessor<T, S, TBrand, TEntityName, TSchema>[] {
 	const items = hasMany.items
 
 	const sortedItems = useMemo(
-		() => sortEntities(items, orderField) as EntityAccessor<T, S, TBrand, TEntityName, TAvailableRoles, TSchema>[],
+		() => sortEntities(items, orderField) as EntityAccessor<T, S, TBrand, TEntityName, TSchema>[],
 		[items, orderField],
 	)
 

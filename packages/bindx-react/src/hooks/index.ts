@@ -19,7 +19,6 @@ export {
 
 export {
 	createBindx,
-	createRoleAwareBindx,
 	type UseEntityOptions,
 	type UseEntityListOptions,
 	type LoadingEntityAccessor,
@@ -32,17 +31,6 @@ export {
 	type ErrorEntityListAccessor,
 	type ReadyEntityListAccessor,
 	type EntityListAccessorResult,
-	type HasRoleProps,
-	type HasRoleComponent,
-	type SchemaInput,
-	type ContemberSchemaLike,
-	type UnifiedBindx,
-	type RoleSchemasBase,
-	type RoleAwareEntityComponent,
-	type RoleAwareEntityListComponent,
-	type RoleAwareUseEntity,
-	type RoleAwareUseEntityList,
-	type RoleAwareCreateComponent,
 } from './createBindx.js'
 
 export {

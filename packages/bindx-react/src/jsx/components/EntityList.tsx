@@ -5,7 +5,6 @@ import { useEntityListCore } from '../../hooks/useEntityListCore.js'
 import { useSelectionCollectionForList } from '../../hooks/useSelectionCollectionForList.js'
 import { createRuntimeAccessor } from '../proxy.js'
 import type { EntityAccessor } from '../types.js'
-import { EntityContext, type EntityContextValue } from '../../roles/RoleContext.js'
 
 /**
  * Props for EntityList component
@@ -13,8 +12,6 @@ import { EntityContext, type EntityContextValue } from '../../roles/RoleContext.
 export interface EntityListProps<TSchema, K extends keyof TSchema> {
 	/** Entity type name */
 	name: K
-	/** Optional roles for role-aware type narrowing. When omitted, uses all available roles. */
-	roles?: readonly string[]
 	/** Optional filter criteria - type-safe based on entity schema */
 	filter?: EntityWhere<TSchema[K]>
 	/** Optional ordering - type-safe based on entity schema */
@@ -53,7 +50,6 @@ export interface EntityListProps<TSchema, K extends keyof TSchema> {
  */
 function EntityListImpl<TSchema, K extends keyof TSchema>({
 	name,
-	roles,
 	filter,
 	orderBy,
 	limit,
@@ -115,27 +111,10 @@ function EntityListImpl<TSchema, K extends keyof TSchema>({
 			selection,
 		)
 
-		// Wrap accessor in Proxy to inject __availableRoles for role-aware components
-		const roleAwareAccessor = new Proxy(accessor, {
-			get(target, prop) {
-				if (prop === '__availableRoles') {
-					return roles ?? []
-				}
-				return Reflect.get(target, prop)
-			},
-		})
-
-		// Provide entity context for HasRole component
-		const entityContext: EntityContextValue = {
-			entityType,
-			entityId: item.id,
-			storeKey: `${entityType}:${item.id}`,
-		}
-
 		return (
-			<EntityContext.Provider key={item.id} value={entityContext}>
-				{children(roleAwareAccessor, index)}
-			</EntityContext.Provider>
+			<React.Fragment key={item.id}>
+				{children(accessor, index)}
+			</React.Fragment>
 		)
 	})
 

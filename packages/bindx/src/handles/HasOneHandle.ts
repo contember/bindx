@@ -454,9 +454,6 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	/** Type brand for entity name */
 	get __entityName(): string { return this.targetType }
 
-	/** Available roles for role-based type checking */
-	get __availableRoles(): readonly string[] { return [] }
-
 	/** Clear all errors - delegates to $entity */
 	$clearAllErrors(): void { this.entity.$clearAllErrors() }
 

@@ -33,12 +33,11 @@ function HasManyImpl<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
->({ field, children }: HasManyProps<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>): ReactElement {
+>({ field, children }: HasManyProps<TEntity, TSelected, TBrand, TEntityName, TSchema>): ReactElement {
 	// At runtime, field is always a full HasManyRef (proxy provides all properties)
 	// Props accept HasManyRefBase for type compatibility with both implicit and explicit modes
-	const fullField = field as HasManyRef<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>
+	const fullField = field as HasManyRef<TEntity, TSelected, TBrand, TEntityName, TSchema>
 	const items = fullField.map((item, index) => {
 		return <React.Fragment key={item.id}>{children(item, index)}</React.Fragment>
 	})

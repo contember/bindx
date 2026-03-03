@@ -58,7 +58,6 @@ export type {
 	HasOneRef,
 	HasOneAccessor,
 	EntityRef,
-	EntityRefFor,
 	EntityAccessor,
 	// Base types (for implicit selection - no .value, .length, etc.)
 	FieldRefBase,
@@ -69,9 +68,7 @@ export type {
 	EntityAccessorBase,
 	// Type extraction helpers
 	ExtractHasOneEntityName,
-	ExtractHasOneRoles,
 	ExtractHasManyEntityName,
-	ExtractHasManyRoles,
 } from './handles/index.js'
 
 // Brand types
@@ -321,30 +318,6 @@ export {
 
 // Re-export Contember types for convenience
 export type { SchemaNames, SchemaEntityNames } from '@contember/client-content'
-
-// Role-based schema types
-export type {
-	UnionToIntersection,
-	RoleSchemaMap,
-	RoleNames,
-	IntersectRoleSchemas,
-	IntersectSchemaEntities,
-	PickCommonProperties,
-	EntityForRoles,
-	SchemaForRole,
-	EntityNamesForRoles,
-	RoleSchemaDefinitions,
-	RoleBindxConfig,
-	RolesAreSubset,
-	RequireRoleSubset,
-	AssertRoleCompatibility,
-	SingleSchemaRoles,
-	IsSingleSchema,
-	AllRoles,
-	DefaultRole,
-} from './roles/index.js'
-
-export { isValidRole, RoleSchemaRegistry, DEFAULT_ROLE } from './roles/index.js'
 
 // ============================================================================
 // Internal API (for advanced use cases)

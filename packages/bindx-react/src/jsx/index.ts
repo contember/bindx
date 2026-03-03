@@ -59,7 +59,6 @@ export {
 export { Field, FieldWithMeta } from './components/Field.js'
 export { HasMany, HasManyWithMeta } from './components/HasMany.js'
 export { HasOne, HasOneWithMeta } from './components/HasOne.js'
-export { HasRole, HasRoleWithMeta, type HasRoleComponentProps } from './components/HasRole.js'
 export { If, IfWithMeta } from './components/If.js'
 export { Show, ShowWithMeta, type ShowProps } from './components/Show.js'
 export { Entity, type EntityProps } from './components/Entity.js'

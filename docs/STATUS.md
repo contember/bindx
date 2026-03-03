@@ -33,5 +33,5 @@
 - [x] 020 - Conditional selection limitation
 - [x] 021 - Debug flag via globalThis string key
 - [x] 022 - Inconsistent error systems
-- [ ] 023 - Role system complexity
+- [x] 023 - Role system complexity
 - [ ] 024 - `console.warn` for unknown error types

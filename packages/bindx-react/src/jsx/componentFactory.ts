@@ -336,7 +336,6 @@ function createFragment(
 		__isFragment: true,
 		__brand: componentBrand,
 		__brands: new Set([componentBrand.brandSymbol]),
-		__availableRoles: roles.length > 0 ? roles : undefined,
 		__roles: roles.length > 0 ? roles : undefined,
 	}
 }

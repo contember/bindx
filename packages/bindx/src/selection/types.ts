@@ -66,13 +66,11 @@ type ArrayItemType<T> = T extends Array<infer U> ? U : never
  * @typeParam TModel - The entity model type
  * @typeParam TResult - The selected fields result type
  * @typeParam TBrand - Component brand type for validation (defaults to AnyBrand)
- * @typeParam TAvailableRoles - Available roles for this fragment (defaults to readonly string[])
  */
 export interface FluentFragment<
 	TModel,
 	TResult,
 	TBrand extends AnyBrand = AnyBrand,
-	TAvailableRoles extends readonly string[] = readonly string[],
 > {
 	/** Runtime metadata */
 	readonly __meta: SelectionMeta
@@ -86,13 +84,6 @@ export interface FluentFragment<
 	readonly __brand?: TBrand
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
-	/**
-	 * Type brand for available roles.
-	 * Uses readonly array of union elements for covariance:
-	 * FluentFragment<..., ['admin']> is assignable to FluentFragment<..., ['admin', 'client']>
-	 * because readonly 'admin'[] is assignable to readonly ('admin' | 'client')[].
-	 */
-	readonly __availableRoles?: readonly TAvailableRoles[number][]
 	/** Runtime roles for validation */
 	readonly __roles?: readonly string[]
 }

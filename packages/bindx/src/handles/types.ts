@@ -252,7 +252,6 @@ export interface HasManyRefBase<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
 > {
 	/** Internal metadata for collection phase */
@@ -284,9 +283,6 @@ export interface HasManyRefBase<
 
 	/** Type brand for entity name */
 	readonly __entityName: TEntityName
-
-	/** Type brand for available roles */
-	readonly __availableRoles: readonly TAvailableRoles[number][]
 
 	/** Type brand for schema */
 	readonly __schema?: TSchema & any
@@ -328,17 +324,16 @@ export interface HasManyRef<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
-> extends HasManyRefBase<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema> {
+> extends HasManyRefBase<TEntity, TSelected, TBrand, TEntityName, TSchema> {
 	/** Number of items */
 	readonly length: number
 
 	/** Direct access to items array */
-	readonly items: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>[]
+	readonly items: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>[]
 
 	/** Iterate over items */
-	map<R>(fn: (item: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>, index: number) => R): R[]
+	map<R>(fn: (item: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>, index: number) => R): R[]
 }
 
 // ============================================================================
@@ -372,7 +367,6 @@ export interface HasOneRefBase<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
 > {
 	/** Internal metadata for collection phase */
@@ -395,9 +389,6 @@ export interface HasOneRefBase<
 
 	/** Type brand for entity name */
 	readonly __entityName: TEntityName
-
-	/** Type brand for available roles */
-	readonly __availableRoles: readonly TAvailableRoles[number][]
 
 	/** Type brand for schema */
 	readonly __schema?: TSchema & any
@@ -475,9 +466,8 @@ export interface HasOneRef<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
-> extends HasOneRefBase<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema> {
+> extends HasOneRefBase<TEntity, TSelected, TBrand, TEntityName, TSchema> {
 	/** Raw data snapshot of the related entity */
 	readonly $data: TSelected | null
 
@@ -485,10 +475,10 @@ export interface HasOneRef<
 	readonly $state: HasOneRelationState
 
 	/** Nested entity fields - only selected fields are accessible */
-	readonly $fields: SelectedEntityFields<TEntity, TSelected, TAvailableRoles, TSchema>
+	readonly $fields: SelectedEntityFields<TEntity, TSelected, TSchema>
 
 	/** Related entity accessor with direct field access */
-	readonly $entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema>
+	readonly $entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>
 }
 
 /**
@@ -499,10 +489,9 @@ export type HasOneAccessorBase<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
-> = HasOneRefBase<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema> &
-	SelectedEntityFieldsBase<TEntity, TSelected, TAvailableRoles, TSchema>
+> = HasOneRefBase<TEntity, TSelected, TBrand, TEntityName, TSchema> &
+	SelectedEntityFieldsBase<TEntity, TSelected, TSchema>
 
 /**
  * HasOneRef with direct field access via Proxy (for explicit mode).
@@ -512,10 +501,9 @@ export type HasOneAccessor<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
-> = HasOneRef<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema> &
-	SelectedEntityFields<TEntity, TSelected, TAvailableRoles, TSchema>
+> = HasOneRef<TEntity, TSelected, TBrand, TEntityName, TSchema> &
+	SelectedEntityFields<TEntity, TSelected, TSchema>
 
 // ============================================================================
 // ENTITY TYPES
@@ -531,7 +519,6 @@ export interface EntityRefBase<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
 > {
 	/** Entity ID */
@@ -554,9 +541,6 @@ export interface EntityRefBase<
 
 	/** Type brand for entity name */
 	readonly __entityName: TEntityName
-
-	/** Type brand for available roles */
-	readonly __availableRoles: readonly TAvailableRoles[number][]
 
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
@@ -604,11 +588,10 @@ export interface EntityRef<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
-> extends EntityRefBase<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema> {
+> extends EntityRefBase<TEntity, TSelected, TBrand, TEntityName, TSchema> {
 	/** Typed field accessors */
-	readonly $fields: SelectedEntityFields<TEntity, TSelected, TAvailableRoles, TSchema>
+	readonly $fields: SelectedEntityFields<TEntity, TSelected, TSchema>
 
 	/** Raw data snapshot */
 	readonly $data: TSelected | null
@@ -622,10 +605,9 @@ export type EntityAccessorBase<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
-> = EntityRefBase<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema> &
-	SelectedEntityFieldsBase<TEntity, TSelected, TAvailableRoles, TSchema>
+> = EntityRefBase<TEntity, TSelected, TBrand, TEntityName, TSchema> &
+	SelectedEntityFieldsBase<TEntity, TSelected, TSchema>
 
 /**
  * EntityRef with direct field access via Proxy (for explicit mode).
@@ -635,10 +617,9 @@ export type EntityAccessor<
 	TSelected = TEntity,
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
-> = EntityRef<TEntity, TSelected, TBrand, TEntityName, TAvailableRoles, TSchema> &
-	SelectedEntityFields<TEntity, TSelected, TAvailableRoles, TSchema>
+> = EntityRef<TEntity, TSelected, TBrand, TEntityName, TSchema> &
+	SelectedEntityFields<TEntity, TSelected, TSchema>
 
 // ============================================================================
 // ENTITY FIELDS MAPPING TYPES
@@ -667,14 +648,13 @@ export type EntityFields<T> = {
 export type SelectedEntityFieldsBase<
 	TEntity,
 	TSelected,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
 > = {
 	[K in ScalarKeys<TEntity> & keyof TSelected]: FieldRefBase<TEntity[K]>
 } & {
 	[K in HasManyKeys<TEntity> & keyof TSelected]: TEntity[K] extends (infer U)[]
 		? U extends object
-			? HasManyRefBase<U, ExtractNestedSelection<TSelected, K> extends (infer S)[] ? S : U, AnyBrand, EntityNameFromType<TSchema, U>, TAvailableRoles, TSchema>
+			? HasManyRefBase<U, ExtractNestedSelection<TSelected, K> extends (infer S)[] ? S : U, AnyBrand, EntityNameFromType<TSchema, U>, TSchema>
 			: never
 		: never
 } & {
@@ -683,7 +663,6 @@ export type SelectedEntityFieldsBase<
 		ExtractNestedSelection<TSelected, K> extends object ? ExtractNestedSelection<TSelected, K> : NonNullable<TEntity[K]>,
 		AnyBrand,
 		EntityNameFromType<TSchema, NonNullable<TEntity[K]>>,
-		TAvailableRoles,
 		TSchema
 	>
 }
@@ -695,14 +674,13 @@ export type SelectedEntityFieldsBase<
 export type SelectedEntityFields<
 	TEntity,
 	TSelected,
-	TAvailableRoles extends readonly string[] = readonly string[],
 	TSchema extends Record<string, object> = Record<string, object>,
 > = {
 	[K in ScalarKeys<TEntity> & keyof TSelected]: FieldRef<TEntity[K]>
 } & {
 	[K in HasManyKeys<TEntity> & keyof TSelected]: TEntity[K] extends (infer U)[]
 		? U extends object
-			? HasManyRef<U, ExtractNestedSelection<TSelected, K> extends (infer S)[] ? S : U, AnyBrand, EntityNameFromType<TSchema, U>, TAvailableRoles, TSchema>
+			? HasManyRef<U, ExtractNestedSelection<TSelected, K> extends (infer S)[] ? S : U, AnyBrand, EntityNameFromType<TSchema, U>, TSchema>
 			: never
 		: never
 } & {
@@ -711,72 +689,25 @@ export type SelectedEntityFields<
 		ExtractNestedSelection<TSelected, K> extends object ? ExtractNestedSelection<TSelected, K> : NonNullable<TEntity[K]>,
 		AnyBrand,
 		EntityNameFromType<TSchema, NonNullable<TEntity[K]>>,
-		TAvailableRoles,
 		TSchema
 	>
 }
-
-// ============================================================================
-// Role-Aware Type Helpers
-// ============================================================================
-
-type RoleSchemasBaseForRef<T> = { [K in keyof T]: { [E: string]: object } }
-
-type EntityForRolesObjectForRef<
-	TRoleSchemas extends RoleSchemasBaseForRef<TRoleSchemas>,
-	TRoles extends readonly (keyof TRoleSchemas)[],
-	TEntityName extends string,
-> = import('../roles/types.js').EntityForRoles<TRoleSchemas, TRoles, TEntityName> extends object
-	? import('../roles/types.js').EntityForRoles<TRoleSchemas, TRoles, TEntityName>
-	: object
-
-/**
- * Type helper for creating correctly typed EntityRef for role-aware components.
- */
-export type EntityRefFor<
-	TRoleSchemas extends RoleSchemasBaseForRef<TRoleSchemas>,
-	TRoles extends readonly (keyof TRoleSchemas & string)[],
-	TEntityName extends string,
-	TSelected extends object = EntityForRolesObjectForRef<TRoleSchemas, TRoles, TEntityName>,
-	TSchema extends Record<string, object> = import('../roles/types.js').IntersectRoleSchemas<TRoleSchemas, TRoles>,
-> = EntityRef<
-	EntityForRolesObjectForRef<TRoleSchemas, TRoles, TEntityName>,
-	TSelected,
-	AnyBrand,
-	TEntityName,
-	TRoles,
-	TSchema
->
 
 // ============================================================================
 // Type Extraction Helpers
 // ============================================================================
 
 export type ExtractHasOneEntityName<T> =
-	T extends HasOneRef<any, any, any, infer TEntityName, any, any>
+	T extends HasOneRef<any, any, any, infer TEntityName, any>
 		? TEntityName
-		: T extends HasOneRefBase<any, any, any, infer TEntityName, any, any>
+		: T extends HasOneRefBase<any, any, any, infer TEntityName, any>
 			? TEntityName
-			: never
-
-export type ExtractHasOneRoles<T> =
-	T extends HasOneRef<any, any, any, any, infer TRoles, any>
-		? TRoles
-		: T extends HasOneRefBase<any, any, any, any, infer TRoles, any>
-			? TRoles
 			: never
 
 export type ExtractHasManyEntityName<T> =
-	T extends HasManyRef<any, any, any, infer TEntityName, any, any>
+	T extends HasManyRef<any, any, any, infer TEntityName, any>
 		? TEntityName
-		: T extends HasManyRefBase<any, any, any, infer TEntityName, any, any>
+		: T extends HasManyRefBase<any, any, any, infer TEntityName, any>
 			? TEntityName
-			: never
-
-export type ExtractHasManyRoles<T> =
-	T extends HasManyRef<any, any, any, any, infer TRoles, any>
-		? TRoles
-		: T extends HasManyRefBase<any, any, any, any, infer TRoles, any>
-			? TRoles
 			: never
 

@@ -41,14 +41,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	}
 
 	/**
-	 * Type brand - available roles for type inference.
-	 * Returns empty array at runtime; role checking is compile-time only.
-	 */
-	get __availableRoles(): readonly string[] {
-		return []
-	}
-
-	/**
 	 * Type brand - schema for type inference.
 	 * Returns undefined at runtime; schema type is compile-time only.
 	 */
