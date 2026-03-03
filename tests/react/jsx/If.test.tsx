@@ -41,6 +41,9 @@ describe('If component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -76,6 +79,9 @@ describe('If component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -110,6 +116,9 @@ describe('If component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -150,11 +159,14 @@ describe('If component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
 						<If
-							condition={article.published}
+							condition={cond.isTruthy(article.published)}
 							then={<span data-testid="then-branch">Published</span>}
 							else={<span data-testid="else-branch">Not published</span>}
 						/>
@@ -195,11 +207,14 @@ describe('If component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
 						<If
-							condition={article.published}
+							condition={cond.isTruthy(article.published)}
 							then={<span data-testid="then-branch">Published</span>}
 							else={<span data-testid="else-branch">Not published</span>}
 						/>
@@ -238,11 +253,14 @@ describe('If component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
 						<If
-							condition={article.published}
+							condition={cond.isTruthy(article.published)}
 							then={<span data-testid="then-branch">Published</span>}
 							else={<span data-testid="else-branch">Not published</span>}
 						/>
@@ -276,6 +294,9 @@ describe('If component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -312,6 +333,9 @@ describe('If component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -357,6 +381,9 @@ describe('If component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -391,6 +418,9 @@ describe('If component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -430,6 +460,9 @@ describe('If component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -471,11 +504,14 @@ describe('If component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
 						<If
-							condition={article.published}
+							condition={cond.isTruthy(article.published)}
 							then={<span data-testid="status">Published</span>}
 							else={<span data-testid="status">Not published</span>}
 						/>
@@ -532,6 +568,9 @@ describe('If component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -571,6 +610,9 @@ describe('If component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (

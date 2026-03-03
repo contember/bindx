@@ -1,4 +1,4 @@
-import type { FieldHandle } from '@contember/bindx-react'
+import type { FieldRef } from '@contember/bindx-react'
 import { TextInput } from '../inputs/index.js'
 
 /**
@@ -8,7 +8,7 @@ import { TextInput } from '../inputs/index.js'
 export function AuthorEditor({
 	author,
 }: {
-	author: { name: FieldHandle<string>; email: FieldHandle<string> }
+	author: { name: FieldRef<string>; email: FieldRef<string> }
 }) {
 	return (
 		<div className="author-editor">

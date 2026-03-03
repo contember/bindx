@@ -44,9 +44,6 @@ export {
 	useEntity,
 	useEntityList,
 	Entity,
-	HasOne,
-	HasMany,
-	Field,
 	// Bindx instances for other schemas
 	minimalBindx,
 	hasManyBindx,

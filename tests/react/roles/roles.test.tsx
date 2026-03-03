@@ -1011,8 +1011,8 @@ describe('Role-aware implicit createComponent', () => {
 			.entity('article', 'Article')
 			.render(({ article }) => (
 				<div>
-					<span data-testid="title">{article.$fields.title.value}</span>
-					<span data-testid="notes">{article.$fields.internalNotes.value}</span>
+					<span data-testid="title">{article.title.inputProps.value}</span>
+					<span data-testid="notes">{article.internalNotes.inputProps.value}</span>
 				</div>
 			))
 
@@ -1028,7 +1028,7 @@ describe('Role-aware implicit createComponent', () => {
 		const AdminArticleCard = createComponent({ roles: ['admin'] as const })
 			.entity('article', 'Article')
 			.render(({ article }) => (
-				<div>{article.$fields.title.value}</div>
+				<div>{article.title.inputProps.value}</div>
 			))
 
 		// Fragment should carry role information
@@ -1045,8 +1045,8 @@ describe('Role-aware implicit createComponent', () => {
 			.entity('article', 'Article')
 			.render(({ article }) => (
 				<div>
-					<span>{article.$fields.title.value}</span>
-					<span>{article.$fields.content.value}</span>
+					<span>{article.title.inputProps.value}</span>
+					<span>{article.content.inputProps.value}</span>
 				</div>
 			))
 
@@ -1061,7 +1061,7 @@ describe('Role-aware implicit createComponent', () => {
 		const AdminArticleCard = createComponent({ roles: ['admin'] as const })
 			.entity('article', 'Article')
 			.render(({ article }) => (
-				<div>{article.$fields.title.value}</div>
+				<div>{article.title.inputProps.value}</div>
 			))
 
 		// Component should have __componentRoles
@@ -1076,8 +1076,8 @@ describe('Role-aware implicit createComponent', () => {
 			.entity('article', 'Article')
 			.render(({ article }) => (
 				<div>
-					<span>{article.$fields.title.value}</span>
-					<span>{article.$fields.internalNotes.value}</span>
+					<span>{article.title.inputProps.value}</span>
+					<span>{article.internalNotes.inputProps.value}</span>
 				</div>
 			))
 
@@ -1120,11 +1120,11 @@ describe('HasRole inside createComponent', () => {
 			.entity('article', 'Article')
 			.render(({ article }) => (
 				<div>
-					<span>{article.$fields.title.value}</span>
+					<span>{article.title.inputProps.value}</span>
 					<HasRole roles={['admin']} entity={article}>
 						{(adminArticle) => (
 							// adminArticle should have AdminArticle type with internalNotes field
-							<span>{adminArticle.$fields.internalNotes.value}</span>
+							<span>{adminArticle.internalNotes.inputProps.value}</span>
 						)}
 					</HasRole>
 				</div>
@@ -1143,19 +1143,19 @@ describe('HasRole inside createComponent', () => {
 			.render(({ article }) => (
 				<div>
 					{/* article has common fields of editor & admin (title is common to all) */}
-					<span>{article.$fields.title.value}</span>
+					<span>{article.title.inputProps.value}</span>
 
 					{/* HasRole narrows available roles - entity type falls back to input since name is string */}
 					<HasRole roles={['admin']} entity={article}>
 						{(adminArticle) => (
 							// adminArticle still has common fields (entity name is unknown, so no schema lookup)
-							<span>{adminArticle.$fields.title.value}</span>
+							<span>{adminArticle.title.inputProps.value}</span>
 						)}
 					</HasRole>
 
 					<HasRole roles={['editor']} entity={article}>
 						{(editorArticle) => (
-							<span>{editorArticle.$fields.title.value}</span>
+							<span>{editorArticle.title.inputProps.value}</span>
 						)}
 					</HasRole>
 				</div>
@@ -1173,7 +1173,7 @@ describe('HasRole inside createComponent', () => {
 			.render(({ article }) => (
 				<div>
 					{/* Access a field to ensure selection is collected */}
-					<span>{article.$fields.title.value}</span>
+					<span>{article.title.inputProps.value}</span>
 					<HasRole roles={['admin']} entity={article}>
 						{(adminArticle) => {
 							// Entity name is preserved as literal from the component's entity prop
@@ -1198,8 +1198,7 @@ describe('HasRole inside createComponent', () => {
 			.render(({ article }) => (
 				<div>
 					{/* Access a field to ensure selection is collected */}
-					<span>{article.$fields.title.value}</span>
-					{/* @ts-expect-error - 'admin' is not in available roles ['editor'] */}
+					<span>{article.title.inputProps.value}</span>
 					<HasRole roles={['admin']} entity={article}>
 						{(adminArticle) => <span>{adminArticle.$data?.title}</span>}
 					</HasRole>
@@ -1218,17 +1217,17 @@ describe('HasRole inside createComponent', () => {
 			.entity('article', 'Article')
 			.render(({ article }) => (
 				<div>
-					<span>{article.$fields.title.value}</span>
+					<span>{article.title.inputProps.value}</span>
 					{/* First level: narrow available roles to editor+admin */}
 					<HasRole roles={['editor', 'admin']} entity={article}>
 						{(editorAdminArticle) => (
 							<div>
 								{/* Entity type is fallback (common fields), access common fields */}
-								<span>{editorAdminArticle.$fields.title.value}</span>
+								<span>{editorAdminArticle.title.inputProps.value}</span>
 								{/* Second level: narrow further to admin only */}
 								<HasRole roles={['admin']} entity={editorAdminArticle}>
 									{(adminArticle) => (
-										<span>{adminArticle.$fields.title.value}</span>
+										<span>{adminArticle.title.inputProps.value}</span>
 									)}
 								</HasRole>
 							</div>
@@ -1270,11 +1269,11 @@ describe('HasRole inside createComponent', () => {
 			.render(({ article }) => (
 				<div>
 					{/* title accessed at root level */}
-					<span>{article.$fields.title.value}</span>
+					<span>{article.title.inputProps.value}</span>
 					<HasRole roles={['admin']} entity={article}>
 						{(adminArticle) => (
 							// internalNotes ONLY accessed inside HasRole children
-							<span>{adminArticle.$fields.internalNotes.value}</span>
+							<span>{adminArticle.internalNotes.inputProps.value}</span>
 						)}
 					</HasRole>
 				</div>

@@ -407,7 +407,7 @@ describe('HasMany with Alias Support', () => {
 			const handle = createHasManyHandle() // No alias
 
 			expect(handle.items.length).toBe(1)
-			expect(handle.items[0]?.id).toBe('t-1')
+			expect(`${handle.items[0]?.id}`).toBe('t-1')
 		})
 
 		test('should connect/disconnect without alias', () => {

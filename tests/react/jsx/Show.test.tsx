@@ -40,6 +40,9 @@ describe('Show component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -80,6 +83,9 @@ describe('Show component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -127,6 +133,9 @@ describe('Show component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -163,6 +172,9 @@ describe('Show component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -207,6 +219,9 @@ describe('Show component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -254,6 +269,9 @@ describe('Show component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -291,6 +309,9 @@ describe('Show component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -322,6 +343,9 @@ describe('Show component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -366,6 +390,9 @@ describe('Show component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -420,6 +447,9 @@ describe('Show component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (

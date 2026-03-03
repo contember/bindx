@@ -112,7 +112,7 @@ export const testSchema = defineSchema<TestSchema>({
 /**
  * Typed hooks created from the test schema
  */
-export const { useEntity, useEntityList, Entity, HasOne, HasMany, Field } = createBindx(testSchema)
+export const { useEntity, useEntityList, Entity } = createBindx(testSchema)
 
 // ============================================================================
 // Minimal Schema (Article + Author only)

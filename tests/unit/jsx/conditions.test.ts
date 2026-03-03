@@ -9,7 +9,9 @@ function getConditionMeta(condition: Condition): { type: string; fields: unknown
 	const symbolKeys = Object.getOwnPropertySymbols(condition)
 	const metaSymbol = symbolKeys.find(s => s.description === 'CONDITION_META')
 	if (!metaSymbol) throw new Error('CONDITION_META not found on condition')
-	return (condition as unknown as Record<symbol, { type: string; fields: unknown[]; evaluate: () => boolean }>)[metaSymbol]
+	const meta = (condition as unknown as Record<symbol, { type: string; fields: unknown[]; evaluate: () => boolean }>)[metaSymbol]
+	if (!meta) throw new Error('CONDITION_META value is undefined')
+	return meta
 }
 
 function evaluateCondition(condition: Condition): boolean {
@@ -49,7 +51,7 @@ function createMockFieldRef<T>(value: T): FieldRef<T> {
 			onChange: () => {},
 		},
 		nested: () => ({}) as any,
-	} as FieldRef<T>
+	} as unknown as FieldRef<T>
 }
 
 // Mock HasManyRef for testing

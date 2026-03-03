@@ -25,10 +25,10 @@ export const AuthorArticlesImplicit = createComponent()
 	.entity('author', 'Author')
 	.render(({ author }) => (
 		<ul>
-			<HasMany field={author.$fields.articles} limit={5}>
+			<HasMany field={author.articles} limit={5}>
 				{article => (
 					<li key={article.id}>
-						<Field field={article.$fields.title} />
+						<Field field={article.title} />
 					</li>
 				)}
 			</HasMany>
@@ -43,7 +43,7 @@ export const AuthorBioImplicit = createComponent()
 	.render(({ author }) => (
 		<div>
 			<p>
-				<Field field={author.$fields.bio} />
+				<Field field={author.bio} />
 			</p>
 		</div>
 	))

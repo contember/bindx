@@ -41,6 +41,9 @@ describe('HasOne component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -80,6 +83,9 @@ describe('HasOne component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				// When disconnected, article.author provides a placeholder
@@ -122,6 +128,9 @@ describe('HasOne component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -161,6 +170,9 @@ describe('HasOne component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -211,6 +223,9 @@ describe('HasOne component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -250,6 +265,9 @@ describe('HasOne component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -294,6 +312,9 @@ describe('HasOne component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -350,6 +371,9 @@ describe('HasOne component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -402,6 +426,9 @@ describe('HasOne component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (

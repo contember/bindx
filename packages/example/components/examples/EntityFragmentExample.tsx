@@ -19,12 +19,12 @@ export const AuthorInfo = createComponent()
 	.render(({ author, showEmail }) => (
 		<div className="author-info">
 			<strong>
-				<Field field={author.$fields.name} />
+				<Field field={author.name} />
 			</strong>
 			{showEmail && (
 				<span className="email">
 					{' '}
-					(<Field field={author.$fields.email} />)
+					(<Field field={author.email} />)
 				</span>
 			)}
 		</div>
@@ -37,10 +37,10 @@ export const AuthorArticles = createComponent()
 	.entity('author', 'Author', e => e.articles({ limit: 5 }, a => a.id().title()))
 	.render(({ author }) => (
 		<ul>
-			<HasMany field={author.$fields.articles}>
+			<HasMany field={author.articles}>
 				{article => (
 					<li key={article.id}>
-						<Field field={article.$fields.title} />
+						<Field field={article.title} />
 					</li>
 				)}
 			</HasMany>
@@ -54,10 +54,10 @@ export const AuthorArticlesImplicit = createComponent()
 	.entity('author', 'Author')
 	.render(({ author }) => (
 		<ul>
-			<HasMany field={author.$fields.articles} limit={5}>
+			<HasMany field={author.articles} limit={5}>
 				{article => (
 					<li key={article.id}>
-						<Field field={article.$fields.title} />
+						<Field field={article.title} />
 					</li>
 				)}
 			</HasMany>
@@ -72,14 +72,14 @@ export const AuthorBio = createComponent()
 	.render(({ author }) => (
 		<div className="author-bio">
 			<p>
-				<Field field={author.$fields.bio} />
+				<Field field={author.bio} />
 			</p>
 			<h4>Recent Articles</h4>
 			<ul>
-				<HasMany field={author.$fields.articles} limit={3}>
+				<HasMany field={author.articles} limit={3}>
 					{article => (
 						<li key={article.id}>
-							<Field field={article.$fields.title} />
+							<Field field={article.title} />
 						</li>
 					)}
 				</HasMany>
@@ -95,10 +95,10 @@ export const ArticleTags = createComponent()
 	.props<{ className?: string }>()
 	.render(({ article, className }) => (
 		<div className={className ?? 'article-tags'}>
-			<HasMany field={article.$fields.tags}>
+			<HasMany field={article.tags}>
 				{tag => (
-					<span key={tag.id} className="tag" style={{ backgroundColor: tag.$fields.color.value ?? undefined }}>
-						<Field field={tag.$fields.name} />
+					<span key={tag.id} className="tag" style={{ backgroundColor: tag.color.value ?? undefined }}>
+						<Field field={tag.name} />
 					</span>
 				)}
 			</HasMany>

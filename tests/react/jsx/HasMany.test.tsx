@@ -47,6 +47,9 @@ describe('HasMany component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -91,6 +94,9 @@ describe('HasMany component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div data-testid="wrapper">
@@ -133,6 +139,9 @@ describe('HasMany component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -178,6 +187,9 @@ describe('HasMany component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -219,6 +231,9 @@ describe('HasMany component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -262,6 +277,9 @@ describe('HasMany component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -310,6 +328,9 @@ describe('HasMany component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -356,6 +377,9 @@ describe('HasMany component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -412,6 +436,9 @@ describe('HasMany component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -465,6 +492,9 @@ describe('HasMany component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (
@@ -522,6 +552,9 @@ describe('HasMany component', () => {
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
 				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
+				}
 
 				return (
 					<div>
@@ -557,6 +590,9 @@ describe('HasMany component', () => {
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.isError) {
+					return <div data-testid="error">Error</div>
 				}
 
 				return (

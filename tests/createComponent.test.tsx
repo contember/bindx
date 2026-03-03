@@ -184,8 +184,8 @@ const ImplicitAuthorCard = createComponent()
 	.entity('author', 'Author')
 	.render(({ author }) => (
 		<div data-testid="implicit-author-card">
-			<span data-testid="author-name">{author.name.value}</span>
-			<span data-testid="author-email">{author.email.value}</span>
+			<span data-testid="author-name">{author.name.inputProps.value}</span>
+			<span data-testid="author-email">{author.email.inputProps.value}</span>
 		</div>
 	))
 
@@ -305,7 +305,7 @@ describe('createComponent builder API', () => {
 				.entity('article', 'Article', e => e.title())  // explicit
 				.render(({ author, article }) => (
 					<div>
-						<span>{author.name.value}</span>
+						<span>{author.name.inputProps.value}</span>
 						<span>{article.$data?.title}</span>
 					</div>
 				))
@@ -426,7 +426,7 @@ describe('createComponent.entityInterface', () => {
 				.interfaces<{ item: HasName }>()
 				.render(({ item }) => (
 					<div data-testid="name-card">
-						<span data-testid="name">{item.name.value}</span>
+						<span data-testid="name">{item.name.inputProps.value}</span>
 					</div>
 				))
 
@@ -438,7 +438,7 @@ describe('createComponent.entityInterface', () => {
 			const NameCard = createComponent()
 				.interfaces<{ item: HasName }>()
 				.render(({ item }) => (
-					<div>{item.name.value}</div>
+					<div>{item.name.inputProps.value}</div>
 				))
 
 			const meta = NameCard.$item.__meta
@@ -448,7 +448,7 @@ describe('createComponent.entityInterface', () => {
 		test('isBindxComponent returns true', () => {
 			const NameCard = createComponent()
 				.interfaces<{ item: HasName }>()
-				.render(({ item }) => <span>{item.name.value}</span>)
+				.render(({ item }) => <span>{item.name.inputProps.value}</span>)
 
 			expect(isBindxComponent(NameCard)).toBe(true)
 		})
@@ -460,7 +460,7 @@ describe('createComponent.entityInterface', () => {
 				.interfaces<{ item: HasName }>()
 				.render(({ item }) => (
 					<div data-testid="name-card">
-						<span data-testid="name">{item.name.value}</span>
+						<span data-testid="name">{item.name.inputProps.value}</span>
 					</div>
 				))
 
@@ -484,7 +484,7 @@ describe('createComponent.entityInterface', () => {
 				.interfaces<{ item: HasName }>()
 				.render(({ item }) => (
 					<div data-testid="name-card">
-						<span data-testid="name">{item.name.value}</span>
+						<span data-testid="name">{item.name.inputProps.value}</span>
 					</div>
 				))
 
@@ -512,7 +512,7 @@ describe('createComponent.entityInterface', () => {
 				.interfaces<{ item: HasTitle }>()
 				.render(({ item }) => (
 					<div data-testid="title-card">
-						<span data-testid="title">{item.title.value}</span>
+						<span data-testid="title">{item.title.inputProps.value}</span>
 					</div>
 				))
 
@@ -539,7 +539,7 @@ describe('createComponent.entityInterface', () => {
 				.entity('article', 'Article', e => e.title())
 				.render(({ item, article }) => (
 					<div>
-						<span data-testid="name">{item.name.value}</span>
+						<span data-testid="name">{item.name.inputProps.value}</span>
 						<span data-testid="title">{article.$data?.title}</span>
 					</div>
 				))
@@ -560,7 +560,7 @@ describe('createComponent.entityInterface', () => {
 				.interfaces<{ item: HasName }>()
 				.render(({ item }) => {
 					// These should be typed correctly
-					const name: string | null = item.name.value
+					const name: string | null | undefined = item.name.inputProps.value
 					return <div>{name}</div>
 				})
 
@@ -576,7 +576,7 @@ describe('createComponent.entityInterface', () => {
 				.interfaces<{ item: HasEmail }>({
 					item: e => e.email(),
 				})
-				.render(({ item }) => <div>{item.$data?.email}</div>)
+				.render(({ item }) => <div>{item.email.inputProps.value}</div>)
 
 			expect(EmailCard.$item).toBeDefined()
 			expect(EmailCard.$item.__meta.fields.has('email')).toBe(true)
@@ -592,8 +592,8 @@ describe('createComponent.entityInterface', () => {
 				})
 				.render(({ item, status }) => (
 					<div>
-						<span>{item.name.value}</span>
-						<span>{status.$data?.archivedAt ? 'Archived' : 'Active'}</span>
+						<span>{item.name.inputProps.value}</span>
+						<span>{status.archivedAt?.inputProps?.value ? 'Archived' : 'Active'}</span>
 					</div>
 				))
 
@@ -614,18 +614,18 @@ describe('nested createComponent with relation entity', () => {
 	// e.g., <AuthorBreadcrumbs author={article.author.$entity} />
 
 	test('correctly tracks entity scope when passing relation entity to nested component', () => {
-		// AuthorBreadcrumbs expects an Author entity
+		// AuthorBreadcrumbs expects an Author entity with explicit name selection
 		const AuthorBreadcrumbs = createComponent()
-			.entity('author', 'Author')
+			.entity('author', 'Author', e => e.name())
 			.render(({ author }) => (
 				<div data-testid="author-breadcrumbs">
 					<span data-testid="author-name">{author.name.value}</span>
 				</div>
 			))
 
-		// ArticlePage has an Article entity and passes article.author.$entity to AuthorBreadcrumbs
+		// ArticlePage has an Article entity with explicit selection, so article.author.$entity is available
 		const ArticlePage = createComponent()
-			.entity('article', 'Article')
+			.entity('article', 'Article', e => e.title().author(a => a.name()))
 			.render(({ article }) => (
 				<div data-testid="article-page">
 					<h1>{article.title.value}</h1>
@@ -649,7 +649,7 @@ describe('nested createComponent with relation entity', () => {
 
 	test('renders nested component with relation entity data', async () => {
 		const AuthorBreadcrumbs = createComponent()
-			.entity('author', 'Author')
+			.entity('author', 'Author', e => e.name())
 			.render(({ author }) => (
 				<div data-testid="author-breadcrumbs">
 					<span data-testid="breadcrumb-author-name">{author.name.value}</span>
@@ -657,7 +657,7 @@ describe('nested createComponent with relation entity', () => {
 			))
 
 		const ArticlePage = createComponent()
-			.entity('article', 'Article')
+			.entity('article', 'Article', e => e.title().author(a => a.name()))
 			.render(({ article }) => (
 				<div data-testid="article-page">
 					<h1 data-testid="article-title">{article.title.value}</h1>
@@ -683,16 +683,16 @@ describe('nested createComponent with relation entity', () => {
 	})
 
 	test('correctly tracks scope with multiple levels of nesting', () => {
-		// AuthorName is a simple component showing author name
+		// AuthorName is a simple component showing author name (explicit selection)
 		const AuthorName = createComponent()
-			.entity('author', 'Author')
+			.entity('author', 'Author', e => e.name())
 			.render(({ author }) => (
 				<span data-testid="author-name">{author.name.value}</span>
 			))
 
-		// AuthorCard uses AuthorName internally
+		// AuthorCard uses AuthorName internally (explicit selection for name + email)
 		const AuthorCard = createComponent()
-			.entity('author', 'Author')
+			.entity('author', 'Author', e => e.name().email())
 			.render(({ author }) => (
 				<div data-testid="author-card">
 					<AuthorName author={author} />
@@ -700,9 +700,9 @@ describe('nested createComponent with relation entity', () => {
 				</div>
 			))
 
-		// ArticleWithAuthor passes article.author.$entity to AuthorCard
+		// ArticleWithAuthor uses explicit selection so article.author.$entity is available
 		const ArticleWithAuthor = createComponent()
-			.entity('article', 'Article')
+			.entity('article', 'Article', e => e.title().author(a => a.name().email()))
 			.render(({ article }) => (
 				<div data-testid="article-with-author">
 					<h1>{article.title.value}</h1>

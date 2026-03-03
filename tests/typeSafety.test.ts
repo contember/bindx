@@ -296,7 +296,7 @@ describe('Type Safety - Runtime Behavior', () => {
 				.entity('author', 'Author')
 				.render(({ author }) => {
 					// Access fields to trigger implicit selection collection
-					void author.$fields.name.value
+					void author.name
 					return null
 				})
 
