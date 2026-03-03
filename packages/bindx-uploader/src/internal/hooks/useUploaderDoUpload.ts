@@ -27,7 +27,7 @@ export const useUploaderDoUpload = ({
 				const previewUrl = getPreviewUrl(file)
 				abortController.signal.addEventListener('abort', () => {
 					URL.revokeObjectURL(previewUrl)
-				})
+				}, { once: true })
 
 				return {
 					id: Math.random().toString(36).substring(7),

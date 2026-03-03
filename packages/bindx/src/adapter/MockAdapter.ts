@@ -56,7 +56,7 @@ export class MockAdapter implements BackendAdapter {
 					signal.addEventListener('abort', () => {
 						clearTimeout(timeoutId)
 						reject(new DOMException('Aborted', 'AbortError'))
-					})
+					}, { once: true })
 				}
 			})
 		}
