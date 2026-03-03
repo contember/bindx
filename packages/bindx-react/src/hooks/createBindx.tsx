@@ -1,8 +1,7 @@
-import React, { useMemo, type ReactElement, type ReactNode } from 'react'
+import React, { type ReactElement, type ReactNode } from 'react'
 import {
 	type SchemaDefinition,
 	SchemaRegistry,
-	resolveSelectionMeta,
 	type SelectionInput,
 	type EntityRef,
 	type EntityRefBase,
@@ -14,6 +13,7 @@ import {
 } from '@contember/bindx'
 import { useEntityImpl, type UseEntityOptions, type EntityAccessorResult } from './useEntityImpl.js'
 import { useEntityListImpl, type UseEntityListOptions, type EntityListAccessorResult } from './useEntityListImpl.js'
+import { useStableSelectionMeta } from './useStableSelectionMeta.js'
 import {
 	createComponentBuilder,
 	COMPONENT_MARKER,
@@ -313,11 +313,7 @@ export function createBindx<TModels extends { [K in keyof TModels]: object }>(
 		options: UseEntityOptions,
 		definer: SelectionInput<TModels[TEntityName], TResult>,
 	): EntityAccessorResult<TModels[TEntityName], TResult> {
-		const selectionMeta = useMemo(
-			() => resolveSelectionMeta(definer),
-			// eslint-disable-next-line react-hooks/exhaustive-deps
-			[entityType],
-		)
+		const selectionMeta = useStableSelectionMeta(definer)
 
 		return useEntityImpl<TModels[TEntityName], TResult>(
 			entityType,
@@ -335,11 +331,7 @@ export function createBindx<TModels extends { [K in keyof TModels]: object }>(
 		options: UseEntityListOptions,
 		definer: SelectionInput<TModels[TEntityName], TResult>,
 	): EntityListAccessorResult<TResult> {
-		const selectionMeta = useMemo(
-			() => resolveSelectionMeta(definer),
-			// eslint-disable-next-line react-hooks/exhaustive-deps
-			[entityType],
-		)
+		const selectionMeta = useStableSelectionMeta(definer)
 
 		return useEntityListImpl<TResult>(
 			entityType,
@@ -445,11 +437,7 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 		options: UseEntityOptions & { roles?: TRoles },
 		definer: SelectionInput<EntityForRoles<TRoleSchemas, TRoles, TEntityName>, TResult>,
 	): EntityAccessorResult<EntityForRoles<TRoleSchemas, TRoles, TEntityName>, TResult> {
-		const selectionMeta = useMemo(
-			() => resolveSelectionMeta(definer),
-			// eslint-disable-next-line react-hooks/exhaustive-deps
-			[entityType],
-		)
+		const selectionMeta = useStableSelectionMeta(definer)
 
 		return useEntityImpl<EntityForRoles<TRoleSchemas, TRoles, TEntityName>, TResult>(
 			entityType,
@@ -473,11 +461,7 @@ export function createRoleAwareBindx<TRoleSchemas extends RoleSchemasBase<TRoleS
 	): EntityListAccessorResult<TResult> {
 		const { roles: _roles, ...restOptions } = options
 
-		const selectionMeta = useMemo(
-			() => resolveSelectionMeta(definer),
-			// eslint-disable-next-line react-hooks/exhaustive-deps
-			[entityType],
-		)
+		const selectionMeta = useStableSelectionMeta(definer)
 
 		return useEntityListImpl<TResult>(
 			entityType,
