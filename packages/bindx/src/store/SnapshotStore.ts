@@ -1,8 +1,4 @@
-import {
-	createEntitySnapshot,
-	type EntitySnapshot,
-	type LoadStatus,
-} from './snapshots.js'
+import type { EntitySnapshot, LoadStatus } from './snapshots.js'
 import type { FieldError } from '../errors/types.js'
 import { SubscriptionManager, type SnapshotVersionBumper } from './SubscriptionManager.js'
 import { ErrorStore } from './ErrorStore.js'
@@ -16,6 +12,7 @@ import { EntityMetaStore, type EntityMeta } from './EntityMetaStore.js'
 import { TouchedStore } from './TouchedStore.js'
 import { generateTempId } from './entityId.js'
 import { DirtyTracker } from './DirtyTracker.js'
+import { EntitySnapshotStore } from './EntitySnapshotStore.js'
 
 export type { HasManyRemovalType, StoredHasManyState, StoredRelationState } from './RelationStore.js'
 export type { EntityMeta } from './EntityMetaStore.js'
@@ -33,6 +30,7 @@ type Subscriber = () => void
  * - Entity-level subscriptions for fine-grained reactivity
  *
  * Composed of:
+ * - EntitySnapshotStore — entity snapshot CRUD
  * - SubscriptionManager — subscription tracking and notification
  * - ErrorStore — field/entity/relation error tracking
  * - RelationStore — has-one / has-many relation state management
@@ -40,15 +38,17 @@ type Subscriber = () => void
  * - TouchedStore — field touched state tracking
  */
 export class SnapshotStore implements SnapshotVersionBumper {
-	/** Entity snapshots keyed by "entityType:id" */
-	private readonly entitySnapshots = new Map<string, EntitySnapshot>()
-
+	private readonly entitySnapshots = new EntitySnapshotStore()
 	private readonly subscriptions = new SubscriptionManager()
 	private readonly errors = new ErrorStore()
 	private readonly relations = new RelationStore()
 	private readonly meta = new EntityMetaStore()
 	private readonly touched = new TouchedStore()
-	private readonly dirtyTracker = new DirtyTracker(this.entitySnapshots, this.meta, this.relations)
+	private readonly dirtyTracker: DirtyTracker
+
+	constructor() {
+		this.dirtyTracker = new DirtyTracker(this.entitySnapshots, this.meta, this.relations)
+	}
 
 	// ==================== Key Generation ====================
 
@@ -63,17 +63,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	// ==================== SnapshotVersionBumper ====================
 
 	bumpEntitySnapshotVersion(key: string): void {
-		const existing = this.entitySnapshots.get(key)
-		if (existing) {
-			const newSnapshot = createEntitySnapshot(
-				existing.id,
-				existing.entityType,
-				existing.data,
-				existing.serverData,
-				existing.version + 1,
-			)
-			this.entitySnapshots.set(key, newSnapshot)
-		}
+		this.entitySnapshots.bumpVersion(key)
 	}
 
 	// ==================== Notification Helpers ====================
@@ -110,25 +100,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		skipNotify: boolean = false,
 	): EntitySnapshot<T> {
 		const key = this.getEntityKey(entityType, id)
-		const existing = this.entitySnapshots.get(key)
-
-		const mergedData = existing?.data
-			? { ...existing.data, ...data } as T
-			: data
-
-		const serverData = isServerData
-			? (existing?.serverData ? { ...existing.serverData, ...data } as T : data)
-			: (existing?.serverData as T) ?? mergedData
-
-		const newSnapshot = createEntitySnapshot(
-			id,
-			entityType,
-			mergedData,
-			serverData,
-			(existing?.version ?? 0) + 1,
-		)
-
-		this.entitySnapshots.set(key, newSnapshot)
+		const newSnapshot = this.entitySnapshots.setData(key, id, entityType, data, isServerData)
 
 		if (isServerData) {
 			this.meta.setExistsOnServer(key, true)
@@ -138,7 +110,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 			this.notifyEntitySubscribers(key)
 		}
 
-		return newSnapshot
+		return newSnapshot as EntitySnapshot<T>
 	}
 
 	updateEntityFields<T extends object>(
@@ -147,23 +119,11 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		updates: Partial<T>,
 	): EntitySnapshot<T> | undefined {
 		const key = this.getEntityKey(entityType, id)
-		const existing = this.entitySnapshots.get(key)
-
-		if (!existing) return undefined
-
-		const newData = { ...existing.data, ...updates } as T
-		const newSnapshot = createEntitySnapshot(
-			id,
-			entityType,
-			newData,
-			existing.serverData as T,
-			existing.version + 1,
-		)
-
-		this.entitySnapshots.set(key, newSnapshot)
-		this.notifyEntitySubscribers(key)
-
-		return newSnapshot
+		const result = this.entitySnapshots.updateFields<T>(key, updates)
+		if (result) {
+			this.notifyEntitySubscribers(key)
+		}
+		return result
 	}
 
 	setFieldValue(
@@ -173,63 +133,26 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		value: unknown,
 	): void {
 		const key = this.getEntityKey(entityType, id)
-		const existing = this.entitySnapshots.get(key)
-
-		if (!existing) return
-
-		const newData = setNestedValue({ ...existing.data }, fieldPath, value)
-
-		const newSnapshot = createEntitySnapshot(
-			id,
-			entityType,
-			newData,
-			existing.serverData,
-			existing.version + 1,
-		)
-
-		this.entitySnapshots.set(key, newSnapshot)
-		this.notifyEntitySubscribers(key)
+		if (this.entitySnapshots.setFieldValue(key, fieldPath, value)) {
+			this.notifyEntitySubscribers(key)
+		}
 	}
 
 	commitEntity(entityType: string, id: string): void {
 		const key = this.getEntityKey(entityType, id)
-		const existing = this.entitySnapshots.get(key)
-
-		if (!existing) return
-
-		const newSnapshot = createEntitySnapshot(
-			id,
-			entityType,
-			existing.data,
-			existing.data,
-			existing.version + 1,
-		)
-
-		this.entitySnapshots.set(key, newSnapshot)
+		this.entitySnapshots.commit(key)
 		this.notifyEntitySubscribers(key)
 	}
 
 	resetEntity(entityType: string, id: string): void {
 		const key = this.getEntityKey(entityType, id)
-		const existing = this.entitySnapshots.get(key)
-
-		if (!existing) return
-
-		const newSnapshot = createEntitySnapshot(
-			id,
-			entityType,
-			existing.serverData,
-			existing.serverData,
-			existing.version + 1,
-		)
-
-		this.entitySnapshots.set(key, newSnapshot)
+		this.entitySnapshots.reset(key)
 		this.notifyEntitySubscribers(key)
 	}
 
 	removeEntity(entityType: string, id: string): void {
 		const key = this.getEntityKey(entityType, id)
-		this.entitySnapshots.delete(key)
+		this.entitySnapshots.remove(key)
 		this.meta.clearLoadState(key)
 		this.notifyEntitySubscribers(key)
 	}
@@ -771,17 +694,8 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		hasManyStates: Map<string, StoredHasManyState>
 		entityMetas: Map<string, EntityMeta>
 	} {
-		const entitySnapshots = new Map<string, EntitySnapshot>()
-
-		for (const key of keys.entityKeys) {
-			const snapshot = this.entitySnapshots.get(key)
-			if (snapshot) {
-				entitySnapshots.set(key, snapshot)
-			}
-		}
-
 		return {
-			entitySnapshots,
+			entitySnapshots: this.entitySnapshots.exportSnapshots(keys.entityKeys),
 			relationStates: this.relations.exportRelationStates(keys.relationKeys),
 			hasManyStates: this.relations.exportHasManyStates(keys.hasManyKeys),
 			entityMetas: this.meta.exportMetas(keys.entityKeys),
@@ -794,12 +708,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		hasManyStates: Map<string, StoredHasManyState>
 		entityMetas: Map<string, EntityMeta>
 	}): void {
-		const notifiedEntityKeys = new Set<string>()
-
-		for (const [key, entitySnapshot] of snapshot.entitySnapshots) {
-			this.entitySnapshots.set(key, entitySnapshot)
-			notifiedEntityKeys.add(key)
-		}
+		const notifiedEntityKeys = this.entitySnapshots.importSnapshots(snapshot.entitySnapshots)
 
 		this.meta.importMetas(snapshot.entityMetas)
 
@@ -838,29 +747,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 
 	commitFields(entityType: string, entityId: string, fieldNames: string[]): void {
 		const key = this.getEntityKey(entityType, entityId)
-		const existing = this.entitySnapshots.get(key)
-
-		if (!existing) return
-
-		const data = existing.data as Record<string, unknown>
-		const serverData = existing.serverData as Record<string, unknown>
-
-		const newServerData = { ...serverData }
-		for (const fieldName of fieldNames) {
-			if (fieldName in data) {
-				newServerData[fieldName] = data[fieldName]
-			}
-		}
-
-		const newSnapshot = createEntitySnapshot(
-			entityId,
-			entityType,
-			data,
-			newServerData,
-			existing.version + 1,
-		)
-
-		this.entitySnapshots.set(key, newSnapshot)
+		this.entitySnapshots.commitFields(key, fieldNames)
 		this.notifyEntitySubscribers(key)
 	}
 
@@ -876,38 +763,3 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		this.subscriptions.notify()
 	}
 }
-
-// ==================== Helper Functions ====================
-
-/**
- * Sets a nested value in an object, returning a new object.
- */
-function setNestedValue<T extends Record<string, unknown>>(
-	obj: T,
-	path: string[],
-	value: unknown,
-): T {
-	if (path.length === 0) return obj
-
-	const result = { ...obj }
-	let current: Record<string, unknown> = result
-
-	for (let i = 0; i < path.length - 1; i++) {
-		const key = path[i]!
-		const nextValue = current[key]
-
-		if (typeof nextValue === 'object' && nextValue !== null) {
-			current[key] = { ...nextValue as Record<string, unknown> }
-		} else {
-			current[key] = {}
-		}
-
-		current = current[key] as Record<string, unknown>
-	}
-
-	const lastKey = path[path.length - 1]!
-	current[lastKey] = value
-
-	return result
-}
-

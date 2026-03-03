@@ -1,4 +1,4 @@
-import type { EntitySnapshot } from './snapshots.js'
+import type { EntitySnapshotStore } from './EntitySnapshotStore.js'
 import type { EntityMetaStore } from './EntityMetaStore.js'
 import type { RelationStore } from './RelationStore.js'
 import { deepEqual } from '../utils/deepEqual.js'
@@ -17,7 +17,7 @@ interface DirtyEntity {
  */
 export class DirtyTracker {
 	constructor(
-		private readonly entitySnapshots: ReadonlyMap<string, EntitySnapshot>,
+		private readonly entitySnapshots: EntitySnapshotStore,
 		private readonly meta: EntityMetaStore,
 		private readonly relations: RelationStore,
 	) {}
@@ -25,7 +25,7 @@ export class DirtyTracker {
 	getAllDirtyEntities(): DirtyEntity[] {
 		const dirtyEntities: DirtyEntity[] = []
 
-		for (const [key] of this.entitySnapshots) {
+		for (const key of this.entitySnapshots.keys()) {
 			const [entityType, ...idParts] = key.split(':')
 			const entityId = idParts.join(':')
 
@@ -56,6 +56,7 @@ export class DirtyTracker {
 	getDirtyFields(entityType: string, entityId: string): string[] {
 		const key = `${entityType}:${entityId}`
 		const snapshot = this.entitySnapshots.get(key)
+
 		if (!snapshot) return []
 
 		const data = snapshot.data as Record<string, unknown>
