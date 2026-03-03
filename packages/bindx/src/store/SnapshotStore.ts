@@ -4,7 +4,6 @@ import {
 	type LoadStatus,
 } from './snapshots.js'
 import type { FieldError } from '../errors/types.js'
-import { deepEqual } from '../utils/deepEqual.js'
 import { SubscriptionManager, type SnapshotVersionBumper } from './SubscriptionManager.js'
 import { ErrorStore } from './ErrorStore.js'
 import {
@@ -16,6 +15,7 @@ import {
 import { EntityMetaStore, type EntityMeta } from './EntityMetaStore.js'
 import { TouchedStore } from './TouchedStore.js'
 import { generateTempId } from './entityId.js'
+import { DirtyTracker } from './DirtyTracker.js'
 
 export type { HasManyRemovalType, StoredHasManyState, StoredRelationState } from './RelationStore.js'
 export type { EntityMeta } from './EntityMetaStore.js'
@@ -48,6 +48,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	private readonly relations = new RelationStore()
 	private readonly meta = new EntityMetaStore()
 	private readonly touched = new TouchedStore()
+	private readonly dirtyTracker = new DirtyTracker(this.entitySnapshots, this.meta, this.relations)
 
 	// ==================== Key Generation ====================
 
@@ -817,86 +818,22 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		}
 	}
 
-	// ==================== Dirty Tracking ====================
+	// ==================== Dirty Tracking (delegated to DirtyTracker) ====================
 
 	getAllDirtyEntities(): Array<{
 		entityType: string
 		entityId: string
 		changeType: 'create' | 'update' | 'delete'
 	}> {
-		const dirtyEntities: Array<{
-			entityType: string
-			entityId: string
-			changeType: 'create' | 'update' | 'delete'
-		}> = []
-
-		for (const [key] of this.entitySnapshots) {
-			const [entityType, ...idParts] = key.split(':')
-			const entityId = idParts.join(':')
-
-			if (!entityType || !entityId) continue
-
-			if (this.isScheduledForDeletion(entityType, entityId)) {
-				if (this.existsOnServer(entityType, entityId)) {
-					dirtyEntities.push({ entityType, entityId, changeType: 'delete' })
-				}
-				continue
-			}
-
-			if (!this.existsOnServer(entityType, entityId)) {
-				dirtyEntities.push({ entityType, entityId, changeType: 'create' })
-				continue
-			}
-
-			if (this.isEntityDirty(entityType, entityId)) {
-				dirtyEntities.push({ entityType, entityId, changeType: 'update' })
-			}
-		}
-
-		return dirtyEntities
-	}
-
-	private isEntityDirty(entityType: string, entityId: string): boolean {
-		const dirtyFields = this.getDirtyFields(entityType, entityId)
-		if (dirtyFields.length > 0) return true
-
-		const keyPrefix = `${entityType}:${entityId}:`
-		const dirtyRelations = this.relations.getDirtyRelations(keyPrefix)
-		if (dirtyRelations.length > 0) return true
-
-		return false
+		return this.dirtyTracker.getAllDirtyEntities()
 	}
 
 	getDirtyFields(entityType: string, entityId: string): string[] {
-		const snapshot = this.getEntitySnapshot(entityType, entityId)
-		if (!snapshot) return []
-
-		const data = snapshot.data as Record<string, unknown>
-		const serverData = snapshot.serverData as Record<string, unknown>
-
-		const dirtyFields: string[] = []
-
-		for (const fieldName of Object.keys(data)) {
-			if (fieldName === 'id') continue
-
-			const currentValue = data[fieldName]
-			const serverValue = serverData[fieldName]
-
-			if (isRelationValue(currentValue) || isRelationValue(serverValue)) {
-				continue
-			}
-
-			if (!deepEqual(currentValue, serverValue)) {
-				dirtyFields.push(fieldName)
-			}
-		}
-
-		return dirtyFields
+		return this.dirtyTracker.getDirtyFields(entityType, entityId)
 	}
 
 	getDirtyRelations(entityType: string, entityId: string): string[] {
-		const keyPrefix = `${entityType}:${entityId}:`
-		return this.relations.getDirtyRelations(keyPrefix)
+		return this.dirtyTracker.getDirtyRelations(entityType, entityId)
 	}
 
 	commitFields(entityType: string, entityId: string, fieldNames: string[]): void {
@@ -974,19 +911,3 @@ function setNestedValue<T extends Record<string, unknown>>(
 	return result
 }
 
-/**
- * Checks if a value represents a relation (object with id or array of objects).
- */
-function isRelationValue(value: unknown): boolean {
-	if (value === null || value === undefined) return false
-
-	if (Array.isArray(value)) {
-		return value.length > 0 && typeof value[0] === 'object' && value[0] !== null
-	}
-
-	if (typeof value === 'object') {
-		return 'id' in (value as object)
-	}
-
-	return false
-}
