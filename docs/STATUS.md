@@ -20,7 +20,7 @@
 
 ## Code Quality
 
-- [ ] 013 - Large files exceeding 300-line guideline
+- [ ] 013 - Large files exceeding 300-line guideline (SnapshotStore.ts split done)
 - [ ] 014 - `any` types in componentBuilder
 - [ ] 015 - `as` type casts in createBindx
 - [ ] 016 - `as any` casts in ContemberAdapter
