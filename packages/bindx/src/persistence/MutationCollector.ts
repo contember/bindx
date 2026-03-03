@@ -377,6 +377,7 @@ export class MutationCollector implements MutationDataCollector {
 
 	/**
 	 * Collects has-many relation operations.
+	 * Uses StoredHasManyState as the single source of truth for all operations.
 	 * Returns array of operations or null if no changes.
 	 */
 	private collectHasManyOperations(
@@ -384,128 +385,70 @@ export class MutationCollector implements MutationDataCollector {
 		entityId: string,
 		fieldName: string,
 	): Array<Record<string, unknown>> | null {
-		// Get current data from snapshot
-		const snapshot = this.store.getEntitySnapshot(entityType, entityId)
-		if (!snapshot) return null
-
-		const data = snapshot.data as Record<string, unknown>
-		const serverData = snapshot.serverData as Record<string, unknown>
-
-		const currentItems = (data[fieldName] as Array<Record<string, unknown>>) ?? []
-		const serverItems = (serverData[fieldName] as Array<Record<string, unknown>>) ?? []
+		const hasManyState = this.store.getHasMany(entityType, entityId, fieldName)
+		if (!hasManyState) return null
 
 		const operations: Array<Record<string, unknown>> = []
+		const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
 
-		// Build sets of IDs for comparison (exclude temp IDs from current)
-		const currentIds = new Set(
-			currentItems
-				.map(item => item['id'] as string)
-				.filter(id => id && !id.startsWith('__temp_')),
-		)
-		const serverIds = new Set(serverItems.map(item => item['id'] as string).filter(Boolean))
-
-		// Check for planned removals from store
-		const plannedRemovals = this.store.getHasManyPlannedRemovals(entityType, entityId, fieldName)
-		if (plannedRemovals) {
-			for (const [removedId, removalType] of plannedRemovals) {
-				if (removalType === 'delete') {
-					operations.push({ delete: { id: removedId } })
-				} else if (removalType === 'disconnect') {
-					operations.push({ disconnect: { id: removedId } })
-				}
+		// Planned removals -> disconnect/delete
+		for (const [removedId, removalType] of hasManyState.plannedRemovals) {
+			if (removalType === 'delete') {
+				operations.push({ delete: { id: removedId } })
+			} else {
+				operations.push({ disconnect: { id: removedId } })
 			}
 		}
 
-		// Get created entities (via add() method) and planned connections
-		const createdEntities = this.store.getHasManyCreatedEntities(entityType, entityId, fieldName)
-		const plannedConnections = this.store.getHasManyPlannedConnections(entityType, entityId, fieldName)
-
-		// Items to create (entities created via add())
-		if (createdEntities) {
-			const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
-
-			for (const tempId of createdEntities) {
-				if (targetType) {
-					const itemSnapshot = this.store.getEntitySnapshot(targetType, tempId)
-					if (itemSnapshot) {
-						const createData = { ...itemSnapshot.data as Record<string, unknown> }
-						delete createData['id']
-						if (Object.keys(createData).length > 0) {
-							operations.push({ create: this.processNestedData(createData) })
-						} else {
-							// Empty create - just create with no data
-							operations.push({ create: {} })
-						}
+		// Created entities -> create (using entity snapshot data)
+		if (targetType) {
+			for (const tempId of hasManyState.createdEntities) {
+				const itemSnapshot = this.store.getEntitySnapshot(targetType, tempId)
+				if (itemSnapshot) {
+					const createData = { ...itemSnapshot.data as Record<string, unknown> }
+					delete createData['id']
+					if (Object.keys(createData).length > 0) {
+						operations.push({ create: this.processNestedData(createData) })
+					} else {
+						operations.push({ create: {} })
 					}
 				}
 			}
 		}
 
-		// Items to connect (planned connections that are not created entities)
-		if (plannedConnections) {
-			for (const connectedId of plannedConnections) {
-				// Skip if it's a created entity (already handled above)
-				if (createdEntities?.has(connectedId)) continue
-				// Skip if already planned for removal
-				if (plannedRemovals?.has(connectedId)) continue
-				operations.push({ connect: { id: connectedId } })
-			}
+		// Planned connections (minus created entities) -> connect
+		for (const connectedId of hasManyState.plannedConnections) {
+			if (hasManyState.createdEntities.has(connectedId)) continue
+			operations.push({ connect: { id: connectedId } })
 		}
 
-		// Items to connect from embedded data (in current but not in server, with existing ID, not temp)
-		for (const item of currentItems) {
-			const itemId = item['id'] as string
-			if (itemId && !itemId.startsWith('__temp_') && !serverIds.has(itemId)) {
-				// Skip if already planned for removal
-				if (plannedRemovals?.has(itemId)) continue
-				// Skip if already in planned connections
-				if (plannedConnections?.has(itemId)) continue
-				operations.push({ connect: { id: itemId } })
-			}
-		}
+		// Server items that aren't removed -> check for updates via entity snapshots
+		if (targetType) {
+			for (const itemId of hasManyState.serverIds) {
+				if (hasManyState.plannedRemovals.has(itemId)) continue
 
-		// Items to disconnect (in server but not in current, without planned removal)
-		for (const serverItem of serverItems) {
-			const itemId = serverItem['id'] as string
-			if (itemId && !currentIds.has(itemId)) {
-				// Only disconnect if not already planned for removal
-				if (!plannedRemovals?.has(itemId)) {
-					operations.push({ disconnect: { id: itemId } })
+				const itemSnapshot = this.store.getEntitySnapshot(targetType, itemId)
+				if (!itemSnapshot) continue
+
+				const itemData = itemSnapshot.data as Record<string, unknown>
+				const itemServerData = itemSnapshot.serverData as Record<string, unknown>
+
+				const changes: Record<string, unknown> = {}
+				for (const [key, value] of Object.entries(itemData)) {
+					if (key === 'id') continue
+					if (!deepEqual(value, itemServerData[key])) {
+						changes[key] = value
+					}
 				}
-			}
-		}
 
-		// Items to create from embedded data (items without ID or with temp ID in currentItems)
-		for (const item of currentItems) {
-			const itemId = item['id'] as string
-			if (!itemId || itemId.startsWith('__temp_')) {
-				// Skip if it's a created entity (already handled above)
-				if (itemId && createdEntities?.has(itemId)) continue
-				const createData = { ...item }
-				delete createData['id']
-				if (Object.keys(createData).length > 0) {
-					operations.push({ create: this.processNestedData(createData) })
+				if (Object.keys(changes).length > 0) {
+					operations.push({
+						update: {
+							by: { id: itemId },
+							data: changes,
+						},
+					})
 				}
-			}
-		}
-
-		// Items to update (in both, but with different data)
-		for (const currentItem of currentItems) {
-			const itemId = currentItem['id'] as string
-			if (!itemId || itemId.startsWith('__temp_')) continue
-
-			const serverItem = serverItems.find(s => s['id'] === itemId)
-			if (!serverItem) continue
-
-			// Check if item data changed
-			const itemChanges = this.collectItemChanges(currentItem, serverItem)
-			if (itemChanges && Object.keys(itemChanges).length > 0) {
-				operations.push({
-					update: {
-						by: { id: itemId },
-						data: itemChanges,
-					},
-				})
 			}
 		}
 
@@ -545,27 +488,6 @@ export class MutationCollector implements MutationDataCollector {
 	}
 
 	// ==================== Helper Methods ====================
-
-	/**
-	 * Collects changes between current and server item data.
-	 */
-	private collectItemChanges(
-		currentItem: Record<string, unknown>,
-		serverItem: Record<string, unknown>,
-	): Record<string, unknown> | null {
-		const changes: Record<string, unknown> = {}
-
-		for (const [key, value] of Object.entries(currentItem)) {
-			if (key === 'id') continue
-
-			const serverValue = serverItem[key]
-			if (!deepEqual(value, serverValue)) {
-				changes[key] = value
-			}
-		}
-
-		return Object.keys(changes).length > 0 ? changes : null
-	}
 
 	/**
 	 * Processes nested data to handle relation objects.

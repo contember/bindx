@@ -11,7 +11,7 @@
 ## Important
 
 - [x] 006 - Dual persistence managers
-- [ ] 007 - Dual source of truth for has-many state
+- [x] 007 - Dual source of truth for has-many state
 - [ ] 008 - Interceptors unusable with sync dispatch
 - [ ] 009 - `inputProps` creates new object on every access
 - [ ] 010 - Constructor anti-pattern with Proxy

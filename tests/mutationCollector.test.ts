@@ -239,13 +239,9 @@ describe('MutationCollector', () => {
 				tags: [{ id: 'tag-1', name: 'Tag1' }],
 			}, true)
 
-			// Add a new tag (already exists in DB)
-			store.updateEntityFields('Article', 'a-1', {
-				tags: [
-					{ id: 'tag-1', name: 'Tag1' },
-					{ id: 'tag-2', name: 'Tag2' },
-				],
-			})
+			// Set up has-many state and plan connection
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['tag-1'])
+			store.planHasManyConnection('Article', 'a-1', 'tags', 'tag-2')
 
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
@@ -264,10 +260,9 @@ describe('MutationCollector', () => {
 				],
 			}, true)
 
-			// Remove tag-2
-			store.updateEntityFields('Article', 'a-1', {
-				tags: [{ id: 'tag-1', name: 'Tag1' }],
-			})
+			// Set up has-many state and plan removal
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['tag-1', 'tag-2'])
+			store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-2', 'disconnect')
 
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
@@ -276,41 +271,22 @@ describe('MutationCollector', () => {
 			})
 		})
 
-		test('should generate create operation for new items without ID', () => {
+		test('should generate create operation for new entity via add()', () => {
 			store.setEntityData('Article', 'a-1', {
 				id: 'a-1',
 				title: 'Article',
 				tags: [],
 			}, true)
 
-			// Add new tag without ID
-			store.updateEntityFields('Article', 'a-1', {
-				tags: [{ name: 'NewTag' }],
-			})
+			// Create a new tag entity and add it to the has-many relation
+			const tempId = store.createEntity('Tag', { name: 'NewTag' })
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', [])
+			store.addToHasMany('Article', 'a-1', 'tags', tempId)
 
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
 			expect(mutation).toEqual({
 				tags: [{ create: { name: 'NewTag' } }],
-			})
-		})
-
-		test('should generate create operation for items with temp ID', () => {
-			store.setEntityData('Article', 'a-1', {
-				id: 'a-1',
-				title: 'Article',
-				tags: [],
-			}, true)
-
-			// Add new tag with temp ID
-			store.updateEntityFields('Article', 'a-1', {
-				tags: [{ id: '__temp_123', name: 'TempTag' }],
-			})
-
-			const mutation = collector.collectUpdateData('Article', 'a-1')
-
-			expect(mutation).toEqual({
-				tags: [{ create: { name: 'TempTag' } }],
 			})
 		})
 
@@ -321,10 +297,15 @@ describe('MutationCollector', () => {
 				tags: [{ id: 'tag-1', name: 'OriginalName' }],
 			}, true)
 
-			// Change tag name
-			store.updateEntityFields('Article', 'a-1', {
-				tags: [{ id: 'tag-1', name: 'UpdatedName' }],
-			})
+			// Set up tag entity with server data, then change it
+			store.setEntityData('Tag', 'tag-1', {
+				id: 'tag-1',
+				name: 'OriginalName',
+			}, true)
+			store.setFieldValue('Tag', 'tag-1', ['name'], 'UpdatedName')
+
+			// Set up has-many state with server IDs
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['tag-1'])
 
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
@@ -348,14 +329,18 @@ describe('MutationCollector', () => {
 				],
 			}, true)
 
-			// Connect tag-3, disconnect tag-2, update tag-1, create new
-			store.updateEntityFields('Article', 'a-1', {
-				tags: [
-					{ id: 'tag-1', name: 'UpdatedTag1' },
-					{ id: 'tag-3', name: 'Tag3' },
-					{ name: 'BrandNew' },
-				],
-			})
+			// Set up tag-1 entity with server data, then change it
+			store.setEntityData('Tag', 'tag-1', { id: 'tag-1', name: 'Tag1' }, true)
+			store.setFieldValue('Tag', 'tag-1', ['name'], 'UpdatedTag1')
+
+			// Set up has-many state
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['tag-1', 'tag-2'])
+
+			// Connect tag-3, disconnect tag-2, create new entity
+			store.planHasManyConnection('Article', 'a-1', 'tags', 'tag-3')
+			store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-2', 'disconnect')
+			const tempId = store.createEntity('Tag', { name: 'BrandNew' })
+			store.addToHasMany('Article', 'a-1', 'tags', tempId)
 
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
@@ -364,7 +349,7 @@ describe('MutationCollector', () => {
 
 			const tagOps = mutation!['tags'] as any[]
 
-			// Should have connect for tag-3, disconnect for tag-2, update for tag-1, create for new
+			// Should have disconnect for tag-2, create for new, connect for tag-3, update for tag-1
 			expect(tagOps).toContainEqual({ connect: { id: 'tag-3' } })
 			expect(tagOps).toContainEqual({ disconnect: { id: 'tag-2' } })
 			expect(tagOps).toContainEqual({ create: { name: 'BrandNew' } })
@@ -401,13 +386,9 @@ describe('MutationCollector', () => {
 				state: 'connected',
 			})
 
-			// Add tag
-			store.updateEntityFields('Article', 'a-1', {
-				tags: [
-					{ id: 'tag-1', name: 'Tag1' },
-					{ id: 'tag-2', name: 'Tag2' },
-				],
-			})
+			// Add tag via has-many state
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['tag-1'])
+			store.planHasManyConnection('Article', 'a-1', 'tags', 'tag-2')
 
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
@@ -774,11 +755,6 @@ describe('MutationCollector', () => {
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['tag-1', 'tag-2'])
 			store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-2', 'disconnect')
 
-			// Remove tag-2 from current data
-			store.updateEntityFields('Article', 'a-1', {
-				tags: [{ id: 'tag-1', name: 'Tag1' }],
-			})
-
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
 			expect(mutation).toEqual({
@@ -799,11 +775,6 @@ describe('MutationCollector', () => {
 			// Plan to delete tag-2
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['tag-1', 'tag-2'])
 			store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-2', 'delete')
-
-			// Remove tag-2 from current data
-			store.updateEntityFields('Article', 'a-1', {
-				tags: [{ id: 'tag-1', name: 'Tag1' }],
-			})
 
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
@@ -828,11 +799,6 @@ describe('MutationCollector', () => {
 			store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-2', 'disconnect')
 			store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-3', 'delete')
 
-			// Remove both from current data
-			store.updateEntityFields('Article', 'a-1', {
-				tags: [{ id: 'tag-1', name: 'Tag1' }],
-			})
-
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
 			expect(mutation).not.toBeNull()
@@ -852,11 +818,6 @@ describe('MutationCollector', () => {
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['tag-1'])
 			store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-1', 'disconnect')
 
-			// Remove from current data
-			store.updateEntityFields('Article', 'a-1', {
-				tags: [],
-			})
-
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
 			expect(mutation).toEqual({
@@ -865,7 +826,7 @@ describe('MutationCollector', () => {
 
 			// Should only have one disconnect operation
 			const tagOps = mutation!['tags'] as any[]
-			expect(tagOps.filter(op => op.disconnect)).toHaveLength(1)
+			expect(tagOps.filter((op: any) => op.disconnect)).toHaveLength(1)
 		})
 	})
 })
