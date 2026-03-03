@@ -11,6 +11,7 @@ export type {
 	CreateResult,
 	DeleteResult,
 	EntityUniqueWhere,
+	UniqueWhereValue,
 	TransactionMutation,
 	TransactionMutationResult,
 	TransactionResult,

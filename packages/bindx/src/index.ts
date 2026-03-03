@@ -95,6 +95,7 @@ export type {
 	MockAdapterOptions,
 	ContemberAdapterOptions,
 	EntityUniqueWhere,
+	UniqueWhereValue,
 	TransactionMutation as AdapterTransactionMutation,
 	TransactionMutationResult as AdapterTransactionMutationResult,
 	TransactionResult as AdapterTransactionResult,

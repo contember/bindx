@@ -13,10 +13,16 @@ export interface QueryOptions {
 }
 
 /**
+ * Recursive value type for unique where fields (string or number identifiers).
+ * Structurally compatible with Input.UniqueWhere from @contember/schema.
+ */
+export type UniqueWhereValue = string | number | { readonly [field: string]: UniqueWhereValue }
+
+/**
  * Unique field lookup for single entity queries.
  * Supports id and any other unique field.
  */
-export type EntityUniqueWhere = Record<string, unknown>
+export type EntityUniqueWhere = { readonly [field: string]: UniqueWhereValue }
 
 /**
  * Query for a single entity by unique field(s)

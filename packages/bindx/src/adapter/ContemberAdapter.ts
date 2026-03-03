@@ -1,5 +1,16 @@
 import { GraphQlClient } from '@contember/graphql-client'
-import { ContentClient, ContentQueryBuilder, ContentEntitySelection, SchemaNames, ContentQuery } from '@contember/client-content'
+import {
+	ContentClient,
+	ContentQueryBuilder,
+	ContentEntitySelection,
+	SchemaNames,
+	ContentQuery,
+	type EntitySelectionManyArgs,
+	type EntitySelectionOneArgs,
+	type EntitySelectionColumnArgs,
+	type ContentClientInput,
+} from '@contember/client-content'
+import { type Input } from '@contember/schema'
 import type { QuerySpec, QueryFieldSpec } from '../selection/buildQuery.js'
 import type { BackendAdapter, Query, QueryResult, QueryOptions, GetQuery, ListQuery, PersistResult, CreateResult, DeleteResult } from './types.js'
 import type { ContemberMutationResult } from '../errors/pathMapper.js'
@@ -64,21 +75,18 @@ export class ContemberAdapter implements BackendAdapter {
 
 	private buildGetQuery(query: GetQuery): ContentQuery<unknown> {
 		const selection = this.buildEntitySelection(query.spec)
-		return this.queryBuilder.get(query.entityType, { by: query.by as any }, selection)
+		return this.queryBuilder.get(query.entityType, { by: query.by }, selection)
 	}
 
 	private buildListQuery(query: ListQuery): ContentQuery<unknown> {
 		const selection = this.buildEntitySelection(query.spec)
-		return this.queryBuilder.list(
-			query.entityType,
-			{
-				filter: query.filter as any,
-				orderBy: query.orderBy as any,
-				limit: query.limit,
-				offset: query.offset,
-			},
-			selection,
-		)
+		const args: ContentClientInput.AnyListQueryInput = {
+			filter: query.filter as Input.OptionalWhere | undefined,
+			orderBy: query.orderBy as ContentClientInput.AnyOrderBy | undefined,
+			limit: query.limit,
+			offset: query.offset,
+		}
+		return this.queryBuilder.list(query.entityType, args, selection)
 	}
 
 	async persist(
@@ -88,7 +96,7 @@ export class ContemberAdapter implements BackendAdapter {
 	): Promise<PersistResult> {
 		const mutation = this.queryBuilder.update(entityType, {
 			by: { id },
-			data: changes as any,
+			data: changes as Input.UpdateDataInput,
 		})
 
 		const result = await this.contentClient.mutate(mutation)
@@ -111,7 +119,7 @@ export class ContemberAdapter implements BackendAdapter {
 		// Build selection to return created entity
 		const selection = (s: ContentEntitySelection) => s.$('id')
 
-		const mutation = this.queryBuilder.create(entityType, { data: data as any }, selection)
+		const mutation = this.queryBuilder.create(entityType, { data: data as Input.CreateDataInput }, selection)
 		const result = await this.contentClient.mutate(mutation)
 
 		if (!result.ok) {
@@ -216,39 +224,27 @@ export class ContemberAdapter implements BackendAdapter {
 
 				if (field.isArray) {
 					// has-many relation with optional params
-					const args: Record<string, unknown> = {}
-					if (field.name !== fieldName) {
-						args['as'] = field.name
-					}
-					if (field.filter) {
-						args['filter'] = field.filter
-					}
-					if (field.orderBy) {
-						args['orderBy'] = field.orderBy
-					}
-					if (field.limit !== undefined) {
-						args['limit'] = field.limit
-					}
-					if (field.offset !== undefined) {
-						args['offset'] = field.offset
+					const manyArgs: EntitySelectionManyArgs = {
+						...(field.name !== fieldName ? { as: field.name } : undefined),
+						...(field.filter !== undefined ? { filter: field.filter as Input.OptionalWhere } : undefined),
+						...(field.orderBy !== undefined ? { orderBy: field.orderBy as ContentClientInput.AnyOrderBy } : undefined),
+						...(field.limit !== undefined ? { limit: field.limit } : undefined),
+						...(field.offset !== undefined ? { offset: field.offset } : undefined),
 					}
 
-					result = result.$(fieldName, args as any, nestedCallback)
+					result = result.$(fieldName, manyArgs, nestedCallback)
 				} else {
 					// has-one relation
-					const args: Record<string, unknown> = {}
-					if (field.name !== fieldName) {
-						args['as'] = field.name
+					const oneArgs: EntitySelectionOneArgs = {
+						...(field.name !== fieldName ? { as: field.name } : undefined),
 					}
-					result = result.$(fieldName, args as any, nestedCallback)
+					result = result.$(fieldName, oneArgs, nestedCallback)
 				}
 			} else {
 				// Scalar field
-				const args: Record<string, unknown> = {}
-				if (field.name !== fieldName) {
-					args['as'] = field.name
-				}
-				result = result.$(fieldName, Object.keys(args).length > 0 ? args : undefined)
+				const columnArgs: EntitySelectionColumnArgs | undefined =
+					field.name !== fieldName ? { as: field.name } : undefined
+				result = result.$(fieldName, columnArgs)
 			}
 		}
 
