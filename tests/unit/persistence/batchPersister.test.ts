@@ -294,6 +294,50 @@ describe('BatchPersister', () => {
 		})
 	})
 
+	describe('deep equality for update detection', () => {
+		test('should not persist when object fields have different key order but same values', async () => {
+			// Set server data with keys in one order
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Title',
+				metadata: { b: 2, a: 1 },
+			}, true)
+
+			// Set current data with keys in different order but same values
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Title',
+				metadata: { a: 1, b: 2 },
+			}, false)
+
+			const result = await persister.persistAll()
+
+			// Should detect no changes — deepEqual treats {a:1,b:2} === {b:2,a:1}
+			expect(result.success).toBe(true)
+			expect(result.results.length).toBe(0)
+		})
+
+		test('should persist when object fields have genuinely different values', async () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Title',
+				metadata: { a: 1, b: 2 },
+			}, true)
+
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Title',
+				metadata: { a: 1, b: 3 },
+			}, false)
+
+			const result = await persister.persistAll()
+
+			expect(result.success).toBe(true)
+			expect(result.results.length).toBe(1)
+			expect(result.successCount).toBe(1)
+		})
+	})
+
 	describe('client validation errors', () => {
 		test('should block persist when entity has client errors', async () => {
 			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Original' }, true)

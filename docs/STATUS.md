@@ -6,7 +6,7 @@
 - [x] 002 - Memoization bug — `definer` missing from useMemo deps
 - [x] 003 - Temp ID prefix mismatch in JSX proxy
 - [x] 004 - Silent data loss without MutationCollector
-- [ ] 005 - `JSON.stringify` vs `deepEqual` inconsistency
+- [x] 005 - `JSON.stringify` vs `deepEqual` inconsistency
 
 ## Important
 

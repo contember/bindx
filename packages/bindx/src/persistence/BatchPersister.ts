@@ -19,6 +19,7 @@ import { extractMappedErrors, type ContemberMutationResult } from '../errors/pat
 import { createServerError } from '../errors/types.js'
 import type { EntitySnapshot } from '../store/snapshots.js'
 import type { StoredHasManyState, StoredRelationState } from '../store/SnapshotStore.js'
+import { deepEqual } from '../utils/deepEqual.js'
 
 /**
  * Captured state for pessimistic mode restoration.
@@ -484,7 +485,7 @@ export class BatchPersister {
 
 		for (const [key, value] of Object.entries(data)) {
 			if (key === 'id') continue
-			if (JSON.stringify(value) !== JSON.stringify(serverData[key])) {
+			if (!deepEqual(value, serverData[key])) {
 				changes[key] = value
 			}
 		}
