@@ -53,9 +53,17 @@ const SKIP_ACTION_TYPES = new Set<Action['type']>([
 
 /**
  * Checks if an action should be tracked for undo/redo.
+ * Server data loads (SET_ENTITY_DATA with isServerData=true) are not tracked.
  */
 export function isTrackableAction(action: Action): boolean {
-	return TRACKABLE_ACTION_TYPES.has(action.type)
+	if (!TRACKABLE_ACTION_TYPES.has(action.type)) {
+		return false
+	}
+	// Server data loads are not user-initiated mutations
+	if (action.type === 'SET_ENTITY_DATA' && action.isServerData) {
+		return false
+	}
+	return true
 }
 
 /**

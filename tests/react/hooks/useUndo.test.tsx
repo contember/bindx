@@ -243,25 +243,44 @@ describe('useUndo React integration', () => {
 		// First change
 		await act(async () => {
 			fireEvent.change(getByTestId(container, 'title-input'), { target: { value: 'First' } })
-			await new Promise(r => setTimeout(r, 50))
 		})
 
-		// Second change (separate entry because debounce is 300ms in default, but we wait)
+		// Wait for debounce to flush (default 300ms)
+		await act(async () => {
+			await new Promise(r => setTimeout(r, 400))
+		})
+
+		// Second change (separate entry because debounce has flushed)
 		await act(async () => {
 			fireEvent.change(getByTestId(container, 'title-input'), { target: { value: 'Second' } })
+		})
+
+		// Wait for second debounce to flush
+		await act(async () => {
 			await new Promise(r => setTimeout(r, 400))
 		})
 
 		expect(getByTestId(container, 'title-value').textContent).toBe('Second')
+		expect(getByTestId(container, 'undo-count').textContent).toBe('2')
 
-		// Undo first -> goes to "First"
+		// Undo -> goes to "First"
 		await act(async () => {
 			fireEvent.click(getByTestId(container, 'undo-btn'))
 			await new Promise(r => setTimeout(r, 50))
 		})
 
-		// Should still have undo available (the first change)
+		expect(getByTestId(container, 'title-value').textContent).toBe('First')
 		expect(getByTestId(container, 'can-undo').textContent).toBe('true')
 		expect(getByTestId(container, 'redo-count').textContent).toBe('1')
+
+		// Undo again -> goes to "Original Title"
+		await act(async () => {
+			fireEvent.click(getByTestId(container, 'undo-btn'))
+			await new Promise(r => setTimeout(r, 50))
+		})
+
+		expect(getByTestId(container, 'title-value').textContent).toBe('Original Title')
+		expect(getByTestId(container, 'can-undo').textContent).toBe('false')
+		expect(getByTestId(container, 'redo-count').textContent).toBe('2')
 	})
 })
