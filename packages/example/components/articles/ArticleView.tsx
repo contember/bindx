@@ -15,9 +15,9 @@ export function ArticleView({ id }: { id: string }) {
 	}
 
 	return (
-		<div className="article-view">
-			<h2>{article.data.title}</h2>
-			<p>By: {article.data.author?.name ?? 'Unknown'}</p>
+		<div className="article-view" data-testid="article-view">
+			<h2 data-testid="article-view-title">{article.data.title}</h2>
+			<p data-testid="article-view-author">By: {article.data.author?.name ?? 'Unknown'}</p>
 		</div>
 	)
 }

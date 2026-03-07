@@ -16,13 +16,14 @@ export function TagListExample() {
 	}
 
 	return (
-		<div className="tag-list">
+		<div className="tag-list" data-testid="tag-list">
 			<h3>Available Tags</h3>
 			<div className="tag-badges">
 				{tags.items.map(item => (
 					<span
 						key={item.id}
 						className="tag-badge"
+						data-testid={`tag-list-badge-${item.$data?.name}`}
 						style={{
 							backgroundColor: item.$data?.color,
 							color: '#fff',

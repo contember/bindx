@@ -12,6 +12,7 @@ export interface SelectProps<TData extends { id: string }> {
 	options: EntityListAccessorResult<TData>
 	getLabel: (data: TData) => string
 	placeholder?: string
+	testId?: string
 }
 
 /**
@@ -24,6 +25,7 @@ export function Select<TData extends { id: string }>({
 	options,
 	getLabel,
 	placeholder = 'Select...',
+	testId,
 }: SelectProps<TData>) {
 	const isLoading = options.isLoading
 
@@ -34,6 +36,7 @@ export function Select<TData extends { id: string }>({
 				value={value ?? ''}
 				onChange={e => onChange(e.target.value || null)}
 				disabled={isLoading}
+				data-testid={testId}
 			>
 				<option value="">{isLoading ? 'Loading...' : placeholder}</option>
 				{!isLoading &&

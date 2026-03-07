@@ -16,11 +16,11 @@ export function AuthorListExample() {
 	}
 
 	return (
-		<div className="author-list">
-			<h3>All Authors ({authors.length})</h3>
+		<div className="author-list" data-testid="author-list">
+			<h3 data-testid="author-list-count">All Authors ({authors.length})</h3>
 			<ul>
 				{authors.items.map(item => (
-					<li key={item.id}>
+					<li key={item.id} data-testid={`author-item-${item.$data?.name}`}>
 						<strong>{item.$data?.name}</strong>
 						<span> - {item.$data?.email}</span>
 						<p>{item.$data?.bio}</p>

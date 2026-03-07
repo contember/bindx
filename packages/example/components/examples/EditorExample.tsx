@@ -73,7 +73,7 @@ export function RichTextEditorExample({ id }: { id: string }): ReactNode {
 	if (article.isError) return <div>Error: {article.error.message}</div>
 
 	return (
-		<div className="editor-example">
+		<div className="editor-example" data-testid="rich-text-editor">
 			<h3>{article.fields.title.value}</h3>
 
 			<RichTextEditor field={article.fields.content} plugins={richTextPlugins}>
@@ -81,16 +81,16 @@ export function RichTextEditorExample({ id }: { id: string }): ReactNode {
 					<div>
 						<div className="editor-toolbar">
 							<EditorMarkTrigger mark={boldMark}>
-								<button type="button"><strong>B</strong></button>
+								<button type="button" data-testid="rte-bold-button"><strong>B</strong></button>
 							</EditorMarkTrigger>
 							<EditorMarkTrigger mark={italicMark}>
-								<button type="button"><em>I</em></button>
+								<button type="button" data-testid="rte-italic-button"><em>I</em></button>
 							</EditorMarkTrigger>
 							<EditorMarkTrigger mark={underlineMark}>
-								<button type="button"><u>U</u></button>
+								<button type="button" data-testid="rte-underline-button"><u>U</u></button>
 							</EditorMarkTrigger>
 						</div>
-						<div className="editor-content">
+						<div className="editor-content" data-testid="rte-content">
 							<Editable
 								renderElement={editor.renderElement}
 								renderLeaf={editor.renderLeaf}
@@ -103,7 +103,7 @@ export function RichTextEditorExample({ id }: { id: string }): ReactNode {
 			</RichTextEditor>
 
 			{article.fields.content.isDirty && (
-				<p style={{ color: 'orange', fontSize: '12px' }}>Content has been modified</p>
+				<p style={{ color: 'orange', fontSize: '12px' }} data-testid="rte-dirty-notice">Content has been modified</p>
 			)}
 		</div>
 	)
@@ -125,7 +125,7 @@ export function BlockEditorExample({ id }: { id: string }): ReactNode {
 	if (article.isError) return <div>Error: {article.error.message}</div>
 
 	return (
-		<div className="editor-example">
+		<div className="editor-example" data-testid="block-editor">
 			<h3>{article.fields.title.value}</h3>
 
 			<BlockEditor
@@ -139,16 +139,16 @@ export function BlockEditorExample({ id }: { id: string }): ReactNode {
 					<div>
 						<div className="editor-toolbar">
 							<EditorMarkTrigger mark={boldMark}>
-								<button type="button"><strong>B</strong></button>
+								<button type="button" data-testid="block-bold-button"><strong>B</strong></button>
 							</EditorMarkTrigger>
 							<EditorMarkTrigger mark={italicMark}>
-								<button type="button"><em>I</em></button>
+								<button type="button" data-testid="block-italic-button"><em>I</em></button>
 							</EditorMarkTrigger>
-							<button type="button" onClick={() => editor.insertBlock?.('image')}>
+							<button type="button" onClick={() => editor.insertBlock?.('image')} data-testid="insert-image-button">
 								Insert Image
 							</button>
 						</div>
-						<div className="editor-content">
+						<div className="editor-content" data-testid="block-editor-content">
 							<Editable
 								renderElement={editor.renderElement}
 								renderLeaf={editor.renderLeaf}
@@ -175,7 +175,7 @@ export function SimpleBlockEditorExample({ id }: { id: string }): ReactNode {
 	if (article.isError) return <div>Error: {article.error.message}</div>
 
 	return (
-		<div className="editor-example">
+		<div className="editor-example" data-testid="simple-block-editor">
 			<h3>{article.fields.title.value}</h3>
 
 			<BlockEditor

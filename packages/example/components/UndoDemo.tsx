@@ -27,15 +27,15 @@ export function UndoDemo({ id }: { id: string }): React.ReactElement {
 	}
 
 	return (
-		<div className="undo-demo">
+		<div className="undo-demo" data-testid="undo-demo">
 			<div className="undo-toolbar">
-				<button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
+				<button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" data-testid="undo-button">
 					↩ Undo ({undoCount})
 				</button>
-				<button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)">
+				<button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)" data-testid="redo-button">
 					↪ Redo ({redoCount})
 				</button>
-				<button onClick={handleBulkUpdate} className="bulk-btn">
+				<button onClick={handleBulkUpdate} className="bulk-btn" data-testid="bulk-update-button">
 					Bulk Update (grouped)
 				</button>
 			</div>
@@ -46,6 +46,7 @@ export function UndoDemo({ id }: { id: string }): React.ReactElement {
 					<TextInput
 						field={article.fields.title}
 						label=""
+						testId="undo-title-input"
 					/>
 					{article.fields.title.isDirty && <span className="dirty-indicator">*</span>}
 				</div>
@@ -56,6 +57,7 @@ export function UndoDemo({ id }: { id: string }): React.ReactElement {
 						value={article.fields.content.value ?? ''}
 						onChange={e => article.fields.content.setValue(e.target.value)}
 						rows={4}
+						data-testid="undo-content-input"
 					/>
 					{article.fields.content.isDirty && <span className="dirty-indicator">*</span>}
 				</div>

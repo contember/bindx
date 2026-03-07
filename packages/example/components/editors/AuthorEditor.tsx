@@ -11,10 +11,10 @@ export function AuthorEditor({
 	author: { name: FieldRef<string>; email: FieldRef<string> }
 }) {
 	return (
-		<div className="author-editor">
+		<div className="author-editor" data-testid="author-editor">
 			<h3>Author</h3>
-			<TextInput field={author.name} label="Name" />
-			<TextInput field={author.email} label="Email" />
+			<TextInput field={author.name} label="Name" testId="author-name-input" />
+			<TextInput field={author.email} label="Email" testId="author-email-input" />
 		</div>
 	)
 }

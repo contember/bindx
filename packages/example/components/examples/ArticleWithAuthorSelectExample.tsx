@@ -44,11 +44,11 @@ export function ArticleWithAuthorSelectExample({ id }: { id: string }) {
 	const authorEntity = article.fields.author.$entity
 
 	return (
-		<div className="article-with-select">
+		<div className="article-with-select" data-testid="article-with-author-select">
 			<h3>Edit Article (with Author Select)</h3>
 
-			<TextInput field={article.fields.title} label="Title" />
-			<TextInput field={article.fields.content} label="Content" />
+			<TextInput field={article.fields.title} label="Title" testId="author-select-title-input" />
+			<TextInput field={article.fields.content} label="Content" testId="author-select-content-input" />
 
 			<div className="field">
 				<label>Author</label>
@@ -62,6 +62,7 @@ export function ArticleWithAuthorSelectExample({ id }: { id: string }) {
 					<select
 						value={currentAuthorId}
 						onChange={e => handleAuthorChange(e.target.value)}
+						data-testid="author-select-dropdown"
 					>
 						<option value="">No author</option>
 						{authors.items.map(item => (
@@ -73,7 +74,7 @@ export function ArticleWithAuthorSelectExample({ id }: { id: string }) {
 				)}
 			</div>
 
-			<div className="current-author">
+			<div className="current-author" data-testid="current-author-display">
 				{currentAuthorId ? (
 					<p>
 						<strong>Current author:</strong> {authorEntity.$fields.name.value} ({authorEntity.$fields.email.value})
@@ -89,10 +90,10 @@ export function ArticleWithAuthorSelectExample({ id }: { id: string }) {
 			</div>
 
 			<div className="actions">
-				<button onClick={() => article.persist()} disabled={!article.isDirty || article.isPersisting}>
+				<button onClick={() => article.persist()} disabled={!article.isDirty || article.isPersisting} data-testid="author-select-save-button">
 					{article.isPersisting ? 'Saving...' : 'Save'}
 				</button>
-				<button onClick={() => article.reset()} disabled={!article.isDirty}>
+				<button onClick={() => article.reset()} disabled={!article.isDirty} data-testid="author-select-reset-button">
 					Reset
 				</button>
 			</div>

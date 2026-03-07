@@ -40,12 +40,12 @@ export function ArticleEditor({ id }: { id: string }) {
 		.map(tag => ({ id: tag.id, data: tag.$data! }))
 
 	return (
-		<div className="article-editor">
+		<div className="article-editor" data-testid="article-editor">
 			<h1>Edit Article</h1>
 
 			<div className="form-section">
-				<TextInput field={article.fields.title} label="Title" />
-				<TextInput field={article.fields.content} label="Content" />
+				<TextInput field={article.fields.title} label="Title" testId="article-title-input" />
+				<TextInput field={article.fields.content} label="Content" testId="article-content-input" />
 			</div>
 
 			<div className="form-section">
@@ -60,6 +60,7 @@ export function ArticleEditor({ id }: { id: string }) {
 									article.fields.author.$connect(e.target.value)
 								}
 							}}
+							data-testid="article-author-select"
 						>
 							<option value="">Select an author...</option>
 							{allAuthors.items.map(author => (
@@ -73,7 +74,7 @@ export function ArticleEditor({ id }: { id: string }) {
 				<AuthorEditor author={article.fields.author.$fields} />
 			</div>
 
-			<div className="form-section">
+			<div className="form-section" data-testid="article-location">
 				<h3>Location</h3>
 				<p>Label: {article.data.location?.label ?? 'N/A'}</p>
 				<p>
@@ -82,12 +83,13 @@ export function ArticleEditor({ id }: { id: string }) {
 				</p>
 			</div>
 
-			<div className="form-section">
+			<div className="form-section" data-testid="article-tags">
 				<h3>Tags ({article.fields.tags.length})</h3>
 				<ul style={{ listStyle: 'none', padding: 0 }}>
 					{article.fields.tags.items.map(tag => (
 						<li key={tag.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
 							<span
+								data-testid={`tag-badge-${tag.$fields.name.value}`}
 								style={{
 									backgroundColor: tag.$fields.color.value ?? '#ccc',
 									color: 'white',
@@ -100,6 +102,7 @@ export function ArticleEditor({ id }: { id: string }) {
 							<button
 								onClick={() => article.fields.tags.disconnect(tag.id)}
 								style={{ padding: '2px 6px', cursor: 'pointer' }}
+								data-testid={`remove-tag-${tag.$fields.name.value}`}
 							>
 								×
 							</button>
@@ -118,6 +121,7 @@ export function ArticleEditor({ id }: { id: string }) {
 								}
 							}}
 							defaultValue=""
+							data-testid="article-add-tag-select"
 						>
 							<option value="">Select a tag...</option>
 							{availableTags.map(tag => (
@@ -130,20 +134,20 @@ export function ArticleEditor({ id }: { id: string }) {
 				)}
 
 				{article.fields.tags.isDirty && (
-					<p style={{ color: 'orange', fontSize: '12px' }}>Tags have been modified</p>
+					<p style={{ color: 'orange', fontSize: '12px' }} data-testid="tags-dirty-notice">Tags have been modified</p>
 				)}
 			</div>
 
 			<div className="actions">
-				<button disabled={!article.isDirty || article.isPersisting} onClick={() => article.persist()}>
+				<button disabled={!article.isDirty || article.isPersisting} onClick={() => article.persist()} data-testid="article-save-button">
 					{article.isPersisting ? 'Saving...' : 'Save'}
 				</button>
-				<button disabled={!article.isDirty} onClick={() => article.reset()}>
+				<button disabled={!article.isDirty} onClick={() => article.reset()} data-testid="article-reset-button">
 					Reset
 				</button>
 			</div>
 
-			{article.isDirty && <p className="dirty-notice">You have unsaved changes</p>}
+			{article.isDirty && <p className="dirty-notice" data-testid="article-dirty-notice">You have unsaved changes</p>}
 		</div>
 	)
 }
