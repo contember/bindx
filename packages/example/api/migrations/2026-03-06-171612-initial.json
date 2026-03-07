@@ -1,0 +1,531 @@
+{
+	"formatVersion": 6,
+	"modifications": [
+		{
+			"modification": "createEntity",
+			"entity": {
+				"name": "Article",
+				"primary": "id",
+				"primaryColumn": "id",
+				"tableName": "article",
+				"fields": {
+					"id": {
+						"name": "id",
+						"columnName": "id",
+						"columnType": "uuid",
+						"nullable": false,
+						"type": "Uuid"
+					}
+				},
+				"unique": [],
+				"indexes": [],
+				"eventLog": {
+					"enabled": true
+				}
+			}
+		},
+		{
+			"modification": "createEntity",
+			"entity": {
+				"name": "Author",
+				"primary": "id",
+				"primaryColumn": "id",
+				"tableName": "author",
+				"fields": {
+					"id": {
+						"name": "id",
+						"columnName": "id",
+						"columnType": "uuid",
+						"nullable": false,
+						"type": "Uuid"
+					}
+				},
+				"unique": [],
+				"indexes": [],
+				"eventLog": {
+					"enabled": true
+				}
+			}
+		},
+		{
+			"modification": "createEntity",
+			"entity": {
+				"name": "ContentReference",
+				"primary": "id",
+				"primaryColumn": "id",
+				"tableName": "content_reference",
+				"fields": {
+					"id": {
+						"name": "id",
+						"columnName": "id",
+						"columnType": "uuid",
+						"nullable": false,
+						"type": "Uuid"
+					}
+				},
+				"unique": [],
+				"indexes": [],
+				"eventLog": {
+					"enabled": true
+				}
+			}
+		},
+		{
+			"modification": "createEntity",
+			"entity": {
+				"name": "Location",
+				"primary": "id",
+				"primaryColumn": "id",
+				"tableName": "location",
+				"fields": {
+					"id": {
+						"name": "id",
+						"columnName": "id",
+						"columnType": "uuid",
+						"nullable": false,
+						"type": "Uuid"
+					}
+				},
+				"unique": [],
+				"indexes": [],
+				"eventLog": {
+					"enabled": true
+				}
+			}
+		},
+		{
+			"modification": "createEntity",
+			"entity": {
+				"name": "Tag",
+				"primary": "id",
+				"primaryColumn": "id",
+				"tableName": "tag",
+				"fields": {
+					"id": {
+						"name": "id",
+						"columnName": "id",
+						"columnType": "uuid",
+						"nullable": false,
+						"type": "Uuid"
+					}
+				},
+				"unique": [],
+				"indexes": [],
+				"eventLog": {
+					"enabled": true
+				}
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "Article",
+			"field": {
+				"name": "title",
+				"columnName": "title",
+				"columnType": "text",
+				"nullable": false,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "Article",
+			"field": {
+				"name": "content",
+				"columnName": "content",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "Article",
+			"field": {
+				"name": "richContent",
+				"columnName": "rich_content",
+				"columnType": "jsonb",
+				"nullable": true,
+				"type": "Json"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "Article",
+			"field": {
+				"name": "publishedAt",
+				"columnName": "published_at",
+				"columnType": "timestamptz",
+				"nullable": true,
+				"type": "DateTime"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "Author",
+			"field": {
+				"name": "name",
+				"columnName": "name",
+				"columnType": "text",
+				"nullable": false,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "Author",
+			"field": {
+				"name": "email",
+				"columnName": "email",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "Author",
+			"field": {
+				"name": "bio",
+				"columnName": "bio",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "ContentReference",
+			"field": {
+				"name": "type",
+				"columnName": "type",
+				"columnType": "text",
+				"nullable": false,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "ContentReference",
+			"field": {
+				"name": "imageUrl",
+				"columnName": "image_url",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "ContentReference",
+			"field": {
+				"name": "caption",
+				"columnName": "caption",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "Location",
+			"field": {
+				"name": "lat",
+				"columnName": "lat",
+				"columnType": "double precision",
+				"nullable": true,
+				"type": "Double"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "Location",
+			"field": {
+				"name": "lng",
+				"columnName": "lng",
+				"columnType": "double precision",
+				"nullable": true,
+				"type": "Double"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "Location",
+			"field": {
+				"name": "label",
+				"columnName": "label",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "Tag",
+			"field": {
+				"name": "name",
+				"columnName": "name",
+				"columnType": "text",
+				"nullable": false,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "Tag",
+			"field": {
+				"name": "color",
+				"columnName": "color",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createRelation",
+			"entityName": "Article",
+			"owningSide": {
+				"type": "ManyHasOne",
+				"name": "author",
+				"target": "Author",
+				"joiningColumn": {
+					"columnName": "author_id",
+					"onDelete": "restrict"
+				},
+				"nullable": true,
+				"inversedBy": "articles"
+			},
+			"inverseSide": {
+				"type": "OneHasMany",
+				"name": "articles",
+				"target": "Article",
+				"ownedBy": "author"
+			}
+		},
+		{
+			"modification": "createRelation",
+			"entityName": "Article",
+			"owningSide": {
+				"type": "OneHasOne",
+				"name": "location",
+				"target": "Location",
+				"joiningColumn": {
+					"columnName": "location_id",
+					"onDelete": "restrict"
+				},
+				"nullable": true
+			}
+		},
+		{
+			"modification": "createRelation",
+			"entityName": "Article",
+			"owningSide": {
+				"type": "ManyHasMany",
+				"name": "tags",
+				"target": "Tag",
+				"joiningTable": {
+					"tableName": "article_tags",
+					"joiningColumn": {
+						"columnName": "article_id",
+						"onDelete": "cascade"
+					},
+					"inverseJoiningColumn": {
+						"columnName": "tag_id",
+						"onDelete": "cascade"
+					},
+					"eventLog": {
+						"enabled": true
+					}
+				},
+				"inversedBy": "articles"
+			},
+			"inverseSide": {
+				"type": "ManyHasMany",
+				"name": "articles",
+				"target": "Article",
+				"ownedBy": "tags"
+			}
+		},
+		{
+			"modification": "createRelation",
+			"entityName": "ContentReference",
+			"owningSide": {
+				"type": "ManyHasOne",
+				"name": "article",
+				"target": "Article",
+				"joiningColumn": {
+					"columnName": "article_id",
+					"onDelete": "cascade"
+				},
+				"nullable": true,
+				"inversedBy": "contentReferences"
+			},
+			"inverseSide": {
+				"type": "OneHasMany",
+				"name": "contentReferences",
+				"target": "ContentReference",
+				"ownedBy": "article"
+			}
+		},
+		{
+			"modification": "patchAclSchema",
+			"patch": [
+				{
+					"op": "add",
+					"path": "/roles/admin",
+					"value": {
+						"variables": {},
+						"entities": {
+							"Article": {
+								"predicates": {},
+								"operations": {
+									"read": {
+										"id": true,
+										"title": true,
+										"content": true,
+										"richContent": true,
+										"publishedAt": true,
+										"author": true,
+										"location": true,
+										"tags": true,
+										"contentReferences": true
+									},
+									"create": {
+										"id": true,
+										"title": true,
+										"content": true,
+										"richContent": true,
+										"publishedAt": true,
+										"author": true,
+										"location": true,
+										"tags": true,
+										"contentReferences": true
+									},
+									"update": {
+										"id": true,
+										"title": true,
+										"content": true,
+										"richContent": true,
+										"publishedAt": true,
+										"author": true,
+										"location": true,
+										"tags": true,
+										"contentReferences": true
+									},
+									"delete": true,
+									"customPrimary": true
+								}
+							},
+							"Author": {
+								"predicates": {},
+								"operations": {
+									"read": {
+										"id": true,
+										"name": true,
+										"email": true,
+										"bio": true,
+										"articles": true
+									},
+									"create": {
+										"id": true,
+										"name": true,
+										"email": true,
+										"bio": true,
+										"articles": true
+									},
+									"update": {
+										"id": true,
+										"name": true,
+										"email": true,
+										"bio": true,
+										"articles": true
+									},
+									"delete": true,
+									"customPrimary": true
+								}
+							},
+							"ContentReference": {
+								"predicates": {},
+								"operations": {
+									"read": {
+										"id": true,
+										"article": true,
+										"type": true,
+										"imageUrl": true,
+										"caption": true
+									},
+									"create": {
+										"id": true,
+										"article": true,
+										"type": true,
+										"imageUrl": true,
+										"caption": true
+									},
+									"update": {
+										"id": true,
+										"article": true,
+										"type": true,
+										"imageUrl": true,
+										"caption": true
+									},
+									"delete": true,
+									"customPrimary": true
+								}
+							},
+							"Location": {
+								"predicates": {},
+								"operations": {
+									"read": {
+										"id": true,
+										"lat": true,
+										"lng": true,
+										"label": true
+									},
+									"create": {
+										"id": true,
+										"lat": true,
+										"lng": true,
+										"label": true
+									},
+									"update": {
+										"id": true,
+										"lat": true,
+										"lng": true,
+										"label": true
+									},
+									"delete": true,
+									"customPrimary": true
+								}
+							},
+							"Tag": {
+								"predicates": {},
+								"operations": {
+									"read": {
+										"id": true,
+										"name": true,
+										"color": true,
+										"articles": true
+									},
+									"create": {
+										"id": true,
+										"name": true,
+										"color": true,
+										"articles": true
+									},
+									"update": {
+										"id": true,
+										"name": true,
+										"color": true,
+										"articles": true
+									},
+									"delete": true,
+									"customPrimary": true
+								}
+							}
+						}
+					}
+				}
+			]
+		}
+	]
+}
