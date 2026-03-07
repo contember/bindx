@@ -8,9 +8,16 @@
 		"build": "tsc --build",
 		"dev": "tsc --build --watch",
 		"typecheck": "tsc --build",
-		"test": "bun test",
+		"test": "bun test tests/unit tests/react tests/cases tests/*.test.ts tests/*.test.tsx",
+		"test:browser": "bun test tests/browser/",
+		"test:all": "bun test",
 		"playground": "cd packages/example && bun run dev",
-		"generate:schema": "bun run packages/bindx-generator/src/generate.ts"
+		"playground:contember": "cd packages/example && VITE_CONTEMBER_API_URL=http://localhost:1581 VITE_CONTEMBER_API_TOKEN=0000000000000000000000000000000000000000 bun run dev",
+		"contember:up": "docker compose up -d",
+		"contember:migrate": "docker compose run --rm contember-cli migrations:execute --yes",
+		"contember:diff": "docker compose run --rm contember-cli migrations:diff",
+		"contember:seed": "bun run packages/example/seed.ts",
+		"generate:schema": "bun run packages/bindx-generator/src/generate.ts packages/example/api/index.ts packages/example/generated"
 	},
 	"devDependencies": {
 		"@contember/bindx": "workspace:*",
