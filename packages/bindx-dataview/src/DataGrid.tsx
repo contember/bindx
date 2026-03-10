@@ -23,7 +23,7 @@ import type { StateStorageOrName } from './stateStorage.js'
 import { SelectionScope, buildQueryFromSelection } from '@contember/bindx'
 import {
 	useBindxContext,
-	useEntityListCore,
+	useEntityList,
 	createCollectorProxy,
 	mergeSelections,
 	collectSelection,
@@ -89,7 +89,7 @@ function DataGridImpl({
 	pagingSettingsStorage,
 	storageKey,
 }: DataGridProps): ReactElement | null {
-	const { store, schema: schemaRegistry } = useBindxContext()
+	const { schema: schemaRegistry } = useBindxContext()
 	const entityType = entity.$name
 
 	// ---- Loader state tracking ----
@@ -175,15 +175,17 @@ function DataGridImpl({
 	}, [staticFilter, filtering.resolvedWhere])
 
 	// ---- Phase 4: Load data ----
-	const result = useEntityListCore({
-		entityType,
+	const result = useEntityList(entity, {
 		filter: combinedFilter,
 		orderBy: sorting.resolvedOrderBy,
 		limit: paging.queryLimit,
 		offset: paging.queryOffset,
-		selectionMeta: selection,
+		selection,
 		queryKey,
 	})
+
+	const items = result.status === 'ready' ? result.items : []
+	const itemCount = items.length
 
 	// Update loader state
 	useEffect(() => {
@@ -199,10 +201,10 @@ function DataGridImpl({
 
 	// Update total count when data is ready
 	useEffect(() => {
-		if (result.status === 'ready' && paging.queryLimit !== undefined && paging.queryOffset !== undefined && result.items.length < paging.queryLimit) {
-			paging.setTotalCount(paging.queryOffset + result.items.length)
+		if (result.status === 'ready' && paging.queryLimit !== undefined && paging.queryOffset !== undefined && itemCount < paging.queryLimit) {
+			paging.setTotalCount(paging.queryOffset + itemCount)
 		}
-	}, [result.status, result.items.length, paging.queryLimit, paging.queryOffset, paging.setTotalCount])
+	}, [result.status, itemCount, paging.queryLimit, paging.queryOffset, paging.setTotalCount])
 
 	// ---- Reload ----
 	const [reloadCounter, setReloadCounter] = useState(0)
@@ -216,11 +218,7 @@ function DataGridImpl({
 	// Reset highlight on data change
 	useEffect(() => {
 		setHighlightIndex(null)
-	}, [result.items])
-
-	// ---- Context value ----
-	const items = result.status === 'ready' ? result.items : []
-	const itemCount = items.length
+	}, [items])
 
 	const contextValue = useMemo((): DataViewContextValue => ({
 		filtering,

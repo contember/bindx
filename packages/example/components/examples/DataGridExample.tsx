@@ -13,11 +13,8 @@ import {
 	DataViewHighlightRow,
 	DataViewKeyboardEventHandler,
 	DataViewElement,
+	type DataViewItem,
 } from '@contember/bindx-dataview'
-import {
-	useBindxContext,
-	createRuntimeAccessor,
-} from '@contember/bindx-react'
 import {
 	DefaultDataGrid,
 	DataGridTable,
@@ -115,8 +112,8 @@ export function DataGridExample(): ReactElement {
 							</DataViewLayout>
 
 							<DataGridTiles>
-								{(item: { id: string; data: Record<string, unknown> }) => (
-									<DataGridTileCard key={item.id} id={item.id} />
+								{(item: DataViewItem) => (
+									<DataGridTileCard key={item.id} item={item} />
 								)}
 							</DataGridTiles>
 						</DataViewNonEmpty>
@@ -128,8 +125,7 @@ export function DataGridExample(): ReactElement {
 }
 
 function DataGridTableView(): ReactElement {
-	const { columns, entityType, selectionMeta } = useDataViewContext()
-	const { store } = useBindxContext()
+	const { columns } = useDataViewContext()
 
 	return (
 		<DataViewKeyboardEventHandler>
@@ -167,11 +163,10 @@ function DataGridTableView(): ReactElement {
 									<DataGridRow data-testid={`datagrid-row-${rowIndex}`}>
 										{columns.map((col, colIndex) => {
 											const name = col.fieldName ?? `col-${colIndex}`
-											const accessor = createRuntimeAccessor(entityType, item.id, store, () => {}, [], selectionMeta)
 											return (
 												<DataViewElement key={name} name={name}>
 													<DataGridCell data-testid={`datagrid-cell-${name}`}>
-														<CellContent col={col} accessor={accessor} />
+														<CellContent col={col} accessor={item} />
 													</DataGridCell>
 												</DataViewElement>
 											)
@@ -220,20 +215,18 @@ function CellContent({ col, accessor }: { col: any; accessor: any }): ReactEleme
 	return <>{renderCellValue(col, accessor)}</>
 }
 
-function DataGridTileCard({ id }: { id: string }): ReactElement {
-	const { entityType, selectionMeta, columns } = useDataViewContext()
-	const { store } = useBindxContext()
-	const accessor = createRuntimeAccessor(entityType, id, store, () => {}, [], selectionMeta)
+function DataGridTileCard({ item }: { item: DataViewItem }): ReactElement {
+	const { columns } = useDataViewContext()
 
 	const titleCol = columns.find(c => c.fieldName === 'title')
 	const authorCol = columns.find(c => c.fieldName === 'author')
 
-	const title = titleCol ? renderCellValue(titleCol, accessor) : id
-	const authorRef = authorCol?.fieldName ? (accessor as any)[authorCol.fieldName] : null
+	const title = titleCol ? renderCellValue(titleCol, item) : item.id
+	const authorRef = authorCol?.fieldName ? (item as any)[authorCol.fieldName] : null
 	const authorName = authorCol?.relationRenderer && authorRef ? authorCol.relationRenderer(authorRef) : null
 
 	return (
-		<div className="rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow" data-testid={`datagrid-tile-${id}`}>
+		<div className="rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow" data-testid={`datagrid-tile-${item.id}`}>
 			<div className="font-medium text-sm" data-testid="tile-title">{title}</div>
 			{authorName && <div className="text-xs text-gray-500 mt-1" data-testid="tile-author">{authorName}</div>}
 		</div>

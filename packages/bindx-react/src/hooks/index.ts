@@ -24,6 +24,11 @@ export {
 
 export {
 	useEntityList,
+	type UseEntityListOptions,
+	type LoadingEntityListAccessor,
+	type ErrorEntityListAccessor,
+	type ReadyEntityListAccessor,
+	type EntityListAccessorResult,
 } from './useEntityList.js'
 
 export {
@@ -34,14 +39,6 @@ export {
 	type ReadyEntityAccessor,
 	type EntityAccessorResult,
 } from './useEntityImpl.js'
-
-export {
-	type UseEntityListOptions,
-	type LoadingEntityListAccessor,
-	type ErrorEntityListAccessor,
-	type ReadyEntityListAccessor,
-	type EntityListAccessorResult,
-} from './useEntityListImpl.js'
 
 export {
 	ContemberBindxProvider,
@@ -59,8 +56,6 @@ export {
 } from './useBindxEvents.js'
 
 export { useEntityBeforePersist } from './useEntityBeforePersist.js'
-
-export { useEntityListCore, type EntityListCoreItem } from './useEntityListCore.js'
 
 export {
 	useEntityErrors,

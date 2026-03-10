@@ -21,7 +21,7 @@
 import React, { forwardRef, type ReactElement, useCallback } from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { composeEventHandlers } from '@radix-ui/primitive'
-import { useDataViewContext } from './DataViewContext.js'
+import { useDataViewContext, type DataViewItem } from './DataViewContext.js'
 import type { DataViewLoaderState as DataViewLoaderStateType } from './DataViewContext.js'
 
 // ============================================================================
@@ -155,7 +155,7 @@ export function DataViewNonEmpty({ children }: DataViewNonEmptyProps): ReactElem
 // ============================================================================
 
 export interface DataViewEachRowProps {
-	children: (item: { id: string; data: Record<string, unknown> }, index: number) => React.ReactNode
+	children: (item: DataViewItem, index: number) => React.ReactNode
 }
 
 export function DataViewEachRow({ children }: DataViewEachRowProps): ReactElement {
@@ -201,7 +201,7 @@ DataViewHighlightRow.displayName = 'DataViewHighlightRow'
 
 export interface DataViewKeyboardEventHandlerProps {
 	children: ReactElement
-	onSelectHighlighted?: (item: { id: string; data: Record<string, unknown> }) => void
+	onSelectHighlighted?: (item: DataViewItem) => void
 }
 
 export const DataViewKeyboardEventHandler = forwardRef<HTMLElement, DataViewKeyboardEventHandlerProps>(

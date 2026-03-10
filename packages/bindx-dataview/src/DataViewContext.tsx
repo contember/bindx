@@ -6,14 +6,11 @@
 import React, { createContext, useContext } from 'react'
 import type { FilteringState, SortingStateResult, PagingStateResult, SelectionStateResult } from './useDataViewState.js'
 import type { ColumnMeta } from './columns.js'
-import type { SelectionMeta } from '@contember/bindx'
+import type { EntityAccessor, SelectionMeta } from '@contember/bindx'
 
 export type DataViewLoaderState = 'initial' | 'loaded' | 'refreshing' | 'failed'
 
-export interface DataViewItem {
-	readonly id: string
-	readonly data: Record<string, unknown>
-}
+export type DataViewItem = EntityAccessor<object>
 
 export interface DataViewContextValue {
 	readonly filtering: FilteringState

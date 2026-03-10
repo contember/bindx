@@ -9,6 +9,7 @@
 import { useMemo } from 'react'
 import type {
 	EntityDef,
+	EntityAccessor,
 	FilterHandler,
 	FilterArtifact,
 	SelectionMeta,
@@ -17,8 +18,7 @@ import type {
 	DataViewLayout,
 	SelectionValues,
 } from '@contember/bindx'
-import { buildQueryFromSelection } from '@contember/bindx'
-import { useEntityListCore, type EntityListCoreItem } from '@contember/bindx-react'
+import { useEntityList } from '@contember/bindx-react'
 import {
 	useFilteringState,
 	useSortingState,
@@ -67,8 +67,8 @@ export interface DataViewResult {
 	readonly status: 'loading' | 'error' | 'ready'
 	/** Error if status is 'error' */
 	readonly error?: FieldError
-	/** Loaded items */
-	readonly items: readonly EntityListCoreItem[]
+	/** Loaded items as entity accessors */
+	readonly items: readonly EntityAccessor<object>[]
 	/** Filtering state and controls */
 	readonly filtering: FilteringState
 	/** Sorting state and controls */
@@ -90,7 +90,6 @@ export function useDataView(
 	entity: EntityDef,
 	options: UseDataViewOptions,
 ): DataViewResult {
-	const entityType = entity.$name
 	const {
 		filters: filterDefs = EMPTY_FILTERS,
 		sortableFields = EMPTY_SORTABLE,
@@ -126,27 +125,21 @@ export function useDataView(
 		return { and: parts }
 	}, [staticFilter, filtering.resolvedWhere])
 
-	// Build query key
-	const queryKey = useMemo(() => {
-		const query = buildQueryFromSelection(selection)
-		return JSON.stringify({ entityType, query })
-	}, [entityType, selection])
-
 	// Load data
-	const result = useEntityListCore({
-		entityType,
+	const result = useEntityList(entity, {
 		filter: combinedFilter,
 		orderBy: sorting.resolvedOrderBy,
 		limit: paging.queryLimit,
 		offset: paging.queryOffset,
-		selectionMeta: selection,
-		queryKey,
+		selection,
 	})
+
+	const items = result.status === 'ready' ? result.items : []
 
 	return {
 		status: result.status,
-		error: result.error,
-		items: result.items,
+		error: result.status === 'error' ? result.error : undefined,
+		items,
 		filtering,
 		sorting,
 		paging,

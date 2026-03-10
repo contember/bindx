@@ -1,9 +1,7 @@
 import React, { memo, type ReactElement } from 'react'
 import { type EntityDef, type EntityWhere, type EntityOrderBy, type FieldError } from '@contember/bindx'
-import { useBindxContext } from '../../hooks/BackendAdapterContext.js'
-import { useEntityListCore } from '../../hooks/useEntityListCore.js'
+import { useEntityList } from '../../hooks/useEntityList.js'
 import { useSelectionCollectionForList } from '../../hooks/useSelectionCollectionForList.js'
-import { createRuntimeAccessor } from '../proxy.js'
 import type { EntityAccessor } from '../types.js'
 
 /**
@@ -48,7 +46,7 @@ export interface EntityListProps<TEntity extends object = object> {
  * </EntityList>
  * ```
  */
-function EntityListImpl<TEntity extends object>({
+function EntityListComponent<TEntity extends object>({
 	entity,
 	filter,
 	orderBy,
@@ -59,7 +57,6 @@ function EntityListImpl<TEntity extends object>({
 	error: errorFallback,
 	empty,
 }: EntityListProps<TEntity>): ReactElement | null {
-	const { store } = useBindxContext()
 	const entityType = entity.$name
 
 	// Phase 1: Collect JSX selection
@@ -72,14 +69,13 @@ function EntityListImpl<TEntity extends object>({
 		children,
 	})
 
-	// Phase 2: Load data using core hook
-	const result = useEntityListCore({
-		entityType,
+	// Phase 2: Load data using unified hook
+	const result = useEntityList(entity, {
 		filter,
 		orderBy,
 		limit,
 		offset,
-		selectionMeta: selection,
+		selection,
 		queryKey,
 	})
 
@@ -90,9 +86,9 @@ function EntityListImpl<TEntity extends object>({
 
 	if (result.status === 'error') {
 		if (errorFallback) {
-			return <>{errorFallback(result.error!)}</>
+			return <>{errorFallback(result.error)}</>
 		}
-		return <DefaultError error={result.error!} />
+		return <DefaultError error={result.error} />
 	}
 
 	// Empty state
@@ -100,20 +96,11 @@ function EntityListImpl<TEntity extends object>({
 		return <>{empty ?? <DefaultEmpty entityType={entityType} />}</>
 	}
 
-	// Phase 3: Runtime render with real data
+	// Phase 3: Runtime render — items are already EntityAccessors from the hook
 	const items = result.items.map((item, index) => {
-		const accessor = createRuntimeAccessor<TEntity>(
-			entityType,
-			item.id,
-			store,
-			() => {}, // Changes are automatically handled by useSyncExternalStore
-			[],
-			selection,
-		)
-
 		return (
 			<React.Fragment key={item.id}>
-				{children(accessor, index)}
+				{children(item as unknown as EntityAccessor<TEntity>, index)}
 			</React.Fragment>
 		)
 	})
@@ -122,7 +109,7 @@ function EntityListImpl<TEntity extends object>({
 }
 
 // Note: Using type assertion for generic memo component
-export const EntityList = memo(EntityListImpl) as unknown as typeof EntityListImpl
+export const EntityList = memo(EntityListComponent) as unknown as typeof EntityListComponent
 
 /**
  * Default loading component

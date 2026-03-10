@@ -173,7 +173,7 @@ describe('useDataView', () => {
 		expect(result.current.sorting.state.directions).toEqual({ title: 'asc' })
 
 		// Data should be sorted alphabetically
-		const titles = result.current.items.map(i => i.data['title'])
+		const titles = result.current.items.map(i => (i.$data as Record<string, unknown>)?.['title'])
 		expect(titles).toEqual(['Alpha', 'Beta', 'Charlie', 'Delta'])
 	})
 
@@ -217,7 +217,7 @@ describe('useDataView', () => {
 		})
 
 		// Page 1
-		const page1Items = result.current.items.map(i => i.data['title'])
+		const page1Items = result.current.items.map(i => (i.$data as Record<string, unknown>)?.['title'])
 		expect(page1Items).toEqual(['Alpha', 'Beta'])
 
 		// Go to page 2
@@ -226,7 +226,7 @@ describe('useDataView', () => {
 		})
 
 		await waitFor(() => {
-			const page2Items = result.current.items.map(i => i.data['title'])
+			const page2Items = result.current.items.map(i => (i.$data as Record<string, unknown>)?.['title'])
 			expect(page2Items).toEqual(['Charlie', 'Delta'])
 		})
 	})

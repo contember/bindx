@@ -8,13 +8,8 @@ import React, { type ReactElement } from 'react'
 import {
 	useDataViewContext,
 	type ColumnMeta,
-	type DataViewItem,
 	renderCellValue,
 } from '@contember/bindx-dataview'
-import {
-	createRuntimeAccessor,
-	useBindxContext,
-} from '@contember/bindx-react'
 import type { FilterArtifact } from '@contember/bindx'
 
 /**
@@ -22,8 +17,7 @@ import type { FilterArtifact } from '@contember/bindx'
  * Supports sort indicators, cell rendering via accessors, and highlight.
  */
 export function TestTable(): ReactElement {
-	const { items, columns, loaderState, sorting, selection, highlightIndex, setHighlightIndex, entityType, selectionMeta } = useDataViewContext()
-	const { store } = useBindxContext()
+	const { items, columns, loaderState, sorting, selection, highlightIndex, setHighlightIndex } = useDataViewContext()
 
 	if (loaderState === 'initial') {
 		return <div data-testid="datagrid-loading">Loading...</div>
@@ -59,14 +53,6 @@ export function TestTable(): ReactElement {
 			</thead>
 			<tbody>
 				{items.map((item, rowIndex) => {
-					const accessor = createRuntimeAccessor(
-						entityType,
-						item.id,
-						store,
-						() => {},
-						[],
-						selectionMeta,
-					)
 					return (
 						<tr
 							key={item.id}
@@ -81,7 +67,7 @@ export function TestTable(): ReactElement {
 										key={colIndex}
 										data-testid={`datagrid-row-${rowIndex}-col-${col.fieldName ?? colIndex}`}
 									>
-										{renderCellValue(col, accessor)}
+										{renderCellValue(col, item)}
 									</td>
 								)
 							})}

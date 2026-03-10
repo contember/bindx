@@ -281,9 +281,6 @@ export {
 	useInterceptField,
 	// Contember
 	ContemberBindxProvider,
-	// Internal (used by @contember/bindx-dataview)
-	useEntityListCore,
-	type EntityListCoreItem,
 } from './hooks/index.js'
 
 // Undo hook types
