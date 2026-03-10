@@ -7,7 +7,6 @@ import {
 	DataViewSortingTrigger,
 	DataViewVisibilityTrigger,
 	useDataViewFilter,
-	type ColumnMeta,
 } from '@contember/bindx-dataview'
 import type { FieldRefBase } from '@contember/bindx'
 import { ArrowDownAZIcon, ArrowUpDownIcon, ArrowUpZaIcon, EyeOffIcon, FilterIcon } from 'lucide-react'

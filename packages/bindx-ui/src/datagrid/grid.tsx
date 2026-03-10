@@ -19,6 +19,7 @@ export {
 	DataGridCell,
 	DataGridEmptyState,
 } from './table.js'
+export { DataGridAutoTable, type DataGridAutoTableProps } from './auto-table.js'
 export { DataGridLoader, type DataGridLoaderProps } from './loader.js'
 export { DataGridTiles, type DataGridTilesProps } from './tiles.js'
 export { DataGridLayoutSwitcher } from './layout-switcher.js'

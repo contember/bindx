@@ -1,8 +1,38 @@
 // Core DataGrid
 export { DataGrid, type DataGridProps, QUERY_FILTER_NAME } from './DataGrid.js'
 
-// Cell rendering utility
-export { renderCellValue } from './renderCellValue.js'
+// Column type definitions (Layer 1: headless behavior)
+export {
+	defineColumnType,
+	type ColumnTypeDef,
+	textColumnDef,
+	numberColumnDef,
+	dateColumnDef,
+	dateTimeColumnDef,
+	booleanColumnDef,
+	enumColumnDef,
+	enumListColumnDef,
+	uuidColumnDef,
+	isDefinedColumnDef,
+	hasOneColumnDef,
+	hasManyColumnDef,
+} from './columnTypes.js'
+
+// ColumnLeaf and extraction
+export {
+	ColumnLeaf,
+	type ColumnLeafProps,
+	extractColumnLeaves,
+} from './columnLeaf.js'
+
+// createColumn factory (Layer 2: UI wrapping)
+export {
+	createColumn,
+	type ColumnRenderProps,
+	type FilterRenderProps,
+	type CreateColumnConfig,
+	type ColumnComponentProps,
+} from './createColumn.js'
 
 // Column components
 export {
@@ -33,9 +63,7 @@ export {
 	type DataGridActionColumnProps,
 	type DataGridColumnProps,
 	type ColumnMeta,
-	extractColumns,
 	extractFieldName,
-	COLUMN_META,
 } from './columns.js'
 
 // State hooks

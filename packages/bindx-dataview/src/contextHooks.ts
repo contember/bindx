@@ -143,7 +143,7 @@ export function useDataViewElements(): readonly DataViewElementData[] {
 		() => columns
 			.filter(c => c.fieldName !== null)
 			.map(c => ({
-				name: c.fieldName!,
+				name: c.name,
 				label: c.header,
 				fallback: true,
 			})),

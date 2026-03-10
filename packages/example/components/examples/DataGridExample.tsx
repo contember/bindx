@@ -4,37 +4,19 @@ import {
 	DataGridDateColumn,
 	DataGridHasOneColumn,
 	DataGridHasManyColumn,
-	useDataViewContext,
-	renderCellValue,
-	DataViewEachRow,
 	DataViewLayout,
 	DataViewEmpty,
 	DataViewNonEmpty,
-	DataViewHighlightRow,
-	DataViewKeyboardEventHandler,
-	DataViewElement,
 	type DataViewItem,
 } from '@contember/bindx-dataview'
 import {
 	DefaultDataGrid,
-	DataGridTable,
-	DataGridTableWrapper,
-	DataGridThead,
-	DataGridTbody,
-	DataGridHeaderRow,
-	DataGridRow,
-	DataGridHeaderCell,
-	DataGridCell,
-	DataGridColumnHeaderUI,
+	DataGridAutoTable,
 	DataGridNoResults,
 	DataGridTiles,
 	DataGridTextFilter,
 	DataGridDateFilterUI,
-	DataGridHasOneCell,
-	DataGridHasManyCell,
 	DataViewFieldLabel,
-	DataViewHasOneLabel,
-	DataViewHasManyLabel,
 	FieldLabelFormatterProvider,
 } from '@contember/bindx-ui'
 import { schema } from '../../generated/index.js'
@@ -65,9 +47,8 @@ function labelFormatter(entityName: string, fieldName: string): ReactNode | null
 /**
  * Example: Styled DataGrid with filtering, sorting, and pagination.
  *
- * Uses bindx-ui styled components: DefaultDataGrid, DataGridTable,
- * DataGridColumnHeaderUI, DataGridHasOneCell, DataGridHasManyCell,
- * DataViewFieldLabel/HasOneLabel/HasManyLabel, DataGridTiles, DataGridNoResults.
+ * - Table layout uses DataGridAutoTable (auto-renders from column metadata)
+ * - Tiles layout uses direct field access on items (no column context)
  */
 export function DataGridExample(): ReactElement {
 	return (
@@ -108,7 +89,7 @@ export function DataGridExample(): ReactElement {
 
 						<DataViewNonEmpty>
 							<DataViewLayout name="table">
-								<DataGridTableView />
+								<DataGridAutoTable />
 							</DataViewLayout>
 
 							<DataGridTiles>
@@ -124,111 +105,15 @@ export function DataGridExample(): ReactElement {
 	)
 }
 
-function DataGridTableView(): ReactElement {
-	const { columns } = useDataViewContext()
-
-	return (
-		<DataViewKeyboardEventHandler>
-			<DataGridTableWrapper data-testid="datagrid-table">
-				<DataGridTable>
-					<DataGridThead>
-						<DataGridHeaderRow data-testid="datagrid-header">
-							{columns.map((col, i) => {
-								const name = col.fieldName ?? `col-${i}`
-								return (
-									<DataViewElement key={name} name={name}>
-										<DataGridHeaderCell data-testid={`datagrid-header-${name}`}>
-											<DataGridColumnHeaderUI
-												sortingField={col.sortable && col.fieldRef ? col.fieldRef : undefined}
-												hidingName={col.fieldName ?? undefined}
-											>
-												{col.type === 'hasOne'
-													? <DataViewHasOneLabel field={col.fieldName!} />
-													: col.type === 'hasMany'
-														? <DataViewHasManyLabel field={col.fieldName!} />
-														: col.fieldName
-															? <DataViewFieldLabel field={col.fieldName} />
-															: col.header}
-											</DataGridColumnHeaderUI>
-										</DataGridHeaderCell>
-									</DataViewElement>
-								)
-							})}
-						</DataGridHeaderRow>
-					</DataGridThead>
-					<DataGridTbody data-testid="datagrid-body">
-						<DataViewEachRow>
-							{(item, rowIndex) => (
-								<DataViewHighlightRow key={item.id} index={rowIndex}>
-									<DataGridRow data-testid={`datagrid-row-${rowIndex}`}>
-										{columns.map((col, colIndex) => {
-											const name = col.fieldName ?? `col-${colIndex}`
-											return (
-												<DataViewElement key={name} name={name}>
-													<DataGridCell data-testid={`datagrid-cell-${name}`}>
-														<CellContent col={col} accessor={item} />
-													</DataGridCell>
-												</DataViewElement>
-											)
-										})}
-									</DataGridRow>
-								</DataViewHighlightRow>
-							)}
-						</DataViewEachRow>
-					</DataGridTbody>
-				</DataGridTable>
-			</DataGridTableWrapper>
-		</DataViewKeyboardEventHandler>
-	)
-}
-
-function CellContent({ col, accessor }: { col: any; accessor: any }): ReactElement {
-	if (col.type === 'hasOne' && col.fieldName) {
-		const ref = accessor[col.fieldName]
-		const rendered = col.relationRenderer ? col.relationRenderer(ref) : null
-		const id = ref?.$state === 'connected' ? ref?.id : null
-		return (
-			<DataGridHasOneCell field={col.fieldRef} id={id}>
-				{rendered}
-			</DataGridHasOneCell>
-		)
-	}
-
-	if (col.type === 'hasMany' && col.fieldName) {
-		const ref = accessor[col.fieldName]
-		const items = ref?.items ?? []
-		return (
-			<div className="flex flex-wrap gap-1">
-				{items.map((item: any) => {
-					const rendered = col.relationRenderer ? col.relationRenderer(item) : null
-					const id = item?.id ?? (typeof item === 'object' && item !== null && 'id' in item ? item.id : '')
-					return (
-						<DataGridHasManyCell key={id} field={col.fieldRef} id={id}>
-							{rendered}
-						</DataGridHasManyCell>
-					)
-				})}
-			</div>
-		)
-	}
-
-	return <>{renderCellValue(col, accessor)}</>
-}
-
 function DataGridTileCard({ item }: { item: DataViewItem }): ReactElement {
-	const { columns } = useDataViewContext()
-
-	const titleCol = columns.find(c => c.fieldName === 'title')
-	const authorCol = columns.find(c => c.fieldName === 'author')
-
-	const title = titleCol ? renderCellValue(titleCol, item) : item.id
-	const authorRef = authorCol?.fieldName ? (item as any)[authorCol.fieldName] : null
-	const authorName = authorCol?.relationRenderer && authorRef ? authorCol.relationRenderer(authorRef) : null
+	const accessor = item as unknown as Record<string, any>
+	const title = accessor['title']?.value ?? item.id
+	const author = accessor['author']?.name?.value ?? null
 
 	return (
 		<div className="rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow" data-testid={`datagrid-tile-${item.id}`}>
 			<div className="font-medium text-sm" data-testid="tile-title">{title}</div>
-			{authorName && <div className="text-xs text-gray-500 mt-1" data-testid="tile-author">{authorName}</div>}
+			{author && <div className="text-xs text-gray-500 mt-1" data-testid="tile-author">{author}</div>}
 		</div>
 	)
 }

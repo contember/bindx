@@ -28,7 +28,7 @@ import {
 	mergeSelections,
 	collectSelection,
 } from '@contember/bindx-react'
-import { extractColumns } from './columns.js'
+import { extractColumnLeaves } from './columnLeaf.js'
 import { useFilteringState, useSortingState, usePagingState, useSelectionState } from './useDataViewState.js'
 import { DataViewProvider, type DataViewContextValue, type DataViewLoaderState } from './DataViewContext.js'
 
@@ -103,7 +103,13 @@ function DataGridImpl({
 		const collector = createCollectorProxy<any>(scope, entityType, schemaRegistry ?? undefined)
 
 		const columnJsx = columnDefiner(collector)
-		const cols = extractColumns(columnJsx, collector)
+		const cols = extractColumnLeaves(columnJsx)
+
+		// Call collectSelection on each column (for relation columns to capture nested field accesses)
+		for (const col of cols) {
+			col.collectSelection?.(collector)
+		}
+
 		const toolbar = toolbarDefiner ? toolbarDefiner(collector) : undefined
 
 		const jsxSel = collectSelection(columnJsx)
@@ -121,14 +127,14 @@ function DataGridImpl({
 		const map = new Map<string, { handler: FilterHandler<FilterArtifact> }>()
 		const textFieldPaths: string[] = []
 		for (const col of columns) {
-			if (col.filterable && col.filterHandler && col.fieldName) {
-				map.set(col.fieldName, { handler: col.filterHandler })
+			if (col.filterName && col.filterHandler) {
+				map.set(col.filterName, { handler: col.filterHandler })
 			}
-			if (col.type === 'text' && col.fieldName) {
+			if (col.isTextSearchable && col.fieldName) {
 				textFieldPaths.push(col.fieldName)
 			}
 		}
-		// Auto-register query filter across all text columns
+		// Auto-register query filter across all text-searchable columns
 		if (textFieldPaths.length > 0) {
 			map.set(QUERY_FILTER_NAME, { handler: createFullTextFilterHandler(textFieldPaths) })
 		}
@@ -138,8 +144,8 @@ function DataGridImpl({
 	const sortableFields = useMemo((): ReadonlySet<string> => {
 		const set = new Set<string>()
 		for (const col of columns) {
-			if (col.sortable && col.fieldName) {
-				set.add(col.fieldName)
+			if (col.sortingField) {
+				set.add(col.sortingField)
 			}
 		}
 		return set

@@ -7,8 +7,7 @@
 import React, { type ReactElement } from 'react'
 import {
 	useDataViewContext,
-	type ColumnMeta,
-	renderCellValue,
+	type ColumnLeafProps,
 } from '@contember/bindx-dataview'
 import type { FilterArtifact } from '@contember/bindx'
 
@@ -32,18 +31,19 @@ export function TestTable(): ReactElement {
 			<thead>
 				<tr data-testid="datagrid-header">
 					{columns.map((col, i) => {
-						if (!selection.isVisible(col.fieldName ?? `col-${i}`)) return null
+						const name = col.fieldName ?? `col-${i}`
+						if (!selection.isVisible(name)) return null
 						return (
 							<th
 								key={i}
-								data-testid={`datagrid-header-${col.fieldName ?? i}`}
-								onClick={col.sortable && col.fieldRef
+								data-testid={`datagrid-header-${name}`}
+								onClick={col.sortingField && col.fieldRef
 									? () => sorting.setOrderBy(col.fieldRef!, 'next')
 									: undefined}
-								style={col.sortable ? { cursor: 'pointer' } : undefined}
+								style={col.sortingField ? { cursor: 'pointer' } : undefined}
 							>
 								{col.header}
-								{col.sortable && col.fieldRef && (
+								{col.sortingField && col.fieldRef && (
 									<SortIndicator direction={sorting.directionOf(col.fieldRef)} />
 								)}
 							</th>
@@ -52,28 +52,27 @@ export function TestTable(): ReactElement {
 				</tr>
 			</thead>
 			<tbody>
-				{items.map((item, rowIndex) => {
-					return (
-						<tr
-							key={item.id}
-							data-testid={`datagrid-row-${rowIndex}`}
-							data-highlighted={highlightIndex === rowIndex ? '' : undefined}
-							onClick={() => setHighlightIndex(rowIndex)}
-						>
-							{columns.map((col, colIndex) => {
-								if (!selection.isVisible(col.fieldName ?? `col-${colIndex}`)) return null
-								return (
-									<td
-										key={colIndex}
-										data-testid={`datagrid-row-${rowIndex}-col-${col.fieldName ?? colIndex}`}
-									>
-										{renderCellValue(col, item)}
-									</td>
-								)
-							})}
-						</tr>
-					)
-				})}
+				{items.map((item, rowIndex) => (
+					<tr
+						key={item.id}
+						data-testid={`datagrid-row-${rowIndex}`}
+						data-highlighted={highlightIndex === rowIndex ? '' : undefined}
+						onClick={() => setHighlightIndex(rowIndex)}
+					>
+						{columns.map((col, colIndex) => {
+							const name = col.fieldName ?? `col-${colIndex}`
+							if (!selection.isVisible(name)) return null
+							return (
+								<td
+									key={colIndex}
+									data-testid={`datagrid-row-${rowIndex}-col-${name}`}
+								>
+									{col.renderCell(item)}
+								</td>
+							)
+						})}
+					</tr>
+				))}
 			</tbody>
 		</table>
 	)
@@ -92,11 +91,10 @@ function SortIndicator({ direction }: { direction: string | null }): ReactElemen
 
 /**
  * Test toolbar that renders filter controls from DataView context.
- * Matches the data-testid structure of the old DataGridToolbar.
  */
 export function TestToolbar(): ReactElement {
 	const { filtering, columns } = useDataViewContext()
-	const filterableColumns = columns.filter(col => col.filterable && col.fieldName)
+	const filterableColumns = columns.filter(col => col.filterName && col.fieldName)
 
 	return (
 		<div data-testid="datagrid-toolbar">
@@ -128,7 +126,7 @@ export function TestToolbar(): ReactElement {
 }
 
 interface FilterControlProps {
-	column: ColumnMeta
+	column: ColumnLeafProps
 	artifact: unknown
 	onArtifactChange: (artifact: unknown) => void
 	onReset: () => void
@@ -137,7 +135,7 @@ interface FilterControlProps {
 function FilterControl({ column, artifact, onArtifactChange, onReset }: FilterControlProps): ReactElement {
 	const fieldName = column.fieldName!
 
-	switch (column.type) {
+	switch (column.columnType) {
 		case 'text':
 			return <TextFilterControl fieldName={fieldName} header={column.header} artifact={artifact} onChange={onArtifactChange} onReset={onReset} />
 		case 'boolean':
@@ -219,7 +217,6 @@ function EnumFilterControl({ fieldName, header, artifact, onChange, onReset, opt
 
 /**
  * Test pagination that renders pagination controls from DataView context.
- * Matches the data-testid structure of the old DataGridPagination.
  */
 export function TestPagination(): ReactElement {
 	const { paging } = useDataViewContext()

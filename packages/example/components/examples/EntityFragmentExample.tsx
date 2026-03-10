@@ -141,19 +141,19 @@ export function ArticleDetailWithFragments({ articleId }: { articleId: string })
 				<article className="article-detail">
 					<header>
 						<h1>
-							<Field field={article.$fields.title} />
+							<Field field={article.title} />
 						</h1>
 
-						<AuthorInfo author={article.$fields.author.$entity} showEmail />
+						<AuthorInfo author={article.author} showEmail />
 
 						{/* Use fragment component for author */}
-						<HasOne field={article.$fields.author}>
+						<HasOne field={article.author}>
 							{author => <AuthorInfo author={author} showEmail />}
 						</HasOne>
 					</header>
 
 					<div className="content">
-						<Field field={article.$fields.content} />
+						<Field field={article.content} />
 					</div>
 
 					<footer>
