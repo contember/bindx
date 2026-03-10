@@ -1,4 +1,4 @@
-import { useEntity } from '../../bindx.js'
+import { useEntity } from '../../generated/index.js'
 
 /**
  * Simple article view using inline fragment definition

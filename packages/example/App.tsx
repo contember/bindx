@@ -1,7 +1,6 @@
 import { type ReactNode } from 'react'
-import { BindxProvider, ContemberBindxProvider, MockAdapter } from '@contember/bindx-react'
+import { ContemberBindxProvider } from '@contember/bindx-react'
 import { GraphQlClient } from '@contember/graphql-client'
-import { mockData } from './mockData.js'
 import { schemaNames } from './generated/names.js'
 import {
 	ArticleEditor,
@@ -14,25 +13,15 @@ import {
 	RichTextEditorExample,
 	BlockEditorExample,
 	SimpleBlockEditorExample,
+	DataGridExample,
 } from './components/index.js'
 
-const useMock = !import.meta.env.VITE_CONTEMBER_API_URL
+const client = new GraphQlClient({
+	url: `${import.meta.env.VITE_CONTEMBER_API_URL}/content/example/live`,
+	apiToken: import.meta.env.VITE_CONTEMBER_API_TOKEN,
+})
 
 function AppProvider({ children }: { children: ReactNode }) {
-	if (useMock) {
-		const adapter = new MockAdapter(mockData, { debug: true, delay: 200 })
-		return (
-			<BindxProvider adapter={adapter} enableUndo={true}>
-				{children}
-			</BindxProvider>
-		)
-	}
-
-	const client = new GraphQlClient({
-		url: `${import.meta.env.VITE_CONTEMBER_API_URL}/content/example/live`,
-		apiToken: import.meta.env.VITE_CONTEMBER_API_TOKEN,
-	})
-
 	return (
 		<ContemberBindxProvider client={client} schema={schemaNames} undoManager={true} debug={true}>
 			{children}
@@ -49,13 +38,18 @@ export function App() {
 			<div className="app" data-testid="app">
 				<header>
 					<h1>Bindx Demo</h1>
-					<p>
-						Examples of data binding patterns with fragments and entity lists
-						{useMock && <span> (mock mode)</span>}
-					</p>
+					<p>Examples of data binding patterns with fragments and entity lists</p>
 				</header>
 
 				<main>
+					<section data-testid="section-datagrid">
+						<h2>DataGrid</h2>
+						<p>Data grid with filtering, sorting, and pagination.</p>
+						<DataGridExample />
+					</section>
+
+					<hr />
+
 					<section data-testid="section-undo">
 						<h2>Undo/Redo Demo</h2>
 						<p>Edit fields and use Undo/Redo. Changes are auto-grouped when typing rapidly.</p>
@@ -126,7 +120,7 @@ export function App() {
 				</main>
 
 				<footer>
-					<p>{useMock ? 'Mock mode — open browser console to see MockAdapter debug logs.' : 'Connected to Contember API.'}</p>
+					<p>Connected to Contember API.</p>
 				</footer>
 			</div>
 		</AppProvider>

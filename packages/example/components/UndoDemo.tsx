@@ -1,6 +1,6 @@
 import React from 'react'
 import { useUndo } from '@contember/bindx-react'
-import { useEntity } from '../bindx.js'
+import { useEntity } from '../generated/index.js'
 import { TextInput } from './inputs/index.js'
 
 /**

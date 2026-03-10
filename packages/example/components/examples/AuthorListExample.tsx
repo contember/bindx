@@ -1,4 +1,4 @@
-import { useEntityList } from '../../bindx.js'
+import { useEntityList } from '../../generated/index.js'
 
 /**
  * Example: Simple entity list display

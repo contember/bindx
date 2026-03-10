@@ -1,9 +1,10 @@
+import type { ReactNode } from 'react'
 import type { FieldRef } from '@contember/bindx-react'
 
 /**
  * Generic text input - doesn't know about models
  */
-export function TextInput({ field, label, testId }: { field: FieldRef<string>; label: string; testId?: string }) {
+export function TextInput({ field, label, testId }: { field: FieldRef<string> | FieldRef<string | null>; label: string; testId?: string }): ReactNode {
 	return (
 		<div className="field">
 			<label>{label}</label>

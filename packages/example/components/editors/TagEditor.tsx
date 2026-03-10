@@ -4,7 +4,7 @@ import { TextInput } from '../inputs/index.js'
 interface TagData {
 	id: string
 	name: string
-	color: string
+	color: string | null
 }
 
 /**

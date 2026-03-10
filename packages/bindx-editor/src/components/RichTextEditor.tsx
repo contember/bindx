@@ -13,7 +13,7 @@ export type { RichTextEditorProps }
 
 export function RichTextEditor({ field, plugins, children }: RichTextEditorProps): ReactNode {
 	// At runtime, field is always a full FieldRef (proxy provides all properties)
-	const fullField = field as FieldRef<string>
+	const fullField = field as FieldRef<string | null>
 
 	const [editor] = useState(() => {
 		const { editor } = createEditor({
@@ -64,7 +64,7 @@ export function RichTextEditor({ field, plugins, children }: RichTextEditorProps
 	const onChange = useCallback(
 		(value: Descendant[]) => {
 			if (SlateNode.string({ type: 'dummy', children: value }) === '' && fullField.serverValue === null) {
-				fullField.setValue(null as unknown as string)
+				fullField.setValue(null)
 				return
 			}
 

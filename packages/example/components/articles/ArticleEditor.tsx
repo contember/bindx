@@ -1,4 +1,4 @@
-import { useEntity, useEntityList } from '../../bindx.js'
+import { useEntity, useEntityList } from '../../generated/index.js'
 import { AuthorEditor } from '../editors/AuthorEditor.js'
 import { TextInput } from '../inputs/index.js'
 
@@ -31,7 +31,8 @@ export function ArticleEditor({ id }: { id: string }) {
 	}
 
 	// Get current tag IDs for filtering available tags
-	const currentTagIds = new Set(article.fields.tags.items.map(t => t.id))
+	const tagItems = article.fields.tags?.items ?? []
+	const currentTagIds = new Set(tagItems.map(t => t.id))
 
 	// Filter available tags (those not already on the article)
 	const availableTags = allTags.isLoading || allTags.isError
@@ -71,7 +72,9 @@ export function ArticleEditor({ id }: { id: string }) {
 						</select>
 					</div>
 				)}
-				<AuthorEditor author={article.fields.author.$fields} />
+				{article.fields.author.$fields && (
+					<AuthorEditor author={article.fields.author.$fields} />
+				)}
 			</div>
 
 			<div className="form-section" data-testid="article-location">
@@ -84,9 +87,9 @@ export function ArticleEditor({ id }: { id: string }) {
 			</div>
 
 			<div className="form-section" data-testid="article-tags">
-				<h3>Tags ({article.fields.tags.length})</h3>
+				<h3>Tags ({tagItems.length})</h3>
 				<ul style={{ listStyle: 'none', padding: 0 }}>
-					{article.fields.tags.items.map(tag => (
+					{tagItems.map(tag => (
 						<li key={tag.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
 							<span
 								data-testid={`tag-badge-${tag.$fields.name.value}`}

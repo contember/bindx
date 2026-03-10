@@ -8,7 +8,7 @@ import { TextInput } from '../inputs/index.js'
 export function AuthorEditor({
 	author,
 }: {
-	author: { name: FieldRef<string>; email: FieldRef<string> }
+	author: { name: FieldRef<string> | FieldRef<string | null>; email: FieldRef<string> | FieldRef<string | null> }
 }) {
 	return (
 		<div className="author-editor" data-testid="author-editor">

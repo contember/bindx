@@ -6,7 +6,7 @@ import type { SerializableEditorNode } from './editor.js'
 import type { EditorPlugin } from './plugins.js'
 
 export interface RichTextEditorProps {
-	field: FieldRefBase<string>
+	field: FieldRefBase<string | null>
 	plugins?: EditorPlugin[]
 	children: (editor: Editor) => ReactNode
 }

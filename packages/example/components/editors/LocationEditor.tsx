@@ -1,5 +1,5 @@
 import type { EntityFields } from '@contember/bindx-react'
-import type { Location } from '../../types.js'
+import type { Location } from '../../generated/entities.js'
 import { TextInput, CoordinatePicker } from '../inputs/index.js'
 
 /**

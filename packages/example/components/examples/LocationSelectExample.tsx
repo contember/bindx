@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useEntityList } from '../../bindx.js'
+import { useEntityList } from '../../generated/index.js'
 
 /**
  * Example: Location picker using useEntityList
@@ -46,11 +46,11 @@ export function LocationSelectExample() {
 				<div className="location-details" data-testid="location-details">
 					<h4 data-testid="location-selected-label">Selected: {selectedLocation.label}</h4>
 					<p data-testid="location-coordinates">
-						Coordinates: {selectedLocation.lat.toFixed(4)}, {selectedLocation.lng.toFixed(4)}
+						Coordinates: {selectedLocation.lat?.toFixed(4) ?? 'N/A'}, {selectedLocation.lng?.toFixed(4) ?? 'N/A'}
 					</p>
 					<p>
 						<a
-							href={`https://www.google.com/maps?q=${selectedLocation.lat},${selectedLocation.lng}`}
+							href={`https://www.google.com/maps?q=${selectedLocation.lat ?? 0},${selectedLocation.lng ?? 0}`}
 							target="_blank"
 							rel="noopener noreferrer"
 							data-testid="location-maps-link"

@@ -1,4 +1,4 @@
-import { useEntityList } from '../../bindx.js'
+import { useEntityList } from '../../generated/index.js'
 
 /**
  * Example: Tag list with colored badges
@@ -25,7 +25,7 @@ export function TagListExample() {
 						className="tag-badge"
 						data-testid={`tag-list-badge-${item.$data?.name}`}
 						style={{
-							backgroundColor: item.$data?.color,
+							backgroundColor: item.$data?.color ?? undefined,
 							color: '#fff',
 							padding: '4px 8px',
 							borderRadius: '4px',

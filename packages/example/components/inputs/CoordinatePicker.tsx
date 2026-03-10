@@ -7,8 +7,8 @@ export function CoordinatePicker({
 	lat,
 	lng,
 }: {
-	lat: FieldRef<number>
-	lng: FieldRef<number>
+	lat: FieldRef<number> | FieldRef<number | null>
+	lng: FieldRef<number> | FieldRef<number | null>
 }) {
 	return (
 		<div className="coordinate-picker">

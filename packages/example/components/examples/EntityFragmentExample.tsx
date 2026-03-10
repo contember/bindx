@@ -1,4 +1,4 @@
-import { Entity, createComponent } from '../../bindx.js'
+import { Entity, createComponent } from '../../generated/index.js'
 import { Field, HasMany, HasOne } from '@contember/bindx-react'
 
 // ============================================================================

@@ -1,4 +1,4 @@
-import { useEntity, useEntityList } from '../../bindx.js'
+import { useEntity, useEntityList } from '../../generated/index.js'
 import { TextInput } from '../inputs/index.js'
 
 /**

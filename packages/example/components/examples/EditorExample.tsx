@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useEntity } from '../../bindx.js'
+import { useEntity } from '../../generated/index.js'
 import {
 	RichTextEditor,
 	BlockEditor,
@@ -18,7 +18,7 @@ import {
 	type SerializableEditorNode,
 } from '@contember/bindx-editor'
 import type { RenderElementProps } from 'slate-react'
-import type { ContentReference } from '../../types.js'
+import type { ContentReference } from '../../generated/entities.js'
 import type { FieldRefBase } from '@contember/bindx'
 import type { ParagraphElement } from '@contember/bindx-editor'
 import type { HeadingElement } from '@contember/bindx-editor'

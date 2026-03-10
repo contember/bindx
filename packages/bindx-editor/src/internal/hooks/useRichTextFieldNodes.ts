@@ -4,7 +4,7 @@ import { useRef } from 'react'
 
 export interface UseRichTextFieldNodesOptions {
 	editor: Editor
-	field: FieldRef<string>
+	field: FieldRef<string | null>
 }
 
 export const useRichTextFieldNodes = ({

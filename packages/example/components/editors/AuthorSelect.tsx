@@ -1,4 +1,4 @@
-import { useEntityList } from '../../bindx.js'
+import { useEntityList } from '../../generated/index.js'
 import { Select } from '../inputs/index.js'
 
 interface AuthorSelectProps {

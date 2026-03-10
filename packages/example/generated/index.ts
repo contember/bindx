@@ -4,10 +4,10 @@ export * from './names'
 export * from './types'
 
 import { schemaNames } from './names'
-import type { BindxSchema } from './entities'
+import type { BindxEntities } from './entities'
 import { createBindx } from '@contember/bindx-react'
 
 /**
  * Pre-configured bindx instance for this schema
  */
-export const { useEntity, useEntityList, Entity, createComponent } = createBindx<BindxSchema>(schemaNames as any)
+export const { useEntity, useEntityList, Entity, createComponent } = createBindx<BindxEntities>(schemaNames as any)
