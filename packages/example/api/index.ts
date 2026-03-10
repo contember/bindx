@@ -9,7 +9,7 @@ export default createSchema(model, (schema): Schema => ({
 		roles: {
 			...schema.acl.roles,
 			admin: {
-				...schema.acl.roles.admin,
+				...schema.acl.roles['admin'],
 				variables: {},
 				entities: new AllowAllPermissionFactory().create(schema.model, true),
 			},

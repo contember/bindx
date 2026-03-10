@@ -5,7 +5,9 @@ import {
 	UploaderFileStateSwitch,
 	useUploaderFileState,
 	UploaderError,
+	type UploaderFileStateInitial,
 	type UploaderFileStateUploading,
+	type UploaderFileStateFinalizing,
 	type UploaderFileStateError,
 	type UploaderFileStateSuccess,
 } from '@contember/bindx-uploader'
@@ -48,6 +50,13 @@ export const UploaderFileProgressUI = ({
 	</UploaderFileProgressWrapperUI>
 )
 
+const InitialProgress = ({ state }: { state: UploaderFileStateInitial }): ReactNode => (
+	<UploaderFileProgressUI
+		file={state.file.file}
+		actions={<AbortButton />}
+	/>
+)
+
 const UploadingProgress = ({ state }: { state: UploaderFileStateUploading }): ReactNode => (
 	<UploaderFileProgressUI
 		file={state.file.file}
@@ -56,9 +65,16 @@ const UploadingProgress = ({ state }: { state: UploaderFileStateUploading }): Re
 	/>
 )
 
+const FinalizingProgress = ({ state }: { state: UploaderFileStateFinalizing }): ReactNode => (
+	<UploaderFileProgressUI
+		file={state.file.file}
+		actions={<AbortButton />}
+	/>
+)
+
 const ErrorProgress = ({ state }: { state: UploaderFileStateError }): ReactNode => {
 	const errorMessage = state.error instanceof UploaderError
-		? (state.error.endUserMessage ?? dict.uploader.uploadErrors[state.error.type] ?? dict.uploader.unknownError)
+		? (state.error.options.endUserMessage ?? dict.uploader.uploadErrors[state.error.options.type] ?? dict.uploader.unknownError)
 		: dict.uploader.unknownError
 
 	return (
@@ -81,9 +97,9 @@ const SuccessProgress = ({ state }: { state: UploaderFileStateSuccess }): ReactN
 export const UploaderProgress = (): ReactNode => (
 	<UploaderEachFile>
 		<UploaderFileStateSwitch
-			initial={UploadingProgress}
+			initial={InitialProgress}
 			uploading={UploadingProgress}
-			finalizing={UploadingProgress}
+			finalizing={FinalizingProgress}
 			success={SuccessProgress}
 			error={ErrorProgress}
 		/>

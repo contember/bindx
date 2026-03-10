@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { type ReactNode, type MouseEvent } from 'react'
 import { EditIcon, InfoIcon, TrashIcon } from 'lucide-react'
 import { Button } from '../../ui/button.js'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover.js'
@@ -28,7 +28,7 @@ export const FileActions = ({
 							variant="ghost"
 							size="xs"
 							className="p-0.5 h-5 w-5"
-							onClick={e => e.stopPropagation()}
+							onClick={(e: MouseEvent) => e.stopPropagation()}
 						>
 							<EditIcon className="h-4 w-4" />
 						</Button>
@@ -43,7 +43,7 @@ export const FileActions = ({
 					variant="ghost"
 					size="xs"
 					className="p-0.5 h-5 w-5"
-					onClick={e => {
+					onClick={(e: MouseEvent) => {
 						e.stopPropagation()
 						onEdit()
 					}}
@@ -58,7 +58,7 @@ export const FileActions = ({
 							variant="ghost"
 							size="xs"
 							className="p-0.5 h-5 w-5"
-							onClick={e => e.stopPropagation()}
+							onClick={(e: MouseEvent) => e.stopPropagation()}
 						>
 							<InfoIcon className="h-4 w-4" />
 						</Button>
@@ -75,7 +75,7 @@ export const FileActions = ({
 					variant="ghost"
 					size="xs"
 					className="p-0.5 h-5 w-5 text-red-500"
-					onClick={e => {
+					onClick={(e: MouseEvent) => {
 						e.stopPropagation()
 						onRemove()
 					}}

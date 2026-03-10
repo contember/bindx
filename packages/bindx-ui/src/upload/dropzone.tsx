@@ -24,7 +24,7 @@ export const UploaderDropzone = ({
 	dropzonePlaceholder,
 	disabled,
 }: UploaderDropzoneProps): ReactNode => {
-	const filesInProgress = useUploaderStateFiles({ state: ['uploading', 'initial', 'finalizing'] })
+	const filesInProgress = useUploaderStateFiles(['uploading', 'initial', 'finalizing'])
 	const showLoader = inactiveOnUpload && filesInProgress.length > 0
 
 	return (

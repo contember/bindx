@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { open, close, wait, query, action } from './browser.js'
 
-const URL = process.env.PLAYGROUND_URL ?? 'http://localhost:5180'
+const URL = process.env['PLAYGROUND_URL'] ?? 'http://localhost:5180'
 
 describe('Article with Author Select', () => {
 	beforeAll(() => {

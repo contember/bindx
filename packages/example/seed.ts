@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { GraphQlClient } from '@contember/graphql-client'
 
-const apiUrl = process.env.CONTEMBER_API_URL ?? 'http://localhost:1581'
-const apiToken = process.env.CONTEMBER_API_TOKEN ?? '0000000000000000000000000000000000000000'
+const apiUrl = process.env['CONTEMBER_API_URL'] ?? 'http://localhost:1581'
+const apiToken = process.env['CONTEMBER_API_TOKEN'] ?? '0000000000000000000000000000000000000000'
 
 const client = new GraphQlClient({
 	url: `${apiUrl}/content/example/live`,

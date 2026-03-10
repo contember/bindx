@@ -17,8 +17,8 @@ import {
 } from './components/index.js'
 
 const client = new GraphQlClient({
-	url: `${import.meta.env.VITE_CONTEMBER_API_URL}/content/example/live`,
-	apiToken: import.meta.env.VITE_CONTEMBER_API_TOKEN,
+	url: `${import.meta.env['VITE_CONTEMBER_API_URL']}/content/example/live`,
+	apiToken: import.meta.env['VITE_CONTEMBER_API_TOKEN'],
 })
 
 function AppProvider({ children }: { children: ReactNode }) {
