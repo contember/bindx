@@ -9,6 +9,7 @@ import type { ReactNode } from 'react'
 import type {
 	SchemaRegistry,
 	SelectionBuilder,
+	EntityDef,
 } from '@contember/bindx'
 import {
 	ComponentBrand,
@@ -16,6 +17,7 @@ import {
 import type {
 	ComponentBuilder,
 	ComponentBuilderState,
+	CreateComponentOptions,
 } from './componentBuilder.types.js'
 export type { SelectionPropMeta } from './componentBuilder.types.js'
 import type { Condition } from './conditions.js'
@@ -38,8 +40,7 @@ import { COMPONENT_MARKER, COMPONENT_BRAND } from './componentFactory.js'
  * Type safety for consumers is provided by the ComponentBuilder interface.
  */
 export class ComponentBuilderImpl<
-	TSchema extends Record<string, object>,
-	TState extends ComponentBuilderState<TSchema>,
+	TState extends ComponentBuilderState,
 > {
 	constructor(
 		private readonly schemaRegistry: SchemaRegistry<Record<string, object>> | null,
@@ -51,9 +52,10 @@ export class ComponentBuilderImpl<
 
 	entity(
 		propName: string,
-		entityName: string,
+		entity: EntityDef | string,
 		selector?: (builder: SelectionBuilder<object>) => SelectionBuilder<object, object, object>,
-	): ComponentBuilderImpl<TSchema, TState> {
+	): ComponentBuilderImpl<TState> {
+		const entityName = typeof entity === 'string' ? entity : entity.$name
 		const newConfigs = new Map(this.entityConfigs)
 		newConfigs.set(propName, { entityName, selector })
 		return new ComponentBuilderImpl(
@@ -67,7 +69,7 @@ export class ComponentBuilderImpl<
 
 	interfaces(
 		selectors?: Record<string, (builder: SelectionBuilder<object>) => SelectionBuilder<object, object, object>>,
-	): ComponentBuilderImpl<TSchema, TState> {
+	): ComponentBuilderImpl<TState> {
 		// Note: At runtime we don't know the TInterfaces keys, so we rely on
 		// the selectors parameter to determine which props have explicit selectors.
 		// For props without selectors (including pure implicit mode with no selectors param),
@@ -93,7 +95,7 @@ export class ComponentBuilderImpl<
 		)
 	}
 
-	props<TNewScalarProps extends object>(): ComponentBuilderImpl<TSchema, TState> {
+	props<TNewScalarProps extends object>(): ComponentBuilderImpl<TState> {
 		// Type-only operation - runtime is a no-op
 		return new ComponentBuilderImpl(
 			this.schemaRegistry,
@@ -104,7 +106,7 @@ export class ComponentBuilderImpl<
 		)
 	}
 
-	if(conditionFn: (props: Record<string, unknown>) => Condition): ComponentBuilderImpl<TSchema, TState> {
+	if(conditionFn: (props: Record<string, unknown>) => Condition): ComponentBuilderImpl<TState> {
 		return new ComponentBuilderImpl(
 			this.schemaRegistry,
 			this.entityConfigs,
@@ -136,17 +138,17 @@ export class ComponentBuilderImpl<
  * @param schemaRegistry - Optional schema registry for validation
  * @param roles - Optional role constraints
  */
-export function createComponentBuilder<TSchema extends Record<string, object>>(
+export function createComponentBuilder(
 	schemaRegistry: SchemaRegistry<Record<string, object>> | null,
 	roles: readonly string[] = [],
 // eslint-disable-next-line @typescript-eslint/ban-types
-): ComponentBuilder<TSchema, ComponentBuilderState<TSchema, {}, object, typeof roles>> {
+): ComponentBuilder<ComponentBuilderState<{}, object, typeof roles>> {
 	return new ComponentBuilderImpl(
 		schemaRegistry,
 		new Map(),
 		roles,
 	// eslint-disable-next-line @typescript-eslint/ban-types
-	) as unknown as ComponentBuilder<TSchema, ComponentBuilderState<TSchema, {}, object, typeof roles>>
+	) as unknown as ComponentBuilder<ComponentBuilderState<{}, object, typeof roles>>
 }
 
 // ============================================================================

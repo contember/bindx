@@ -12,8 +12,9 @@ import { renderToString } from 'react-dom/server'
 import type { EntityRef, FluentFragment, SelectionBuilder } from '@contember/bindx-react'
 import {
 	createFragment,
-	createBindx,
+	createComponent,
 	defineSchema,
+	entityDef,
 	scalar,
 	hasOne,
 	hasMany,
@@ -23,6 +24,7 @@ import {
 	HasMany,
 	HasOne,
 	mergeFragments,
+	SchemaRegistry,
 } from '@contember/bindx-react'
 
 // ============================================================================
@@ -89,7 +91,11 @@ const schema = defineSchema<{
 	},
 })
 
-const { useEntity, useEntityList, Entity, createComponent } = createBindx(schema)
+const entityDefs = {
+	Author: entityDef<Author>('Author'),
+	Tag: entityDef<Tag>('Tag'),
+	Article: entityDef<Article>('Article'),
+} as const
 
 // ============================================================================
 // Fragment Interoperability Tests
@@ -141,7 +147,7 @@ describe('Fragment Interoperability', () => {
 
 			// Create a component with explicit selection
 			const ArticleHeader = createComponent()
-				.entity('article', 'Article', e => e.title().author(a => a.id().name().email()))
+				.entity('article', entityDefs.Article, e => e.title().author(a => a.id().name().email()))
 				.render(({ article }) => {
 					void article.$data?.title
 					void article.$data?.author?.name
@@ -156,7 +162,7 @@ describe('Fragment Interoperability', () => {
 
 		test('component $propName matches declared selection', () => {
 			const TagCard = createComponent()
-				.entity('tag', 'Tag', e => e.name().color())
+				.entity('tag', entityDefs.Tag, e => e.name().color())
 				.render(({ tag }) => {
 					void tag.$data?.name
 					void tag.$data?.color
@@ -177,7 +183,7 @@ describe('Fragment Interoperability', () => {
 		test('can merge component fragment with fluent fragment', () => {
 			// Component with explicit selection
 			const AuthorCard = createComponent()
-				.entity('author', 'Author', e => e.name())
+				.entity('author', entityDefs.Author, e => e.name())
 				.render(({ author }) => {
 					void author.$data?.name
 					return null
@@ -196,14 +202,14 @@ describe('Fragment Interoperability', () => {
 
 		test('can merge multiple component fragment props', () => {
 			const AuthorName = createComponent()
-				.entity('author', 'Author', e => e.name())
+				.entity('author', entityDefs.Author, e => e.name())
 				.render(({ author }) => {
 					void author.$data?.name
 					return null
 				})
 
 			const AuthorEmail = createComponent()
-				.entity('author', 'Author', e => e.email())
+				.entity('author', entityDefs.Author, e => e.email())
 				.render(({ author }) => {
 					void author.$data?.email
 					return null
@@ -308,7 +314,7 @@ describe('Type Inference Chain', () => {
 describe('Component Integration', () => {
 	test('createComponent creates valid React component', () => {
 		const AuthorView = createComponent()
-			.entity('author', 'Author', e => e.name())
+			.entity('author', entityDefs.Author, e => e.name())
 			.render(({ author }) => {
 				void author.$data?.name
 				return React.createElement('div', null, 'Author View')
@@ -322,14 +328,14 @@ describe('Component Integration', () => {
 
 	test('multiple components with different selections', () => {
 		const AuthorName = createComponent()
-			.entity('author', 'Author', e => e.name())
+			.entity('author', entityDefs.Author, e => e.name())
 			.render(({ author }) => {
 				void author.$data?.name
 				return null
 			})
 
 		const AuthorFull = createComponent()
-			.entity('author', 'Author', e => e.name().email().bio())
+			.entity('author', entityDefs.Author, e => e.name().email().bio())
 			.render(({ author }) => {
 				void author.$data?.name
 				void author.$data?.email
@@ -350,8 +356,8 @@ describe('Component Integration', () => {
 // ============================================================================
 
 describe('Schema Compatibility', () => {
-	test('schema registry is accessible from createBindx result', () => {
-		const { schema: schemaRef } = createBindx(schema)
+	test('schema registry is accessible from SchemaRegistry constructor', () => {
+		const schemaRef = new SchemaRegistry(schema)
 
 		expect(schemaRef).toBeDefined()
 		expect(schemaRef.getEntityNames()).toContain('Author')
@@ -360,7 +366,7 @@ describe('Schema Compatibility', () => {
 	})
 
 	test('schema field definitions match entity types', () => {
-		const { schema: schemaRef } = createBindx(schema)
+		const schemaRef = new SchemaRegistry(schema)
 
 		// Author fields
 		const authorFields = schemaRef.getAllFields('Author')

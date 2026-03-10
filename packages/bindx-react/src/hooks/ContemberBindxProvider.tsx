@@ -1,9 +1,31 @@
 import { memo, useMemo, type ReactNode } from 'react'
 import { GraphQlClient } from '@contember/graphql-client'
 import { ContentClient, ContentQueryBuilder, type SchemaNames } from '@contember/client-content'
-import { ContemberAdapter, SnapshotStore, ActionDispatcher, BatchPersister, MutationCollector, ContemberSchemaMutationAdapter, UndoManager, type UndoManagerConfig, type UpdateMode } from '@contember/bindx'
+import { ContemberAdapter, SnapshotStore, ActionDispatcher, BatchPersister, MutationCollector, ContemberSchemaMutationAdapter, UndoManager, SchemaRegistry, type SchemaDefinition, type UndoManagerConfig, type UpdateMode } from '@contember/bindx'
 import { BindxContext, type BindxContextValue } from './BackendAdapterContext.js'
 import { QueryBatcher } from '../batching/QueryBatcher.js'
+
+/**
+ * Converts SchemaNames (Contember format) to SchemaDefinition (bindx format)
+ * so that a SchemaRegistry can be created for standalone hooks.
+ */
+function schemaNamesToDef(schemaNames: SchemaNames): SchemaDefinition<Record<string, object>> {
+	const entities: Record<string, { fields: Record<string, { type: 'scalar' } | { type: 'hasOne'; target: string } | { type: 'hasMany'; target: string }> }> = {}
+	for (const [entityName, entity] of Object.entries(schemaNames.entities)) {
+		const fields: Record<string, { type: 'scalar' } | { type: 'hasOne'; target: string } | { type: 'hasMany'; target: string }> = {}
+		for (const [fieldName, fieldDef] of Object.entries(entity.fields)) {
+			if (fieldDef.type === 'column') {
+				fields[fieldName] = { type: 'scalar' }
+			} else if (fieldDef.type === 'one') {
+				fields[fieldName] = { type: 'hasOne', target: fieldDef.entity }
+			} else if (fieldDef.type === 'many') {
+				fields[fieldName] = { type: 'hasMany', target: fieldDef.entity }
+			}
+		}
+		entities[entityName] = { fields }
+	}
+	return { entities }
+}
 
 /**
  * Props for ContemberBindxProvider
@@ -94,6 +116,9 @@ export const ContemberBindxProvider = memo(function ContemberBindxProvider({
 			dispatcher.addMiddleware(undoManager.createMiddleware())
 		}
 
+		// Create schema registry from SchemaNames for standalone hooks
+		const schemaRegistry = new SchemaRegistry(schemaNamesToDef(schema))
+
 		// Create mutation collector for proper nested operations
 		// Use ContemberSchemaMutationAdapter to wrap SchemaNames
 		const schemaAdapter = new ContemberSchemaMutationAdapter(schema)
@@ -111,7 +136,7 @@ export const ContemberBindxProvider = memo(function ContemberBindxProvider({
 			store,
 			dispatcher,
 			batchPersister,
-			schema: null,
+			schema: schemaRegistry,
 			undoManager,
 			debug,
 		}

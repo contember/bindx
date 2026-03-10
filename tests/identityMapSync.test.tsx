@@ -4,12 +4,13 @@ import { render, waitFor, act, cleanup } from '@testing-library/react'
 import React from 'react'
 import {
 	BindxProvider,
-	createBindx,
 	MockAdapter,
 	defineSchema,
+	entityDef,
 	scalar,
 	hasOne,
 	hasMany,
+	useEntity,
 } from '@contember/bindx-react'
 
 afterEach(() => {
@@ -36,7 +37,6 @@ interface Article {
 	tags: Tag[]
 }
 
-// Create typed hooks using createBindx with schema
 interface TestSchema {
 	Article: Article
 	Author: Author
@@ -70,7 +70,11 @@ const schema = defineSchema<TestSchema>({
 	},
 })
 
-const { useEntity } = createBindx(schema)
+const entityDefs = {
+	Article: entityDef<Article>('Article'),
+	Author: entityDef<Author>('Author'),
+	Tag: entityDef<Tag>('Tag'),
+} as const
 
 // Helper to query by data-testid
 function getByTestId(container: Element, testId: string): Element {
@@ -129,7 +133,7 @@ describe('Store Synchronization', () => {
 
 			// Component A displays author name
 			function ComponentA() {
-				const author = useEntity('Author', { by: { id: 'author-1' } }, e => e.name())
+				const author = useEntity(entityDefs.Author, { by: { id: 'author-1' } }, e => e.name())
 
 				if (author.isLoading) {
 					return <div data-testid="a-loading">Loading A...</div>
@@ -154,7 +158,7 @@ describe('Store Synchronization', () => {
 
 			// Component B also displays author name
 			function ComponentB() {
-				const author = useEntity('Author', { by: { id: 'author-1' } }, e => e.name())
+				const author = useEntity(entityDefs.Author, { by: { id: 'author-1' } }, e => e.name())
 
 				if (author.isLoading) {
 					return <div data-testid="b-loading">Loading B...</div>
@@ -178,7 +182,7 @@ describe('Store Synchronization', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<ComponentA />
 					<ComponentB />
 				</BindxProvider>,
@@ -220,7 +224,7 @@ describe('Store Synchronization', () => {
 
 			// Component that accesses author through article data
 			function ArticleComponent() {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+				const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 					e.title().author(a => a.id().name())
 				)
 
@@ -242,7 +246,7 @@ describe('Store Synchronization', () => {
 
 			// Component that accesses author directly
 			function AuthorComponent() {
-				const author = useEntity('Author', { by: { id: 'author-1' } }, e => e.name().email())
+				const author = useEntity(entityDefs.Author, { by: { id: 'author-1' } }, e => e.name().email())
 
 				if (author.isLoading) {
 					return <div data-testid="author-loading">Loading...</div>
@@ -267,7 +271,7 @@ describe('Store Synchronization', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<ArticleComponent />
 					<AuthorComponent />
 				</BindxProvider>,
@@ -290,7 +294,7 @@ describe('Store Synchronization', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function ComponentA() {
-				const author = useEntity('Author', { by: { id: 'author-1' } }, e => e.name())
+				const author = useEntity(entityDefs.Author, { by: { id: 'author-1' } }, e => e.name())
 
 				if (author.isLoading) return <div>Loading...</div>
 				if (author.isError || author.isNotFound) return <div>Error</div>
@@ -310,7 +314,7 @@ describe('Store Synchronization', () => {
 			}
 
 			function ComponentB() {
-				const author = useEntity('Author', { by: { id: 'author-1' } }, e => e.name())
+				const author = useEntity(entityDefs.Author, { by: { id: 'author-1' } }, e => e.name())
 
 				if (author.isLoading) return <div>Loading...</div>
 				if (author.isError || author.isNotFound) return <div>Error</div>
@@ -324,7 +328,7 @@ describe('Store Synchronization', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<ComponentA />
 					<ComponentB />
 				</BindxProvider>,
@@ -359,7 +363,7 @@ describe('Store Synchronization', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 50 })
 
 			function TestComponent() {
-				const author = useEntity('Author', { by: { id: 'author-1' }, cache: true }, e => e.name())
+				const author = useEntity(entityDefs.Author, { by: { id: 'author-1' }, cache: true }, e => e.name())
 
 				if (author.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -373,7 +377,7 @@ describe('Store Synchronization', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -393,7 +397,7 @@ describe('Store Synchronization', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function ArticleTagsComponent() {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+				const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 					e.tags(t => t.id().name())
 				)
 
@@ -412,7 +416,7 @@ describe('Store Synchronization', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<ArticleTagsComponent />
 				</BindxProvider>,
 			)

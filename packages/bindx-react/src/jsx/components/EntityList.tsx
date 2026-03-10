@@ -1,5 +1,5 @@
 import React, { memo, type ReactElement } from 'react'
-import { type EntityWhere, type EntityOrderBy, type FieldError } from '@contember/bindx'
+import { type EntityDef, type EntityWhere, type EntityOrderBy, type FieldError } from '@contember/bindx'
 import { useBindxContext } from '../../hooks/BackendAdapterContext.js'
 import { useEntityListCore } from '../../hooks/useEntityListCore.js'
 import { useSelectionCollectionForList } from '../../hooks/useSelectionCollectionForList.js'
@@ -9,19 +9,19 @@ import type { EntityAccessor } from '../types.js'
 /**
  * Props for EntityList component
  */
-export interface EntityListProps<TSchema, K extends keyof TSchema> {
-	/** Entity type name */
-	name: K
+export interface EntityListProps<TEntity extends object = object> {
+	/** Entity definition reference */
+	entity: EntityDef<TEntity>
 	/** Optional filter criteria - type-safe based on entity schema */
-	filter?: EntityWhere<TSchema[K]>
+	filter?: EntityWhere<TEntity>
 	/** Optional ordering - type-safe based on entity schema */
-	orderBy?: readonly EntityOrderBy<TSchema[K]>[]
+	orderBy?: readonly EntityOrderBy<TEntity>[]
 	/** Optional limit */
 	limit?: number
 	/** Optional offset */
 	offset?: number
 	/** Render function receiving typed entity accessor with direct field access */
-	children: (entity: EntityAccessor<TSchema[K]>, index: number) => React.ReactNode
+	children: (entity: EntityAccessor<TEntity>, index: number) => React.ReactNode
 	/** Loading fallback */
 	loading?: React.ReactNode
 	/** Error fallback */
@@ -39,7 +39,7 @@ export interface EntityListProps<TSchema, K extends keyof TSchema> {
  *
  * @example
  * ```tsx
- * <EntityList name="Article" filter={{ published: true }} orderBy={[{ createdAt: 'desc' }]} limit={10}>
+ * <EntityList entity={schema.Article} filter={{ published: true }} orderBy={[{ createdAt: 'desc' }]} limit={10}>
  *   {(article, index) => (
  *     <div key={article.id}>
  *       <Field field={article.fields.title} />
@@ -48,8 +48,8 @@ export interface EntityListProps<TSchema, K extends keyof TSchema> {
  * </EntityList>
  * ```
  */
-function EntityListImpl<TSchema, K extends keyof TSchema>({
-	name,
+function EntityListImpl<TEntity extends object>({
+	entity,
 	filter,
 	orderBy,
 	limit,
@@ -58,9 +58,9 @@ function EntityListImpl<TSchema, K extends keyof TSchema>({
 	loading,
 	error: errorFallback,
 	empty,
-}: EntityListProps<TSchema, K>): ReactElement | null {
+}: EntityListProps<TEntity>): ReactElement | null {
 	const { store } = useBindxContext()
-	const entityType = name as string
+	const entityType = entity.$name
 
 	// Phase 1: Collect JSX selection
 	const { selection, queryKey } = useSelectionCollectionForList({
@@ -102,7 +102,7 @@ function EntityListImpl<TSchema, K extends keyof TSchema>({
 
 	// Phase 3: Runtime render with real data
 	const items = result.items.map((item, index) => {
-		const accessor = createRuntimeAccessor<TSchema[K]>(
+		const accessor = createRuntimeAccessor<TEntity>(
 			entityType,
 			item.id,
 			store,

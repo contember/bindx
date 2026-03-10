@@ -12,6 +12,8 @@ import {
 } from '../src/index.js'
 import {
 	useEntity,
+	entityDefs,
+	schema,
 	getByTestId,
 	queryByTestId,
 	createAdapter,
@@ -27,7 +29,7 @@ describe('Form components integration', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				entityDefs.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().published(),
 			)
@@ -74,7 +76,7 @@ describe('Form components integration', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -108,7 +110,7 @@ describe('Form components integration', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				entityDefs.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title(),
 			)
@@ -146,7 +148,7 @@ describe('Form components integration', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -187,7 +189,7 @@ describe('Form components integration', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				entityDefs.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title(),
 			)
@@ -211,7 +213,7 @@ describe('Form components integration', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)

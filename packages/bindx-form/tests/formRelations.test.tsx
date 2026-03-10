@@ -10,6 +10,8 @@ import {
 } from '../src/index.js'
 import {
 	useEntity,
+	entityDefs,
+	schema,
 	getByTestId,
 	queryByTestId,
 	createAdapter,
@@ -27,7 +29,7 @@ describe('FormHasOneRelationScope', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				entityDefs.Article,
 				{ by: { id: 'article-1' } },
 				e => e.author(a => a.id().name()),
 			)
@@ -48,7 +50,7 @@ describe('FormHasOneRelationScope', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -71,7 +73,7 @@ describe('FormHasManyRelationScope', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				entityDefs.Article,
 				{ by: { id: 'article-1' } },
 				e => e.tags(t => t.id().name()),
 			)
@@ -92,7 +94,7 @@ describe('FormHasManyRelationScope', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -111,7 +113,7 @@ describe('FormHasManyRelationScope', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				entityDefs.Article,
 				{ by: { id: 'article-1' } },
 				e => e.tags(t => t.id().name()),
 			)
@@ -140,7 +142,7 @@ describe('FormHasManyRelationScope', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)

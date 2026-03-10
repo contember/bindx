@@ -2,8 +2,8 @@
  * Shared setup for hasMany relation tests
  */
 import {
-	createBindx,
 	defineSchema,
+	entityDef,
 	scalar,
 	hasMany,
 } from '@contember/bindx-react'
@@ -48,7 +48,10 @@ export const schema = defineSchema<TestSchema>({
 	},
 })
 
-export const { useEntity } = createBindx(schema)
+export const entityDefs = {
+	Article: entityDef<Article>('Article'),
+	Tag: entityDef<Tag>('Tag'),
+} as const
 
 // Test data factory - Article with 2 tags
 export function createMockData() {
@@ -87,5 +90,4 @@ export function createMockData() {
 // Reusable test component props
 export interface TestComponentProps {
 	articleId: string
-	onArticle?: (article: ReturnType<typeof useEntity<'Article', Article>>) => void
 }

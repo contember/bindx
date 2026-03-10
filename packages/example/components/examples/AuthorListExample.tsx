@@ -1,11 +1,12 @@
-import { useEntityList } from '../../generated/index.js'
+import { useEntityList } from '@contember/bindx-react'
+import { schema } from '../../generated/index.js'
 
 /**
  * Example: Simple entity list display
  * Demonstrates basic useEntityList usage for displaying a list of entities
  */
 export function AuthorListExample() {
-	const authors = useEntityList('Author', {}, e => e.id().name().email().bio())
+	const authors = useEntityList(schema.Author, {}, e => e.id().name().email().bio())
 
 	if (authors.isLoading) {
 		return <div>Loading authors...</div>

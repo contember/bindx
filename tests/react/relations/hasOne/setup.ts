@@ -2,12 +2,11 @@
  * Shared setup for hasOne relation tests
  */
 import {
-	createBindx,
 	defineSchema,
+	entityDef,
 	scalar,
 	hasOne,
 } from '@contember/bindx-react'
-import { getByTestId as _getByTestId, queryByTestId as _queryByTestId } from '../../../shared/helpers'
 
 // Re-export helpers
 export { getByTestId, queryByTestId } from '../../../shared/helpers'
@@ -49,7 +48,10 @@ export const schema = defineSchema<TestSchema>({
 	},
 })
 
-export const { useEntity, useEntityList } = createBindx(schema)
+export const entityDefs = {
+	Article: entityDef<Article>('Article'),
+	Author: entityDef<Author>('Author'),
+} as const
 
 // Test data factory
 export function createMockData() {

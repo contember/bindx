@@ -4,11 +4,12 @@ import { render, act, cleanup, waitFor } from '@testing-library/react'
 import React from 'react'
 import {
 	BindxProvider,
-	createBindx,
 	MockAdapter,
 	defineSchema,
+	entityDef,
 	scalar,
 	hasMany,
+	useEntity,
 } from '@contember/bindx-react'
 import { Repeater, arrayMove } from '@contember/bindx-repeater'
 
@@ -53,7 +54,7 @@ const schema = defineSchema<TestSchema>({
 	},
 })
 
-const { useEntity } = createBindx(schema)
+const authorDef = entityDef<Author>('Author')
 
 // Helper functions
 function getByTestId(container: Element, testId: string): Element {
@@ -99,7 +100,7 @@ describe('Repeater Component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent() {
-				const author = useEntity('Author', { by: { id: 'author-1' } }, e =>
+				const author = useEntity(authorDef, { by: { id: 'author-1' } }, e =>
 					e.id().name().articles(a => a.id().title().order()),
 				)
 
@@ -125,7 +126,7 @@ describe('Repeater Component', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -157,7 +158,7 @@ describe('Repeater Component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent() {
-				const author = useEntity('Author', { by: { id: 'author-empty' } }, e =>
+				const author = useEntity(authorDef, { by: { id: 'author-empty' } }, e =>
 					e.id().articles(a => a.id().title()),
 				)
 
@@ -179,7 +180,7 @@ describe('Repeater Component', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -196,7 +197,7 @@ describe('Repeater Component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent() {
-				const author = useEntity('Author', { by: { id: 'author-1' } }, e =>
+				const author = useEntity(authorDef, { by: { id: 'author-1' } }, e =>
 					e.id().articles(a => a.id().title()),
 				)
 
@@ -216,7 +217,7 @@ describe('Repeater Component', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -235,7 +236,7 @@ describe('Repeater Component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent() {
-				const author = useEntity('Author', { by: { id: 'author-1' } }, e =>
+				const author = useEntity(authorDef, { by: { id: 'author-1' } }, e =>
 					e.id().articles(a => a.id().title()),
 				)
 
@@ -255,7 +256,7 @@ describe('Repeater Component', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -277,7 +278,7 @@ describe('Repeater Component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent() {
-				const author = useEntity('Author', { by: { id: 'author-1' } }, e =>
+				const author = useEntity(authorDef, { by: { id: 'author-1' } }, e =>
 					e.id().articles(a => a.id().title()),
 				)
 
@@ -302,7 +303,7 @@ describe('Repeater Component', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -325,7 +326,7 @@ describe('Repeater Component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent() {
-				const author = useEntity('Author', { by: { id: 'author-1' } }, e =>
+				const author = useEntity(authorDef, { by: { id: 'author-1' } }, e =>
 					e.id().articles(a => a.id().title()),
 				)
 
@@ -352,7 +353,7 @@ describe('Repeater Component', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -391,7 +392,7 @@ describe('Repeater Component', () => {
 			}, { delay: 0 })
 
 			function TestComponent() {
-				const author = useEntity('Author', { by: { id: 'author-1' } }, e =>
+				const author = useEntity(authorDef, { by: { id: 'author-1' } }, e =>
 					e.id().articles(a => a.id().title().order()),
 				)
 
@@ -412,7 +413,7 @@ describe('Repeater Component', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -431,7 +432,7 @@ describe('Repeater Component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent() {
-				const author = useEntity('Author', { by: { id: 'author-1' } }, e =>
+				const author = useEntity(authorDef, { by: { id: 'author-1' } }, e =>
 					e.id().articles(a => a.id().title().order()),
 				)
 
@@ -456,7 +457,7 @@ describe('Repeater Component', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -485,7 +486,7 @@ describe('Repeater Component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent() {
-				const author = useEntity('Author', { by: { id: 'author-1' } }, e =>
+				const author = useEntity(authorDef, { by: { id: 'author-1' } }, e =>
 					e.id().articles(a => a.id().title().order()),
 				)
 
@@ -508,7 +509,7 @@ describe('Repeater Component', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -535,7 +536,7 @@ describe('Repeater Component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent() {
-				const author = useEntity('Author', { by: { id: 'author-1' } }, e =>
+				const author = useEntity(authorDef, { by: { id: 'author-1' } }, e =>
 					e.id().articles(a => a.id().title()),
 				)
 
@@ -552,7 +553,7 @@ describe('Repeater Component', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)

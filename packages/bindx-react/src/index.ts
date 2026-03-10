@@ -19,6 +19,8 @@ export type {
 	SchemaDefinition,
 	InferModel,
 	InferEntityNames,
+	EntityDef,
+	InferEntityDef,
 	// Selection types
 	SelectionBuilder,
 	SelectionMeta,
@@ -125,6 +127,7 @@ export {
 	hasOne,
 	hasMany,
 	defineSchema,
+	entityDef,
 	SchemaRegistry,
 	// Selection utilities
 	createFragment,
@@ -224,7 +227,6 @@ export type {
 	ComponentBuilder,
 	ComponentBuilderState,
 	CreateComponentOptions,
-	CreateComponentFn,
 	// Interface types
 	InterfaceEntityPropConfig,
 	ImplicitInterfaceEntityConfig,
@@ -261,7 +263,10 @@ export {
 	useDispatcher,
 	useBatchPersister,
 	useBindxContext,
-	createBindx,
+	useSchemaRegistry,
+	// Standalone hooks
+	useEntity,
+	useEntityList,
 	// Persistence
 	usePersist,
 	usePersistEntity,
@@ -301,6 +306,7 @@ export {
 	cond,
 	type Condition,
 	// Component (unified API)
+	createComponent,
 	isBindxComponent,
 	mergeFragments,
 	COMPONENT_MARKER,
@@ -335,4 +341,3 @@ export {
 	convertToQuerySelection,
 	debugSelection,
 } from './jsx/index.js'
-

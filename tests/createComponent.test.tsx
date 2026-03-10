@@ -4,11 +4,13 @@ import { render, waitFor, cleanup } from '@testing-library/react'
 import React from 'react'
 import {
 	BindxProvider,
-	createBindx,
 	MockAdapter,
 	isBindxComponent,
 	mergeFragments,
+	createComponent,
+	Entity,
 	defineSchema,
+	entityDef,
 	scalar,
 	hasOne,
 	hasMany,
@@ -86,11 +88,11 @@ const schema = defineSchema<TestSchema>({
 	},
 })
 
-// Get typed hooks and createComponent from createBindx
-const {
-	Entity,
-	createComponent,
-} = createBindx(schema)
+const entityDefs = {
+	Article: entityDef<Article>('Article'),
+	Author: entityDef<Author>('Author'),
+	Tag: entityDef<Tag>('Tag'),
+} as const
 
 // ============================================================================
 // Test Helpers
@@ -147,7 +149,7 @@ function createMockData() {
 
 // Simple component with one entity prop - explicit selection
 const AuthorCard = createComponent()
-	.entity('author', 'Author', e => e.name().email())
+	.entity('author', entityDefs.Author, e => e.name().email())
 	.render(({ author }) => (
 		<div data-testid="author-card">
 			<span data-testid="author-name">{author.$data?.name}</span>
@@ -157,7 +159,7 @@ const AuthorCard = createComponent()
 
 // Component with scalar props
 const AuthorCardWithOptions = createComponent()
-	.entity('author', 'Author', e => e.name().email().bio())
+	.entity('author', entityDefs.Author, e => e.name().email().bio())
 	.props<{ showEmail?: boolean; className?: string }>()
 	.render(({ author, showEmail, className }) => (
 		<div data-testid="author-card" className={className}>
@@ -169,8 +171,8 @@ const AuthorCardWithOptions = createComponent()
 
 // Component with multiple entity props
 const ArticleWithAuthor = createComponent()
-	.entity('article', 'Article', e => e.title().content())
-	.entity('author', 'Author', e => e.name())
+	.entity('article', entityDefs.Article, e => e.title().content())
+	.entity('author', entityDefs.Author, e => e.name())
 	.render(({ article, author }) => (
 		<div data-testid="article-with-author">
 			<h1 data-testid="article-title">{article.$data?.title}</h1>
@@ -181,7 +183,7 @@ const ArticleWithAuthor = createComponent()
 
 // Implicit mode - selection collected from JSX
 const ImplicitAuthorCard = createComponent()
-	.entity('author', 'Author')
+	.entity('author', entityDefs.Author)
 	.render(({ author }) => (
 		<div data-testid="implicit-author-card">
 			<span data-testid="author-name">{author.name.inputProps.value}</span>
@@ -267,11 +269,11 @@ describe('createComponent builder API', () => {
 	describe('fragment merging', () => {
 		test('can merge fragments from different components', () => {
 			const AuthorName = createComponent()
-				.entity('author', 'Author', e => e.name())
+				.entity('author', entityDefs.Author, e => e.name())
 				.render(({ author }) => <span>{author.$data?.name}</span>)
 
 			const AuthorEmail = createComponent()
-				.entity('author', 'Author', e => e.email())
+				.entity('author', entityDefs.Author, e => e.email())
 				.render(({ author }) => <span>{author.$data?.email}</span>)
 
 			const merged = mergeFragments(AuthorName.$author, AuthorEmail.$author)
@@ -286,7 +288,7 @@ describe('createComponent builder API', () => {
 			// This test verifies compile-time type checking
 			// If types are wrong, this file won't compile
 			const _testComponent = createComponent()
-				.entity('author', 'Author', e => e.name().email())
+				.entity('author', entityDefs.Author, e => e.name().email())
 				.render(({ author }) => {
 					// These should be typed correctly
 					const name: string | undefined = author.$data?.name
@@ -301,8 +303,8 @@ describe('createComponent builder API', () => {
 	describe('mixed implicit and explicit', () => {
 		test('can mix implicit and explicit entity props', () => {
 			const MixedComponent = createComponent()
-				.entity('author', 'Author')  // implicit
-				.entity('article', 'Article', e => e.title())  // explicit
+				.entity('author', entityDefs.Author)  // implicit
+				.entity('article', entityDefs.Article, e => e.title())  // explicit
 				.render(({ author, article }) => (
 					<div>
 						<span>{author.name.inputProps.value}</span>
@@ -327,8 +329,8 @@ describe('createComponent rendering', () => {
 		const adapter = new MockAdapter(createMockData())
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
-				<Entity name="Author" by={{ id: 'author-1' }}>
+			<BindxProvider adapter={adapter} schema={schema}>
+				<Entity entity={entityDefs.Author} by={{ id: 'author-1' }}>
 					{author => <AuthorCard author={author} />}
 				</Entity>
 			</BindxProvider>,
@@ -345,8 +347,8 @@ describe('createComponent rendering', () => {
 		const adapter = new MockAdapter(createMockData())
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
-				<Entity name="Author" by={{ id: 'author-1' }}>
+			<BindxProvider adapter={adapter} schema={schema}>
+				<Entity entity={entityDefs.Author} by={{ id: 'author-1' }}>
 					{author => (
 						<AuthorCardWithOptions
 							author={author}
@@ -371,8 +373,8 @@ describe('createComponent rendering', () => {
 		const adapter = new MockAdapter(createMockData())
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
-				<Entity name="Author" by={{ id: 'author-1' }}>
+			<BindxProvider adapter={adapter} schema={schema}>
+				<Entity entity={entityDefs.Author} by={{ id: 'author-1' }}>
 					{author => <AuthorCardWithOptions author={author} showEmail={false} />}
 				</Entity>
 			</BindxProvider>,
@@ -390,8 +392,8 @@ describe('createComponent rendering', () => {
 		const adapter = new MockAdapter(createMockData())
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
-				<Entity name="Author" by={{ id: 'author-1' }}>
+			<BindxProvider adapter={adapter} schema={schema}>
+				<Entity entity={entityDefs.Author} by={{ id: 'author-1' }}>
 					{author => <ImplicitAuthorCard author={author} />}
 				</Entity>
 			</BindxProvider>,
@@ -467,8 +469,8 @@ describe('createComponent.entityInterface', () => {
 			const adapter = new MockAdapter(createMockData())
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
-					<Entity name="Author" by={{ id: 'author-1' }}>
+				<BindxProvider adapter={adapter} schema={schema}>
+					<Entity entity={entityDefs.Author} by={{ id: 'author-1' }}>
 						{author => <NameCard item={author} />}
 					</Entity>
 				</BindxProvider>,
@@ -495,8 +497,8 @@ describe('createComponent.entityInterface', () => {
 			})
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
-					<Entity name="Tag" by={{ id: 'tag-1' }}>
+				<BindxProvider adapter={adapter} schema={schema}>
+					<Entity entity={entityDefs.Tag} by={{ id: 'tag-1' }}>
 						{tag => <NameCard item={tag} />}
 					</Entity>
 				</BindxProvider>,
@@ -519,8 +521,8 @@ describe('createComponent.entityInterface', () => {
 			const adapter = new MockAdapter(createMockData())
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
-					<Entity name="Article" by={{ id: 'article-1' }}>
+				<BindxProvider adapter={adapter} schema={schema}>
+					<Entity entity={entityDefs.Article} by={{ id: 'article-1' }}>
 						{article => <TitleCard item={article} />}
 					</Entity>
 				</BindxProvider>,
@@ -536,7 +538,7 @@ describe('createComponent.entityInterface', () => {
 		test('can combine interfaces with regular entity', () => {
 			const MixedComponent = createComponent()
 				.interfaces<{ item: HasName }>()
-				.entity('article', 'Article', e => e.title())
+				.entity('article', entityDefs.Article, e => e.title())
 				.render(({ item, article }) => (
 					<div>
 						<span data-testid="name">{item.name.inputProps.value}</span>
@@ -616,7 +618,7 @@ describe('nested createComponent with relation entity', () => {
 	test('correctly tracks entity scope when passing relation entity to nested component', () => {
 		// AuthorBreadcrumbs expects an Author entity with explicit name selection
 		const AuthorBreadcrumbs = createComponent()
-			.entity('author', 'Author', e => e.name())
+			.entity('author', entityDefs.Author, e => e.name())
 			.render(({ author }) => (
 				<div data-testid="author-breadcrumbs">
 					<span data-testid="author-name">{author.name.value}</span>
@@ -625,7 +627,7 @@ describe('nested createComponent with relation entity', () => {
 
 		// ArticlePage has an Article entity with explicit selection, so article.author.$entity is available
 		const ArticlePage = createComponent()
-			.entity('article', 'Article', e => e.title().author(a => a.name()))
+			.entity('article', entityDefs.Article, e => e.title().author(a => a.name()))
 			.render(({ article }) => (
 				<div data-testid="article-page">
 					<h1>{article.title.value}</h1>
@@ -649,7 +651,7 @@ describe('nested createComponent with relation entity', () => {
 
 	test('renders nested component with relation entity data', async () => {
 		const AuthorBreadcrumbs = createComponent()
-			.entity('author', 'Author', e => e.name())
+			.entity('author', entityDefs.Author, e => e.name())
 			.render(({ author }) => (
 				<div data-testid="author-breadcrumbs">
 					<span data-testid="breadcrumb-author-name">{author.name.value}</span>
@@ -657,7 +659,7 @@ describe('nested createComponent with relation entity', () => {
 			))
 
 		const ArticlePage = createComponent()
-			.entity('article', 'Article', e => e.title().author(a => a.name()))
+			.entity('article', entityDefs.Article, e => e.title().author(a => a.name()))
 			.render(({ article }) => (
 				<div data-testid="article-page">
 					<h1 data-testid="article-title">{article.title.value}</h1>
@@ -668,8 +670,8 @@ describe('nested createComponent with relation entity', () => {
 		const adapter = new MockAdapter(createMockData())
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
-				<Entity name="Article" by={{ id: 'article-1' }}>
+			<BindxProvider adapter={adapter} schema={schema}>
+				<Entity entity={entityDefs.Article} by={{ id: 'article-1' }}>
 					{article => <ArticlePage article={article} />}
 				</Entity>
 			</BindxProvider>,
@@ -685,14 +687,14 @@ describe('nested createComponent with relation entity', () => {
 	test('correctly tracks scope with multiple levels of nesting', () => {
 		// AuthorName is a simple component showing author name (explicit selection)
 		const AuthorName = createComponent()
-			.entity('author', 'Author', e => e.name())
+			.entity('author', entityDefs.Author, e => e.name())
 			.render(({ author }) => (
 				<span data-testid="author-name">{author.name.value}</span>
 			))
 
 		// AuthorCard uses AuthorName internally (explicit selection for name + email)
 		const AuthorCard = createComponent()
-			.entity('author', 'Author', e => e.name().email())
+			.entity('author', entityDefs.Author, e => e.name().email())
 			.render(({ author }) => (
 				<div data-testid="author-card">
 					<AuthorName author={author} />
@@ -702,7 +704,7 @@ describe('nested createComponent with relation entity', () => {
 
 		// ArticleWithAuthor uses explicit selection so article.author.$entity is available
 		const ArticleWithAuthor = createComponent()
-			.entity('article', 'Article', e => e.title().author(a => a.name().email()))
+			.entity('article', entityDefs.Article, e => e.title().author(a => a.name().email()))
 			.render(({ article }) => (
 				<div data-testid="article-with-author">
 					<h1>{article.title.value}</h1>

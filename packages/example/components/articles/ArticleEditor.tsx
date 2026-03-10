@@ -1,4 +1,5 @@
-import { useEntity, useEntityList } from '../../generated/index.js'
+import { useEntity, useEntityList } from '@contember/bindx-react'
+import { schema } from '../../generated/index.js'
 import { AuthorEditor } from '../editors/AuthorEditor.js'
 import { TextInput } from '../inputs/index.js'
 
@@ -6,7 +7,7 @@ import { TextInput } from '../inputs/index.js'
  * Full article editor - demonstrates useEntity with the new API
  */
 export function ArticleEditor({ id }: { id: string }) {
-	const article = useEntity('Article', { by: { id } }, e =>
+	const article = useEntity(schema.Article, { by: { id } }, e =>
 		e
 			.id()
 			.title()
@@ -17,10 +18,10 @@ export function ArticleEditor({ id }: { id: string }) {
 	)
 
 	// Load all available tags for the "add tag" dropdown
-	const allTags = useEntityList('Tag', {}, t => t.id().name().color())
+	const allTags = useEntityList(schema.Tag, {}, t => t.id().name().color())
 
 	// Load all available authors for the "change author" dropdown
-	const allAuthors = useEntityList('Author', {}, a => a.id().name().email())
+	const allAuthors = useEntityList(schema.Author, {}, a => a.id().name().email())
 
 	if (article.isLoading) {
 		return <div>Loading article...</div>

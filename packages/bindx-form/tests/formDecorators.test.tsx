@@ -11,6 +11,8 @@ import {
 } from '../src/index.js'
 import {
 	useEntity,
+	entityDefs,
+	schema,
 	getByTestId,
 	queryByTestId,
 	getAllByTestId,
@@ -26,7 +28,7 @@ describe('FormLabel', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -44,7 +46,7 @@ describe('FormLabel', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -92,7 +94,7 @@ describe('FormLabel', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -115,7 +117,7 @@ describe('FormLabel', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)

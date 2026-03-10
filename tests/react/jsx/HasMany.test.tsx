@@ -7,10 +7,11 @@ import {
 	MockAdapter,
 	HasMany,
 	isTempId,
+	useEntity,
 } from '@contember/bindx-react'
 import {
 	testSchema,
-	useEntity,
+	schema,
 	createMockData,
 	createHasManyMockData,
 } from '../../shared'
@@ -41,7 +42,7 @@ describe('HasMany component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a =>
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a =>
 					a.id().title().tags(t => t.id().name().color()),
 				)
 
@@ -88,7 +89,7 @@ describe('HasMany component', () => {
 			const adapter = new MockAdapter(mockData, { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-empty' } }, a =>
+				const article = useEntity(schema.Article, { by: { id: 'article-empty' } }, a =>
 					a.id().title().tags(t => t.id().name()),
 				)
 
@@ -134,7 +135,7 @@ describe('HasMany component', () => {
 			const adapter = new MockAdapter(mockData, { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-single' } }, a =>
+				const article = useEntity(schema.Article, { by: { id: 'article-single' } }, a =>
 					a.id().title().tags(t => t.id().name()),
 				)
 
@@ -181,7 +182,7 @@ describe('HasMany component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a =>
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a =>
 					a.id().tags(t => t.id().name()),
 				)
 
@@ -226,7 +227,7 @@ describe('HasMany component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a =>
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a =>
 					a.id().tags(t => t.id().name()),
 				)
 
@@ -272,7 +273,7 @@ describe('HasMany component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a =>
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a =>
 					a.id().tags(t => t.id().name()),
 				)
 
@@ -322,7 +323,7 @@ describe('HasMany component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a =>
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a =>
 					a.id().tags(t => t.id().name().color()),
 				)
 
@@ -372,7 +373,7 @@ describe('HasMany component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a =>
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a =>
 					a.id().tags(t => t.id().name()),
 				)
 
@@ -430,7 +431,7 @@ describe('HasMany component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a =>
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a =>
 					a.id().tags(t => t.id().name()),
 				)
 
@@ -488,7 +489,7 @@ describe('HasMany component', () => {
 			let addedId: string | null = null
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a =>
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a =>
 					a.id().tags(t => t.id().name()),
 				)
 
@@ -536,7 +537,7 @@ describe('HasMany component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a =>
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a =>
 					a.id().tags(t => t.id().name()),
 				)
 
@@ -595,7 +596,7 @@ describe('HasMany component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a =>
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a =>
 					a.id().tags(t => t.id().name()),
 				)
 
@@ -634,7 +635,7 @@ describe('HasMany component', () => {
 			const adapter = new MockAdapter(mockData, { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-empty' } }, a =>
+				const article = useEntity(schema.Article, { by: { id: 'article-empty' } }, a =>
 					a.id().tags(t => t.id().name()),
 				)
 

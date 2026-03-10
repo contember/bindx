@@ -2,8 +2,8 @@ import '../../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
 import { render, waitFor, act, cleanup } from '@testing-library/react'
 import React from 'react'
-import { BindxProvider, MockAdapter } from '@contember/bindx-react'
-import { getByTestId, queryByTestId, createMockData, useEntity } from '../../../shared'
+import { BindxProvider, MockAdapter, useEntity } from '@contember/bindx-react'
+import { getByTestId, queryByTestId, createMockData, schema, testSchema } from '../../../shared'
 
 afterEach(() => {
 	cleanup()
@@ -14,7 +14,7 @@ describe('useEntity hook - optimistic updates', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(schema.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) {
 				return <div>Loading...</div>
@@ -37,7 +37,7 @@ describe('useEntity hook - optimistic updates', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -65,7 +65,7 @@ describe('useEntity hook - optimistic updates', () => {
 		// This test demonstrates reading nested data.
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.author(a => a.id().name()),
 			)
@@ -86,7 +86,7 @@ describe('useEntity hook - optimistic updates', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)

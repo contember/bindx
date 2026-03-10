@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useEntityList } from '../../generated/index.js'
+import { useEntityList } from '@contember/bindx-react'
+import { schema } from '../../generated/index.js'
 
 /**
  * Example: Location picker using useEntityList
@@ -8,7 +9,7 @@ import { useEntityList } from '../../generated/index.js'
 export function LocationSelectExample() {
 	const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
 
-	const locations = useEntityList('Location', {}, e => e.id().label().lat().lng())
+	const locations = useEntityList(schema.Location, {}, e => e.id().label().lat().lng())
 
 	if (locations.isLoading) {
 		return <div>Loading locations...</div>

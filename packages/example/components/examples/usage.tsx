@@ -1,11 +1,12 @@
-import { Entity, createComponent, useEntity } from '../../generated/index.js'
+import { Entity, createComponent, useEntity } from '@contember/bindx-react'
 import { Field, HasMany, mergeFragments } from '@contember/bindx-react'
+import { schema } from '../../generated/index.js'
 
 /**
  * Component with explicit selection - selection is defined upfront in the builder.
  */
 export const AuthorArticlesExplicit = createComponent()
-	.entity('author', 'Author', e => e.name().articles({ limit: 5 }, a => a.id().title()))
+	.entity('author', schema.Author, e => e.name().articles({ limit: 5 }, a => a.id().title()))
 	.render(({ author }) => (
 		<ul>
 			<HasMany field={author.$fields.articles}>
@@ -22,7 +23,7 @@ export const AuthorArticlesExplicit = createComponent()
  * Component with implicit selection - selection is collected from JSX access.
  */
 export const AuthorArticlesImplicit = createComponent()
-	.entity('author', 'Author')
+	.entity('author', schema.Author)
 	.render(({ author }) => (
 		<ul>
 			<HasMany field={author.articles} limit={5}>
@@ -39,7 +40,7 @@ export const AuthorArticlesImplicit = createComponent()
  * Another implicit component for author bio.
  */
 export const AuthorBioImplicit = createComponent()
-	.entity('author', 'Author')
+	.entity('author', schema.Author)
 	.render(({ author }) => (
 		<div>
 			<p>
@@ -53,7 +54,7 @@ export const AuthorBioImplicit = createComponent()
  */
 export const ArticleImplicitInImplicit = () => {
 	return (
-		<Entity name="Article" by={{ id: 'some-article-id' }}>
+		<Entity entity={schema.Article} by={{ id: 'some-article-id' }}>
 			{article => (
 				<article className="article-detail">
 					<header>
@@ -73,7 +74,7 @@ export const ArticleImplicitInImplicit = () => {
  */
 export const ArticleExplicitInImplicit = () => {
 	return (
-		<Entity name="Article" by={{ id: 'some-article-id' }}>
+		<Entity entity={schema.Article} by={{ id: 'some-article-id' }}>
 			{article => (
 				<article className="article-detail">
 					<header>
@@ -93,7 +94,7 @@ export const ArticleExplicitInImplicit = () => {
  * The component's $author fragment is used in the selection.
  */
 export const ArticleExplicitInExplicit = () => {
-	const article = useEntity('Article', { by: { id: 'some-article-id' } }, e =>
+	const article = useEntity(schema.Article, { by: { id: 'some-article-id' } }, e =>
 		e.title().author(AuthorArticlesExplicit.$author),
 	)
 
@@ -124,7 +125,7 @@ export const ArticleExplicitInExplicit = () => {
 export const ArticleImplicitInExplicit = () => {
 	// Use mergeFragments to combine fragment selections from both components
 	// This ensures the EntityRef has the required brands for both components
-	const article = useEntity('Article', { by: { id: 'some-article-id' } }, e =>
+	const article = useEntity(schema.Article, { by: { id: 'some-article-id' } }, e =>
 		e.title().author(mergeFragments(AuthorArticlesImplicit.$author, AuthorBioImplicit.$author)),
 	)
 

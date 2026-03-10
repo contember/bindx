@@ -11,6 +11,8 @@ import {
 } from '../src/index.js'
 import {
 	useEntity,
+	entityDefs,
+	schema,
 	getByTestId,
 	queryByTestId,
 	createClientError,
@@ -27,7 +29,7 @@ describe('FormInput', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -42,7 +44,7 @@ describe('FormInput', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -59,7 +61,7 @@ describe('FormInput', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -77,7 +79,7 @@ describe('FormInput', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -96,7 +98,7 @@ describe('FormInput', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 			const [hasError, setHasError] = React.useState(false)
 
 			if (article.isLoading) return <div>Loading...</div>
@@ -119,7 +121,7 @@ describe('FormInput', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -143,7 +145,7 @@ describe('FormInput', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -158,7 +160,7 @@ describe('FormInput', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -179,7 +181,7 @@ describe('FormInput', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -194,7 +196,7 @@ describe('FormInput', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -212,7 +214,7 @@ describe('FormInput', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -234,7 +236,7 @@ describe('FormInput', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -254,7 +256,7 @@ describe('FormInput', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -272,7 +274,7 @@ describe('FormInput', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -293,7 +295,7 @@ describe('FormCheckbox', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.published())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.published())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -308,7 +310,7 @@ describe('FormCheckbox', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -328,7 +330,7 @@ describe('FormCheckbox', () => {
 		const adapter = createAdapter(mockData)
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.published())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.published())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -343,7 +345,7 @@ describe('FormCheckbox', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -361,7 +363,7 @@ describe('FormCheckbox', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-2' } }, e => e.published())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-2' } }, e => e.published())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -376,7 +378,7 @@ describe('FormCheckbox', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -396,7 +398,7 @@ describe('FormCheckbox', () => {
 		const adapter = createAdapter(mockData)
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.published())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.published())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -414,7 +416,7 @@ describe('FormCheckbox', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -435,7 +437,7 @@ describe('FormCheckbox', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.published())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.published())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -458,7 +460,7 @@ describe('FormCheckbox', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -483,7 +485,7 @@ describe('FormRadioInput', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -501,7 +503,7 @@ describe('FormRadioInput', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -521,7 +523,7 @@ describe('FormRadioInput', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -542,7 +544,7 @@ describe('FormRadioInput', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -563,7 +565,7 @@ describe('FormRadioInput', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -581,7 +583,7 @@ describe('FormRadioInput', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -601,7 +603,7 @@ describe('FormRadioInput', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -619,7 +621,7 @@ describe('FormRadioInput', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)

@@ -4,13 +4,13 @@ import { render, waitFor, cleanup, act, fireEvent } from '@testing-library/react
 import React from 'react'
 import {
 	BindxProvider,
-	createBindx,
 	MockAdapter,
 	defineSchema,
 	scalar,
 	hasOne,
 	hasMany,
 } from '@contember/bindx-react'
+import { schema } from '../../shared/index.js'
 import {
 	DataGrid,
 	DataGridTextColumn,
@@ -51,7 +51,7 @@ interface TestSchema {
 	Author: Author
 }
 
-const schema = defineSchema<TestSchema>({
+const localSchema = defineSchema<TestSchema>({
 	entities: {
 		Article: {
 			fields: {
@@ -72,8 +72,6 @@ const schema = defineSchema<TestSchema>({
 		},
 	},
 })
-
-createBindx(schema)
 
 function createMockData(): Record<string, Record<string, Record<string, unknown>>> {
 	return {
@@ -122,9 +120,9 @@ describe('DataGrid sorting', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
+			<BindxProvider adapter={adapter} schema={localSchema}>
 				<DataGrid
-					entity="Article"
+					entity={schema.Article}
 					columns={it => (
 						<>
 							<DataGridTextColumn field={it.title} header="Title" sortable />
@@ -157,9 +155,9 @@ describe('DataGrid sorting', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
+			<BindxProvider adapter={adapter} schema={localSchema}>
 				<DataGrid
-					entity="Article"
+					entity={schema.Article}
 					columns={it => (
 						<DataGridTextColumn field={it.title} header="Title" sortable />
 					)}
@@ -204,9 +202,9 @@ describe('DataGrid sorting', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
+			<BindxProvider adapter={adapter} schema={localSchema}>
 				<DataGrid
-					entity="Article"
+					entity={schema.Article}
 					initialSorting={{ title: 'asc' }}
 					columns={it => (
 						<DataGridTextColumn field={it.title} header="Title" sortable />
@@ -237,9 +235,9 @@ describe('DataGrid column types', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
+			<BindxProvider adapter={adapter} schema={localSchema}>
 				<DataGrid
-					entity="Article"
+					entity={schema.Article}
 					columns={it => (
 						<DataGridNumberColumn field={it.views} header="Views" />
 					)}
@@ -261,9 +259,9 @@ describe('DataGrid column types', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
+			<BindxProvider adapter={adapter} schema={localSchema}>
 				<DataGrid
-					entity="Article"
+					entity={schema.Article}
 					columns={it => (
 						<DataGridBooleanColumn field={it.published} header="Published" />
 					)}
@@ -285,9 +283,9 @@ describe('DataGrid column types', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
+			<BindxProvider adapter={adapter} schema={localSchema}>
 				<DataGrid
-					entity="Article"
+					entity={schema.Article}
 					columns={it => (
 						<DataGridDateColumn field={it.publishedAt} header="Published At" />
 					)}
@@ -310,9 +308,9 @@ describe('DataGrid column types', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
+			<BindxProvider adapter={adapter} schema={localSchema}>
 				<DataGrid
-					entity="Article"
+					entity={schema.Article}
 					columns={it => (
 						<DataGridEnumColumn
 							field={it.status}
@@ -338,9 +336,9 @@ describe('DataGrid column types', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
+			<BindxProvider adapter={adapter} schema={localSchema}>
 				<DataGrid
-					entity="Article"
+					entity={schema.Article}
 					columns={it => (
 						<DataGridNumberColumn field={it.views} header="Views">
 							{(views: number | null) => <strong>{views} views</strong>}
@@ -379,9 +377,9 @@ describe('DataGrid context', () => {
 		}
 
 		render(
-			<BindxProvider adapter={adapter} schema={schema}>
+			<BindxProvider adapter={adapter} schema={localSchema}>
 				<DataGrid
-					entity="Article"
+					entity={schema.Article}
 					columns={it => (
 						<DataGridTextColumn field={it.title} header="Title" />
 					)}
@@ -413,9 +411,9 @@ describe('DataGrid text filter', () => {
 		}
 
 		render(
-			<BindxProvider adapter={adapter} schema={schema}>
+			<BindxProvider adapter={adapter} schema={localSchema}>
 				<DataGrid
-					entity="Article"
+					entity={schema.Article}
 					columns={it => (
 						<>
 							<DataGridTextColumn field={it.title} header="Title" filter />
@@ -448,9 +446,9 @@ describe('DataGrid static filter', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
+			<BindxProvider adapter={adapter} schema={localSchema}>
 				<DataGrid
-					entity="Article"
+					entity={schema.Article}
 					filter={{ status: { eq: 'published' } }}
 					columns={it => (
 						<DataGridTextColumn field={it.title} header="Title" />

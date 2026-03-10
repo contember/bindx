@@ -8,10 +8,13 @@ export {
 	type SchemaDefinition,
 	type InferModel,
 	type InferEntityNames,
+	type EntityDef,
+	type InferEntityDef,
 	scalar,
 	hasOne,
 	hasMany,
 	defineSchema,
+	entityDef,
 } from './types.js'
 
 export { SchemaRegistry } from './SchemaRegistry.js'

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { useEntity } from '../../generated/index.js'
+import { useEntity } from '@contember/bindx-react'
+import { schema } from '../../generated/index.js'
 import {
 	RichTextEditor,
 	BlockEditor,
@@ -65,7 +66,7 @@ const blocks: BlockDefinitions<ContentReference> = {
  * Rich Text Editor example — inline editing with formatting toolbar
  */
 export function RichTextEditorExample({ id }: { id: string }): ReactNode {
-	const article = useEntity('Article', { by: { id } }, e =>
+	const article = useEntity(schema.Article, { by: { id } }, e =>
 		e.id().title().content(),
 	)
 
@@ -113,7 +114,7 @@ export function RichTextEditorExample({ id }: { id: string }): ReactNode {
  * Block Editor example — structured content with embedded references
  */
 export function BlockEditorExample({ id }: { id: string }): ReactNode {
-	const article = useEntity('Article', { by: { id } }, e =>
+	const article = useEntity(schema.Article, { by: { id } }, e =>
 		e
 			.id()
 			.title()
@@ -167,7 +168,7 @@ export function BlockEditorExample({ id }: { id: string }): ReactNode {
  * Simple Block Editor example — without references
  */
 export function SimpleBlockEditorExample({ id }: { id: string }): ReactNode {
-	const article = useEntity('Article', { by: { id } }, e =>
+	const article = useEntity(schema.Article, { by: { id } }, e =>
 		e.id().title().richContent(),
 	)
 

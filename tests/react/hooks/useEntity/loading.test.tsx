@@ -2,8 +2,8 @@ import '../../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
 import { render, waitFor, cleanup } from '@testing-library/react'
 import React from 'react'
-import { BindxProvider, MockAdapter } from '@contember/bindx-react'
-import { getByTestId, queryByTestId, createMockData, useEntity } from '../../../shared'
+import { BindxProvider, MockAdapter, useEntity } from '@contember/bindx-react'
+import { getByTestId, queryByTestId, createMockData, schema, testSchema } from '../../../shared'
 
 afterEach(() => {
 	cleanup()
@@ -14,7 +14,7 @@ describe('useEntity hook - loading state', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 50 })
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(schema.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) {
 				return <div data-testid="loading">Loading...</div>
@@ -27,7 +27,7 @@ describe('useEntity hook - loading state', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -48,12 +48,12 @@ describe('useEntity hook - loading state', () => {
 		let accessor: ReturnType<typeof useEntity> | null = null
 
 		function TestComponent() {
-			accessor = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			accessor = useEntity(schema.Article, { by: { id: 'article-1' } }, e => e.title())
 			return null
 		}
 
 		render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)

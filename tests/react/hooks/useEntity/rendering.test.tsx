@@ -2,8 +2,8 @@ import '../../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
 import { render, waitFor, cleanup } from '@testing-library/react'
 import React from 'react'
-import { BindxProvider, MockAdapter } from '@contember/bindx-react'
-import { getByTestId, queryByTestId, createMockData, useEntity } from '../../../shared'
+import { BindxProvider, MockAdapter, useEntity } from '@contember/bindx-react'
+import { getByTestId, queryByTestId, createMockData, schema, testSchema } from '../../../shared'
 
 afterEach(() => {
 	cleanup()
@@ -15,7 +15,7 @@ describe('useEntity hook - data rendering', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().content(),
 			)
@@ -36,7 +36,7 @@ describe('useEntity hook - data rendering', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -54,7 +54,7 @@ describe('useEntity hook - data rendering', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().author(a => a.name().email()),
 			)
@@ -76,7 +76,7 @@ describe('useEntity hook - data rendering', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -95,7 +95,7 @@ describe('useEntity hook - data rendering', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().tags(t => t.id().name()),
 			)
@@ -122,7 +122,7 @@ describe('useEntity hook - data rendering', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -141,7 +141,7 @@ describe('useEntity hook - data rendering', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().location(l => l.id().label().lat().lng()).tags(t => t.id().name().color()),
 			)
@@ -171,7 +171,7 @@ describe('useEntity hook - data rendering', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -193,7 +193,7 @@ describe('useEntity hook - data rendering', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().location(l => l.id().label()).tags(t => t.id().name()),
 			)
@@ -211,7 +211,7 @@ describe('useEntity hook - data rendering', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -235,7 +235,7 @@ describe('useEntity hook - data rendering', () => {
 
 		function ArticleEditorComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().author(a => a.id().name()).location(l => l.id().label()).tags(t => t.id().name()),
 			)
@@ -259,7 +259,7 @@ describe('useEntity hook - data rendering', () => {
 
 		function ArticleViewComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().content(),
 			)
@@ -279,7 +279,7 @@ describe('useEntity hook - data rendering', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<ArticleEditorComponent />
 				<ArticleViewComponent />
 			</BindxProvider>,
@@ -306,7 +306,7 @@ describe('useEntity hook - data rendering', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().location(l => l.id().label()).tags(t => t.id().name()),
 			)
@@ -322,7 +322,7 @@ describe('useEntity hook - data rendering', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -345,7 +345,7 @@ describe('useEntity hook - data rendering', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().content(),
 			)
@@ -361,7 +361,7 @@ describe('useEntity hook - data rendering', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)

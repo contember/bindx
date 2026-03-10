@@ -4,11 +4,12 @@ import { render, waitFor, act, cleanup } from '@testing-library/react'
 import React from 'react'
 import {
 	BindxProvider,
-	createBindx,
 	MockAdapter,
 	defineSchema,
+	entityDef,
 	scalar,
 	SnapshotStore,
+	useEntityList,
 } from '@contember/bindx-react'
 
 afterEach(() => {
@@ -38,7 +39,7 @@ const schema = defineSchema<TestSchema>({
 	},
 })
 
-const { useEntityList } = createBindx(schema)
+const authorDef = entityDef<Author>('Author')
 
 // Helper functions
 function getByTestId(container: Element, testId: string): Element {
@@ -77,7 +78,7 @@ describe('useEntityList', () => {
 			let addedId: string | undefined
 
 			function TestComponent(): React.ReactElement {
-				const authors = useEntityList('Author', {}, a => a.id().name().email())
+				const authors = useEntityList(authorDef, {}, a => a.id().name().email())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -106,7 +107,7 @@ describe('useEntityList', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -143,7 +144,7 @@ describe('useEntityList', () => {
 			let addedId: string | undefined
 
 			function TestComponent(): React.ReactElement {
-				const authors = useEntityList('Author', {}, a => a.id().name())
+				const authors = useEntityList(authorDef, {}, a => a.id().name())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -165,7 +166,7 @@ describe('useEntityList', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -198,7 +199,7 @@ describe('useEntityList', () => {
 			const addedIds: string[] = []
 
 			function TestComponent(): React.ReactElement {
-				const authors = useEntityList('Author', {}, a => a.id().name())
+				const authors = useEntityList(authorDef, {}, a => a.id().name())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -222,7 +223,7 @@ describe('useEntityList', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -256,7 +257,7 @@ describe('useEntityList', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const authors = useEntityList('Author', {}, a => a.id().name().email())
+				const authors = useEntityList(authorDef, {}, a => a.id().name().email())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -282,7 +283,7 @@ describe('useEntityList', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -312,7 +313,7 @@ describe('useEntityList', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const authors = useEntityList('Author', {}, a => a.id().name().email())
+				const authors = useEntityList(authorDef, {}, a => a.id().name().email())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -339,7 +340,7 @@ describe('useEntityList', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter} store={store}>
+				<BindxProvider adapter={adapter} store={store} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -375,7 +376,7 @@ describe('useEntityList', () => {
 			let addedId: string | undefined
 
 			function TestComponent(): React.ReactElement {
-				const authors = useEntityList('Author', {}, a => a.id().name().email())
+				const authors = useEntityList(authorDef, {}, a => a.id().name().email())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -410,7 +411,7 @@ describe('useEntityList', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter} store={store}>
+				<BindxProvider adapter={adapter} store={store} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -456,7 +457,7 @@ describe('useEntityList', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const authors = useEntityList('Author', {}, a => a.id().name().email())
+				const authors = useEntityList(authorDef, {}, a => a.id().name().email())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -481,7 +482,7 @@ describe('useEntityList', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter} store={store}>
+				<BindxProvider adapter={adapter} store={store} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -514,7 +515,7 @@ describe('useEntityList', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const authors = useEntityList('Author', {}, a => a.id().name().email())
+				const authors = useEntityList(authorDef, {}, a => a.id().name().email())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -541,7 +542,7 @@ describe('useEntityList', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -570,7 +571,7 @@ describe('useEntityList', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const authors = useEntityList('Author', {}, a => a.id().name().email())
+				const authors = useEntityList(authorDef, {}, a => a.id().name().email())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -597,7 +598,7 @@ describe('useEntityList', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -626,7 +627,7 @@ describe('useEntityList', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const authors = useEntityList('Author', {}, a => a.id().name().email())
+				const authors = useEntityList(authorDef, {}, a => a.id().name().email())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -659,7 +660,7 @@ describe('useEntityList', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -693,7 +694,7 @@ describe('useEntityList', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const authors = useEntityList('Author', {}, a => a.id().name().email())
+				const authors = useEntityList(authorDef, {}, a => a.id().name().email())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -720,7 +721,7 @@ describe('useEntityList', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -745,7 +746,7 @@ describe('useEntityList', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const authors = useEntityList('Author', {}, a => a.id().name().email())
+				const authors = useEntityList(authorDef, {}, a => a.id().name().email())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -780,7 +781,7 @@ describe('useEntityList', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)

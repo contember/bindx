@@ -1,6 +1,6 @@
 import React from 'react'
-import { useUndo } from '@contember/bindx-react'
-import { useEntity } from '../generated/index.js'
+import { useUndo, useEntity } from '@contember/bindx-react'
+import { schema } from '../generated/index.js'
 import { TextInput } from './inputs/index.js'
 
 /**
@@ -9,7 +9,7 @@ import { TextInput } from './inputs/index.js'
 export function UndoDemo({ id }: { id: string }): React.ReactElement {
 	const { canUndo, canRedo, undo, redo, undoCount, redoCount, beginGroup, endGroup } = useUndo()
 
-	const article = useEntity('Article', { by: { id } }, e => e.id().title().content())
+	const article = useEntity(schema.Article, { by: { id } }, e => e.id().title().content())
 
 	if (article.isLoading) {
 		return <div className="loading">Loading...</div>

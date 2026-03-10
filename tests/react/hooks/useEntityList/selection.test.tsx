@@ -4,11 +4,12 @@ import { render, waitFor, cleanup, act } from '@testing-library/react'
 import React from 'react'
 import {
 	BindxProvider,
-	createBindx,
 	MockAdapter,
 	defineSchema,
+	entityDef,
 	scalar,
 	hasOne,
+	useEntityList,
 } from '@contember/bindx-react'
 
 afterEach(() => {
@@ -56,7 +57,10 @@ const schema = defineSchema<TestSchema>({
 	},
 })
 
-const { useEntityList } = createBindx(schema)
+const entityDefs = {
+	Author: entityDef<Author>('Author'),
+	Article: entityDef<Article>('Article'),
+} as const
 
 function getByTestId(container: Element, testId: string): Element {
 	const el = container.querySelector(`[data-testid="${testId}"]`)
@@ -114,7 +118,7 @@ describe('useEntityList selection', () => {
 
 			function TestComponent(): React.ReactElement {
 				// Selection: id, name, email
-				const authors = useEntityList('Author', {}, a => a.id().name().email())
+				const authors = useEntityList(entityDefs.Author, {}, a => a.id().name().email())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -131,7 +135,7 @@ describe('useEntityList selection', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -150,7 +154,7 @@ describe('useEntityList selection', () => {
 
 			function TestComponent(): React.ReactElement {
 				// Selection with bio
-				const authors = useEntityList('Author', {}, a => a.id().name().bio())
+				const authors = useEntityList(entityDefs.Author, {}, a => a.id().name().bio())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -167,7 +171,7 @@ describe('useEntityList selection', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -189,7 +193,7 @@ describe('useEntityList selection', () => {
 
 			function TestComponent(): React.ReactElement {
 				// Selection with nested author
-				const articles = useEntityList('Article', {}, a =>
+				const articles = useEntityList(entityDefs.Article, {}, a =>
 					a.id().title().author(au => au.id().name().email()),
 				)
 
@@ -208,7 +212,7 @@ describe('useEntityList selection', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -225,7 +229,7 @@ describe('useEntityList selection', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const articles = useEntityList('Article', {}, a =>
+				const articles = useEntityList(entityDefs.Article, {}, a =>
 					a.id().title().author(au => au.id().name()),
 				)
 
@@ -245,7 +249,7 @@ describe('useEntityList selection', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -268,7 +272,7 @@ describe('useEntityList selection', () => {
 			let renderCount = 0
 
 			function TestComponent(): React.ReactElement {
-				const authors = useEntityList('Author', {}, a => a.id().name().email())
+				const authors = useEntityList(entityDefs.Author, {}, a => a.id().name().email())
 				renderCount++
 
 				if (authors.isLoading) {
@@ -284,7 +288,7 @@ describe('useEntityList selection', () => {
 			}
 
 			const { container, rerender } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -297,7 +301,7 @@ describe('useEntityList selection', () => {
 
 			// Re-render without changing anything
 			rerender(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -320,7 +324,7 @@ describe('useEntityList selection', () => {
 			const adapter = new MockAdapter(mockData, { delay: 0 })
 
 			function TestComponent({ filter }: { filter?: Record<string, unknown> }): React.ReactElement {
-				const authors = useEntityList('Author', { filter }, a => a.id().name())
+				const authors = useEntityList(entityDefs.Author, { filter }, a => a.id().name())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -335,7 +339,7 @@ describe('useEntityList selection', () => {
 			}
 
 			const { container, rerender } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -349,7 +353,7 @@ describe('useEntityList selection', () => {
 
 			// Apply filter
 			rerender(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent filter={{ name: { eq: 'John Doe' } }} />
 				</BindxProvider>,
 			)
@@ -370,7 +374,7 @@ describe('useEntityList selection', () => {
 			const adapter = new MockAdapter(mockData, { delay: 0 })
 
 			function TestComponent({ limit }: { limit?: number }): React.ReactElement {
-				const authors = useEntityList('Author', { limit }, a => a.id().name())
+				const authors = useEntityList(entityDefs.Author, { limit }, a => a.id().name())
 
 				if (authors.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -385,7 +389,7 @@ describe('useEntityList selection', () => {
 			}
 
 			const { container, rerender } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -399,7 +403,7 @@ describe('useEntityList selection', () => {
 
 			// With limit
 			rerender(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent limit={2} />
 				</BindxProvider>,
 			)
@@ -418,7 +422,7 @@ describe('useEntityList selection', () => {
 
 			function TestComponent(): React.ReactElement {
 				// Select all fields
-				const authors = useEntityList('Author', {}, a =>
+				const authors = useEntityList(entityDefs.Author, {}, a =>
 					a.id().name().email().bio(),
 				)
 
@@ -439,7 +443,7 @@ describe('useEntityList selection', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)

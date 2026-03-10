@@ -5,6 +5,7 @@ export {
 	useDispatcher,
 	useBatchPersister,
 	useBindxContext,
+	useSchemaRegistry,
 	type BindxProviderProps,
 	type BindxContextValue,
 } from './BackendAdapterContext.js'
@@ -18,20 +19,29 @@ export {
 } from './usePersist.js'
 
 export {
-	createBindx,
+	useEntity,
+} from './useEntity.js'
+
+export {
+	useEntityList,
+} from './useEntityList.js'
+
+export {
 	type UseEntityOptions,
-	type UseEntityListOptions,
 	type LoadingEntityAccessor,
 	type ErrorEntityAccessor,
 	type NotFoundEntityAccessor,
 	type ReadyEntityAccessor,
 	type EntityAccessorResult,
-	type EntityFields,
+} from './useEntityImpl.js'
+
+export {
+	type UseEntityListOptions,
 	type LoadingEntityListAccessor,
 	type ErrorEntityListAccessor,
 	type ReadyEntityListAccessor,
 	type EntityListAccessorResult,
-} from './createBindx.js'
+} from './useEntityListImpl.js'
 
 export {
 	ContemberBindxProvider,

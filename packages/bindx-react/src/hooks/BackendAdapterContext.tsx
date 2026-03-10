@@ -22,8 +22,8 @@ export interface BindxContextValue {
 	dispatcher: ActionDispatcher
 	/** Batch persister for multi-entity persistence */
 	batchPersister: BatchPersister
-	/** Schema registry (set by createBindx) */
-	schema: SchemaRegistry | null
+	/** Schema registry for entity metadata */
+	schema: SchemaRegistry
 	/** Undo manager (if enabled) */
 	undoManager: UndoManager | null
 	/** Whether debug logging is enabled */
@@ -40,8 +40,8 @@ export interface BindxProviderProps {
 	adapter: BackendAdapter
 	/** Optional custom snapshot store (useful for testing) */
 	store?: SnapshotStore
-	/** Optional schema definition for mutation collection (enables relation persistence) */
-	schema?: SchemaDefinition<Record<string, object>>
+	/** Schema definition for entity metadata and mutation collection */
+	schema: SchemaDefinition<Record<string, object>>
 	/** Optional custom mutation collector (overrides default behavior) */
 	mutationCollector?: MutationDataCollector
 	/** Enable undo/redo functionality */
@@ -69,7 +69,7 @@ export interface BindxProviderProps {
  *
  * function App() {
  *   return (
- *     <BindxProvider adapter={adapter}>
+ *     <BindxProvider adapter={adapter} schema={testSchema}>
  *       <ArticleEditor id="123" />
  *     </BindxProvider>
  *   )
@@ -99,18 +99,18 @@ export function BindxProvider({
 			dispatcher.addMiddleware(undoManager.createMiddleware())
 		}
 
-		// Create schema registry from definition if provided
-		const schemaRegistry = schemaDefinition ? new SchemaRegistry(schemaDefinition) : null
+		// Create schema registry from definition
+		const schemaRegistry = new SchemaRegistry(schemaDefinition)
 
 		// Create mutation collector - use custom, or auto-create from schema
 		// SchemaRegistry implements MutationSchemaProvider interface
 		const mutationCollector =
-			customMutationCollector ?? (schemaRegistry ? new MutationCollector(store, schemaRegistry) : undefined)
+			customMutationCollector ?? new MutationCollector(store, schemaRegistry)
 
 		const batchPersister = new BatchPersister(adapter, store, dispatcher, {
 			mutationCollector,
 			undoManager: undoManager ?? undefined,
-			schema: schemaRegistry ?? undefined,
+			schema: schemaRegistry,
 			defaultUpdateMode,
 		})
 
@@ -127,6 +127,18 @@ export function BindxProvider({
 	}, [adapter, customStore, schemaDefinition, customMutationCollector, enableUndo, undoConfig, defaultUpdateMode, debug])
 
 	return <BindxContext.Provider value={services}>{children}</BindxContext.Provider>
+}
+
+/**
+ * Hook to access the schema registry.
+ * Must be used within a BindxProvider or ContemberBindxProvider.
+ */
+export function useSchemaRegistry(): SchemaRegistry {
+	const context = useContext(BindxContext)
+	if (!context) {
+		throw new Error('useSchemaRegistry must be used within a BindxProvider')
+	}
+	return context.schema
 }
 
 /**
@@ -200,4 +212,3 @@ export function useQueryBatcher(): QueryBatcher {
 	}
 	return context.batcher
 }
-

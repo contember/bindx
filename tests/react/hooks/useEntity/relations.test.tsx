@@ -6,8 +6,9 @@ import {
 	BindxProvider,
 	MockAdapter,
 	createFragment,
+	useEntity,
 } from '@contember/bindx-react'
-import { getByTestId, queryByTestId, createMockData, useEntity, type Author } from '../../../shared'
+import { getByTestId, queryByTestId, createMockData, schema, testSchema, type Author } from '../../../shared'
 
 afterEach(() => {
 	cleanup()
@@ -19,7 +20,7 @@ describe('useEntity hook - relation field handles', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().author(a => a.id().name().email()),
 			)
@@ -42,7 +43,7 @@ describe('useEntity hook - relation field handles', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -61,7 +62,7 @@ describe('useEntity hook - relation field handles', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().tags(t => t.id().name()),
 			)
@@ -92,7 +93,7 @@ describe('useEntity hook - relation field handles', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -112,7 +113,7 @@ describe('useEntity hook - relation field handles', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().tags(t => t.id().name()),
 			)
@@ -138,7 +139,7 @@ describe('useEntity hook - relation field handles', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -160,7 +161,7 @@ describe('useEntity hook - fragment composition', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().author(AuthorFragment),
 			)
@@ -181,7 +182,7 @@ describe('useEntity hook - fragment composition', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -224,7 +225,7 @@ describe('useEntity hook - fragment composition', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().author(a => a.id().name().email()),
 			)
@@ -245,7 +246,7 @@ describe('useEntity hook - fragment composition', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -267,7 +268,7 @@ describe('useEntity hook - has-many connect/disconnect', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().tags(t => t.id().name()),
 			)
@@ -301,7 +302,7 @@ describe('useEntity hook - has-many connect/disconnect', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -332,7 +333,7 @@ describe('useEntity hook - has-many connect/disconnect', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().tags(t => t.id().name()),
 			)
@@ -366,7 +367,7 @@ describe('useEntity hook - has-many connect/disconnect', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -396,7 +397,7 @@ describe('useEntity hook - has-many connect/disconnect', () => {
 
 		function TestComponent() {
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				e => e.title().tags(t => t.id().name()),
 			)
@@ -430,7 +431,7 @@ describe('useEntity hook - has-many connect/disconnect', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)

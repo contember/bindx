@@ -4,10 +4,11 @@ import { render, waitFor, act, cleanup } from '@testing-library/react'
 import React from 'react'
 import {
 	BindxProvider,
-	createBindx,
 	MockAdapter,
 	defineSchema,
+	entityDef,
 	scalar,
+	useEntity,
 } from '@contember/bindx-react'
 
 afterEach(() => {
@@ -39,7 +40,7 @@ const schema = defineSchema<TestSchema>({
 	},
 })
 
-const { useEntity } = createBindx(schema)
+const articleDef = entityDef<Article>('Article')
 
 // Helper functions
 function getByTestId(container: Element, testId: string): Element {
@@ -72,7 +73,7 @@ describe('Field Mutations', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+				const article = useEntity(articleDef, { by: { id: 'article-1' } }, e =>
 					e.id().title().content(),
 				)
 
@@ -98,7 +99,7 @@ describe('Field Mutations', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -125,7 +126,7 @@ describe('Field Mutations', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+				const article = useEntity(articleDef, { by: { id: 'article-1' } }, e =>
 					e.id().title(),
 				)
 
@@ -157,7 +158,7 @@ describe('Field Mutations', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -190,7 +191,7 @@ describe('Field Mutations', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+				const article = useEntity(articleDef, { by: { id: 'article-1' } }, e =>
 					e.id().title(),
 				)
 
@@ -227,7 +228,7 @@ describe('Field Mutations', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -255,7 +256,7 @@ describe('Field Mutations', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+				const article = useEntity(articleDef, { by: { id: 'article-1' } }, e =>
 					e.id().views(),
 				)
 
@@ -281,7 +282,7 @@ describe('Field Mutations', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -306,7 +307,7 @@ describe('Field Mutations', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+				const article = useEntity(articleDef, { by: { id: 'article-1' } }, e =>
 					e.id().title().content(),
 				)
 
@@ -342,7 +343,7 @@ describe('Field Mutations', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -380,7 +381,7 @@ describe('Field Mutations', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+				const article = useEntity(articleDef, { by: { id: 'article-1' } }, e =>
 					e.id().title(),
 				)
 
@@ -406,7 +407,7 @@ describe('Field Mutations', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)

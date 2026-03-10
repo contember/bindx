@@ -1,5 +1,5 @@
 import '../../../tests/setup'
-import { MockAdapter } from '@contember/bindx-react'
+import { MockAdapter, useEntity } from '@contember/bindx-react'
 
 // Re-export shared utilities
 export {
@@ -9,9 +9,11 @@ export {
 	createClientError,
 } from '../../../tests/shared/helpers'
 
+export { useEntity }
+
 export {
 	testSchema as schema,
-	useEntity,
+	schema as entityDefs,
 	type Article,
 	type Author,
 	type Tag,

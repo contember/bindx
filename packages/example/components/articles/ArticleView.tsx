@@ -1,10 +1,11 @@
-import { useEntity } from '../../generated/index.js'
+import { useEntity } from '@contember/bindx-react'
+import { schema } from '../../generated/index.js'
 
 /**
  * Simple article view using inline fragment definition
  */
 export function ArticleView({ id }: { id: string }) {
-	const article = useEntity('Article', { by: { id } }, e => e.title().author(a => a.name()))
+	const article = useEntity(schema.Article, { by: { id } }, e => e.title().author(a => a.name()))
 
 	if (article.isLoading) {
 		return <div>Loading...</div>

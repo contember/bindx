@@ -1,4 +1,5 @@
-import { useEntityList } from '../../generated/index.js'
+import { useEntityList } from '@contember/bindx-react'
+import { schema } from '../../generated/index.js'
 import { Select } from '../inputs/index.js'
 
 interface AuthorSelectProps {
@@ -11,7 +12,7 @@ interface AuthorSelectProps {
  * Author select component - demonstrates useEntityList for loading options
  */
 export function AuthorSelect({ value, onChange, label = 'Author' }: AuthorSelectProps) {
-	const authors = useEntityList('Author', {}, e => e.id().name().email())
+	const authors = useEntityList(schema.Author, {}, e => e.id().name().email())
 
 	return (
 		<Select
@@ -29,7 +30,7 @@ export function AuthorSelect({ value, onChange, label = 'Author' }: AuthorSelect
  * Alternative: Author select with email shown
  */
 export function AuthorSelectWithEmail({ value, onChange, label = 'Author' }: AuthorSelectProps) {
-	const authors = useEntityList('Author', {}, e => e.id().name().email())
+	const authors = useEntityList(schema.Author, {}, e => e.id().name().email())
 
 	if (authors.isLoading) {
 		return (

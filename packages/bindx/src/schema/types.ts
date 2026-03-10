@@ -160,3 +160,37 @@ export type InferModel<
  * Infers all entity names from a schema
  */
 export type InferEntityNames<TSchema extends SchemaDefinition<any>> = keyof TSchema['entities'] & string
+
+// ============================================================================
+// Entity Definitions (type-safe entity references)
+// ============================================================================
+
+/**
+ * A type-safe reference to an entity in the schema.
+ * Carries the entity type as a phantom type parameter.
+ *
+ * @example
+ * ```ts
+ * const Article = entityDef<ArticleType>('Article')
+ * useEntity(Article, { by: { id } }, e => e.title())
+ * ```
+ */
+export interface EntityDef<TEntity extends object = object> {
+	readonly $name: string
+	/** @internal phantom type — not present at runtime */
+	readonly $type?: TEntity
+}
+
+/**
+ * Infers the entity type from an EntityDef
+ */
+export type InferEntityDef<T> = T extends EntityDef<infer E> ? E : never
+
+/**
+ * Creates a type-safe entity definition reference.
+ *
+ * @param name - The entity name as used in the schema
+ */
+export function entityDef<TEntity extends object>(name: string): EntityDef<TEntity> {
+	return { $name: name }
+}

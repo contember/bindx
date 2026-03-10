@@ -2,8 +2,8 @@ import '../../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
 import { render, waitFor, act, cleanup } from '@testing-library/react'
 import React from 'react'
-import { BindxProvider, MockAdapter } from '@contember/bindx-react'
-import { getByTestId, queryByTestId, createMockData, useEntity, type TestComponentProps } from './setup'
+import { BindxProvider, MockAdapter, useEntity } from '@contember/bindx-react'
+import { getByTestId, queryByTestId, createMockData, entityDefs, schema, type TestComponentProps } from './setup'
 
 afterEach(() => {
 	cleanup()
@@ -11,7 +11,7 @@ afterEach(() => {
 
 // Reusable test component
 function HasManyTestComponent({ articleId }: TestComponentProps): React.ReactElement {
-	const article = useEntity('Article', { by: { id: articleId } }, e =>
+	const article = useEntity(entityDefs.Article, { by: { id: articleId } }, e =>
 		e.id().title().tags(t => t.id().name().color()),
 	)
 
@@ -57,7 +57,7 @@ describe('HasMany Relations - Basic Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<HasManyTestComponent articleId="article-1" />
 			</BindxProvider>,
 		)
@@ -85,7 +85,7 @@ describe('HasMany Relations - Basic Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<HasManyTestComponent articleId="article-1" />
 			</BindxProvider>,
 		)
@@ -113,7 +113,7 @@ describe('HasMany Relations - Basic Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<HasManyTestComponent articleId="article-1" />
 			</BindxProvider>,
 		)
@@ -143,7 +143,7 @@ describe('HasMany Relations - Basic Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().tags(t => t.id().name()),
 			)
 
@@ -176,7 +176,7 @@ describe('HasMany Relations - Basic Operations', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -204,7 +204,7 @@ describe('HasMany Relations - Basic Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<HasManyTestComponent articleId="article-1" />
 			</BindxProvider>,
 		)
@@ -233,7 +233,7 @@ describe('HasMany Relations - Basic Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().tags(t => t.id().name()),
 			)
 
@@ -258,7 +258,7 @@ describe('HasMany Relations - Basic Operations', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -291,7 +291,7 @@ describe('HasMany Relations - Combined Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<HasManyTestComponent articleId="article-1" />
 			</BindxProvider>,
 		)
@@ -318,7 +318,7 @@ describe('HasMany Relations - Combined Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<HasManyTestComponent articleId="article-1" />
 			</BindxProvider>,
 		)
@@ -343,7 +343,7 @@ describe('HasMany Relations - Combined Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<HasManyTestComponent articleId="article-1" />
 			</BindxProvider>,
 		)
@@ -367,7 +367,7 @@ describe('HasMany Relations - Combined Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<HasManyTestComponent articleId="article-1" />
 			</BindxProvider>,
 		)

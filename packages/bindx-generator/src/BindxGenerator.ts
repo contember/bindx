@@ -18,6 +18,7 @@ export interface GeneratedFiles {
 	'names.ts'?: string
 	'enums.ts': string
 	'types.ts': string
+	'schema.ts': string
 	'index.ts': string
 }
 
@@ -46,20 +47,13 @@ export const schemaNames: BindxSchemaNames = ${JSON.stringify(namesSchema, null,
 `
 
 		const typesCode = this.generateTypesFile()
+		const schemaCode = this.generateSchemaFile(model)
 
 		const indexCode = `export * from './enums'
 export * from './entities'
 export * from './names'
 export * from './types'
-
-import { schemaNames } from './names'
-import type { BindxSchema } from './entities'
-import { createBindx } from '@contember/bindx-react'
-
-/**
- * Pre-configured bindx instance for this schema
- */
-export const { useEntity, useEntityList, Entity, createComponent } = createBindx<BindxSchema>(schemaNames as any)
+export * from './schema'
 `
 
 		return {
@@ -67,8 +61,26 @@ export const { useEntity, useEntityList, Entity, createComponent } = createBindx
 			'names.ts': namesCode,
 			'enums.ts': enumsCode,
 			'types.ts': typesCode,
+			'schema.ts': schemaCode,
 			'index.ts': indexCode,
 		}
+	}
+
+	private generateSchemaFile(model: Model.Schema): string {
+		const entityNames = Object.values(model.entities).map(e => e.name).sort()
+
+		const imports = entityNames.join(', ')
+		const entries = entityNames
+			.map(name => `\t${name}: entityDef<${name}>('${name}'),`)
+			.join('\n')
+
+		return `import { entityDef } from '@contember/bindx'
+import type { ${imports} } from './entities'
+
+export const schema = {
+${entries}
+} as const
+`
 	}
 
 	private generateTypesFile(): string {

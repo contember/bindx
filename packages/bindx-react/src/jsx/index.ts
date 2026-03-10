@@ -89,6 +89,9 @@ export {
 	validateBrand,
 } from './createComponent.js'
 
+// Standalone createComponent function
+export { createComponent } from './standaloneCreateComponent.js'
+
 export type {
 	SelectionPropMeta,
 	BindxComponentBase,
@@ -96,7 +99,6 @@ export type {
 	ComponentBuilder,
 	ComponentBuilderState,
 	CreateComponentOptions,
-	CreateComponentFn,
 	// Interface types
 	InterfaceEntityPropConfig,
 	ImplicitInterfaceEntityConfig,

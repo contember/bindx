@@ -21,8 +21,9 @@ import type {
 } from '@contember/bindx-react'
 import {
 	createFragment,
-	createBindx,
+	createComponent,
 	defineSchema,
+	entityDef,
 	scalar,
 	hasOne,
 	hasMany,
@@ -125,7 +126,11 @@ const schema = defineSchema<{
 	},
 })
 
-const { createComponent } = createBindx(schema)
+const entityDefs = {
+	Author: entityDef<Author>('Author'),
+	Tag: entityDef<Tag>('Tag'),
+	Article: entityDef<Article>('Article'),
+} as const
 
 // ============================================================================
 // Type-Level Tests (Compile-Time)
@@ -224,7 +229,7 @@ describe('Type Safety - Compile Time Checks', () => {
 		test('$propName fragment has correct result type', () => {
 			// Create a component with explicit selection using builder API
 			const TagDisplay = createComponent()
-				.entity('tag', 'Tag', e => e.name().color())
+				.entity('tag', entityDefs.Tag, e => e.name().color())
 				.render(({ tag }) => {
 					void tag.$data?.name
 					void tag.$data?.color
@@ -278,7 +283,7 @@ describe('Type Safety - Runtime Behavior', () => {
 		test('creates component with correct $propName fragment with explicit selection', () => {
 			// Using builder API with explicit selection
 			const AuthorInfo = createComponent()
-				.entity('author', 'Author', e => e.name())
+				.entity('author', entityDefs.Author, e => e.name())
 				.render(({ author }) => {
 					void author.$data?.name
 					return null
@@ -293,7 +298,7 @@ describe('Type Safety - Runtime Behavior', () => {
 		test('creates component with implicit selection from JSX access', () => {
 			// Using builder API with implicit selection
 			const AuthorInfo = createComponent()
-				.entity('author', 'Author')
+				.entity('author', entityDefs.Author)
 				.render(({ author }) => {
 					// Access fields to trigger implicit selection collection
 					void author.name
@@ -307,7 +312,7 @@ describe('Type Safety - Runtime Behavior', () => {
 
 		test('fragment metadata captures selected fields', () => {
 			const TagList = createComponent()
-				.entity('tag', 'Tag', e => e.name().color())
+				.entity('tag', entityDefs.Tag, e => e.name().color())
 				.render(({ tag }) => {
 					void tag.$data?.name
 					void tag.$data?.color
@@ -322,8 +327,8 @@ describe('Type Safety - Runtime Behavior', () => {
 
 		test('multiple entity props create multiple fragments', () => {
 			const ArticleView = createComponent()
-				.entity('article', 'Article', e => e.title())
-				.entity('author', 'Author', e => e.name())
+				.entity('article', entityDefs.Article, e => e.title())
+				.entity('author', entityDefs.Author, e => e.name())
 				.render(({ article, author }) => {
 					void article.$data?.title
 					void author.$data?.name
@@ -373,13 +378,8 @@ describe('Type Safety - Runtime Behavior', () => {
 		})
 	})
 
-	describe('Schema and createBindx', () => {
-		test('createBindx returns typed hooks', () => {
-			const { useEntity, useEntityList, Entity, createComponent } = createBindx(schema)
-
-			expect(useEntity).toBeDefined()
-			expect(useEntityList).toBeDefined()
-			expect(Entity).toBeDefined()
+	describe('Standalone exports', () => {
+		test('standalone createComponent is defined', () => {
 			expect(createComponent).toBeDefined()
 		})
 	})
@@ -458,7 +458,7 @@ describe('Type Safety - Expected Errors', () => {
 
 	test('createComponent component has typed props', () => {
 		const AuthorCard = createComponent()
-			.entity('author', 'Author', e => e.name())
+			.entity('author', entityDefs.Author, e => e.name())
 			.render(({ author }) => {
 				void author.$data?.name
 				return null
@@ -592,7 +592,7 @@ describe('Type Safety - Integration', () => {
 
 		// 3. Create entity fragment component with builder API
 		const AuthorDisplay = createComponent()
-			.entity('author', 'Author', e => e.id().name())
+			.entity('author', entityDefs.Author, e => e.id().name())
 			.render(({ author }) => {
 				void author.$data?.id
 				void author.$data?.name

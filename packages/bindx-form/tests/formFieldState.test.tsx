@@ -12,6 +12,8 @@ import {
 } from '../src/index.js'
 import {
 	useEntity,
+	entityDefs,
+	schema,
 	getByTestId,
 	queryByTestId,
 	createClientError,
@@ -113,7 +115,7 @@ describe('FormFieldScope', () => {
 		let capturedState: FormFieldState | undefined
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -131,7 +133,7 @@ describe('FormFieldScope', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -151,7 +153,7 @@ describe('FormFieldScope', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -177,7 +179,7 @@ describe('FormFieldScope', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -199,7 +201,7 @@ describe('FormFieldScope', () => {
 		const adapter = createAdapter()
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.title())
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.title())
 
 			if (article.isLoading) return <div>Loading...</div>
 			if (article.isError) return <div>Error</div>
@@ -217,7 +219,7 @@ describe('FormFieldScope', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)

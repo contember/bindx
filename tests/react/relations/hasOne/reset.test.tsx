@@ -6,8 +6,9 @@ import {
 	BindxProvider,
 	MockAdapter,
 	isPlaceholderId,
+	useEntity,
 } from '@contember/bindx-react'
-import { getByTestId, queryByTestId, createMockData, useEntity } from './setup'
+import { getByTestId, queryByTestId, createMockData, entityDefs, schema } from './setup'
 
 afterEach(() => {
 	cleanup()
@@ -18,7 +19,7 @@ describe('HasOne Relations - Reset Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name()),
 			)
 
@@ -47,7 +48,7 @@ describe('HasOne Relations - Reset Operations', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -78,7 +79,7 @@ describe('HasOne Relations - Reset Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name()),
 			)
 
@@ -107,7 +108,7 @@ describe('HasOne Relations - Reset Operations', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)

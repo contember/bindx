@@ -4,10 +4,11 @@ import { render, waitFor, cleanup } from '@testing-library/react'
 import React from 'react'
 import {
 	BindxProvider,
-	createBindx,
 	MockAdapter,
 	defineSchema,
+	entityDef,
 	scalar,
+	useEntity,
 } from '@contember/bindx-react'
 
 afterEach(() => {
@@ -34,7 +35,7 @@ const schema = defineSchema<TestSchema>({
 	},
 })
 
-const { useEntity } = createBindx(schema)
+const authorDef = entityDef<Author>('Author')
 
 function queryByTestId(container: Element, testId: string): Element | null {
 	return container.querySelector(`[data-testid="${testId}"]`)
@@ -55,7 +56,7 @@ describe('not_found state', () => {
 		}, { delay: 0 })
 
 		function TestComponent() {
-			const author = useEntity('Author', { by: { id: 'non-existent' } }, e => e.name())
+			const author = useEntity(authorDef, { by: { id: 'non-existent' } }, e => e.name())
 
 			if (author.status === 'loading') {
 				return <div data-testid="loading">Loading...</div>
@@ -73,7 +74,7 @@ describe('not_found state', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -90,10 +91,10 @@ describe('not_found state', () => {
 			Author: {},
 		}, { delay: 0 })
 
-		let capturedResult: ReturnType<typeof useEntity<'Author', { name: string }>> | null = null
+		let capturedResult: ReturnType<typeof useEntity> | null = null
 
 		function TestComponent() {
-			const author = useEntity('Author', { by: { id: 'missing' } }, e => e.name())
+			const author = useEntity(authorDef, { by: { id: 'missing' } }, e => e.name())
 			capturedResult = author
 
 			if (author.status === 'loading') {
@@ -108,7 +109,7 @@ describe('not_found state', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)

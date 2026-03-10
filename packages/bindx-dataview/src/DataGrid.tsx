@@ -10,7 +10,7 @@
 
 import React, { memo, type ReactElement, useEffect, useMemo, useCallback, useRef, useState } from 'react'
 import type {
-	EntityWhere,
+	EntityDef,
 	OrderDirection,
 	FilterHandler,
 	FilterArtifact,
@@ -40,8 +40,8 @@ export const QUERY_FILTER_NAME = '__query'
 // ============================================================================
 
 export interface DataGridProps {
-	/** Entity type name */
-	entity: string
+	/** Entity definition */
+	entity: EntityDef
 	/** Column definitions: receives entity proxy `it`, returns column components */
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	columns: (it: any) => React.ReactNode
@@ -90,7 +90,7 @@ function DataGridImpl({
 	storageKey,
 }: DataGridProps): ReactElement | null {
 	const { store, schema: schemaRegistry } = useBindxContext()
-	const entityType = entity as string
+	const entityType = entity.$name
 
 	// ---- Loader state tracking ----
 	const hasLoadedOnce = useRef(false)

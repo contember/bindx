@@ -6,10 +6,11 @@ import {
 	BindxProvider,
 	MockAdapter,
 	HasOne,
+	useEntity,
 } from '@contember/bindx-react'
 import {
 	testSchema,
-	useEntity,
+	schema,
 	createMockData,
 	createHasOneMockData,
 } from '../../shared'
@@ -36,7 +37,7 @@ describe('HasOne component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().title().author(au => au.id().name().email()))
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().title().author(au => au.id().name().email()))
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -79,7 +80,7 @@ describe('HasOne component', () => {
 			const adapter = new MockAdapter(mockData, { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-no-author' } }, a => a.id().title().author(au => au.id().name()))
+				const article = useEntity(schema.Article, { by: { id: 'article-no-author' } }, a => a.id().title().author(au => au.id().name()))
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -123,7 +124,7 @@ describe('HasOne component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().author(au => au.id().name().email()))
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().author(au => au.id().name().email()))
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -166,7 +167,7 @@ describe('HasOne component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().author(au => au.id().name()))
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().author(au => au.id().name()))
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -218,7 +219,7 @@ describe('HasOne component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().author(au => au.id().name()))
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().author(au => au.id().name()))
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -259,7 +260,7 @@ describe('HasOne component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a =>
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a =>
 					a.id().title().location(l => l.id().label().lat().lng()),
 				)
 
@@ -308,7 +309,7 @@ describe('HasOne component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().title().author(au => au.id().name().email()))
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().title().author(au => au.id().name().email()))
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -366,7 +367,7 @@ describe('HasOne component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().author(au => au.id().name()))
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().author(au => au.id().name()))
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -422,7 +423,7 @@ describe('HasOne component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().author(au => au.id().name()))
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().author(au => au.id().name()))
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>

@@ -19,6 +19,8 @@ export type {
 	SchemaDefinition,
 	InferModel,
 	InferEntityNames,
+	EntityDef,
+	InferEntityDef,
 } from './schema/index.js'
 
 // Selection types
@@ -124,7 +126,7 @@ export type {
 // ============================================================================
 
 // Schema utilities
-export { scalar, hasOne, hasMany, defineSchema, SchemaRegistry, ContemberSchema, SchemaLoader } from './schema/index.js'
+export { scalar, hasOne, hasMany, defineSchema, entityDef, SchemaRegistry, ContemberSchema, SchemaLoader } from './schema/index.js'
 
 // Contember schema types
 export type {

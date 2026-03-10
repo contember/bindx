@@ -6,9 +6,10 @@ import {
 	BindxProvider,
 	MockAdapter,
 	isPlaceholderId,
-	createBindx,
+	useEntity,
+	useEntityList,
 } from '@contember/bindx-react'
-import { getByTestId, queryByTestId, createMockData, useEntity, schema } from './setup'
+import { getByTestId, queryByTestId, createMockData, entityDefs, schema } from './setup'
 
 afterEach(() => {
 	cleanup()
@@ -18,13 +19,11 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 	test('12. Connect should mark relation as dirty', async () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
-		const { useEntityList } = createBindx(schema)
-
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name()),
 			)
-			const allAuthors = useEntityList('Author', {}, a => a.id().name())
+			const allAuthors = useEntityList(entityDefs.Author, {}, a => a.id().name())
 
 			if (article.isLoading || allAuthors.isLoading) {
 				return <div data-testid="loading">Loading...</div>
@@ -49,7 +48,7 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -78,7 +77,7 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name()),
 			)
 
@@ -105,7 +104,7 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -133,13 +132,11 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 	test('14. Connect back to original should clear dirty state', async () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
-		const { useEntityList } = createBindx(schema)
-
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name()),
 			)
-			const allAuthors = useEntityList('Author', {}, a => a.id().name())
+			const allAuthors = useEntityList(entityDefs.Author, {}, a => a.id().name())
 
 			if (article.isLoading || allAuthors.isLoading) {
 				return <div data-testid="loading">Loading...</div>
@@ -169,7 +166,7 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -197,13 +194,11 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 	test('15. Reset should clear dirty state', async () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
-		const { useEntityList } = createBindx(schema)
-
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name()),
 			)
-			const allAuthors = useEntityList('Author', {}, a => a.id().name())
+			const allAuthors = useEntityList(entityDefs.Author, {}, a => a.id().name())
 
 			if (article.isLoading || allAuthors.isLoading) {
 				return <div data-testid="loading">Loading...</div>
@@ -234,7 +229,7 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -266,13 +261,11 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 	test('16. Disconnect then reconnect to original should clear dirty state', async () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
-		const { useEntityList } = createBindx(schema)
-
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name()),
 			)
-			const allAuthors = useEntityList('Author', {}, a => a.id().name())
+			const allAuthors = useEntityList(entityDefs.Author, {}, a => a.id().name())
 
 			if (article.isLoading || allAuthors.isLoading) {
 				return <div data-testid="loading">Loading...</div>
@@ -302,7 +295,7 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -334,7 +327,7 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name().email()),
 			)
 
@@ -362,7 +355,7 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -393,13 +386,11 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 	test('17. Entity isDirty should reflect hasOne relation changes', async () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
-		const { useEntityList } = createBindx(schema)
-
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name()),
 			)
-			const allAuthors = useEntityList('Author', {}, a => a.id().name())
+			const allAuthors = useEntityList(entityDefs.Author, {}, a => a.id().name())
 
 			if (article.isLoading || allAuthors.isLoading) {
 				return <div data-testid="loading">Loading...</div>
@@ -428,7 +419,7 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)

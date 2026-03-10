@@ -4,12 +4,13 @@ import { render, waitFor, act, cleanup } from '@testing-library/react'
 import React from 'react'
 import {
 	BindxProvider,
-	createBindx,
 	MockAdapter,
 	defineSchema,
+	entityDef,
 	scalar,
 	hasOne,
 	hasMany,
+	Entity,
 	Field,
 	isTempId,
 } from '@contember/bindx-react'
@@ -58,7 +59,10 @@ const schema = defineSchema<TestSchema>({
 	},
 })
 
-const { Entity } = createBindx(schema)
+const entityDefs = {
+	Article: entityDef<Article>('Article'),
+	Author: entityDef<Author>('Author'),
+} as const
 
 // Helper to query by data-testid
 function getByTestId(container: Element, testId: string): Element {
@@ -74,7 +78,7 @@ describe('Entity Create Mode', () => {
 
 			const { container } = render(
 				<BindxProvider adapter={adapter} schema={schema}>
-					<Entity name="Author" create>
+					<Entity entity={entityDefs.Author} create>
 						{author => (
 							<div data-testid="author">
 								<span data-testid="is-new">{author.$isNew ? 'new' : 'existing'}</span>
@@ -104,7 +108,7 @@ describe('Entity Create Mode', () => {
 
 			const { container } = render(
 				<BindxProvider adapter={adapter} schema={schema}>
-					<Entity name="Author" create>
+					<Entity entity={entityDefs.Author} create>
 						{author => {
 							capturedId = author.id
 							return (
@@ -132,7 +136,7 @@ describe('Entity Create Mode', () => {
 
 			const { container } = render(
 				<BindxProvider adapter={adapter} schema={schema}>
-					<Entity name="Author" create>
+					<Entity entity={entityDefs.Author} create>
 						{author => {
 							setNameFn = author.$fields.name.setValue
 							return (
@@ -173,7 +177,7 @@ describe('Entity Create Mode', () => {
 
 			const { container } = render(
 				<BindxProvider adapter={adapter} schema={schema}>
-					<Entity name="Author" create onPersisted={onPersisted}>
+					<Entity entity={entityDefs.Author} create onPersisted={onPersisted}>
 						{author => (
 							<div data-testid="author">
 								<span data-testid="is-new">{author.$isNew ? 'new' : 'existing'}</span>
@@ -319,7 +323,7 @@ describe('Entity Create Mode', () => {
 
 			const { container } = render(
 				<BindxProvider adapter={adapter} schema={schema}>
-					<Entity name="Author" by={{ id: 'author-1' }}>
+					<Entity entity={entityDefs.Author} by={{ id: 'author-1' }}>
 						{author => (
 							<div data-testid="author">
 								<span data-testid="name">{author.$fields.name.value}</span>
@@ -347,7 +351,7 @@ describe('Entity Create Mode', () => {
 
 			const { container } = render(
 				<BindxProvider adapter={adapter} schema={schema}>
-					<Entity name="Author" create>
+					<Entity entity={entityDefs.Author} create>
 						{author => (
 							<div data-testid="author">
 								<span data-testid="is-new">{author.$isNew ? 'new' : 'existing'}</span>

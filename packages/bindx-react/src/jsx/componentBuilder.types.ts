@@ -15,6 +15,7 @@ import type {
 	SelectionBuilder,
 	AnyBrand,
 	SelectionMeta,
+	EntityDef,
 } from '@contember/bindx'
 import type { SelectionProvider } from './types.js'
 import type { Condition } from './conditions.js'
@@ -34,13 +35,14 @@ export declare const COMPONENT_SELECTIONS: unique symbol
 /**
  * Configuration for a single entity prop.
  * Can be implicit (selection from JSX) or explicit (selection from selector).
+ * Stores the entity type directly (not entity name).
  */
 export interface EntityPropConfig<
-	TEntityName extends string = string,
+	TEntity extends object = object,
 	TSelected extends object = object,
 	TIsImplicit extends boolean = boolean,
 > {
-	readonly entityName: TEntityName
+	readonly __entity: TEntity
 	readonly isImplicit: TIsImplicit
 	readonly __selected: TSelected
 }
@@ -48,14 +50,14 @@ export interface EntityPropConfig<
 /**
  * Creates an implicit entity prop config type.
  */
-export type ImplicitEntityConfig<TEntityName extends string, TEntity extends object> =
-	EntityPropConfig<TEntityName, TEntity, true>
+export type ImplicitEntityConfig<TEntity extends object> =
+	EntityPropConfig<TEntity, TEntity, true>
 
 /**
  * Creates an explicit entity prop config type.
  */
-export type ExplicitEntityConfig<TEntityName extends string, TSelected extends object> =
-	EntityPropConfig<TEntityName, TSelected, false>
+export type ExplicitEntityConfig<TEntity extends object, TSelected extends object> =
+	EntityPropConfig<TEntity, TSelected, false>
 
 // ============================================================================
 // Interface Entity Prop Configuration
@@ -63,7 +65,7 @@ export type ExplicitEntityConfig<TEntityName extends string, TSelected extends o
 
 /**
  * Configuration for an interface-based entity prop.
- * Unlike EntityPropConfig, this doesn't require a specific entity name.
+ * Unlike EntityPropConfig, this doesn't require a specific entity type.
  * Instead, it constrains the TSelected type to extend TInterface.
  */
 export interface InterfaceEntityPropConfig<
@@ -101,13 +103,11 @@ export type AnyEntityPropConfig = EntityPropConfig | InterfaceEntityPropConfig
  * Grows as you chain builder methods.
  */
 export interface ComponentBuilderState<
-	TSchema extends Record<string, object>,
 	// eslint-disable-next-line @typescript-eslint/ban-types
 	TEntityProps extends Record<string, AnyEntityPropConfig> = {},
 	TScalarProps extends object = object,
 	TRoles extends readonly string[] = readonly string[],
 > {
-	readonly __schema: TSchema
 	readonly __entityProps: TEntityProps
 	readonly __scalarProps: TScalarProps
 	readonly __roles: TRoles
@@ -119,18 +119,15 @@ export interface ComponentBuilderState<
 
 /**
  * Add an implicit entity to builder state.
+ * Entity type comes directly from the EntityDef.
  */
 export type AddImplicitEntity<
-	TState extends ComponentBuilderState<Record<string, object>>,
+	TState extends ComponentBuilderState,
 	TPropName extends string,
-	TEntityName extends string,
+	TEntity extends object,
 > = ComponentBuilderState<
-	TState['__schema'],
 	TState['__entityProps'] & {
-		readonly [K in TPropName]: ImplicitEntityConfig<
-			TEntityName,
-			TEntityName extends keyof TState['__schema'] ? TState['__schema'][TEntityName] : object
-		>
+		readonly [K in TPropName]: ImplicitEntityConfig<TEntity>
 	},
 	TState['__scalarProps'],
 	TState['__roles']
@@ -138,16 +135,16 @@ export type AddImplicitEntity<
 
 /**
  * Add an explicit entity to builder state.
+ * Entity type comes directly from the EntityDef.
  */
 export type AddExplicitEntity<
-	TState extends ComponentBuilderState<Record<string, object>>,
+	TState extends ComponentBuilderState,
 	TPropName extends string,
-	TEntityName extends string,
+	TEntity extends object,
 	TSelected extends object,
 > = ComponentBuilderState<
-	TState['__schema'],
 	TState['__entityProps'] & {
-		readonly [K in TPropName]: ExplicitEntityConfig<TEntityName, TSelected>
+		readonly [K in TPropName]: ExplicitEntityConfig<TEntity, TSelected>
 	},
 	TState['__scalarProps'],
 	TState['__roles']
@@ -157,11 +154,10 @@ export type AddExplicitEntity<
  * Add an implicit interface entity to builder state.
  */
 export type AddImplicitInterfaceEntity<
-	TState extends ComponentBuilderState<Record<string, object>>,
+	TState extends ComponentBuilderState,
 	TPropName extends string,
 	TInterface extends object,
 > = ComponentBuilderState<
-	TState['__schema'],
 	TState['__entityProps'] & {
 		readonly [K in TPropName]: ImplicitInterfaceEntityConfig<TInterface>
 	},
@@ -173,11 +169,10 @@ export type AddImplicitInterfaceEntity<
  * Add an explicit interface entity to builder state.
  */
 export type AddExplicitInterfaceEntity<
-	TState extends ComponentBuilderState<Record<string, object>>,
+	TState extends ComponentBuilderState,
 	TPropName extends string,
 	TInterface extends object,
 > = ComponentBuilderState<
-	TState['__schema'],
 	TState['__entityProps'] & {
 		readonly [K in TPropName]: ExplicitInterfaceEntityConfig<TInterface>
 	},
@@ -190,10 +185,9 @@ export type AddExplicitInterfaceEntity<
  * Each key in TInterfaces becomes a prop.
  */
 export type AddInterfaces<
-	TState extends ComponentBuilderState<Record<string, object>>,
+	TState extends ComponentBuilderState,
 	TInterfaces extends Record<string, object>,
 > = ComponentBuilderState<
-	TState['__schema'],
 	TState['__entityProps'] & {
 		readonly [K in keyof TInterfaces]: InterfaceEntityPropConfig<TInterfaces[K]>
 	},
@@ -215,10 +209,9 @@ export type InterfaceSelectorsMap<TInterfaces extends Record<string, object>> = 
  * Set scalar props in builder state.
  */
 export type SetScalarProps<
-	TState extends ComponentBuilderState<Record<string, object>>,
+	TState extends ComponentBuilderState,
 	TNewScalarProps extends object,
 > = ComponentBuilderState<
-	TState['__schema'],
 	TState['__entityProps'],
 	TNewScalarProps,
 	TState['__roles']
@@ -239,70 +232,50 @@ export type SetScalarProps<
  * - Blocks direct field access to enforce declarative patterns
  * - Users must use components: `<Field field={entity.fieldName} />`
  * - Users must use condition DSL: `<If condition={cond.hasItems(entity.relation)} />`
- *
- * Preserves entity name literal and schema for proper type narrowing in HasRole and relations.
  */
 export type BuildEntityProps<
 	TEntityProps extends Record<string, AnyEntityPropConfig>,
-	TSchema extends Record<string, object>,
 	TRoles extends readonly string[],
 > = {
 	readonly [K in keyof TEntityProps]: TEntityProps[K] extends EntityPropConfig<
-		infer TEntityName,
+		infer TEntity,
 		infer TSelected,
 		infer TIsImplicit
 	>
 		? TIsImplicit extends true
 			// Implicit selection -> restricted EntityAccessorBase (no .value, .length access)
-			? EntityAccessorBase<
-					TEntityName extends keyof TSchema ? TSchema[TEntityName] : object,
-					TSelected,
-					AnyBrand,
-					TEntityName,
-					TSchema
-				>
+			? EntityAccessorBase<TEntity, TSelected, AnyBrand, string>
 			// Explicit selection -> full EntityAccessor (full access)
-			: EntityAccessor<
-					TEntityName extends keyof TSchema ? TSchema[TEntityName] : object,
-					TSelected,
-					AnyBrand,
-					TEntityName,
-					TSchema
-				>
+			: EntityAccessor<TEntity, TSelected, AnyBrand, string>
 		: TEntityProps[K] extends InterfaceEntityPropConfig<infer TInterface, infer TIsImplicit>
 			? TIsImplicit extends true
 				// Implicit interface -> restricted
-				? EntityAccessorBase<TInterface, TInterface, AnyBrand, string, TSchema>
+				? EntityAccessorBase<TInterface, TInterface, AnyBrand, string>
 				// Explicit interface -> full access
-				: EntityAccessor<TInterface, TInterface, AnyBrand, string, TSchema>
+				: EntityAccessor<TInterface, TInterface, AnyBrand, string>
 			: never
 }
 
 /**
  * Build complete props type from builder state.
  */
-export type BuildProps<TState extends ComponentBuilderState<Record<string, object>>> =
+export type BuildProps<TState extends ComponentBuilderState> =
 	TState['__scalarProps'] &
-		BuildEntityProps<TState['__entityProps'], TState['__schema'], TState['__roles']>
+		BuildEntityProps<TState['__entityProps'], TState['__roles']>
 
 /**
  * Build fragment properties ($propName) from entity config.
  */
 export type BuildFragmentProps<
 	TEntityProps extends Record<string, AnyEntityPropConfig>,
-	TSchema extends Record<string, object>,
 	TRoles extends readonly string[],
 > = {
 	readonly [K in keyof TEntityProps as `$${K & string}`]: TEntityProps[K] extends EntityPropConfig<
-		infer TEntityName,
+		infer TEntity,
 		infer TSelected,
 		infer _TIsImplicit
 	>
-		? FluentFragment<
-				TEntityName extends keyof TSchema ? TSchema[TEntityName] : object,
-				TSelected,
-				AnyBrand
-			>
+		? FluentFragment<TEntity, TSelected, AnyBrand>
 		: TEntityProps[K] extends InterfaceEntityPropConfig<infer TInterface, infer _TIsImplicit>
 			? FluentFragment<TInterface, TInterface, AnyBrand>
 			: never
@@ -334,9 +307,9 @@ export type BindxComponentBase<TProps extends object> = ComponentType<TProps> &
  * Complete bindx component type with fragment properties.
  */
 export type BindxComponent<
-	TState extends ComponentBuilderState<Record<string, object>>,
+	TState extends ComponentBuilderState,
 > = BindxComponentBase<BuildProps<TState>> &
-	BuildFragmentProps<TState['__entityProps'], TState['__schema'], TState['__roles']>
+	BuildFragmentProps<TState['__entityProps'], TState['__roles']>
 
 // ============================================================================
 // Builder Interface
@@ -345,49 +318,47 @@ export type BindxComponent<
 /**
  * Fluent builder for creating bindx components.
  *
- * @typeParam TSchema - The entity schema
  * @typeParam TState - Accumulated builder state
  *
  * @example
  * ```typescript
- * createComponent({ roles: ['admin'] })
- *   .entity('article', 'Article')  // implicit
- *   .entity('author', 'Author', e => e.id().name())  // explicit
+ * createComponent()
+ *   .entity('article', schema.Article)  // implicit
+ *   .entity('author', schema.Author, e => e.id().name())  // explicit
  *   .props<{ className?: string }>()
  *   .render(({ article, author, className }) => ...)
  * ```
  */
 export interface ComponentBuilder<
-	TSchema extends Record<string, object>,
-	TState extends ComponentBuilderState<TSchema> = ComponentBuilderState<TSchema>,
+	TState extends ComponentBuilderState = ComponentBuilderState,
 > {
 	/**
 	 * Add an entity prop with implicit selection (collected from JSX).
 	 *
 	 * @param propName - Name of the prop
-	 * @param entityName - Name of the entity in the schema
+	 * @param entity - EntityDef reference
 	 */
-	entity<TPropName extends string, TEntityName extends keyof TSchema & string>(
+	entity<TPropName extends string, TEntity extends object>(
 		propName: TPropName,
-		entityName: TEntityName,
-	): ComponentBuilder<TSchema, AddImplicitEntity<TState, TPropName, TEntityName>>
+		entity: EntityDef<TEntity>,
+	): ComponentBuilder<AddImplicitEntity<TState, TPropName, TEntity>>
 
 	/**
 	 * Add an entity prop with explicit selection (from selector function).
 	 *
 	 * @param propName - Name of the prop
-	 * @param entityName - Name of the entity in the schema
+	 * @param entity - EntityDef reference
 	 * @param selector - Selection builder function
 	 */
 	entity<
 		TPropName extends string,
-		TEntityName extends keyof TSchema & string,
+		TEntity extends object,
 		TSelected extends object,
 	>(
 		propName: TPropName,
-		entityName: TEntityName,
-		selector: (e: SelectionBuilder<TSchema[TEntityName]>) => SelectionBuilder<TSchema[TEntityName], TSelected, object>,
-	): ComponentBuilder<TSchema, AddExplicitEntity<TState, TPropName, TEntityName, TSelected>>
+		entity: EntityDef<TEntity>,
+		selector: (e: SelectionBuilder<TEntity>) => SelectionBuilder<TEntity, TSelected, object>,
+	): ComponentBuilder<AddExplicitEntity<TState, TPropName, TEntity, TSelected>>
 
 	/**
 	 * Add interface-based entity props that accept any EntityRef with matching fields.
@@ -424,7 +395,7 @@ export interface ComponentBuilder<
 	 */
 	interfaces<TInterfaces extends Record<string, object>>(
 		selectors?: InterfaceSelectorsMap<TInterfaces>,
-	): ComponentBuilder<TSchema, AddInterfaces<TState, TInterfaces>>
+	): ComponentBuilder<AddInterfaces<TState, TInterfaces>>
 
 	/**
 	 * Define additional scalar (non-entity) props.
@@ -435,7 +406,7 @@ export interface ComponentBuilder<
 	 * .props<{ className?: string; onClick?: () => void }>()
 	 * ```
 	 */
-	props<TNewScalarProps extends object>(): ComponentBuilder<TSchema, SetScalarProps<TState, TNewScalarProps>>
+	props<TNewScalarProps extends object>(): ComponentBuilder<SetScalarProps<TState, TNewScalarProps>>
 
 	/**
 	 * Add a condition that must be true for the component to render.
@@ -447,8 +418,8 @@ export interface ComponentBuilder<
 	 *
 	 * @example
 	 * ```typescript
-	 * createComponent({ roles })
-	 *   .entity('task', 'Task')
+	 * createComponent()
+	 *   .entity('task', schema.Task)
 	 *   .if(({ task }) => cond.isTruthy(task.project.company.canSeeTimeEstimates))
 	 *   .render(({ task }) => (
 	 *     // Only renders if canSeeTimeEstimates is truthy
@@ -456,7 +427,7 @@ export interface ComponentBuilder<
 	 *   ))
 	 * ```
 	 */
-	if(conditionFn: (props: BuildEntityProps<TState['__entityProps'], TSchema, TState['__roles']>) => Condition): ComponentBuilder<TSchema, TState>
+	if(conditionFn: (props: BuildEntityProps<TState['__entityProps'], TState['__roles']>) => Condition): ComponentBuilder<TState>
 
 	/**
 	 * Build the component with the render function.
@@ -477,35 +448,13 @@ export interface ComponentBuilder<
  * when combining with scalar props.
  */
 export type InitialBuilderState<
-	TSchema extends Record<string, object>,
 	TRoles extends readonly string[] = readonly string[],
 	// eslint-disable-next-line @typescript-eslint/ban-types
-> = ComponentBuilderState<TSchema, {}, object, TRoles>
+> = ComponentBuilderState<{}, object, TRoles>
 
 /**
  * Options for createComponent.
  */
 export interface CreateComponentOptions<TRoles extends readonly string[] = readonly string[]> {
 	readonly roles?: TRoles
-}
-
-/**
- * Type for the createComponent function returned by createBindx.
- */
-export interface CreateComponentFn<
-	TSchema extends Record<string, object>,
-	TRoleNames extends string = never,
-> {
-	/**
-	 * Create a component builder without role constraints.
-	 */
-	(): ComponentBuilder<TSchema, InitialBuilderState<TSchema>>
-
-	/**
-	 * Create a component builder with role constraints.
-	 * Entity types are narrowed to fields accessible by the specified roles.
-	 */
-	<TRoles extends readonly TRoleNames[]>(
-		options: CreateComponentOptions<TRoles>,
-	): ComponentBuilder<TSchema, InitialBuilderState<TSchema, TRoles>>
 }

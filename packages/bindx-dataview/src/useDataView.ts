@@ -8,6 +8,7 @@
 
 import { useMemo } from 'react'
 import type {
+	EntityDef,
 	FilterHandler,
 	FilterArtifact,
 	SelectionMeta,
@@ -86,9 +87,10 @@ const EMPTY_FILTERS = new Map<string, { handler: FilterHandler<FilterArtifact> }
 const EMPTY_SORTABLE = new Set<string>()
 
 export function useDataView(
-	entityType: string,
+	entity: EntityDef,
 	options: UseDataViewOptions,
 ): DataViewResult {
+	const entityType = entity.$name
 	const {
 		filters: filterDefs = EMPTY_FILTERS,
 		sortableFields = EMPTY_SORTABLE,

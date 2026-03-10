@@ -1,5 +1,6 @@
-import { Entity } from '../../generated/index.js'
+import { Entity } from '@contember/bindx-react'
 import { Field, HasMany, HasOne, If, Show } from '@contember/bindx-react'
+import { schema } from '../../generated/index.js'
 
 /**
  * Simple example using the two-pass JSX approach.
@@ -7,7 +8,7 @@ import { Field, HasMany, HasOne, If, Show } from '@contember/bindx-react'
  */
 export function AuthorSimpleExample({ authorId }: { authorId: string }) {
 	return (
-		<Entity name="Author" by={{ id: authorId }}>
+		<Entity entity={schema.Author} by={{ id: authorId }}>
 			{author => (
 				<div className="author-card">
 					{/* Scalar fields - fully typed */}
@@ -81,7 +82,7 @@ export function AuthorSimpleExample({ authorId }: { authorId: string }) {
  */
 export function ArticleDetailExample({ articleId }: { articleId: string }) {
 	return (
-		<Entity name="Article" by={{ id: articleId }}>
+		<Entity entity={schema.Article} by={{ id: articleId }}>
 			{article => (
 				<article className="article-detail">
 					<header>
@@ -126,7 +127,7 @@ export function ArticleDetailExample({ articleId }: { articleId: string }) {
 export function AuthorEditExample({ authorId }: { authorId: string }) {
 	return (
 		<Entity
-			name="Author"
+			entity={schema.Author}
 			by={{ id: authorId }}
 			loading={<div>Loading author...</div>}
 			error={err => <div className="error">Failed to load: {err.message}</div>}

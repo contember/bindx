@@ -5,8 +5,8 @@
  * Each schema variant is exported for specific testing scenarios.
  */
 import {
-	createBindx,
 	defineSchema,
+	entityDef,
 	scalar,
 	hasOne,
 	hasMany,
@@ -110,9 +110,14 @@ export const testSchema = defineSchema<TestSchema>({
 })
 
 /**
- * Typed hooks created from the test schema
+ * Entity definitions for type-safe hooks
  */
-export const { useEntity, useEntityList, Entity } = createBindx(testSchema)
+export const schema = {
+	Article: entityDef<Article>('Article'),
+	Author: entityDef<Author>('Author'),
+	Tag: entityDef<Tag>('Tag'),
+	Location: entityDef<Location>('Location'),
+} as const
 
 // ============================================================================
 // Minimal Schema (Article + Author only)
@@ -154,7 +159,10 @@ export const minimalSchema = defineSchema<MinimalSchema>({
 	},
 })
 
-export const minimalBindx = createBindx(minimalSchema)
+export const minimalEntityDefs = {
+	Article: entityDef<MinimalArticle>('Article'),
+	Author: entityDef<MinimalAuthor>('Author'),
+} as const
 
 // ============================================================================
 // HasMany-focused Schema (Article + Tags only)
@@ -196,4 +204,7 @@ export const hasManySchema = defineSchema<HasManySchema>({
 	},
 })
 
-export const hasManyBindx = createBindx(hasManySchema)
+export const hasManyEntityDefs = {
+	Article: entityDef<HasManyArticle>('Article'),
+	Tag: entityDef<HasManyTag>('Tag'),
+} as const

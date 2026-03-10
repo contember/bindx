@@ -40,6 +40,7 @@ import {
 	DataViewHasManyLabel,
 	FieldLabelFormatterProvider,
 } from '@contember/bindx-ui'
+import { schema } from '../../generated/index.js'
 import type { ReactElement, ReactNode } from 'react'
 
 const fieldLabels: Record<string, Record<string, string>> = {
@@ -76,7 +77,7 @@ export function DataGridExample(): ReactElement {
 		<div data-testid="datagrid-example">
 			<FieldLabelFormatterProvider formatter={labelFormatter}>
 				<DataGrid
-					entity="Article"
+					entity={schema.Article}
 					itemsPerPage={5}
 					initialSorting={{ title: 'asc' }}
 					layouts={[
@@ -192,7 +193,7 @@ function CellContent({ col, accessor }: { col: any; accessor: any }): ReactEleme
 		const rendered = col.relationRenderer ? col.relationRenderer(ref) : null
 		const id = ref?.$state === 'connected' ? ref?.id : null
 		return (
-			<DataGridHasOneCell field={col.fieldName} id={id}>
+			<DataGridHasOneCell field={col.fieldRef} id={id}>
 				{rendered}
 			</DataGridHasOneCell>
 		)
@@ -207,7 +208,7 @@ function CellContent({ col, accessor }: { col: any; accessor: any }): ReactEleme
 					const rendered = col.relationRenderer ? col.relationRenderer(item) : null
 					const id = item?.id ?? (typeof item === 'object' && item !== null && 'id' in item ? item.id : '')
 					return (
-						<DataGridHasManyCell key={id} field={col.fieldName} id={id}>
+						<DataGridHasManyCell key={id} field={col.fieldRef} id={id}>
 							{rendered}
 						</DataGridHasManyCell>
 					)

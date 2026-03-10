@@ -4,11 +4,12 @@ import { render, act, cleanup, fireEvent } from '@testing-library/react'
 import React, { useState } from 'react'
 import {
 	BindxProvider,
-	createBindx,
 	MockAdapter,
 	defineSchema,
+	entityDef,
 	scalar,
 	useUndo,
+	useEntity,
 } from '@contember/bindx-react'
 
 afterEach(() => {
@@ -37,7 +38,7 @@ const schema = defineSchema<TestSchema>({
 	},
 })
 
-const { useEntity } = createBindx(schema)
+const articleDef = entityDef<Article>('Article')
 
 function createMockData() {
 	return {
@@ -56,7 +57,7 @@ function getByTestId(container: Element, testId: string): Element {
 /** Test component that exercises useUndo + useEntity together */
 function UndoTestComponent({ id }: { id: string }): React.ReactElement {
 	const { canUndo, canRedo, undo, redo, undoCount, redoCount, beginGroup, endGroup } = useUndo()
-	const article = useEntity('Article', { by: { id } }, e => e.id().title().content())
+	const article = useEntity(articleDef, { by: { id } }, e => e.id().title().content())
 
 	if (article.isLoading) return <div data-testid="loading">Loading</div>
 	if (article.isError) return <div data-testid="error">Error</div>
@@ -95,7 +96,7 @@ function UndoTestComponent({ id }: { id: string }): React.ReactElement {
 function renderWithProvider(ui: React.ReactElement, mockData = createMockData()) {
 	const adapter = new MockAdapter(mockData, { debug: false, delay: 0 })
 	return render(
-		<BindxProvider adapter={adapter} enableUndo={true}>
+		<BindxProvider adapter={adapter} schema={schema} enableUndo={true}>
 			{ui}
 		</BindxProvider>,
 	)

@@ -8,11 +8,11 @@ import { render, waitFor, cleanup, act, fireEvent } from '@testing-library/react
 import React from 'react'
 import {
 	BindxProvider,
-	createBindx,
 	MockAdapter,
 	defineSchema,
 	scalar,
 } from '@contember/bindx-react'
+import { schema } from '../../shared/index.js'
 import {
 	DataGrid,
 	DataGridTextColumn,
@@ -40,7 +40,7 @@ interface TestSchema {
 	Article: Article
 }
 
-const schema = defineSchema<TestSchema>({
+const localSchema = defineSchema<TestSchema>({
 	entities: {
 		Article: {
 			fields: {
@@ -52,8 +52,6 @@ const schema = defineSchema<TestSchema>({
 		},
 	},
 })
-
-createBindx(schema)
 
 function createData(): Record<string, Record<string, Record<string, unknown>>> {
 	return {
@@ -76,8 +74,8 @@ describe('DataGrid E2E: static filter', () => {
 		const adapter = new MockAdapter(createData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
-				<DataGrid entity="Article" filter={{ status: { eq: 'published' } }} columns={it => (
+			<BindxProvider adapter={adapter} schema={localSchema}>
+				<DataGrid entity={schema.Article} filter={{ status: { eq: 'published' } }} columns={it => (
 					<>
 						<DataGridTextColumn field={it.title} header="Title" />
 						<DataGridTextColumn field={it.status} header="Status" />
@@ -102,8 +100,8 @@ describe('DataGrid E2E: static filter', () => {
 		const adapter = new MockAdapter(createData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
-				<DataGrid entity="Article" filter={{ status: { in: ['draft', 'archived'] } }} columns={it => (
+			<BindxProvider adapter={adapter} schema={localSchema}>
+				<DataGrid entity={schema.Article} filter={{ status: { in: ['draft', 'archived'] } }} columns={it => (
 					<DataGridTextColumn field={it.title} header="Title" />
 				)}>
 					<TestTable />
@@ -129,8 +127,8 @@ describe('DataGrid E2E: sorting', () => {
 		const adapter = new MockAdapter(createData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
-				<DataGrid entity="Article" initialSorting={{ title: 'asc' }} columns={it => (
+			<BindxProvider adapter={adapter} schema={localSchema}>
+				<DataGrid entity={schema.Article} initialSorting={{ title: 'asc' }} columns={it => (
 					<DataGridTextColumn field={it.title} header="Title" sortable />
 				)}>
 					<TestTable />
@@ -154,8 +152,8 @@ describe('DataGrid E2E: sorting', () => {
 		const adapter = new MockAdapter(createData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
-				<DataGrid entity="Article" initialSorting={{ title: 'desc' }} columns={it => (
+			<BindxProvider adapter={adapter} schema={localSchema}>
+				<DataGrid entity={schema.Article} initialSorting={{ title: 'desc' }} columns={it => (
 					<DataGridTextColumn field={it.title} header="Title" sortable />
 				)}>
 					<TestTable />
@@ -175,8 +173,8 @@ describe('DataGrid E2E: sorting', () => {
 		const adapter = new MockAdapter(createData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
-				<DataGrid entity="Article" columns={it => (
+			<BindxProvider adapter={adapter} schema={localSchema}>
+				<DataGrid entity={schema.Article} columns={it => (
 					<DataGridTextColumn field={it.title} header="Title" sortable />
 				)}>
 					<TestTable />
@@ -221,8 +219,8 @@ describe('DataGrid E2E: dynamic filtering', () => {
 		const adapter = new MockAdapter(createData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
-				<DataGrid entity="Article" columns={it => (
+			<BindxProvider adapter={adapter} schema={localSchema}>
+				<DataGrid entity={schema.Article} columns={it => (
 					<DataGridTextColumn field={it.title} header="Title" filter />
 				)}>
 					<TestToolbar />
@@ -261,8 +259,8 @@ describe('DataGrid E2E: dynamic filtering', () => {
 		const adapter = new MockAdapter(createData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
-				<DataGrid entity="Article" columns={it => (
+			<BindxProvider adapter={adapter} schema={localSchema}>
+				<DataGrid entity={schema.Article} columns={it => (
 					<>
 						<DataGridTextColumn field={it.title} header="Title" />
 						<DataGridEnumColumn
@@ -305,8 +303,8 @@ describe('DataGrid E2E: dynamic filtering', () => {
 		const adapter = new MockAdapter(createData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
-				<DataGrid entity="Article" columns={it => (
+			<BindxProvider adapter={adapter} schema={localSchema}>
+				<DataGrid entity={schema.Article} columns={it => (
 					<>
 						<DataGridTextColumn field={it.title} header="Title" />
 						<DataGridBooleanColumn field={it.published} header="Published" filter />
@@ -340,8 +338,8 @@ describe('DataGrid E2E: dynamic filtering', () => {
 		const adapter = new MockAdapter(createData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
-				<DataGrid entity="Article" columns={it => (
+			<BindxProvider adapter={adapter} schema={localSchema}>
+				<DataGrid entity={schema.Article} columns={it => (
 					<DataGridTextColumn field={it.title} header="Title" filter />
 				)}>
 					<TestToolbar />
@@ -381,9 +379,9 @@ describe('DataGrid E2E: dynamic filtering', () => {
 		const adapter = new MockAdapter(createData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
+			<BindxProvider adapter={adapter} schema={localSchema}>
 				<DataGrid
-					entity="Article"
+					entity={schema.Article}
 					filter={{ published: { eq: true } }}
 					columns={it => (
 						<>
@@ -434,8 +432,8 @@ describe('DataGrid E2E: pagination', () => {
 		const adapter = new MockAdapter(createData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
-				<DataGrid entity="Article" itemsPerPage={2} columns={it => (
+			<BindxProvider adapter={adapter} schema={localSchema}>
+				<DataGrid entity={schema.Article} itemsPerPage={2} columns={it => (
 					<DataGridTextColumn field={it.title} header="Title" />
 				)}>
 					<TestTable />
@@ -459,8 +457,8 @@ describe('DataGrid E2E: pagination', () => {
 		const adapter = new MockAdapter(createData(), { delay: 0 })
 
 		const { container } = render(
-			<BindxProvider adapter={adapter} schema={schema}>
-				<DataGrid entity="Article" itemsPerPage={2} initialSorting={{ title: 'asc' }} columns={it => (
+			<BindxProvider adapter={adapter} schema={localSchema}>
+				<DataGrid entity={schema.Article} itemsPerPage={2} initialSorting={{ title: 'asc' }} columns={it => (
 					<DataGridTextColumn field={it.title} header="Title" sortable />
 				)}>
 					<TestTable />

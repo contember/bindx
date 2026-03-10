@@ -6,10 +6,11 @@ import {
 	BindxProvider,
 	MockAdapter,
 	Show,
+	useEntity,
 } from '@contember/bindx-react'
 import {
 	testSchema,
-	useEntity,
+	schema,
 	createMockData,
 } from '../../shared'
 
@@ -35,7 +36,7 @@ describe('Show component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().title())
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().title())
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -79,7 +80,7 @@ describe('Show component', () => {
 			}, { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().publishedAt())
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().publishedAt())
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -128,7 +129,7 @@ describe('Show component', () => {
 			}, { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().publishedAt())
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().publishedAt())
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -168,7 +169,7 @@ describe('Show component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().title())
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().title())
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -215,7 +216,7 @@ describe('Show component', () => {
 			}, { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().publishedAt())
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().publishedAt())
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -264,7 +265,7 @@ describe('Show component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().views())
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().views())
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -304,7 +305,7 @@ describe('Show component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().title())
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().title())
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -339,7 +340,7 @@ describe('Show component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().published())
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().published())
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -386,7 +387,7 @@ describe('Show component', () => {
 			}, { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().publishedAt())
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().publishedAt())
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>
@@ -443,7 +444,7 @@ describe('Show component', () => {
 			const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 			function TestComponent(): React.ReactElement {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, a => a.id().publishedAt())
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().publishedAt())
 
 				if (article.isLoading) {
 					return <div data-testid="loading">Loading...</div>

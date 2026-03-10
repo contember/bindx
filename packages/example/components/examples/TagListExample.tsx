@@ -1,11 +1,12 @@
-import { useEntityList } from '../../generated/index.js'
+import { useEntityList } from '@contember/bindx-react'
+import { schema } from '../../generated/index.js'
 
 /**
  * Example: Tag list with colored badges
  * Demonstrates useEntityList with custom rendering
  */
 export function TagListExample() {
-	const tags = useEntityList('Tag', {}, e => e.id().name().color())
+	const tags = useEntityList(schema.Tag, {}, e => e.id().name().color())
 
 	if (tags.isLoading) {
 		return <div>Loading tags...</div>

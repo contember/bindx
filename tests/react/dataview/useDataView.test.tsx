@@ -13,6 +13,7 @@ import {
 	resolveSelectionMeta,
 	type SelectionMeta,
 } from '@contember/bindx-react'
+import { schema } from '../../shared/index.js'
 import { useDataView } from '@contember/bindx-dataview'
 import {
 	createTextFilterHandler,
@@ -37,7 +38,7 @@ interface TestSchema {
 	Article: Article
 }
 
-const schema = defineSchema<TestSchema>({
+const localSchema = defineSchema<TestSchema>({
 	entities: {
 		Article: {
 			fields: {
@@ -69,7 +70,7 @@ function createWrapper(data: Record<string, Record<string, Record<string, unknow
 	const adapter = new MockAdapter(data, { delay: 0 })
 	return function Wrapper({ children }: { children: React.ReactNode }) {
 		return (
-			<BindxProvider adapter={adapter} schema={schema}>
+			<BindxProvider adapter={adapter} schema={localSchema}>
 				{children}
 			</BindxProvider>
 		)
@@ -86,7 +87,7 @@ describe('useDataView', () => {
 		const selection = buildSelection()
 
 		const { result } = renderHook(
-			() => useDataView('Article', { selection }),
+			() => useDataView(schema.Article, { selection }),
 			{ wrapper },
 		)
 
@@ -106,7 +107,7 @@ describe('useDataView', () => {
 		const selection = buildSelection()
 
 		const { result } = renderHook(
-			() => useDataView('Article', {
+			() => useDataView(schema.Article, {
 				selection,
 				filter: { status: { eq: 'published' } },
 			}),
@@ -128,7 +129,7 @@ describe('useDataView', () => {
 		])
 
 		const { result } = renderHook(
-			() => useDataView('Article', { selection, filters }),
+			() => useDataView(schema.Article, { selection, filters }),
 			{ wrapper },
 		)
 
@@ -157,7 +158,7 @@ describe('useDataView', () => {
 		const selection = buildSelection()
 
 		const { result } = renderHook(
-			() => useDataView('Article', {
+			() => useDataView(schema.Article, {
 				selection,
 				sortableFields: new Set(['title']),
 				initialSorting: { title: 'asc' },
@@ -181,7 +182,7 @@ describe('useDataView', () => {
 		const selection = buildSelection()
 
 		const { result } = renderHook(
-			() => useDataView('Article', {
+			() => useDataView(schema.Article, {
 				selection,
 				itemsPerPage: 2,
 			}),
@@ -202,7 +203,7 @@ describe('useDataView', () => {
 		const selection = buildSelection()
 
 		const { result } = renderHook(
-			() => useDataView('Article', {
+			() => useDataView(schema.Article, {
 				selection,
 				itemsPerPage: 2,
 				sortableFields: new Set(['title']),
@@ -235,7 +236,7 @@ describe('useDataView', () => {
 		const selection = buildSelection()
 
 		const { result } = renderHook(
-			() => useDataView('Article', { selection }),
+			() => useDataView(schema.Article, { selection }),
 			{ wrapper },
 		)
 

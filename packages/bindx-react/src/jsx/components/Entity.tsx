@@ -4,19 +4,18 @@ import { useEntityCore } from '../../hooks/useEntityCore.js'
 import { useSelectionCollection } from '../../hooks/useSelectionCollection.js'
 import { createRuntimeAccessor } from '../proxy.js'
 import type { EntityAccessor } from '../types.js'
-import { type EntityUniqueWhere, type AnyBrand, type FieldError } from '@contember/bindx'
+import { type EntityDef, type EntityUniqueWhere, type AnyBrand, type FieldError } from '@contember/bindx'
 
 // ==================== Props Types ====================
 
 /**
  * Base props shared by both edit and create modes.
- * K must extend string to preserve the entity name literal type.
  */
-interface EntityBaseProps<TSchema, K extends keyof TSchema & string> {
-	/** Entity type name */
-	name: K
+interface EntityBaseProps<TEntity extends object> {
+	/** Entity definition reference */
+	entity: EntityDef<TEntity>
 	/** Render function receiving typed entity accessor with direct field access */
-	children: (entity: EntityAccessor<TSchema[K], TSchema[K], AnyBrand, K>) => React.ReactNode
+	children: (entity: EntityAccessor<TEntity>) => React.ReactNode
 	/** Error fallback */
 	error?: (error: FieldError) => React.ReactNode
 }
@@ -24,7 +23,7 @@ interface EntityBaseProps<TSchema, K extends keyof TSchema & string> {
 /**
  * Props for editing an existing entity (fetched by unique field)
  */
-interface EntityByProps<TSchema, K extends keyof TSchema & string> extends EntityBaseProps<TSchema, K> {
+interface EntityByProps<TEntity extends object> extends EntityBaseProps<TEntity> {
 	/** Unique field(s) to identify the entity (e.g., { id: '...' } or { slug: '...' }) */
 	by: EntityUniqueWhere
 	create?: never
@@ -38,7 +37,7 @@ interface EntityByProps<TSchema, K extends keyof TSchema & string> extends Entit
 /**
  * Props for creating a new entity
  */
-interface EntityCreateProps<TSchema, K extends keyof TSchema & string> extends EntityBaseProps<TSchema, K> {
+interface EntityCreateProps<TEntity extends object> extends EntityBaseProps<TEntity> {
 	by?: never
 	/** Create a new entity instead of fetching an existing one */
 	create: true
@@ -51,9 +50,9 @@ interface EntityCreateProps<TSchema, K extends keyof TSchema & string> extends E
 /**
  * Props for Entity component - union of edit mode (by) and create mode
  */
-export type EntityProps<TSchema, K extends keyof TSchema & string> =
-	| EntityByProps<TSchema, K>
-	| EntityCreateProps<TSchema, K>
+export type EntityProps<TEntity extends object = object> =
+	| EntityByProps<TEntity>
+	| EntityCreateProps<TEntity>
 
 // ==================== Internal Props Types ====================
 
@@ -240,7 +239,7 @@ function EntityCreateMode({
  *
  * @example Edit mode
  * ```tsx
- * <Entity name="Author" by={{ id: 'author-1' }}>
+ * <Entity entity={schema.Author} by={{ id: 'author-1' }}>
  *   {author => (
  *     <>
  *       <Field field={author.fields.name} />
@@ -254,7 +253,7 @@ function EntityCreateMode({
  *
  * @example Create mode
  * ```tsx
- * <Entity name="Author" create onPersisted={id => navigate(`/authors/${id}`)}>
+ * <Entity entity={schema.Author} create onPersisted={id => navigate(`/authors/${id}`)}>
  *   {author => (
  *     <>
  *       <Field field={author.fields.name} />
@@ -265,16 +264,16 @@ function EntityCreateMode({
  * </Entity>
  * ```
  */
-function EntityImpl<TSchema, K extends keyof TSchema & string>(
-	props: EntityProps<TSchema, K>,
+function EntityImpl<TEntity extends object>(
+	props: EntityProps<TEntity>,
 ): ReactElement | null {
 	const isCreateMode = 'create' in props && props.create === true
 
 	if (isCreateMode) {
-		const createProps = props as EntityCreateProps<TSchema, K>
+		const createProps = props as EntityCreateProps<TEntity>
 		return (
 			<EntityCreateMode
-				entityType={createProps.name as string}
+				entityType={createProps.entity.$name}
 				children={createProps.children as (entity: EntityAccessor<unknown>) => React.ReactNode}
 				error={createProps.error}
 				onPersisted={createProps.onPersisted}
@@ -282,10 +281,10 @@ function EntityImpl<TSchema, K extends keyof TSchema & string>(
 		)
 	}
 
-	const byProps = props as EntityByProps<TSchema, K>
+	const byProps = props as EntityByProps<TEntity>
 	return (
 		<EntityByMode
-			entityType={byProps.name as string}
+			entityType={byProps.entity.$name}
 			by={byProps.by}
 			children={byProps.children as (entity: EntityAccessor<unknown>) => React.ReactNode}
 			loading={byProps.loading}

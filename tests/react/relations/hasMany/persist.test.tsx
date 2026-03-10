@@ -2,8 +2,8 @@ import '../../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
 import { render, waitFor, act, cleanup } from '@testing-library/react'
 import React from 'react'
-import { BindxProvider, MockAdapter, isTempId } from '@contember/bindx-react'
-import { getByTestId, queryByTestId, createMockData, useEntity, schema } from './setup'
+import { BindxProvider, MockAdapter, isTempId, useEntity } from '@contember/bindx-react'
+import { getByTestId, queryByTestId, createMockData, entityDefs, schema } from './setup'
 
 afterEach(() => {
 	cleanup()
@@ -14,7 +14,7 @@ describe('HasMany Relations - Persistence', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().title().tags(t => t.id().name()))
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.id().title().tags(t => t.id().name()))
 			if (article.isLoading) return <div data-testid="loading">Loading</div>
 			if (article.isError || article.isNotFound) return <div>Error</div>
 
@@ -35,7 +35,7 @@ describe('HasMany Relations - Persistence', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -67,7 +67,7 @@ describe('HasMany Relations - Persistence', () => {
 		let addedId: string | null = null
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
 			if (article.isLoading) return <div data-testid="loading">Loading</div>
 			if (article.isError || article.isNotFound) return <div>Error</div>
 
@@ -87,7 +87,7 @@ describe('HasMany Relations - Persistence', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -110,7 +110,7 @@ describe('HasMany Relations - Persistence', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-empty' } }, e => e.id().tags(t => t.id()))
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-empty' } }, e => e.id().tags(t => t.id()))
 			if (article.isLoading) return <div data-testid="loading">Loading</div>
 			if (article.isError || article.isNotFound) return <div>Error</div>
 
@@ -125,7 +125,7 @@ describe('HasMany Relations - Persistence', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -157,7 +157,7 @@ describe('HasMany Relations - Persistence', () => {
 		let addedId: string | null = null
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
 			if (article.isLoading) return <div data-testid="loading">Loading</div>
 			if (article.isError || article.isNotFound) return <div>Error</div>
 
@@ -186,7 +186,7 @@ describe('HasMany Relations - Persistence', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -215,7 +215,7 @@ describe('HasMany Relations - Persistence', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
 			if (article.isLoading) return <div data-testid="loading">Loading</div>
 			if (article.isError || article.isNotFound) return <div>Error</div>
 
@@ -234,7 +234,7 @@ describe('HasMany Relations - Persistence', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -259,7 +259,7 @@ describe('HasMany Relations - Persistence', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().tags(t => t.id().name()))
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.id().tags(t => t.id().name()))
 			if (article.isLoading) return <div data-testid="loading">Loading</div>
 			if (article.isError || article.isNotFound) return <div>Error</div>
 
@@ -277,7 +277,7 @@ describe('HasMany Relations - Persistence', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -301,7 +301,7 @@ describe('HasMany Relations - Persistence', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
 			if (article.isLoading) return <div data-testid="loading">Loading</div>
 			if (article.isError || article.isNotFound) return <div>Error</div>
 
@@ -319,7 +319,7 @@ describe('HasMany Relations - Persistence', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -343,7 +343,7 @@ describe('HasMany Relations - Persistence', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent() {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e => e.id().tags(t => t.id()))
 			if (article.isLoading) return <div data-testid="loading">Loading</div>
 			if (article.isError || article.isNotFound) return <div>Error</div>
 
@@ -364,7 +364,7 @@ describe('HasMany Relations - Persistence', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)

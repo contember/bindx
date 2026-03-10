@@ -8,7 +8,7 @@
  *   queryByTestId,
  *   createMockData,
  *   testSchema,
- *   useEntity,
+ *   schema,
  *   renderWithBindx,
  * } from '../shared'
  * ```
@@ -22,7 +22,7 @@ export {
 	createClientError,
 } from './helpers'
 
-// Schema definitions and typed hooks
+// Schema definitions and entity defs
 export {
 	// Types
 	type Author,
@@ -40,13 +40,10 @@ export {
 	testSchema,
 	minimalSchema,
 	hasManySchema,
-	// Typed hooks from testSchema
-	useEntity,
-	useEntityList,
-	Entity,
-	// Bindx instances for other schemas
-	minimalBindx,
-	hasManyBindx,
+	// Entity definitions for type-safe hooks
+	schema,
+	minimalEntityDefs,
+	hasManyEntityDefs,
 } from './schema'
 
 // Mock data factories

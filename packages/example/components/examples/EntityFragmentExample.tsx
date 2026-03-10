@@ -1,5 +1,6 @@
-import { Entity, createComponent } from '../../generated/index.js'
+import { Entity, createComponent } from '@contember/bindx-react'
 import { Field, HasMany, HasOne } from '@contember/bindx-react'
+import { schema } from '../../generated/index.js'
 
 // ============================================================================
 // Fragment Component Definitions
@@ -14,7 +15,7 @@ import { Field, HasMany, HasOne } from '@contember/bindx-react'
  * 3. Uses implicit selection (collected from JSX)
  */
 export const AuthorInfo = createComponent()
-	.entity('author', 'Author')
+	.entity('author', schema.Author)
 	.props<{ showEmail?: boolean }>()
 	.render(({ author, showEmail }) => (
 		<div className="author-info">
@@ -34,7 +35,7 @@ export const AuthorInfo = createComponent()
  * A component that uses explicit selection for has-many with limit.
  */
 export const AuthorArticles = createComponent()
-	.entity('author', 'Author', e => e.articles({ limit: 5 }, a => a.id().title()))
+	.entity('author', schema.Author, e => e.articles({ limit: 5 }, a => a.id().title()))
 	.render(({ author }) => (
 		<ul>
 			<HasMany field={author.articles}>
@@ -51,7 +52,7 @@ export const AuthorArticles = createComponent()
  * A component that uses implicit selection - limit is passed at render time.
  */
 export const AuthorArticlesImplicit = createComponent()
-	.entity('author', 'Author')
+	.entity('author', schema.Author)
 	.render(({ author }) => (
 		<ul>
 			<HasMany field={author.articles} limit={5}>
@@ -68,7 +69,7 @@ export const AuthorArticlesImplicit = createComponent()
  * Another fragment component for author - displays bio and articles.
  */
 export const AuthorBio = createComponent()
-	.entity('author', 'Author')
+	.entity('author', schema.Author)
 	.render(({ author }) => (
 		<div className="author-bio">
 			<p>
@@ -91,7 +92,7 @@ export const AuthorBio = createComponent()
  * Fragment component for displaying article tags.
  */
 export const ArticleTags = createComponent()
-	.entity('article', 'Article')
+	.entity('article', schema.Article)
 	.props<{ className?: string }>()
 	.render(({ article, className }) => (
 		<div className={className ?? 'article-tags'}>
@@ -114,7 +115,7 @@ export const ArticleTags = createComponent()
  */
 export function AuthorProfileExample({ authorId }: { authorId: string }) {
 	return (
-		<Entity name="Author" by={{ id: authorId }}>
+		<Entity entity={schema.Author} by={{ id: authorId }}>
 			{author => (
 				<div className="author-profile">
 					<h2>Author Profile</h2>
@@ -135,7 +136,7 @@ export function AuthorProfileExample({ authorId }: { authorId: string }) {
  */
 export function ArticleDetailWithFragments({ articleId }: { articleId: string }) {
 	return (
-		<Entity name="Article" by={{ id: articleId }}>
+		<Entity entity={schema.Article} by={{ id: articleId }}>
 			{article => (
 				<article className="article-detail">
 					<header>
@@ -170,7 +171,7 @@ export function ArticleDetailWithFragments({ articleId }: { articleId: string })
  */
 export function AuthorCardExample({ authorId }: { authorId: string }) {
 	return (
-		<Entity name="Author" by={{ id: authorId }}>
+		<Entity entity={schema.Author} by={{ id: authorId }}>
 			{author => (
 				<div className="author-card">
 					{/* Multiple fragment components for the same entity */}
@@ -196,14 +197,14 @@ export function AuthorCardExample({ authorId }: { authorId: string }) {
  *
  * Usage with useEntity:
  * ```ts
- * const article = useEntity('Article', { id }, e =>
+ * const article = useEntity(schema.Article, { id }, e =>
  *   e.title().author(AuthorInfo.$author)
  * )
  * ```
  *
  * Merging multiple fragments:
  * ```ts
- * const article = useEntity('Article', { id }, e =>
+ * const article = useEntity(schema.Article, { id }, e =>
  *   e.title().author(AuthorInfo.$author, AuthorBio.$author)
  * )
  * ```

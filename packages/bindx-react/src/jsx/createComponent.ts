@@ -28,7 +28,6 @@ export type {
 	ComponentBuilder,
 	ComponentBuilderState,
 	CreateComponentOptions,
-	CreateComponentFn,
 	// Interface types
 	InterfaceEntityPropConfig,
 	ImplicitInterfaceEntityConfig,

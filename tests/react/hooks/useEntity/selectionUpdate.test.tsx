@@ -2,8 +2,8 @@ import '../../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
 import { render, waitFor, cleanup, act } from '@testing-library/react'
 import React, { useState } from 'react'
-import { BindxProvider, MockAdapter } from '@contember/bindx-react'
-import { getByTestId, queryByTestId, createMockData, useEntity } from '../../../shared'
+import { BindxProvider, MockAdapter, useEntity } from '@contember/bindx-react'
+import { getByTestId, queryByTestId, createMockData, schema, testSchema } from '../../../shared'
 
 afterEach(() => {
 	cleanup()
@@ -17,7 +17,7 @@ describe('useEntity hook - selection update on definer change', () => {
 			const [includeContent, setIncludeContent] = useState(false)
 
 			const article = useEntity(
-				'Article',
+				schema.Article,
 				{ by: { id: 'article-1' } },
 				includeContent
 					? e => e.title().content()
@@ -45,7 +45,7 @@ describe('useEntity hook - selection update on definer change', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={testSchema}>
 				<TestComponent />
 			</BindxProvider>,
 		)

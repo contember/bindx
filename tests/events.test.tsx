@@ -15,7 +15,8 @@ import {
 	useOnEvent,
 	useOnEntityEvent,
 	useOnFieldEvent,
-	createBindx,
+	entityDef,
+	useEntity,
 } from '@contember/bindx-react'
 
 afterEach(() => {
@@ -400,7 +401,7 @@ describe('Event React Hooks', () => {
 		},
 	})
 
-	const { useEntity } = createBindx(schema)
+	const articleDef = entityDef<Article>('Article')
 
 	function createMockData() {
 		return {
@@ -431,7 +432,7 @@ describe('Event React Hooks', () => {
 			const events: FieldChangedEvent[] = []
 
 			function TestComponent() {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().title())
+				const article = useEntity(articleDef, { by: { id: 'article-1' } }, e => e.id().title())
 
 				useOnEvent('field:changed', (event) => {
 					events.push(event as FieldChangedEvent)
@@ -454,7 +455,7 @@ describe('Event React Hooks', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -479,7 +480,7 @@ describe('Event React Hooks', () => {
 			const capturedValues: number[] = []
 
 			function TestComponent() {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().title())
+				const article = useEntity(articleDef, { by: { id: 'article-1' } }, e => e.id().title())
 				const [counter, setCounter] = useState(0)
 
 				useOnEvent('field:changed', () => {
@@ -506,7 +507,7 @@ describe('Event React Hooks', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -542,8 +543,8 @@ describe('Event React Hooks', () => {
 			const article1Events: FieldChangedEvent[] = []
 
 			function TestComponent() {
-				const article1 = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().title())
-				const article2 = useEntity('Article', { by: { id: 'article-2' } }, e => e.id().title())
+				const article1 = useEntity(articleDef, { by: { id: 'article-1' } }, e => e.id().title())
+				const article2 = useEntity(articleDef, { by: { id: 'article-2' } }, e => e.id().title())
 
 				useOnEntityEvent('field:changed', 'Article', 'article-1', (event) => {
 					article1Events.push(event as FieldChangedEvent)
@@ -571,7 +572,7 @@ describe('Event React Hooks', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -610,7 +611,7 @@ describe('Event React Hooks', () => {
 			const titleEvents: FieldChangedEvent[] = []
 
 			function TestComponent() {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().title().content())
+				const article = useEntity(articleDef, { by: { id: 'article-1' } }, e => e.id().title().content())
 
 				useOnFieldEvent('field:changed', 'Article', 'article-1', 'title', (event) => {
 					titleEvents.push(event as FieldChangedEvent)
@@ -638,7 +639,7 @@ describe('Event React Hooks', () => {
 			}
 
 			const { container } = render(
-				<BindxProvider adapter={adapter}>
+				<BindxProvider adapter={adapter} schema={schema}>
 					<TestComponent />
 				</BindxProvider>,
 			)
@@ -688,7 +689,7 @@ describe('Event React Hooks', () => {
 			}
 
 			function TestComponent({ showListener }: { showListener: boolean }) {
-				const article = useEntity('Article', { by: { id: 'article-1' } }, e => e.id().title())
+				const article = useEntity(articleDef, { by: { id: 'article-1' } }, e => e.id().title())
 
 				if (article.isLoading) return <div>Loading...</div>
 				if (article.isError || article.isNotFound) return <div>Error</div>
@@ -710,7 +711,7 @@ describe('Event React Hooks', () => {
 				const [showListener, setShowListener] = useState(true)
 
 				return (
-					<BindxProvider adapter={adapter}>
+					<BindxProvider adapter={adapter} schema={schema}>
 						<TestComponent showListener={showListener} />
 						<button data-testid="toggle" onClick={() => setShowListener(s => !s)}>
 							Toggle

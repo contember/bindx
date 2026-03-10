@@ -16,8 +16,8 @@ describe('BindxGenerator', () => {
 		expect(files['types.ts']).toBeDefined()
 		expect(files['index.ts']).toBeDefined()
 
-		expect(files['index.ts']).toContain('createBindx')
-		expect(files['index.ts']).toContain('useEntity')
+		expect(files['index.ts']).toContain('schema')
+		expect(files['schema.ts']).toContain('entityDef')
 	})
 })
 

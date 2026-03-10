@@ -1,4 +1,5 @@
-import { useEntity, useEntityList } from '../../generated/index.js'
+import { useEntity, useEntityList } from '@contember/bindx-react'
+import { schema } from '../../generated/index.js'
 import { TextInput } from '../inputs/index.js'
 
 /**
@@ -9,7 +10,7 @@ import { TextInput } from '../inputs/index.js'
  */
 export function ArticleWithAuthorSelectExample({ id }: { id: string }) {
 	// Load the article
-	const article = useEntity('Article', { by: { id } }, e =>
+	const article = useEntity(schema.Article, { by: { id } }, e =>
 		e
 			.id()
 			.title()
@@ -18,7 +19,7 @@ export function ArticleWithAuthorSelectExample({ id }: { id: string }) {
 	)
 
 	// Load all authors for the select dropdown
-	const authors = useEntityList('Author', {}, e => e.id().name().email())
+	const authors = useEntityList(schema.Author, {}, e => e.id().name().email())
 
 	if (article.isLoading) {
 		return <div>Loading article...</div>

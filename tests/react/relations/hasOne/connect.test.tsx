@@ -7,8 +7,10 @@ import {
 	MockAdapter,
 	isPlaceholderId,
 	isPersistedId,
+	useEntity,
+	useEntityList,
 } from '@contember/bindx-react'
-import { getByTestId, queryByTestId, createMockData, useEntity, useEntityList, schema } from './setup'
+import { getByTestId, queryByTestId, createMockData, entityDefs, schema } from './setup'
 
 afterEach(() => {
 	cleanup()
@@ -19,7 +21,7 @@ describe('HasOne Relations - Connect Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name().email()),
 			)
 
@@ -46,7 +48,7 @@ describe('HasOne Relations - Connect Operations', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -74,7 +76,7 @@ describe('HasOne Relations - Connect Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name()),
 			)
 
@@ -105,7 +107,7 @@ describe('HasOne Relations - Connect Operations', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -133,7 +135,7 @@ describe('HasOne Relations - Connect Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name()),
 			)
 
@@ -164,7 +166,7 @@ describe('HasOne Relations - Connect Operations', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -195,7 +197,7 @@ describe('HasOne Relations - Connect Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name()),
 			)
 
@@ -226,7 +228,7 @@ describe('HasOne Relations - Connect Operations', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -255,12 +257,12 @@ describe('HasOne Relations - Connect Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name().email()),
 			)
 
 			// Load all authors (like a real app would do for a select dropdown)
-			const allAuthors = useEntityList('Author', {}, a => a.id().name().email())
+			const allAuthors = useEntityList(entityDefs.Author, {}, a => a.id().name().email())
 
 			if (article.isLoading || allAuthors.isLoading) {
 				return <div data-testid="loading">Loading...</div>
@@ -293,7 +295,7 @@ describe('HasOne Relations - Connect Operations', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
@@ -323,11 +325,11 @@ describe('HasOne Relations - Connect Operations', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent(): React.ReactElement {
-			const article = useEntity('Article', { by: { id: 'article-1' } }, e =>
+			const article = useEntity(entityDefs.Article, { by: { id: 'article-1' } }, e =>
 				e.id().title().author(a => a.id().name().email()),
 			)
 
-			const allAuthors = useEntityList('Author', {}, a => a.id().name().email())
+			const allAuthors = useEntityList(entityDefs.Author, {}, a => a.id().name().email())
 
 			if (article.isLoading || allAuthors.isLoading) {
 				return <div data-testid="loading">Loading...</div>
@@ -370,7 +372,7 @@ describe('HasOne Relations - Connect Operations', () => {
 		}
 
 		const { container } = render(
-			<BindxProvider adapter={adapter}>
+			<BindxProvider adapter={adapter} schema={schema}>
 				<TestComponent />
 			</BindxProvider>,
 		)
