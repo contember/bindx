@@ -20,6 +20,12 @@ export {
 
 export {
 	useEntity,
+	type UseEntityOptions,
+	type LoadingEntityAccessor,
+	type ErrorEntityAccessor,
+	type NotFoundEntityAccessor,
+	type ReadyEntityAccessor,
+	type EntityAccessorResult,
 } from './useEntity.js'
 
 export {
@@ -30,15 +36,6 @@ export {
 	type ReadyEntityListAccessor,
 	type EntityListAccessorResult,
 } from './useEntityList.js'
-
-export {
-	type UseEntityOptions,
-	type LoadingEntityAccessor,
-	type ErrorEntityAccessor,
-	type NotFoundEntityAccessor,
-	type ReadyEntityAccessor,
-	type EntityAccessorResult,
-} from './useEntityImpl.js'
 
 export {
 	ContemberBindxProvider,

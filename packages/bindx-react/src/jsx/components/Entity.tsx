@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useSyncExternalStore, type ReactElement } from 'react'
 import { useBindxContext } from '../../hooks/BackendAdapterContext.js'
-import { useEntityCore } from '../../hooks/useEntityCore.js'
+import { useEntity } from '../../hooks/useEntity.js'
 import { useSelectionCollection } from '../../hooks/useSelectionCollection.js'
 import { createRuntimeAccessor } from '../proxy.js'
 import type { EntityAccessor } from '../types.js'
@@ -97,11 +97,10 @@ function EntityByMode({
 		children,
 	})
 
-	// Phase 2: Load data using core hook
-	const result = useEntityCore({
-		entityType,
+	// Phase 2: Load data using unified hook
+	const result = useEntity({ $name: entityType } as EntityDef, {
 		by,
-		selectionMeta: selection,
+		selection,
 		queryKey,
 	})
 
@@ -112,23 +111,23 @@ function EntityByMode({
 
 	if (result.status === 'error') {
 		if (errorFallback) {
-			return <>{errorFallback(result.error!)}</>
+			return <>{errorFallback(result.error)}</>
 		}
-		return <DefaultError error={result.error!} />
+		return <DefaultError error={result.error} />
 	}
 
 	if (result.status === 'not_found') {
 		return <>{notFound ?? <DefaultNotFound entityType={entityType} by={by} />}</>
 	}
 
-	// Phase 3: Runtime render with real data
-	// Get ID from loaded snapshot data
-	const entityId = (result.snapshot?.data as Record<string, unknown> | undefined)?.['id'] as string
+	// Phase 3: Runtime render with JSX proxy accessor
+	// createRuntimeAccessor is needed because JSX components (Field, HasMany, etc.)
+	// expect the selection-aware runtime proxy
 	const accessor = createRuntimeAccessor<unknown>(
 		entityType,
-		entityId,
+		result.id,
 		store,
-		() => {}, // Changes are automatically handled by useSyncExternalStore
+		() => {},
 		[],
 		selection,
 	)
