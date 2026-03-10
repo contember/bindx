@@ -17,7 +17,32 @@ function stripAnsi(str: string): string {
 }
 
 function evalJs(code: string): string {
-	return stripAnsi(exec(`agent-browser eval '${code.replace(/'/g, "'\\''")}'`))
+	const raw = stripAnsi(exec(`agent-browser eval '${code.replace(/'/g, "'\\''")}'`))
+	// agent-browser eval returns JSON-serialized values — strip surrounding quotes for strings
+	if (raw.startsWith('"') && raw.endsWith('"')) {
+		return raw.slice(1, -1)
+	}
+	return raw
+}
+
+/**
+ * Build a `[data-testid="..."]` selector.
+ * Use to compose selectors: `${tid('parent')} ${tid('child')}`
+ */
+export function tid(testId: string): string {
+	return `[data-testid="${testId}"]`
+}
+
+/**
+ * Resolve a selector string.
+ * Strings containing `[` are treated as raw CSS selectors (e.g. from `tid()`).
+ * Everything else is treated as a data-testid value.
+ */
+function resolveSelector(selectorOrTestId: string): string {
+	if (selectorOrTestId.includes('[')) {
+		return selectorOrTestId
+	}
+	return `[data-testid="${selectorOrTestId}"]`
 }
 
 /** Open a URL and wait for it to be ready */
@@ -41,53 +66,72 @@ export function wait(ms: number): void {
 	exec(`agent-browser wait ${ms}`)
 }
 
-/** Query helpers scoped to data-testid */
+/**
+ * Query helpers — accept a data-testid string or any CSS selector.
+ *
+ * Simple:   query.text('article-title')
+ * Nested:   query.attr(`${tid('parent')} ${tid('child')}`, 'data-direction')
+ * Raw CSS:  query.text('table tr:first-child td')
+ */
 export const query = {
-	/** Get text content of element by data-testid */
-	text(testId: string): string {
-		return evalJs(`document.querySelector('[data-testid="${testId}"]')?.textContent?.trim() ?? ''`)
+	/** Get text content */
+	text(selector: string): string {
+		const sel = resolveSelector(selector)
+		return evalJs(`document.querySelector('${sel}')?.textContent?.trim() ?? ''`)
 	},
 
 	/** Check if element exists */
-	exists(testId: string): boolean {
-		return evalJs(`document.querySelector('[data-testid="${testId}"]') !== null`) === 'true'
+	exists(selector: string): boolean {
+		const sel = resolveSelector(selector)
+		return evalJs(`document.querySelector('${sel}') !== null`) === 'true'
 	},
 
 	/** Check if element is disabled */
-	isDisabled(testId: string): boolean {
-		return evalJs(`document.querySelector('[data-testid="${testId}"]')?.disabled === true`) === 'true'
+	isDisabled(selector: string): boolean {
+		const sel = resolveSelector(selector)
+		return evalJs(`document.querySelector('${sel}')?.disabled === true`) === 'true'
 	},
 
 	/** Get input/select value */
-	value(testId: string): string {
-		return evalJs(`document.querySelector('[data-testid="${testId}"]')?.value ?? ''`)
+	value(selector: string): string {
+		const sel = resolveSelector(selector)
+		return evalJs(`document.querySelector('${sel}')?.value ?? ''`)
 	},
 
 	/** Get an attribute value */
-	attr(testId: string, attr: string): string {
-		return evalJs(`document.querySelector('[data-testid="${testId}"]')?.getAttribute('${attr}') ?? ''`)
+	attr(selector: string, attr: string): string {
+		const sel = resolveSelector(selector)
+		return evalJs(`document.querySelector('${sel}')?.getAttribute('${attr}') ?? ''`)
 	},
 
-	/** Count child elements matching optional selector */
-	count(testId: string, childSelector = '*'): number {
-		const result = evalJs(`document.querySelector('[data-testid="${testId}"]')?.querySelectorAll(':scope > ${childSelector}').length ?? 0`)
+	/** Count matching elements (or children if childSelector provided) */
+	count(selector: string, childSelector?: string): number {
+		const sel = resolveSelector(selector)
+		const query = childSelector
+			? `document.querySelector('${sel}')?.querySelectorAll(':scope > ${childSelector}').length ?? 0`
+			: `document.querySelectorAll('${sel}').length`
+		const result = evalJs(query)
 		return parseInt(result, 10) || 0
 	},
 }
 
-/** Interaction helpers scoped to data-testid */
+/**
+ * Interaction helpers — accept a data-testid string or any CSS selector.
+ */
 export const action = {
 	/** Click an element */
-	click(testId: string): void {
-		evalJs(`document.querySelector('[data-testid="${testId}"]')?.click()`)
+	click(selector: string): void {
+		const sel = resolveSelector(selector)
+		evalJs(`document.querySelector('${sel}')?.click()`)
 		exec('agent-browser wait 300')
 	},
 
 	/** Fill an input field (clears existing value) */
-	fill(testId: string, value: string): void {
+	fill(selector: string, value: string): void {
+		const sel = resolveSelector(selector)
 		const escaped = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
 		evalJs(`(() => {
-			const el = document.querySelector('[data-testid="${testId}"]');
+			const el = document.querySelector('${sel}');
 			if (!el) return;
 			const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
 				|| Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
@@ -99,10 +143,11 @@ export const action = {
 	},
 
 	/** Select an option in a dropdown by visible text (partial match) */
-	select(testId: string, optionText: string): void {
+	select(selector: string, optionText: string): void {
+		const sel = resolveSelector(selector)
 		const escaped = optionText.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
 		evalJs(`(() => {
-			const sel = document.querySelector('[data-testid="${testId}"]');
+			const sel = document.querySelector('${sel}');
 			if (!sel) return;
 			const opt = Array.from(sel.options).find(o => o.textContent.includes('${escaped}'));
 			if (!opt) return;

@@ -319,6 +319,44 @@ export {
 // Re-export Contember types for convenience
 export type { SchemaNames, SchemaEntityNames } from '@contember/client-content'
 
+// DataView / DataGrid
+export type {
+	TextFilterArtifact,
+	NumberFilterArtifact,
+	NumberRangeFilterArtifact,
+	DateFilterArtifact,
+	BooleanFilterArtifact,
+	EnumFilterArtifact,
+	EnumListFilterArtifact,
+	RelationFilterArtifact,
+	IsDefinedFilterArtifact,
+	FilterArtifact,
+	FilterHandler,
+	ColumnType,
+	ColumnDefinition,
+	SortingDirections,
+	SortingDirectionAction,
+	SortingState,
+	PagingState,
+	PagingInfo,
+	DataViewLayout,
+	SelectionValues,
+	SelectionState,
+} from './dataview/index.js'
+
+export {
+	createTextFilterHandler,
+	createFullTextFilterHandler,
+	createNumberFilterHandler,
+	createNumberRangeFilterHandler,
+	createDateFilterHandler,
+	createBooleanFilterHandler,
+	createEnumFilterHandler,
+	createEnumListFilterHandler,
+	createRelationFilterHandler,
+	createIsDefinedFilterHandler,
+} from './dataview/index.js'
+
 // ============================================================================
 // Internal API (for advanced use cases)
 // ============================================================================

@@ -8,6 +8,8 @@
 	"include": ["src/**/*"],
 	"references": [
 		{ "path": "../bindx" },
+		{ "path": "../bindx-react" },
+		{ "path": "../bindx-dataview" },
 		{ "path": "../bindx-form" }
 	]
 }

@@ -16,6 +16,7 @@ export {
 	RichTextEditorExample,
 	BlockEditorExample,
 	SimpleBlockEditorExample,
+	DataGridExample,
 } from './examples/index.js'
 
 // Undo/Redo demo

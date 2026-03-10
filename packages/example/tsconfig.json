@@ -8,6 +8,8 @@
 	"exclude": ["dist"],
 	"references": [
 		{"path": "../bindx-react"},
+		{"path": "../bindx-dataview"},
+		{"path": "../bindx-ui"},
 		{"path": "../bindx-editor"}
 	]
 }

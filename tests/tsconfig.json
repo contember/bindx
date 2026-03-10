@@ -7,7 +7,8 @@
 			"@contember/bindx": ["../packages/bindx/src/index.ts"],
 			"@contember/bindx-form": ["../packages/bindx-form/src/index.ts"],
 			"@contember/bindx-repeater": ["../packages/bindx-repeater/src/index.ts"],
-			"@contember/bindx-react": ["../packages/bindx-react/src/index.ts"]
+			"@contember/bindx-react": ["../packages/bindx-react/src/index.ts"],
+			"@contember/bindx-dataview": ["../packages/bindx-dataview/src/index.ts"]
 		}
 	},
 	"include": ["./**/*"],
@@ -15,6 +16,7 @@
 		{ "path": "../packages/bindx"},
 		{ "path": "../packages/bindx-form"},
 		{ "path": "../packages/bindx-repeater"},
-		{ "path": "../packages/bindx-react"}
+		{ "path": "../packages/bindx-react"},
+		{ "path": "../packages/bindx-dataview"}
 	]
 }

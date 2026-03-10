@@ -6,6 +6,7 @@
 		{ "path": "./packages/bindx-form" },
 		{ "path": "./packages/bindx-repeater" },
 		{ "path": "./packages/bindx-react" },
+		{ "path": "./packages/bindx-dataview" },
 		{ "path": "./packages/bindx-editor" },
 		{ "path": "./packages/bindx-uploader" },
 		{ "path": "./packages/bindx-generator" },

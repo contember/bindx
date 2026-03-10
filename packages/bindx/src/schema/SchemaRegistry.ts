@@ -19,7 +19,7 @@ export class SchemaRegistry<TModels extends Record<string, object> = Record<stri
 		this.entityDefs = new Map()
 
 		for (const [entityName, entityDef] of Object.entries(definition.entities)) {
-			this.entityDefs.set(entityName, entityDef as EntitySchemaDef)
+			this.entityDefs.set(entityName, normalizeEntityDef(entityDef as EntitySchemaDef))
 		}
 	}
 
@@ -216,4 +216,41 @@ export class SchemaRegistry<TModels extends Record<string, object> = Record<stri
 			}
 		}
 	}
+}
+
+/**
+ * Normalizes field definitions from Contember SchemaNames format
+ * (column/one/many with entity) to bindx FieldDef format (scalar/hasOne/hasMany with target).
+ */
+function normalizeEntityDef(entityDef: EntitySchemaDef): EntitySchemaDef {
+	const fields: Record<string, FieldDef> = {}
+	let needsNormalization = false
+
+	for (const [fieldName, fieldDef] of Object.entries(entityDef.fields)) {
+		const raw = fieldDef as unknown as Record<string, unknown>
+		const type = raw['type'] as string
+
+		if (type === 'column') {
+			fields[fieldName] = { type: 'scalar' }
+			needsNormalization = true
+		} else if (type === 'one') {
+			fields[fieldName] = {
+				type: 'hasOne',
+				target: (raw['entity'] as string) ?? (raw['target'] as string),
+				inverse: raw['inverse'] as string | undefined,
+			}
+			needsNormalization = true
+		} else if (type === 'many') {
+			fields[fieldName] = {
+				type: 'hasMany',
+				target: (raw['entity'] as string) ?? (raw['target'] as string),
+				inverse: raw['inverse'] as string | undefined,
+			}
+			needsNormalization = true
+		} else {
+			fields[fieldName] = fieldDef
+		}
+	}
+
+	return needsNormalization ? { fields } : entityDef
 }

@@ -24,6 +24,7 @@ export { Overlay, type OverlayProps } from './ui/overlay.js'
 export { Loader, LoaderIcon, type LoaderProps } from './ui/loader.js'
 export { Progress } from './ui/progress.js'
 export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor } from './ui/popover.js'
+export { Tooltip, type TooltipProps } from './ui/tooltip.js'
 
 // Form Components
 export {
@@ -63,6 +64,9 @@ export { useErrorFormatter } from './errors/index.js'
 
 // Upload
 export * from './upload/index.js'
+
+// DataGrid
+export * from './datagrid/index.js'
 
 // Dict
 export { dict, dictFormat } from './dict.js'

@@ -50,6 +50,8 @@ export {
 
 export { useEntityBeforePersist } from './useEntityBeforePersist.js'
 
+export { useEntityListCore, type EntityListCoreItem } from './useEntityListCore.js'
+
 export {
 	useEntityErrors,
 	type EntityErrorsState,
