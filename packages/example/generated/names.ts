@@ -90,13 +90,37 @@ export const schemaNames: BindxSchemaNames = {
 				},
 				"caption": {
 					"type": "column"
+				},
+				"quoteText": {
+					"type": "column"
+				},
+				"quoteAuthor": {
+					"type": "column"
+				},
+				"embedUrl": {
+					"type": "column"
+				},
+				"embedType": {
+					"type": "column"
+				},
+				"calloutText": {
+					"type": "column"
+				},
+				"calloutVariant": {
+					"type": "column"
 				}
 			},
 			"scalars": [
 				"id",
 				"type",
 				"imageUrl",
-				"caption"
+				"caption",
+				"quoteText",
+				"quoteAuthor",
+				"embedUrl",
+				"embedType",
+				"calloutText",
+				"calloutVariant"
 			]
 		},
 		"Location": {

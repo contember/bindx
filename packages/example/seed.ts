@@ -27,6 +27,9 @@ const ids = {
 	location3: '00000000-0000-0000-0000-000000000c03',
 	location4: '00000000-0000-0000-0000-000000000c04',
 	ref1: '00000000-0000-0000-0000-000000000d01',
+	ref2: '00000000-0000-0000-0000-000000000d02',
+	ref3: '00000000-0000-0000-0000-000000000d03',
+	ref4: '00000000-0000-0000-0000-000000000d04',
 	article1: '00000000-0000-0000-0000-000000000e01',
 	article2: '00000000-0000-0000-0000-000000000e02',
 }
@@ -90,11 +93,32 @@ async function seed(): Promise<void> {
 				caption: "A sample image"
 			}) { ok }
 
+			ref2: createContentReference(data: {
+				id: "${ids.ref2}"
+				type: "quote"
+				quoteText: "The only way to do great work is to love what you do."
+				quoteAuthor: "Steve Jobs"
+			}) { ok }
+
+			ref3: createContentReference(data: {
+				id: "${ids.ref3}"
+				type: "embed"
+				embedUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+				embedType: "youtube"
+			}) { ok }
+
+			ref4: createContentReference(data: {
+				id: "${ids.ref4}"
+				type: "callout"
+				calloutText: "This is an important note about React best practices."
+				calloutVariant: "info"
+			}) { ok }
+
 			article1: createArticle(data: {
 				id: "${ids.article1}"
 				title: "Introduction to React"
 				content: "React is a JavaScript library for building user interfaces..."
-				richContent: "{\\"formatVersion\\":2,\\"children\\":[{\\"type\\":\\"paragraph\\",\\"children\\":[{\\"text\\":\\"This is a block editor example with \\"},{\\"text\\":\\"bold text\\",\\"bold\\":true},{\\"text\\":\\" and \\"},{\\"text\\":\\"italic text\\",\\"italic\\":true},{\\"text\\":\\".\\"}]},{\\"type\\":\\"paragraph\\",\\"children\\":[{\\"text\\":\\"Try editing this content!\\"}]}]}"
+				richContent: "{\\"formatVersion\\":2,\\"children\\":[{\\"type\\":\\"paragraph\\",\\"children\\":[{\\"text\\":\\"This is a block editor example with \\"},{\\"text\\":\\"bold text\\",\\"bold\\":true},{\\"text\\":\\" and \\"},{\\"text\\":\\"italic text\\",\\"italic\\":true},{\\"text\\":\\".\\"}]},{\\"type\\":\\"image\\",\\"referenceId\\":\\"${ids.ref1}\\",\\"children\\":[{\\"text\\":\\"\\"}]},{\\"type\\":\\"paragraph\\",\\"children\\":[{\\"text\\":\\"Here is an inspiring quote:\\"}]},{\\"type\\":\\"quote\\",\\"referenceId\\":\\"${ids.ref2}\\",\\"children\\":[{\\"text\\":\\"\\"}]},{\\"type\\":\\"paragraph\\",\\"children\\":[{\\"text\\":\\"Check out this video:\\"}]},{\\"type\\":\\"embed\\",\\"referenceId\\":\\"${ids.ref3}\\",\\"children\\":[{\\"text\\":\\"\\"}]},{\\"type\\":\\"callout\\",\\"referenceId\\":\\"${ids.ref4}\\",\\"children\\":[{\\"text\\":\\"\\"}]},{\\"type\\":\\"paragraph\\",\\"children\\":[{\\"text\\":\\"Try editing this content!\\"}]}]}"
 				publishedAt: "2024-01-15T00:00:00.000Z"
 				author: { connect: { id: "${ids.author1}" } }
 				location: { connect: { id: "${ids.location1}" } }
@@ -104,6 +128,9 @@ async function seed(): Promise<void> {
 				]
 				contentReferences: [
 					{ connect: { id: "${ids.ref1}" } }
+					{ connect: { id: "${ids.ref2}" } }
+					{ connect: { id: "${ids.ref3}" } }
+					{ connect: { id: "${ids.ref4}" } }
 				]
 			}) { ok }
 

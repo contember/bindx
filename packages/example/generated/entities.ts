@@ -29,6 +29,12 @@ export interface ContentReference {
 		type: string
 		imageUrl: string | null
 		caption: string | null
+		quoteText: string | null
+		quoteAuthor: string | null
+		embedUrl: string | null
+		embedType: string | null
+		calloutText: string | null
+		calloutVariant: string | null
 		article: Article
 }
 

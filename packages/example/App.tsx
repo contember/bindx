@@ -66,7 +66,7 @@ export function App() {
 
 					<section data-testid="section-block-editor">
 						<h2>Block Editor (with references)</h2>
-						<p>Structured block editor with embedded image references. Click "Insert Image" to add a block.</p>
+						<p>Structured block editor with image, quote, embed, and callout blocks. Selection auto-collected from JSX via staticRender.</p>
 						<BlockEditorExample id="00000000-0000-0000-0000-000000000e01" />
 					</section>
 

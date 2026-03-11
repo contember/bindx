@@ -21,7 +21,8 @@ import { EditorErrorBoundary } from './EditorErrorBoundary.js'
 import { ReferenceElementWrapper } from '../plugins/references/ReferenceElementWrapper.js'
 import { EditorGetReferencedEntityProvider, useEditorGetReferencedEntity } from '../contexts/EditorReferencesContext.js'
 import { EditorBlockElementProvider } from '../contexts/EditorBlockElementContext.js'
-import { BINDX_COMPONENT, type SelectionFieldMeta, type SelectionProvider, type SelectionMeta } from '@contember/bindx-react'
+import { BINDX_COMPONENT, type SelectionFieldMeta, type SelectionProvider, type SelectionMeta, createCollectorProxy } from '@contember/bindx-react'
+import { SelectionScope } from '@contember/bindx'
 
 export type { BlockEditorBaseProps, BlockEditorWithReferencesProps, BlockEditorProps }
 
@@ -269,7 +270,7 @@ const blockEditorAny = BlockEditor as unknown as Record<string | symbol, unknown
 
 blockEditorAny.getSelection = (
 	props: unknown,
-	_collectNested: (children: ReactNode) => SelectionMeta,
+	collectNested: (children: ReactNode) => SelectionMeta,
 ): SelectionFieldMeta | SelectionFieldMeta[] | null => {
 	const editorProps = props as BlockEditorProps
 	if (editorProps.field === undefined || editorProps.field === null) {
@@ -293,23 +294,34 @@ blockEditorAny.getSelection = (
 		const refProps = editorProps as BlockEditorWithReferencesProps<object>
 		const refMeta = refProps.references[FIELD_REF_META]
 		if (refMeta) {
+			const refScope = new SelectionScope()
+			refScope.addScalar(refProps.discriminationField)
+
+			// Collect fields from each block's staticRender
+			for (const block of Object.values(refProps.blocks)) {
+				const blockDef = block as BlockDefinition<object>
+				const blockScope = new SelectionScope()
+				const collector = createCollectorProxy<object>(blockScope, null, null)
+
+				// Call staticRender with collector proxy — dual-track collection:
+				// 1. Proxy tracking captures ref.field access
+				// 2. JSX analysis discovers <Field>, <HasOne>, <HasMany> in returned JSX
+				const jsx = blockDef.staticRender(collector)
+				if (jsx) {
+					const jsxMeta = collectNested(jsx as ReactNode)
+					blockScope.mergeFromSelectionMeta(jsxMeta)
+				}
+
+				refScope.merge(blockScope)
+			}
+
 			const referencesSelection: SelectionFieldMeta = {
 				fieldName: refMeta.fieldName,
 				alias: refMeta.fieldName,
 				path: refMeta.path,
 				isArray: true,
 				isRelation: true,
-				nested: {
-					fields: new Map([
-						[refProps.discriminationField, {
-							fieldName: refProps.discriminationField,
-							alias: refProps.discriminationField,
-							path: [...refMeta.path, refMeta.fieldName],
-							isArray: false,
-							isRelation: false,
-						}],
-					]),
-				},
+				nested: refScope.toSelectionMeta(),
 			}
 			return [fieldSelection, referencesSelection]
 		}

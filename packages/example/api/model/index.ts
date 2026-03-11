@@ -35,4 +35,10 @@ export class ContentReference {
 	type = c.stringColumn().notNull()
 	imageUrl = c.stringColumn()
 	caption = c.stringColumn()
+	quoteText = c.stringColumn()
+	quoteAuthor = c.stringColumn()
+	embedUrl = c.stringColumn()
+	embedType = c.stringColumn()
+	calloutText = c.stringColumn()
+	calloutVariant = c.stringColumn()
 }
