@@ -16,7 +16,8 @@ import { Slot } from '@radix-ui/react-slot'
 import { composeEventHandlers } from '@radix-ui/primitive'
 import { useDataViewContext } from './DataViewContext.js'
 import { useBindxContext } from '@contember/bindx-react'
-import type { ListQuery, ListQueryResult, QueryFieldSpec } from '@contember/bindx'
+import { buildQueryFromSelection } from '@contember/bindx'
+import type { ListQuery, ListQueryResult } from '@contember/bindx'
 
 // ============================================================================
 // Export Factory Interface
@@ -116,7 +117,7 @@ export interface DataViewExportTriggerProps {
 
 export const DataViewExportTrigger = forwardRef<HTMLButtonElement, DataViewExportTriggerProps>(
 	({ baseName, exportFactory = defaultExportFactory, onlyVisible = false, ...props }, ref) => {
-		const { columns, entityType, filtering, selection } = useDataViewContext()
+		const { columns, entityType, filtering, selection, selectionMeta } = useDataViewContext()
 		const { adapter } = useBindxContext()
 		const [isExporting, setIsExporting] = useState(false)
 
@@ -129,11 +130,6 @@ export const DataViewExportTrigger = forwardRef<HTMLButtonElement, DataViewExpor
 					? columns.filter((c, i) => selection.isVisible(c.fieldName ?? `col-${i}`))
 					: columns
 
-				// Build query spec from column fields
-				const fields: QueryFieldSpec[] = visibleColumns
-					.filter(c => c.fieldName !== null)
-					.map(c => ({ name: c.fieldName!, sourcePath: [c.fieldName!] }))
-
 				const listQuery: ListQuery = {
 					type: 'list',
 					entityType,
@@ -141,7 +137,7 @@ export const DataViewExportTrigger = forwardRef<HTMLButtonElement, DataViewExpor
 					orderBy: undefined,
 					limit: undefined,
 					offset: undefined,
-					spec: { fields },
+					spec: buildQueryFromSelection(selectionMeta),
 				}
 
 				const results = await adapter.query([listQuery])
@@ -173,7 +169,7 @@ export const DataViewExportTrigger = forwardRef<HTMLButtonElement, DataViewExpor
 			} finally {
 				setIsExporting(false)
 			}
-		}, [adapter, columns, entityType, filtering.resolvedWhere, exportFactory, baseName, isExporting, onlyVisible, selection])
+		}, [adapter, columns, entityType, filtering.resolvedWhere, selectionMeta, exportFactory, baseName, isExporting, onlyVisible, selection])
 
 		const { onClick, ...otherProps } = props as React.ButtonHTMLAttributes<HTMLButtonElement>
 
@@ -199,15 +195,11 @@ export interface FetchAllDataResult {
 }
 
 export function useDataViewFetchAllData(): () => Promise<FetchAllDataResult | null> {
-	const { columns, entityType, filtering } = useDataViewContext()
+	const { entityType, filtering, selectionMeta } = useDataViewContext()
 	const { adapter } = useBindxContext()
 
 	return useCallback(async (): Promise<FetchAllDataResult | null> => {
 		if (!adapter) return null
-
-		const fields: QueryFieldSpec[] = columns
-			.filter(c => c.fieldName !== null)
-			.map(c => ({ name: c.fieldName!, sourcePath: [c.fieldName!] }))
 
 		const listQuery: ListQuery = {
 			type: 'list',
@@ -216,12 +208,12 @@ export function useDataViewFetchAllData(): () => Promise<FetchAllDataResult | nu
 			orderBy: undefined,
 			limit: undefined,
 			offset: undefined,
-			spec: { fields },
+			spec: buildQueryFromSelection(selectionMeta),
 		}
 
 		const results = await adapter.query([listQuery])
 		const result = results[0]
 		if (!result || result.type !== 'list') return null
 		return { data: (result as ListQueryResult).data }
-	}, [adapter, columns, entityType, filtering.resolvedWhere])
+	}, [adapter, entityType, filtering.resolvedWhere, selectionMeta])
 }
