@@ -45,9 +45,13 @@ export function useDataViewFilter<T extends FilterArtifact>(key: string): UseDat
 				const next = (filterOrUpdater as (prev: T | undefined) => T | undefined)(current)
 				if (next !== undefined) {
 					filtering.setArtifact(key, next)
+				} else {
+					filtering.resetFilter(key)
 				}
 			} else if (filterOrUpdater !== undefined) {
 				filtering.setArtifact(key, filterOrUpdater)
+			} else {
+				filtering.resetFilter(key)
 			}
 		},
 		[filtering, key],
