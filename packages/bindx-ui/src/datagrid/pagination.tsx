@@ -88,13 +88,13 @@ export function DataGridPaginationUI({ sticky, className }: DataGridPaginationUI
 export const DataGridPerPageSelector = (): ReactElement => {
 	return (
 		<div>
-			<p className="text-gray-400 text-xs font-semibold mb-1">{dict.datagrid.paginationRowsPerPage}</p>
-			<div className="flex gap-1">
+			<p className="text-xs font-medium text-gray-500 mb-1.5">{dict.datagrid.paginationRowsPerPage}</p>
+			<div className="inline-flex rounded-md border border-gray-200 overflow-hidden">
 				{[10, 20, 50, 100].map(pageSize => (
 					<DataViewSetItemsPerPageTrigger value={pageSize} key={pageSize}>
-						<Button variant="outline" size="xs" className="data-[active]:font-bold data-[active]:shadow-inner">
+						<button className="px-2.5 py-1 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors data-[active]:bg-gray-100 data-[active]:text-gray-900 data-[active]:font-medium">
 							{pageSize}
-						</Button>
+						</button>
 					</DataViewSetItemsPerPageTrigger>
 				))}
 			</div>

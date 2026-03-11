@@ -52,8 +52,8 @@ export function DataGridToolbarUI({ children, className, sticky }: DataGridToolb
 								<SettingsIcon className="w-4 h-4" />
 							</Button>
 						</PopoverTrigger>
-						<PopoverContent className="w-64">
-							<div className="flex flex-col gap-2">
+						<PopoverContent className="w-auto min-w-48">
+							<div className="flex flex-col gap-4">
 								<DataGridLayoutSwitcher />
 								<DataGridToolbarVisibleElements />
 								<DataGridPerPageSelector />
