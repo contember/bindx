@@ -2,6 +2,7 @@
  * Text filter UI components for DataGrid.
  */
 import type { ReactElement, ReactNode } from 'react'
+import type { TextFilterArtifact } from '@contember/bindx'
 import {
 	DataViewFilterScope,
 	DataViewHasFilterType,
@@ -19,6 +20,7 @@ import {
 import { useDefaultFieldLabel } from '../labels.js'
 import { XIcon, MoreHorizontalIcon } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover.js'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../ui/dropdown.js'
 import { Button } from '../../ui/button.js'
 import { InputBare, InputLike } from '../../ui/input.js'
 import { DataGridActiveFilterUI } from '../ui.js'
@@ -77,11 +79,22 @@ export const DataGridTextFilterInner = ({ label }: { label?: ReactNode }): React
 	return (
 		<InputLike className="p-1 relative basis-1/4 min-w-56">
 			<div className="flex items-center gap-1">
-				<DataViewTextFilterMatchModeTrigger mode="contains">
-					<Button size="sm" variant="secondary" className="px-3">
-						{label} <DataViewTextFilterMatchModeLabel />
-					</Button>
-				</DataViewTextFilterMatchModeTrigger>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button size="sm" variant="secondary" className="px-3">
+							{label} <DataViewTextFilterMatchModeLabel />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent>
+						{Object.entries(dict.datagrid.textMatchMode).map(([mode, modeLabel]) => (
+							<DataViewTextFilterMatchModeTrigger mode={mode as TextFilterArtifact['mode']} key={mode}>
+								<DropdownMenuItem className="data-[active]:font-bold">
+									{modeLabel}
+								</DropdownMenuItem>
+							</DataViewTextFilterMatchModeTrigger>
+						))}
+					</DropdownMenuContent>
+				</DropdownMenu>
 			</div>
 
 			<DataViewTextFilterInput>
