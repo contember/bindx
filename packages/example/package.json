@@ -11,18 +11,21 @@
 	},
 	"dependencies": {
 		"@contember/bindx": "workspace:*",
+		"@contember/bindx-dataview": "workspace:*",
+		"@contember/bindx-ui": "workspace:*",
 		"@contember/bindx-editor": "workspace:*",
+		"@contember/bindx-react": "workspace:*",
 		"@contember/client-content": "^2.1.0-alpha.30",
 		"@contember/graphql-client": "^2.1.0-alpha.30",
-		"@contember/bindx-react": "workspace:*",
-		"@contember/bindx-dataview": "workspace:*",
 		"@contember/schema": "^2.1.0-alpha.30",
 		"@contember/schema-definition": "^2.1.0-alpha.30",
+		"@tailwindcss/vite": "^4.2.1",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0",
 		"slate": "^0.103.0",
 		"slate-history": "^0.109.0",
-		"slate-react": "^0.110.1"
+		"slate-react": "^0.110.1",
+		"tailwindcss": "^4.2.1"
 	},
 	"devDependencies": {
 		"@types/react": "^19",
