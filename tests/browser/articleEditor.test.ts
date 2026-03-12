@@ -1,66 +1,54 @@
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
-import { open, close, wait, query, action } from './browser.js'
+import { test, expect } from 'bun:test'
+import { browserTest, el } from './browser.js'
 
-const URL = process.env['PLAYGROUND_URL'] ?? 'http://localhost:5180'
-
-describe('Article Editor', () => {
-	beforeAll(() => {
-		open(URL)
-	})
-
-	afterAll(() => {
-		close()
-	})
-
+browserTest('Article Editor', () => {
 	test('section renders with all sub-components', () => {
-		expect(query.exists('article-editor')).toBe(true)
-		expect(query.exists('article-title-input')).toBe(true)
-		expect(query.exists('article-content-input')).toBe(true)
-		expect(query.exists('article-author-select')).toBe(true)
-		expect(query.exists('author-editor')).toBe(true)
-		expect(query.exists('author-name-input')).toBe(true)
-		expect(query.exists('author-email-input')).toBe(true)
-		expect(query.exists('article-location')).toBe(true)
-		expect(query.exists('article-tags')).toBe(true)
-		expect(query.exists('article-add-tag-select')).toBe(true)
+		expect(el('article-editor').exists).toBe(true)
+		expect(el('article-title-input').exists).toBe(true)
+		expect(el('article-content-input').exists).toBe(true)
+		expect(el('article-author-select').exists).toBe(true)
+		expect(el('author-editor').exists).toBe(true)
+		expect(el('author-name-input').exists).toBe(true)
+		expect(el('author-email-input').exists).toBe(true)
+		expect(el('article-location').exists).toBe(true)
+		expect(el('article-tags').exists).toBe(true)
+		expect(el('article-add-tag-select').exists).toBe(true)
 	})
 
 	test('save and reset are initially disabled', () => {
-		expect(query.isDisabled('article-save-button')).toBe(true)
-		expect(query.isDisabled('article-reset-button')).toBe(true)
+		expect(el('article-save-button').isDisabled).toBe(true)
+		expect(el('article-reset-button').isDisabled).toBe(true)
 	})
 
 	test('changing author enables save/reset and shows dirty notice', () => {
-		action.select('article-author-select', 'Jane Smith')
-		wait(300)
+		el('article-author-select').select('Jane Smith')
 
-		expect(query.isDisabled('article-save-button')).toBe(false)
-		expect(query.isDisabled('article-reset-button')).toBe(false)
-		expect(query.exists('article-dirty-notice')).toBe(true)
+		expect(el('article-save-button').isDisabled).toBe(false)
+		expect(el('article-reset-button').isDisabled).toBe(false)
+		expect(el('article-dirty-notice').exists).toBe(true)
 	})
 
 	test('removing a tag updates the tag list', () => {
-		action.click('remove-tag-React')
+		el('remove-tag-React').click()
 
-		expect(query.exists('tag-badge-React')).toBe(false)
-		expect(query.exists('tag-badge-JavaScript')).toBe(true)
-		expect(query.exists('tags-dirty-notice')).toBe(true)
+		expect(el('tag-badge-React').exists).toBe(false)
+		expect(el('tag-badge-JavaScript').exists).toBe(true)
+		expect(el('tags-dirty-notice').exists).toBe(true)
 	})
 
 	test('adding a tag shows it in the list', () => {
-		action.select('article-add-tag-select', 'TypeScript')
+		el('article-add-tag-select').select('TypeScript')
 
-		expect(query.exists('tag-badge-TypeScript')).toBe(true)
+		expect(el('tag-badge-TypeScript').exists).toBe(true)
 	})
 
 	test('reset reverts all changes', () => {
-		action.click('article-reset-button')
-		wait(300)
+		el('article-reset-button').click()
 
-		expect(query.isDisabled('article-save-button')).toBe(true)
-		expect(query.isDisabled('article-reset-button')).toBe(true)
-		expect(query.exists('article-dirty-notice')).toBe(false)
-		expect(query.exists('tag-badge-React')).toBe(true)
-		expect(query.exists('tag-badge-TypeScript')).toBe(false)
+		expect(el('article-save-button').isDisabled).toBe(true)
+		expect(el('article-reset-button').isDisabled).toBe(true)
+		expect(el('article-dirty-notice').exists).toBe(false)
+		expect(el('tag-badge-React').exists).toBe(true)
+		expect(el('tag-badge-TypeScript').exists).toBe(false)
 	})
 })

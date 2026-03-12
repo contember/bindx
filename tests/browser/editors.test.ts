@@ -1,52 +1,24 @@
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
-import { open, close, query } from './browser.js'
+import { test, expect } from 'bun:test'
+import { browserTest, el } from './browser.js'
 
-const URL = process.env['PLAYGROUND_URL'] ?? 'http://localhost:5180'
-
-describe('Editors', () => {
-	beforeAll(() => {
-		open(URL)
+browserTest('Editors', () => {
+	test('Rich Text Editor renders with toolbar', () => {
+		expect(el('rich-text-editor').exists).toBe(true)
+		expect(el('rte-bold-button').exists).toBe(true)
+		expect(el('rte-italic-button').exists).toBe(true)
+		expect(el('rte-underline-button').exists).toBe(true)
+		expect(el('rte-content').exists).toBe(true)
 	})
 
-	afterAll(() => {
-		close()
+	test('Block Editor renders with toolbar', () => {
+		expect(el('block-editor').exists).toBe(true)
+		expect(el('block-bold-button').exists).toBe(true)
+		expect(el('block-italic-button').exists).toBe(true)
+		expect(el('insert-image-button').exists).toBe(true)
+		expect(el('block-editor-content').exists).toBe(true)
 	})
 
-	describe('Rich Text Editor', () => {
-		test('section renders', () => {
-			expect(query.exists('rich-text-editor')).toBe(true)
-		})
-
-		test('toolbar buttons exist', () => {
-			expect(query.exists('rte-bold-button')).toBe(true)
-			expect(query.exists('rte-italic-button')).toBe(true)
-			expect(query.exists('rte-underline-button')).toBe(true)
-		})
-
-		test('content area exists', () => {
-			expect(query.exists('rte-content')).toBe(true)
-		})
-	})
-
-	describe('Block Editor (with references)', () => {
-		test('section renders', () => {
-			expect(query.exists('block-editor')).toBe(true)
-		})
-
-		test('toolbar buttons exist', () => {
-			expect(query.exists('block-bold-button')).toBe(true)
-			expect(query.exists('block-italic-button')).toBe(true)
-			expect(query.exists('insert-image-button')).toBe(true)
-		})
-
-		test('content area exists', () => {
-			expect(query.exists('block-editor-content')).toBe(true)
-		})
-	})
-
-	describe('Block Editor (simple)', () => {
-		test('section renders', () => {
-			expect(query.exists('simple-block-editor')).toBe(true)
-		})
+	test('Simple Block Editor renders', () => {
+		expect(el('simple-block-editor').exists).toBe(true)
 	})
 })

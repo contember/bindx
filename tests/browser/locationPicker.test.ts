@@ -1,46 +1,36 @@
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
-import { open, close, query, action } from './browser.js'
+import { test, expect } from 'bun:test'
+import { browserTest, el } from './browser.js'
 
-const URL = process.env['PLAYGROUND_URL'] ?? 'http://localhost:5180'
-
-describe('Location Picker', () => {
-	beforeAll(() => {
-		open(URL)
-	})
-
-	afterAll(() => {
-		close()
-	})
-
+browserTest('Location Picker', () => {
 	test('section renders', () => {
-		expect(query.exists('location-picker')).toBe(true)
-		expect(query.exists('location-select')).toBe(true)
+		expect(el('location-picker').exists).toBe(true)
+		expect(el('location-select').exists).toBe(true)
 	})
 
 	test('no details shown initially', () => {
-		expect(query.exists('location-details')).toBe(false)
+		expect(el('location-details').exists).toBe(false)
 	})
 
 	test('selecting Tokyo shows location details', () => {
-		action.select('location-select', 'Tokyo')
+		el('location-select').select('Tokyo')
 
-		expect(query.exists('location-details')).toBe(true)
-		expect(query.text('location-selected-label')).toContain('Selected: Tokyo')
-		expect(query.text('location-coordinates')).toContain('35.6762')
-		expect(query.text('location-coordinates')).toContain('139.6503')
-		expect(query.exists('location-maps-link')).toBe(true)
+		expect(el('location-details').exists).toBe(true)
+		expect(el('location-selected-label').text).toContain('Selected: Tokyo')
+		expect(el('location-coordinates').text).toContain('35.6762')
+		expect(el('location-coordinates').text).toContain('139.6503')
+		expect(el('location-maps-link').exists).toBe(true)
 	})
 
 	test('changing to London updates details', () => {
-		action.select('location-select', 'London')
+		el('location-select').select('London')
 
-		expect(query.text('location-selected-label')).toContain('Selected: London')
-		expect(query.text('location-coordinates')).toContain('51.5074')
+		expect(el('location-selected-label').text).toContain('Selected: London')
+		expect(el('location-coordinates').text).toContain('51.5074')
 	})
 
 	test('selecting empty option hides details', () => {
-		action.select('location-select', 'Choose a location')
+		el('location-select').select('Choose a location')
 
-		expect(query.exists('location-details')).toBe(false)
+		expect(el('location-details').exists).toBe(false)
 	})
 })

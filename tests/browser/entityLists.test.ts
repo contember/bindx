@@ -1,29 +1,19 @@
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
-import { open, close, query } from './browser.js'
+import { test, expect, describe } from 'bun:test'
+import { browserTest, el } from './browser.js'
 
-const URL = process.env['PLAYGROUND_URL'] ?? 'http://localhost:5180'
-
-describe('Entity Lists', () => {
-	beforeAll(() => {
-		open(URL)
-	})
-
-	afterAll(() => {
-		close()
-	})
-
+browserTest('Entity Lists', () => {
 	describe('Article View (read-only)', () => {
 		test('renders article title and author', () => {
-			expect(query.exists('article-view')).toBe(true)
-			expect(query.exists('article-view-title')).toBe(true)
-			expect(query.text('article-view-author')).toContain('By:')
+			expect(el('article-view').exists).toBe(true)
+			expect(el('article-view-title').exists).toBe(true)
+			expect(el('article-view-author').text).toContain('By:')
 		})
 	})
 
 	describe('Author List', () => {
 		test('renders all 5 authors', () => {
-			expect(query.exists('author-list')).toBe(true)
-			expect(query.text('author-list-count')).toContain('All Authors (5)')
+			expect(el('author-list').exists).toBe(true)
+			expect(el('author-list-count').text).toContain('All Authors (5)')
 		})
 
 		test.each([
@@ -33,13 +23,13 @@ describe('Entity Lists', () => {
 			'Alice Brown',
 			'Charlie Davis',
 		])('shows author: %s', (name) => {
-			expect(query.exists(`author-item-${name}`)).toBe(true)
+			expect(el(`author-item-${name}`).exists).toBe(true)
 		})
 	})
 
 	describe('Tag List', () => {
 		test('renders tag list section', () => {
-			expect(query.exists('tag-list')).toBe(true)
+			expect(el('tag-list').exists).toBe(true)
 		})
 
 		test.each([
@@ -50,7 +40,7 @@ describe('Entity Lists', () => {
 			'Node.js',
 			'GraphQL',
 		])('shows tag badge: %s', (tag) => {
-			expect(query.exists(`tag-list-badge-${tag}`)).toBe(true)
+			expect(el(`tag-list-badge-${tag}`).exists).toBe(true)
 		})
 	})
 })
