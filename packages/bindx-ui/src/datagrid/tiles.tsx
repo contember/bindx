@@ -18,13 +18,6 @@ export interface DataGridTilesProps {
 }
 
 export const DataGridTiles = ({ children, className }: DataGridTilesProps): ReactElement => {
-	const { tileRender } = useDataViewContext()
-	const renderItem = children ?? tileRender
-
-	if (!renderItem) {
-		throw new Error('DataGridTiles requires either children or a `tile` prop on DataGrid')
-	}
-
 	return (
 		<DataViewLayout
 			name="grid"
@@ -35,7 +28,7 @@ export const DataGridTiles = ({ children, className }: DataGridTilesProps): Reac
 		>
 			<div className={cn('grid grid-cols-2 md:grid-cols-4 gap-4', className)}>
 				<DataViewEachRow>
-					{renderItem}
+					{children}
 				</DataViewEachRow>
 			</div>
 		</DataViewLayout>
