@@ -64,10 +64,10 @@ export function analyzeJsx(node: ReactNode, selection: SelectionMetaCollector): 
 		return
 	}
 
-	// Check if it's a component with getSelection (including memo() wrapped components)
+	// Check if it's a component with getSelection (memo() wrapped or plain function components)
 	if (
 		component !== null &&
-		typeof component === 'object' &&
+		(typeof component === 'object' || typeof component === 'function') &&
 		'getSelection' in component &&
 		typeof (component as SelectionProvider).getSelection === 'function'
 	) {

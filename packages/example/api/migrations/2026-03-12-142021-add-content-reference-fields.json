@@ -1,0 +1,166 @@
+{
+	"formatVersion": 6,
+	"modifications": [
+		{
+			"modification": "createColumn",
+			"entityName": "ContentReference",
+			"field": {
+				"name": "quoteText",
+				"columnName": "quote_text",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "ContentReference",
+			"field": {
+				"name": "quoteAuthor",
+				"columnName": "quote_author",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "ContentReference",
+			"field": {
+				"name": "embedUrl",
+				"columnName": "embed_url",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "ContentReference",
+			"field": {
+				"name": "embedType",
+				"columnName": "embed_type",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "ContentReference",
+			"field": {
+				"name": "calloutText",
+				"columnName": "callout_text",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "ContentReference",
+			"field": {
+				"name": "calloutVariant",
+				"columnName": "callout_variant",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "patchAclSchema",
+			"patch": [
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/read/quoteText",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/read/quoteAuthor",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/read/embedUrl",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/read/embedType",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/read/calloutText",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/read/calloutVariant",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/create/quoteText",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/create/quoteAuthor",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/create/embedUrl",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/create/embedType",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/create/calloutText",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/create/calloutVariant",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/update/quoteText",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/update/quoteAuthor",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/update/embedUrl",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/update/embedType",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/update/calloutText",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ContentReference/operations/update/calloutVariant",
+					"value": true
+				}
+			]
+		}
+	]
+}
