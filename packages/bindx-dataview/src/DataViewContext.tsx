@@ -12,6 +12,12 @@ export type DataViewLoaderState = 'initial' | 'loaded' | 'refreshing' | 'failed'
 
 export type DataViewItem = EntityAccessor<object>
 
+export interface DataViewElementData {
+	readonly name: string
+	readonly label?: React.ReactNode
+	readonly fallback?: boolean
+}
+
 export interface DataViewContextValue {
 	readonly filtering: FilteringState
 	readonly sorting: SortingStateResult
@@ -29,6 +35,8 @@ export interface DataViewContextValue {
 	readonly toolbarContent?: React.ReactNode
 	/** Named layout render callbacks — analyzed during collection, called per item at runtime */
 	readonly layoutRenders: ReadonlyMap<string, (item: DataViewItem) => React.ReactNode>
+	/** Elements per layout — extracted from layout render callbacks during collection */
+	readonly layoutElements: ReadonlyMap<string, readonly DataViewElementData[]>
 }
 
 const DataViewContext = createContext<DataViewContextValue | null>(null)

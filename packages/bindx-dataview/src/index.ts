@@ -102,6 +102,7 @@ export {
 	type DataViewContextValue,
 	type DataViewItem,
 	type DataViewLoaderState as DataViewLoaderStateType,
+	type DataViewElementData,
 } from './DataViewContext.js'
 
 // Low-level hook
@@ -316,7 +317,6 @@ export {
 	type DataViewSelectionState,
 	type DataViewSelectionMethods,
 	useDataViewElements,
-	type DataViewElementData,
 } from './contextHooks.js'
 
 // State storage

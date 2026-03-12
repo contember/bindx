@@ -80,7 +80,7 @@ export function DataGridAutoTable({ onSelectHighlighted }: DataGridAutoTableProp
 					<DataGridThead>
 						<DataGridHeaderRow data-testid="datagrid-header">
 							{columns.map(col => (
-								<DataViewElement key={col.name} name={col.name}>
+								<DataViewElement key={col.name} name={col.name} label={col.header}>
 									<DataGridHeaderCell data-testid={`datagrid-header-${col.name}`}>
 										<DataGridColumnHeaderUI
 											sortingField={col.sortingField && col.fieldRef ? col.fieldRef : undefined}

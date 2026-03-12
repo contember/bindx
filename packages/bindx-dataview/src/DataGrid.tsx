@@ -33,7 +33,8 @@ import { ColumnLeaf, type ColumnLeafProps, analyzeChildren } from './columnLeaf.
 import { DataGridToolbarContent, type DataGridToolbarContentProps } from './markers.js'
 import { DataGridLayout, type DataGridLayoutProps } from './markers.js'
 import { useFilteringState, useSortingState, usePagingState, useSelectionState } from './useDataViewState.js'
-import { DataViewProvider, type DataViewContextValue, type DataViewLoaderState } from './DataViewContext.js'
+import { DataViewProvider, type DataViewContextValue, type DataViewLoaderState, type DataViewElementData } from './DataViewContext.js'
+import { DataViewElement, type DataViewElementProps } from './selectionComponents.js'
 
 /** Well-known filter name for the universal query filter */
 export const QUERY_FILTER_NAME = '__query'
@@ -44,6 +45,12 @@ const MARKER_TYPES: ReadonlySet<React.ComponentType<any>> = new Set([
 	ColumnLeaf,
 	DataGridToolbarContent,
 	DataGridLayout,
+])
+
+/** Marker types for extracting DataViewElement from layout render callbacks */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ELEMENT_MARKER_TYPES: ReadonlySet<React.ComponentType<any>> = new Set([
+	DataViewElement,
 ])
 
 // ============================================================================
@@ -100,7 +107,7 @@ function DataGridImpl<TEntity extends object>({
 	const [loaderState, setLoaderState] = useState<DataViewLoaderState>('initial')
 
 	// ---- Phase 1: Collection ----
-	const { childrenJsx, columns, selection, queryKey, toolbarContent, layoutRenders, effectiveLayouts } = useMemo(() => {
+	const { childrenJsx, columns, selection, queryKey, toolbarContent, layoutRenders, layoutElements, effectiveLayouts } = useMemo(() => {
 		const scope = new SelectionScope()
 		const collector = createCollectorProxy<TEntity>(scope, entityType, schemaRegistry ?? undefined) as unknown as EntityAccessor<TEntity>
 
@@ -116,14 +123,22 @@ function DataGridImpl<TEntity extends object>({
 			col.collectSelection?.(collector)
 		}
 
-		// Analyze layout callbacks — call with collector proxy for selection discovery
+		// Analyze layout callbacks — call with collector proxy for selection discovery + element extraction
 		const renders = new Map<string, (item: DataViewContextValue['items'][number]) => ReactNode>()
+		const elements = new Map<string, readonly DataViewElementData[]>()
 		for (const marker of layoutMarkers) {
 			const layoutCallback = marker.children as (item: EntityAccessor<object>) => ReactNode
 			const layoutJsx = layoutCallback(collector as unknown as EntityAccessor<object>)
 			const layoutSel = collectSelection(layoutJsx)
 			mergeSelections(scope.toSelectionMeta(), layoutSel)
 			renders.set(marker.name, layoutCallback)
+
+			// Extract DataViewElement markers from the layout JSX
+			const elementAnalysis = analyzeChildren(layoutJsx, ELEMENT_MARKER_TYPES)
+			const elementProps = elementAnalysis.getAll(DataViewElement) as unknown as DataViewElementProps[]
+			if (elementProps.length > 0) {
+				elements.set(marker.name, elementProps.map(it => ({ name: it.name, label: it.label, fallback: it.fallback })))
+			}
 		}
 
 		const jsxSel = collectSelection(jsx)
@@ -146,6 +161,7 @@ function DataGridImpl<TEntity extends object>({
 			queryKey: key,
 			toolbarContent: toolbarMarker?.children,
 			layoutRenders: renders,
+			layoutElements: elements,
 			effectiveLayouts: autoLayouts,
 		}
 	}, [entityType, schemaRegistry, children, layouts])
@@ -270,7 +286,8 @@ function DataGridImpl<TEntity extends object>({
 		selectionMeta: selection,
 		toolbarContent,
 		layoutRenders,
-	}), [filtering, sorting, paging, selectionState, columns, entityType, items, itemCount, loaderState, reload, highlightIndex, selection, toolbarContent, layoutRenders])
+		layoutElements,
+	}), [filtering, sorting, paging, selectionState, columns, entityType, items, itemCount, loaderState, reload, highlightIndex, selection, toolbarContent, layoutRenders, layoutElements])
 
 	return (
 		<DataViewProvider value={contextValue}>

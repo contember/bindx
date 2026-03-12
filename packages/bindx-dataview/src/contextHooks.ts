@@ -7,6 +7,7 @@
 
 import { useMemo } from 'react'
 import { useDataViewContext } from './DataViewContext.js'
+import type { DataViewElementData } from './DataViewContext.js'
 import type { FilteringState, SortingStateResult, PagingStateResult, SelectionStateResult } from './useDataViewState.js'
 import type {
 	SortingState,
@@ -131,22 +132,26 @@ export function useDataViewSelectionMethods(): DataViewSelectionMethods {
 // Elements (visibility-togglable items)
 // ============================================================================
 
-export interface DataViewElementData {
-	readonly name: string
-	readonly label?: React.ReactNode
-	readonly fallback?: boolean
-}
+export type { DataViewElementData } from './DataViewContext.js'
 
 export function useDataViewElements(): readonly DataViewElementData[] {
-	const { columns } = useDataViewContext()
-	return useMemo(
-		() => columns
+	const { columns, selection, layoutElements } = useDataViewContext()
+	const currentLayout = selection.currentLayout
+
+	return useMemo((): readonly DataViewElementData[] => {
+		// If the active layout has explicitly declared elements, use those
+		if (currentLayout) {
+			const elements = layoutElements.get(currentLayout)
+			if (elements) return elements
+		}
+
+		// Fallback: derive elements from columns (table layout or no layout markers)
+		return columns
 			.filter(c => c.fieldName !== null)
 			.map(c => ({
 				name: c.name,
 				label: c.header,
 				fallback: true,
-			})),
-		[columns],
-	)
+			}))
+	}, [columns, currentLayout, layoutElements])
 }
