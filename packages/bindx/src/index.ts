@@ -294,6 +294,9 @@ export type {
 	ContemberValidationError,
 	MappedError,
 	ContemberMutationResult,
+	ResolvedErrorTarget,
+	ResolvedError,
+	ErrorPathContext,
 } from './errors/index.js'
 
 export {
@@ -315,6 +318,8 @@ export {
 	isNestedError,
 	getErrorPathString,
 	UnfetchedFieldError,
+	resolveErrorPath,
+	resolveAllErrors,
 } from './errors/index.js'
 
 

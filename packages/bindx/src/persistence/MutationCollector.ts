@@ -30,10 +30,21 @@ export interface EntityMutationResult {
  * implementing MutationSchemaProvider interface (SchemaRegistry, Contember SchemaNames via adapter).
  */
 export class MutationCollector implements MutationDataCollector {
+	private excludedEntityIds: ReadonlySet<string> = new Set()
+
 	constructor(
 		private readonly store: SnapshotStore,
 		private readonly schemaProvider: MutationSchemaProvider,
 	) {}
+
+	/**
+	 * Sets entity IDs that should be excluded from nested mutation generation.
+	 * These entities get their own top-level mutations, so nested updates are skipped
+	 * to avoid duplicate changes.
+	 */
+	setExcludedEntities(ids: ReadonlySet<string>): void {
+		this.excludedEntityIds = ids
+	}
 
 	// ==================== Main Collection Methods ====================
 
@@ -307,6 +318,10 @@ export class MutationCollector implements MutationDataCollector {
 						return { connect: { id: currentId } }
 					}
 				} else if (currentId && serverId && currentId === serverId) {
+					// Skip if entity has its own top-level mutation
+					if (this.excludedEntityIds.has(currentId)) {
+						return null
+					}
 					// Same entity - check if we need to update it
 					const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
 					if (targetType) {
@@ -394,9 +409,9 @@ export class MutationCollector implements MutationDataCollector {
 		// Planned removals -> disconnect/delete
 		for (const [removedId, removalType] of hasManyState.plannedRemovals) {
 			if (removalType === 'delete') {
-				operations.push({ delete: { id: removedId } })
+				operations.push({ delete: { id: removedId }, alias: removedId })
 			} else {
-				operations.push({ disconnect: { id: removedId } })
+				operations.push({ disconnect: { id: removedId }, alias: removedId })
 			}
 		}
 
@@ -408,9 +423,9 @@ export class MutationCollector implements MutationDataCollector {
 					const createData = { ...itemSnapshot.data as Record<string, unknown> }
 					delete createData['id']
 					if (Object.keys(createData).length > 0) {
-						operations.push({ create: this.processNestedData(createData) })
+						operations.push({ create: this.processNestedData(createData), alias: tempId })
 					} else {
-						operations.push({ create: {} })
+						operations.push({ create: {}, alias: tempId })
 					}
 				}
 			}
@@ -419,13 +434,14 @@ export class MutationCollector implements MutationDataCollector {
 		// Planned connections (minus created entities) -> connect
 		for (const connectedId of hasManyState.plannedConnections) {
 			if (hasManyState.createdEntities.has(connectedId)) continue
-			operations.push({ connect: { id: connectedId } })
+			operations.push({ connect: { id: connectedId }, alias: connectedId })
 		}
 
 		// Server items that aren't removed -> check for updates via entity snapshots
 		if (targetType) {
 			for (const itemId of hasManyState.serverIds) {
 				if (hasManyState.plannedRemovals.has(itemId)) continue
+				if (this.excludedEntityIds.has(itemId)) continue
 
 				const itemSnapshot = this.store.getEntitySnapshot(targetType, itemId)
 				if (!itemSnapshot) continue
@@ -447,6 +463,7 @@ export class MutationCollector implements MutationDataCollector {
 							by: { id: itemId },
 							data: changes,
 						},
+						alias: itemId,
 					})
 				}
 			}
@@ -473,13 +490,13 @@ export class MutationCollector implements MutationDataCollector {
 
 			if (id && !isTempId(id) && this.isExistingEntity(id)) {
 				// Connect to existing entity
-				operations.push({ connect: { id } })
+				operations.push({ connect: { id }, alias: id })
 			} else {
 				// Create new entity
 				const createData = { ...obj }
 				delete createData['id']
 				if (Object.keys(createData).length > 0) {
-					operations.push({ create: this.processNestedData(createData) })
+					operations.push({ create: this.processNestedData(createData), alias: id })
 				}
 			}
 		}

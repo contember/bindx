@@ -16,8 +16,10 @@ import type {
 	UpdateMode,
 } from './types.js'
 import { setPersisting, commitEntity, resetEntity, addFieldError, addEntityError, addRelationError, clearAllServerErrors } from '../core/actions.js'
-import { extractMappedErrors, type ContemberMutationResult } from '../errors/pathMapper.js'
+import { type ContemberMutationResult } from '../errors/pathMapper.js'
+import { resolveAllErrors } from '../errors/errorPathResolver.js'
 import { createServerError } from '../errors/types.js'
+import { MutationCollector } from './MutationCollector.js'
 import type { EntitySnapshot } from '../store/snapshots.js'
 import type { StoredHasManyState, StoredRelationState } from '../store/SnapshotStore.js'
 import { deepEqual } from '../utils/deepEqual.js'
@@ -379,6 +381,13 @@ export class BatchPersister {
 		entities: DirtyEntity[],
 		scope: PersistScope,
 	): TransactionMutation[] {
+		// Tell MutationCollector which entities have their own top-level mutations
+		// so it skips generating nested updates for them
+		if (this.mutationCollector instanceof MutationCollector) {
+			const excludedIds = new Set(entities.map(e => e.entityId))
+			this.mutationCollector.setExcludedEntities(excludedIds)
+		}
+
 		const mutations: TransactionMutation[] = []
 
 		for (const entity of entities) {
@@ -849,20 +858,33 @@ export class BatchPersister {
 		}
 
 		if (this.schema) {
-			const mappedErrors = extractMappedErrors(mutationResult, entityType, this.schema)
+			const resolved = resolveAllErrors(mutationResult, entityType, entityId, {
+				schema: this.schema,
+				store: this.store,
+			})
 
-			for (const mapped of mappedErrors) {
-				if (mapped.type === 'field' && mapped.name) {
+			// Clear server errors for all resolved target entities
+			const clearedEntities = new Set<string>()
+			for (const { target } of resolved) {
+				const key = `${target.entityType}:${target.entityId}`
+				if (!clearedEntities.has(key)) {
+					clearedEntities.add(key)
+					this.dispatcher.dispatch(clearAllServerErrors(target.entityType, target.entityId))
+				}
+			}
+
+			for (const { target, error } of resolved) {
+				if (target.type === 'field' && target.fieldName) {
 					this.dispatcher.dispatch(
-						addFieldError(entityType, entityId, mapped.name, mapped.error),
+						addFieldError(target.entityType, target.entityId, target.fieldName, error),
 					)
-				} else if (mapped.type === 'relation' && mapped.name) {
+				} else if (target.type === 'relation' && target.fieldName) {
 					this.dispatcher.dispatch(
-						addRelationError(entityType, entityId, mapped.name, mapped.error),
+						addRelationError(target.entityType, target.entityId, target.fieldName, error),
 					)
 				} else {
 					this.dispatcher.dispatch(
-						addEntityError(entityType, entityId, mapped.error),
+						addEntityError(target.entityType, target.entityId, error),
 					)
 				}
 			}

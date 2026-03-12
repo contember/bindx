@@ -38,3 +38,11 @@ export {
 	isNestedError,
 	getErrorPathString,
 } from './pathMapper.js'
+
+export {
+	type ResolvedErrorTarget,
+	type ResolvedError,
+	type ErrorPathContext,
+	resolveErrorPath,
+	resolveAllErrors,
+} from './errorPathResolver.js'

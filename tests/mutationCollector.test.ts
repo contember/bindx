@@ -246,7 +246,7 @@ describe('MutationCollector', () => {
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
 			expect(mutation).toEqual({
-				tags: [{ connect: { id: 'tag-2' } }],
+				tags: [{ connect: { id: 'tag-2' }, alias: 'tag-2' }],
 			})
 		})
 
@@ -267,7 +267,7 @@ describe('MutationCollector', () => {
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
 			expect(mutation).toEqual({
-				tags: [{ disconnect: { id: 'tag-2' } }],
+				tags: [{ disconnect: { id: 'tag-2' }, alias: 'tag-2' }],
 			})
 		})
 
@@ -285,9 +285,10 @@ describe('MutationCollector', () => {
 
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
-			expect(mutation).toEqual({
-				tags: [{ create: { name: 'NewTag' } }],
-			})
+			const tagOps = mutation!['tags'] as any[]
+			expect(tagOps).toHaveLength(1)
+			expect(tagOps[0]).toMatchObject({ create: { name: 'NewTag' } })
+			expect(tagOps[0].alias).toEqual(expect.stringContaining('__temp_'))
 		})
 
 		test('should generate update operation for changed items', () => {
@@ -315,6 +316,7 @@ describe('MutationCollector', () => {
 						by: { id: 'tag-1' },
 						data: { name: 'UpdatedName' },
 					},
+					alias: 'tag-1',
 				}],
 			})
 		})
@@ -350,12 +352,12 @@ describe('MutationCollector', () => {
 			const tagOps = mutation!['tags'] as any[]
 
 			// Should have disconnect for tag-2, create for new, connect for tag-3, update for tag-1
-			expect(tagOps).toContainEqual({ connect: { id: 'tag-3' } })
-			expect(tagOps).toContainEqual({ disconnect: { id: 'tag-2' } })
-			expect(tagOps).toContainEqual({ create: { name: 'BrandNew' } })
-			expect(tagOps).toContainEqual({
-				update: { by: { id: 'tag-1' }, data: { name: 'UpdatedTag1' } },
-			})
+			expect(tagOps).toContainEqual(expect.objectContaining({ connect: { id: 'tag-3' }, alias: 'tag-3' }))
+			expect(tagOps).toContainEqual(expect.objectContaining({ disconnect: { id: 'tag-2' }, alias: 'tag-2' }))
+			expect(tagOps).toContainEqual(expect.objectContaining({ create: { name: 'BrandNew' } }))
+			expect(tagOps).toContainEqual(expect.objectContaining({
+				update: { by: { id: 'tag-1' }, data: { name: 'UpdatedTag1' } }, alias: 'tag-1',
+			}))
 		})
 	})
 
@@ -395,7 +397,7 @@ describe('MutationCollector', () => {
 			expect(mutation).toEqual({
 				title: 'New Title',
 				author: { connect: { id: 'auth-2' } },
-				tags: [{ connect: { id: 'tag-2' } }],
+				tags: [{ connect: { id: 'tag-2' }, alias: 'tag-2' }],
 			})
 		})
 	})
@@ -602,8 +604,8 @@ describe('MutationCollector', () => {
 			expect(createData).toEqual({
 				title: 'New Article',
 				tags: [
-					{ connect: { id: 'tag-1' } },
-					{ connect: { id: 'tag-2' } },
+					{ connect: { id: 'tag-1' }, alias: 'tag-1' },
+					{ connect: { id: 'tag-2' }, alias: 'tag-2' },
 				],
 			})
 		})
@@ -623,8 +625,8 @@ describe('MutationCollector', () => {
 			expect(createData).toEqual({
 				title: 'New Article',
 				tags: [
-					{ create: { name: 'NewTag1' } },
-					{ create: { name: 'NewTag2' } },
+					{ create: { name: 'NewTag1' }, alias: undefined },
+					{ create: { name: 'NewTag2' }, alias: '__temp_tag' },
 				],
 			})
 		})
@@ -758,7 +760,7 @@ describe('MutationCollector', () => {
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
 			expect(mutation).toEqual({
-				tags: [{ disconnect: { id: 'tag-2' } }],
+				tags: [{ disconnect: { id: 'tag-2' }, alias: 'tag-2' }],
 			})
 		})
 
@@ -779,7 +781,7 @@ describe('MutationCollector', () => {
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
 			expect(mutation).toEqual({
-				tags: [{ delete: { id: 'tag-2' } }],
+				tags: [{ delete: { id: 'tag-2' }, alias: 'tag-2' }],
 			})
 		})
 
@@ -803,8 +805,8 @@ describe('MutationCollector', () => {
 
 			expect(mutation).not.toBeNull()
 			const tagOps = mutation!['tags'] as any[]
-			expect(tagOps).toContainEqual({ disconnect: { id: 'tag-2' } })
-			expect(tagOps).toContainEqual({ delete: { id: 'tag-3' } })
+			expect(tagOps).toContainEqual(expect.objectContaining({ disconnect: { id: 'tag-2' }, alias: 'tag-2' }))
+			expect(tagOps).toContainEqual(expect.objectContaining({ delete: { id: 'tag-3' }, alias: 'tag-3' }))
 		})
 
 		test('should not duplicate disconnect for planned removal', () => {
@@ -821,12 +823,100 @@ describe('MutationCollector', () => {
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
 			expect(mutation).toEqual({
-				tags: [{ disconnect: { id: 'tag-1' } }],
+				tags: [{ disconnect: { id: 'tag-1' }, alias: 'tag-1' }],
 			})
 
 			// Should only have one disconnect operation
 			const tagOps = mutation!['tags'] as any[]
 			expect(tagOps.filter((op: any) => op.disconnect)).toHaveLength(1)
+		})
+	})
+
+	describe('excluded entities', () => {
+		test('should skip nested has-one update for excluded entity', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Article',
+				author: { id: 'auth-1', name: 'John' },
+			}, true)
+
+			store.setEntityData('Author', 'auth-1', {
+				id: 'auth-1',
+				name: 'John',
+				email: 'john@example.com',
+			}, true)
+			store.setExistsOnServer('Author', 'auth-1', true)
+			store.setFieldValue('Author', 'auth-1', ['name'], 'John Updated')
+
+			store.getOrCreateRelation('Article', 'a-1', 'author', {
+				currentId: 'auth-1',
+				serverId: 'auth-1',
+				state: 'connected',
+				serverState: 'connected',
+				placeholderData: {},
+			})
+
+			// Without exclusion, should generate nested update
+			const mutationBefore = collector.collectUpdateData('Article', 'a-1')
+			expect(mutationBefore).toEqual({
+				author: { update: { name: 'John Updated' } },
+			})
+
+			// With exclusion, should skip nested update
+			collector.setExcludedEntities(new Set(['auth-1']))
+			const mutationAfter = collector.collectUpdateData('Article', 'a-1')
+			expect(mutationAfter).toBeNull()
+		})
+
+		test('should skip has-many update for excluded entity', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Article',
+				tags: [{ id: 'tag-1', name: 'OriginalName' }],
+			}, true)
+
+			store.setEntityData('Tag', 'tag-1', {
+				id: 'tag-1',
+				name: 'OriginalName',
+			}, true)
+			store.setFieldValue('Tag', 'tag-1', ['name'], 'UpdatedName')
+
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['tag-1'])
+
+			// Without exclusion, generates update
+			const mutationBefore = collector.collectUpdateData('Article', 'a-1')
+			expect(mutationBefore).not.toBeNull()
+
+			// With exclusion, skips the update
+			collector.setExcludedEntities(new Set(['tag-1']))
+			const mutationAfter = collector.collectUpdateData('Article', 'a-1')
+			expect(mutationAfter).toBeNull()
+		})
+	})
+
+	describe('aliases on has-many operations', () => {
+		test('should include alias on all has-many operation types', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Article',
+				tags: [{ id: 'tag-1', name: 'Tag1' }],
+			}, true)
+
+			store.setEntityData('Tag', 'tag-1', { id: 'tag-1', name: 'Tag1' }, true)
+			store.setFieldValue('Tag', 'tag-1', ['name'], 'Updated')
+
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['tag-1'])
+			store.planHasManyConnection('Article', 'a-1', 'tags', 'tag-2')
+			store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-1', 'disconnect')
+
+			// Reset exclusions
+			collector.setExcludedEntities(new Set())
+			const mutation = collector.collectUpdateData('Article', 'a-1')
+
+			const tagOps = mutation!['tags'] as any[]
+			for (const op of tagOps) {
+				expect(op).toHaveProperty('alias')
+			}
 		})
 	})
 })
