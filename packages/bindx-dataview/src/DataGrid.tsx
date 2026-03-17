@@ -33,6 +33,7 @@ import { ColumnLeaf, type ColumnLeafProps, analyzeChildren } from './columnLeaf.
 import { DataGridToolbarContent, type DataGridToolbarContentProps } from './markers.js'
 import { DataGridLayout, type DataGridLayoutProps } from './markers.js'
 import { useFilteringState, useSortingState, usePagingState, useSelectionState } from './useDataViewState.js'
+import { useDataViewKey } from './DataViewKeyProvider.js'
 import { DataViewProvider, type DataViewContextValue, type DataViewLoaderState, type DataViewElementData } from './DataViewContext.js'
 import { DataViewElement, type DataViewElementProps } from './selectionComponents.js'
 
@@ -101,6 +102,8 @@ function DataGridImpl<TEntity extends object>({
 }: DataGridProps<TEntity>): ReactElement | null {
 	const { schema: schemaRegistry } = useBindxContext()
 	const entityType = entity.$name
+	const contextKey = useDataViewKey()
+	const effectiveStorageKey = storageKey ?? contextKey
 
 	// ---- Loader state tracking ----
 	const hasLoadedOnce = useRef(false)
@@ -204,15 +207,15 @@ function DataGridImpl<TEntity extends object>({
 		return Object.keys(dirs).length > 0 ? dirs : undefined
 	}, [initialSorting])
 
-	const filtering = useFilteringState({ filters: filterDefs, stateStorage, storageKey })
-	const sorting = useSortingState({ sortableFields, initialSorting: initialSortingDirs, stateStorage, storageKey })
+	const filtering = useFilteringState({ filters: filterDefs, stateStorage, storageKey: effectiveStorageKey })
+	const sorting = useSortingState({ sortableFields, initialSorting: initialSortingDirs, stateStorage, storageKey: effectiveStorageKey })
 	const paging = usePagingState({
 		initialItemsPerPage: itemsPerPage,
 		currentPageStateStorage: currentPageStateStorage ?? stateStorage,
 		pagingSettingsStorage,
-		storageKey,
+		storageKey: effectiveStorageKey,
 	})
-	const selectionState = useSelectionState({ layouts: effectiveLayouts, initialSelection, stateStorage, storageKey })
+	const selectionState = useSelectionState({ layouts: effectiveLayouts, initialSelection, stateStorage, storageKey: effectiveStorageKey })
 
 	// ---- Phase 3: Build combined filter ----
 	const combinedFilter = useMemo((): Record<string, unknown> | undefined => {

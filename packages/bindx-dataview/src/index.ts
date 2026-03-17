@@ -339,9 +339,17 @@ export {
 export {
 	type StateStorage,
 	type StateStorageOrName,
+	type SetStoredState,
 	useStoredState,
 	buildDataViewKey,
 } from './stateStorage.js'
+
+// DataView key context
+export {
+	DataViewKeyProvider,
+	type DataViewKeyProviderProps,
+	useDataViewKey,
+} from './DataViewKeyProvider.js'
 
 // Select
 export * from './select/index.js'
