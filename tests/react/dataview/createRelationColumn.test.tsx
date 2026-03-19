@@ -104,7 +104,7 @@ describe('createRelationColumn — hasOne', () => {
 		)
 		const leaves = extractColumnLeaves(jsx)
 		expect(leaves).toHaveLength(1)
-		const leaf = leaves[0]
+		const leaf = leaves[0]!
 
 		expect(leaf.fieldName).toBe('organization')
 		expect(leaf.columnType).toBe('hasOne')
@@ -124,7 +124,7 @@ describe('createRelationColumn — hasOne', () => {
 				{(org: any) => org.name.value}
 			</HeadlessHasOneColumn>
 		)
-		const [leaf] = extractColumnLeaves(jsx)
+		const leaf = extractColumnLeaves(jsx)[0]!
 		expect(leaf.filterName).toBe('organization')
 		expect(leaf.filterHandler).toBeDefined()
 	})
@@ -136,7 +136,7 @@ describe('createRelationColumn — hasOne', () => {
 				{(org: any) => org.name.value}
 			</HeadlessHasOneColumn>
 		)
-		const [leaf] = extractColumnLeaves(jsx)
+		const leaf = extractColumnLeaves(jsx)[0]!
 		expect(leaf.filterName).toBeNull()
 		expect(leaf.filterHandler).toBeUndefined()
 	})
@@ -148,7 +148,7 @@ describe('createRelationColumn — hasOne', () => {
 				{(org: any) => org.name.value}
 			</HeadlessHasOneColumn>
 		)
-		const [leaf] = extractColumnLeaves(jsx)
+		const leaf = extractColumnLeaves(jsx)[0]!
 		expect(leaf.renderFilter).toBeUndefined()
 	})
 
@@ -163,7 +163,7 @@ describe('createRelationColumn — hasOne', () => {
 				{(org: any) => org.name.value}
 			</StyledHasOneColumn>
 		)
-		const [leaf] = extractColumnLeaves(jsx)
+		const leaf = extractColumnLeaves(jsx)[0]!
 		expect(leaf.renderFilter).toBeTypeOf('function')
 	})
 
@@ -178,7 +178,7 @@ describe('createRelationColumn — hasOne', () => {
 				{(org: any) => org.name.value}
 			</StyledHasOneColumn>
 		)
-		const [leaf] = extractColumnLeaves(jsx)
+		const leaf = extractColumnLeaves(jsx)[0]!
 		expect(leaf.renderCellWrapper).toBeTypeOf('function')
 	})
 
@@ -194,7 +194,7 @@ describe('createRelationColumn — hasOne', () => {
 				{(org: any) => org.name.value}
 			</StyledHasOneColumn>
 		)
-		const [leaf] = extractColumnLeaves(jsx)
+		const leaf = extractColumnLeaves(jsx)[0]!
 		expect(leaf.renderCellWrapper).toBe(userWrapper)
 	})
 
@@ -205,7 +205,7 @@ describe('createRelationColumn — hasOne', () => {
 				{(org: any) => org.name.value}
 			</HeadlessHasOneColumn>
 		)
-		const [leaf] = extractColumnLeaves(jsx)
+		const leaf = extractColumnLeaves(jsx)[0]!
 		expect(leaf.relatedSelection).toBeDefined()
 		expect(leaf.relatedSelection?.fields.has('name')).toBe(true)
 	})
@@ -227,7 +227,7 @@ describe('createRelationColumn — hasMany', () => {
 		)
 		const leaves = extractColumnLeaves(jsx)
 		expect(leaves).toHaveLength(1)
-		const leaf = leaves[0]
+		const leaf = leaves[0]!
 
 		expect(leaf.fieldName).toBe('tags')
 		expect(leaf.columnType).toBe('hasMany')
@@ -247,7 +247,7 @@ describe('createRelationColumn — hasMany', () => {
 				{(tag: any) => tag.label.value}
 			</StyledHasManyColumn>
 		)
-		const [leaf] = extractColumnLeaves(jsx)
+		const leaf = extractColumnLeaves(jsx)[0]!
 		expect(leaf.renderFilter).toBeTypeOf('function')
 	})
 })

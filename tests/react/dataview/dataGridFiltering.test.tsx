@@ -297,7 +297,7 @@ describe('DataGrid column types', () => {
 							<DataGridEnumColumn
 								field={it.status}
 								header="Status"
-								options={['draft', 'published', 'archived']}
+								options={{ draft: 'Draft', published: 'Published', archived: 'Archived' }}
 							/>
 							<TestTable />
 						</>
