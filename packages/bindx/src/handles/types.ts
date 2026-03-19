@@ -120,6 +120,8 @@ export interface FieldRefMeta<TEntityName extends string = string> {
 	readonly fieldName: string
 	readonly isArray: boolean
 	readonly isRelation: boolean
+	/** For enum fields: the enum type name (e.g. 'DeploymentStatus') */
+	readonly enumName?: string
 }
 
 /**
@@ -328,6 +330,9 @@ export interface HasManyRef<
 > extends HasManyRefBase<TEntity, TSelected, TBrand, TEntityName, TSchema> {
 	/** Number of items */
 	readonly length: number
+
+	/** Total count from paginateRelation (undefined if not available) */
+	readonly totalCount: number | undefined
 
 	/** Direct access to items array */
 	readonly items: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>[]

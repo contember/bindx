@@ -113,15 +113,16 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		const data = this.getEntityData()
 		if (!data) return []
 
-		const listData = data[this.fieldName] as Array<{ id: string }> | undefined
-		if (!Array.isArray(listData)) return []
+		const rawData = data[this.alias] ?? data[this.fieldName]
+		const listData = this.extractItems(rawData)
+		if (!listData) return []
 
 		// Ensure snapshots exist for embedded items
 		this.ensureItemSnapshots(listData)
 
 		// Extract server IDs from embedded data
 		const serverIds = listData
-			.map((item) => item.id)
+			.map((item) => item['id'] as string | undefined)
 			.filter((id): id is string => id !== undefined)
 
 		// Ensure has-many state exists with proper server IDs
@@ -172,6 +173,39 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 				true, // skipNotify - called during render, data already exists embedded in parent
 			)
 		}
+	}
+
+	/**
+	 * Extracts items from either flat array or Connection format (paginateRelation).
+	 * Returns null if data is not in a recognized format.
+	 */
+	private extractItems(rawData: unknown): Array<Record<string, unknown>> | null {
+		// Flat array format: [{ id, name }, ...]
+		if (Array.isArray(rawData)) {
+			return rawData
+		}
+		// Connection format: { pageInfo: { totalCount }, edges: [{ node: { id, name } }] }
+		if (rawData && typeof rawData === 'object' && 'edges' in rawData) {
+			const connection = rawData as { edges: Array<{ node: Record<string, unknown> }> }
+			return connection.edges.map(edge => edge.node)
+		}
+		return null
+	}
+
+	/**
+	 * Gets the total count from paginateRelation response.
+	 * Content client attaches totalCount as a non-enumerable property on the array.
+	 * Returns undefined if totalCount was not requested or not available.
+	 */
+	get totalCount(): number | undefined {
+		const data = this.getEntityData()
+		if (!data) return undefined
+
+		const rawData = data[this.alias] ?? data[this.fieldName]
+		if (Array.isArray(rawData) && 'totalCount' in rawData) {
+			return (rawData as unknown as { totalCount: number }).totalCount
+		}
+		return undefined
 	}
 
 	/**

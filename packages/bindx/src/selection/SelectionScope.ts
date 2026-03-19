@@ -9,6 +9,7 @@ export interface HasManyParams {
 	orderBy?: unknown
 	limit?: number
 	offset?: number
+	totalCount?: boolean
 }
 
 /**
@@ -44,6 +45,7 @@ export class SelectionScope {
 	/**
 	 * Create or get a child scope for a relation field.
 	 * Automatically removes the field from scalars if it was there.
+	 * New child scopes always include 'id' as a minimum selection.
 	 */
 	child(fieldName: string): SelectionScope {
 		// Remove from scalars if it was added as scalar first
@@ -53,6 +55,7 @@ export class SelectionScope {
 		if (!childScope) {
 			childScope = new SelectionScope()
 			childScope.parent = this
+			childScope.addScalar('id')
 			this.children.set(fieldName, childScope)
 			this.relationMeta.set(fieldName, { isArray: false })
 		}

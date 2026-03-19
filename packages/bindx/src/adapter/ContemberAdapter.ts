@@ -60,6 +60,7 @@ export class ContemberAdapter implements BackendAdapter {
 		})
 
 		// Map results back to QueryResult array
+		// Content client transforms already unwrap paginateRelation → flat arrays
 		return queries.map((q, i) => {
 			const key = `q${i}`
 			const data = (results as Record<string, unknown>)[key]
@@ -207,13 +208,14 @@ export class ContemberAdapter implements BackendAdapter {
 					this.applyFieldsToSelection(s, field.nested!.fields)
 
 				if (field.isArray) {
-					// has-many relation with optional params
+					// has-many relation — always uses paginateRelation
 					const manyArgs: EntitySelectionManyArgs = {
 						...(field.name !== fieldName ? { as: field.name } : undefined),
 						...(field.filter !== undefined ? { filter: field.filter as Input.OptionalWhere } : undefined),
 						...(field.orderBy !== undefined ? { orderBy: field.orderBy as ContentClientInput.AnyOrderBy } : undefined),
 						...(field.limit !== undefined ? { limit: field.limit } : undefined),
 						...(field.offset !== undefined ? { offset: field.offset } : undefined),
+						...(field.totalCount ? { totalCount: true } : undefined),
 					}
 
 					result = result.$(fieldName, manyArgs, nestedCallback)

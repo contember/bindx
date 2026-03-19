@@ -21,6 +21,7 @@ export interface HasManyOptions<
 	orderBy?: readonly EntityOrderBy<TItem>[]
 	limit?: number
 	offset?: number
+	totalCount?: boolean
 }
 
 /**
@@ -45,6 +46,7 @@ export interface SelectionFieldMeta {
 		orderBy?: unknown
 		limit?: number
 		offset?: number
+		totalCount?: boolean
 	}
 }
 

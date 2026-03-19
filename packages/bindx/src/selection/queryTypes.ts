@@ -105,6 +105,7 @@ export interface TypedHasManyOptions<
 	readonly orderBy?: readonly EntityOrderBy<TItem>[]
 	readonly limit?: number
 	readonly offset?: number
+	readonly totalCount?: boolean
 }
 
 /**

@@ -92,6 +92,7 @@ function createFieldMethod<TEntity, TSelected extends object, THasManyParams ext
 					orderBy: (options as HasManyOptions).orderBy,
 					limit: (options as HasManyOptions).limit,
 					offset: (options as HasManyOptions).offset,
+					totalCount: (options as HasManyOptions).totalCount,
 				}
 			}
 		}
@@ -109,6 +110,7 @@ function createFieldMethod<TEntity, TSelected extends object, THasManyParams ext
 					orderBy: (options as HasManyOptions).orderBy,
 					limit: (options as HasManyOptions).limit,
 					offset: (options as HasManyOptions).offset,
+					totalCount: (options as HasManyOptions).totalCount,
 				}
 			}
 		}
@@ -131,6 +133,7 @@ function createFieldMethod<TEntity, TSelected extends object, THasManyParams ext
 					orderBy: (options as HasManyOptions).orderBy,
 					limit: (options as HasManyOptions).limit,
 					offset: (options as HasManyOptions).offset,
+					totalCount: (options as HasManyOptions).totalCount,
 				}
 			}
 		}

@@ -88,10 +88,29 @@ export class MockQueryEngine {
 			const value = this.getNestedValue(source, relativePath)
 
 			if (field.nested && Array.isArray(value)) {
-				// Project each item in array (has-many relation)
-				result[field.name] = value.map(item =>
+				// Has-many relation — apply filter/orderBy/limit/offset, return flat array + metadata
+				let items = value as Record<string, unknown>[]
+				if (field.filter) {
+					items = this.filter(items, field.filter as Record<string, unknown>)
+				}
+				if (field.orderBy) {
+					items = this.orderBy(items, field.orderBy as readonly Record<string, unknown>[])
+				}
+				const totalCount = items.length
+				if (field.limit !== undefined || field.offset !== undefined) {
+					items = this.paginate(items, field.offset, field.limit)
+				}
+				const projected = items.map(item =>
 					this.projectFields(item as Record<string, unknown>, field.nested!.fields, []),
 				)
+				if (field.totalCount) {
+					Object.defineProperty(projected, 'totalCount', {
+						value: totalCount,
+						enumerable: false,
+						writable: false,
+					})
+				}
+				result[field.name] = projected
 			} else if (field.nested && value && typeof value === 'object') {
 				// Project nested object (has-one relation)
 				result[field.name] = this.projectFields(
