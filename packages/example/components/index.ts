@@ -17,6 +17,7 @@ export {
 	BlockEditorExample,
 	SimpleBlockEditorExample,
 	DataGridExample,
+	HasManyDataGridExample,
 } from './examples/index.js'
 
 // Undo/Redo demo

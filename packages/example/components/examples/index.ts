@@ -4,3 +4,4 @@ export { ArticleWithAuthorSelectExample } from './ArticleWithAuthorSelectExample
 export { LocationSelectExample } from './LocationSelectExample.js'
 export { RichTextEditorExample, BlockEditorExample, SimpleBlockEditorExample } from './EditorExample.js'
 export { DataGridExample } from './DataGridExample.js'
+export { HasManyDataGridExample } from './HasManyDataGridExample.js'

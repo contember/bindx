@@ -14,6 +14,7 @@ import {
 	BlockEditorExample,
 	SimpleBlockEditorExample,
 	DataGridExample,
+	HasManyDataGridExample,
 } from './components/index.js'
 
 const client = new GraphQlClient({
@@ -48,7 +49,7 @@ export function App() {
 						<DataGridExample />
 					</section>
 
-					<hr />
+						<hr />
 
 					<section data-testid="section-undo">
 						<h2>Undo/Redo Demo</h2>
@@ -116,6 +117,14 @@ export function App() {
 						<h2>6. Location Picker</h2>
 						<p>Standalone location select using useEntityList.</p>
 						<LocationSelectExample />
+					</section>
+
+					<hr />
+
+					<section data-testid="section-hasmany-datagrid">
+						<h2>7. HasMany DataGrid</h2>
+						<p>Data grid for a has-many relation field (Author → Articles).</p>
+						<HasManyDataGridExample id="00000000-0000-0000-0000-000000000a01" />
 					</section>
 				</main>
 
