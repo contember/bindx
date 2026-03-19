@@ -10,7 +10,7 @@ import React from 'react'
 import type { FieldRefBase, FilterArtifact, FilterHandler, EntityAccessor } from '@contember/bindx'
 import type { ColumnTypeDef } from './columnTypes.js'
 import { ColumnLeaf, type ColumnLeafProps } from './columnLeaf.js'
-import { extractFieldName } from './columns.js'
+import { extractFieldName, extractEnumName } from './columns.js'
 
 // ============================================================================
 // Render Props
@@ -73,7 +73,8 @@ export function createColumn<TValue, TFilterArtifact extends FilterArtifact, TEx
 		const sortable = (props['sortable'] as boolean | undefined) ?? columnType.defaultSortable
 		const filterEnabled = (props['filter'] as boolean | undefined) ?? true
 		const children = props['children'] as ((value: TValue | null, accessor: EntityAccessor<object>) => React.ReactNode) | undefined
-		const enumOptions = props['options'] as readonly string[] | undefined
+		const enumOptions = props['options'] as Readonly<Record<string, React.ReactNode>> | undefined
+		const enumName = extractEnumName(fieldRef)
 
 		const renderCell = children
 			? (accessor: EntityAccessor<object>): React.ReactNode => {
@@ -105,6 +106,7 @@ export function createColumn<TValue, TFilterArtifact extends FilterArtifact, TEx
 				: undefined,
 			isTextSearchable: columnType.isTextSearchable,
 			columnType: columnType.name as ColumnLeafProps['columnType'],
+			enumName,
 			enumOptions,
 			header,
 			renderCell,

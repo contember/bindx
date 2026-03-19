@@ -9,7 +9,7 @@
  */
 
 import React, { type ReactElement, type ReactNode } from 'react'
-import type { EntityAccessor, EntityDef, EnumFilterArtifact, EnumListFilterArtifact } from '@contember/bindx'
+import type { EntityAccessor, EntityDef, EnumFilterArtifact, EnumListFilterArtifact, FieldRefBase } from '@contember/bindx'
 import {
 	createColumn,
 	createRelationColumn,
@@ -40,7 +40,7 @@ import {
 	useDataViewRelationFilterFactory,
 	type UseDataViewRelationFilterResult,
 } from '@contember/bindx-dataview'
-import type { ColumnRenderProps, RelationFilterContext, RelationCellWrapperContext, RelationColumnComponent, DataGridHasOneColumnProps, DataGridHasManyColumnProps } from '@contember/bindx-dataview'
+import type { ColumnRenderProps, ColumnComponentProps, RelationFilterContext, RelationCellWrapperContext, RelationColumnComponent, DataGridHasOneColumnProps, DataGridHasManyColumnProps } from '@contember/bindx-dataview'
 import { DataGridTextFilterInner } from './filters/text.js'
 import { DataGridBooleanFilterControls } from './filters/boolean.js'
 import { DataGridNumberFilterControls } from './filters/number.js'
@@ -48,6 +48,7 @@ import { DataGridDateFilterControls } from './filters/date.js'
 import { DataGridEnumFilterControls } from './filters/enum.js'
 import { DataGridIsDefinedFilterControls } from './filters/defined.js'
 import { DataGridNullFilter } from './filters/common.js'
+import { useEnumOptionsFormatter } from '../labels/index.js'
 import { DataGridHasOneTooltip } from './tooltips.js'
 import { DataGridFilterSelectItemUI, DataGridTooltipLabel } from './ui.js'
 import { SelectDefaultFilter } from '../select/filter.js'
@@ -106,19 +107,25 @@ function renderEnumListDefault({ value }: ColumnRenderProps<readonly string[] | 
 function ColumnEnumFilterControls(): ReactElement {
 	const filterName = useDataViewFilterName()
 	const { columns } = useDataViewContext()
+	const enumFormatter = useEnumOptionsFormatter()
 	const column = columns.find(c => c.filterName === filterName)
-	const options = column?.enumOptions ?? []
-	const optionsRecord = Object.fromEntries(options.map(o => [o, o] as const))
+
+	// Priority: explicit options prop > context formatter > empty
+	let optionsRecord: Record<string, ReactNode>
+	if (column?.enumOptions && Object.keys(column.enumOptions).length > 0) {
+		optionsRecord = column.enumOptions
+	} else if (column?.enumName) {
+		optionsRecord = enumFormatter(column.enumName)
+	} else {
+		optionsRecord = {}
+	}
+
 	return <DataGridEnumFilterControls options={optionsRecord} />
 }
 
 // ============================================================================
 // Styled Scalar Columns
 // ============================================================================
-
-interface EnumExtraProps {
-	options: readonly string[]
-}
 
 export const DataGridTextColumn = createColumn(textColumnDef, {
 	renderCell: renderScalarDefault,
@@ -145,15 +152,41 @@ export const DataGridBooleanColumn = createColumn(booleanColumnDef, {
 	renderFilter: () => <DataGridBooleanFilterControls />,
 })
 
-export const DataGridEnumColumn = createColumn<string | null, EnumFilterArtifact, EnumExtraProps>(enumColumnDef, {
+const _DataGridEnumColumn = createColumn(enumColumnDef, {
 	renderCell: renderScalarDefault,
 	renderFilter: () => <ColumnEnumFilterControls />,
 })
 
-export const DataGridEnumListColumn = createColumn<readonly string[] | null, EnumListFilterArtifact, EnumExtraProps>(enumListColumnDef, {
+type ExtractEnum<F> = F extends FieldRefBase<infer T> ? Exclude<T, null | undefined> & string : string
+
+export const DataGridEnumColumn = <F extends FieldRefBase<any>>(props: {
+	field: F
+	header?: ReactNode
+	sortable?: boolean
+	filter?: boolean
+	children?: (value: ExtractEnum<F> | null, accessor: EntityAccessor<object>) => ReactNode
+	options?: { [K in ExtractEnum<F>]?: ReactNode }
+}): ReactNode => null
+DataGridEnumColumn.staticRender = _DataGridEnumColumn.staticRender
+
+const _DataGridEnumListColumn = createColumn(enumListColumnDef, {
 	renderCell: renderEnumListDefault,
 	renderFilter: () => <ColumnEnumFilterControls />,
 })
+
+type ExtractEnumList<F> = F extends FieldRefBase<infer T>
+	? T extends readonly (infer U)[] | null ? U & string : string
+	: string
+
+export const DataGridEnumListColumn = <F extends FieldRefBase<any>>(props: {
+	field: F
+	header?: ReactNode
+	sortable?: boolean
+	filter?: boolean
+	children?: (value: ExtractEnumList<F>[] | null, accessor: EntityAccessor<object>) => ReactNode
+	options?: { [K in ExtractEnumList<F>]?: ReactNode }
+}): ReactNode => null
+DataGridEnumListColumn.staticRender = _DataGridEnumListColumn.staticRender
 
 export const DataGridUuidColumn = createColumn(uuidColumnDef, {
 	renderCell: renderScalarDefault,

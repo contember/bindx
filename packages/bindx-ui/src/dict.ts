@@ -29,6 +29,9 @@ export const dict = {
 		true: 'Yes',
 		false: 'No',
 	},
+	persist: {
+		save: 'Save',
+	},
 	select: {
 		placeholder: 'Select…',
 		search: 'Search…',

@@ -9,6 +9,7 @@ export {
 	type CheckboxFieldProps,
 	type RadioEnumFieldProps,
 } from './inputs.js'
+export { SelectEnumField, type SelectEnumFieldProps } from './select-enum-field.js'
 export { FormFieldLabel } from './labels.js'
 export {
 	FormLayout,

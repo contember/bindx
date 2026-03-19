@@ -34,7 +34,10 @@ export interface ColumnLeafProps {
 	readonly collectSelection?: (collectorProxy: unknown) => void
 
 	// ── Enum ──
-	readonly enumOptions?: readonly string[]
+	/** Enum type name for resolving options from context (e.g. 'DeploymentStatus') */
+	readonly enumName?: string
+	/** Explicit enum options — value → label (overrides context-resolved options) */
+	readonly enumOptions?: Readonly<Record<string, React.ReactNode>>
 
 	// ── Relation ──
 	readonly relatedEntityName?: string

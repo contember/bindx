@@ -38,6 +38,8 @@ export {
 	type TextareaFieldProps,
 	type CheckboxFieldProps,
 	type RadioEnumFieldProps,
+	SelectEnumField,
+	type SelectEnumFieldProps,
 	FormFieldLabel,
 	FormLayout,
 	FormDescriptionUI,
@@ -70,6 +72,12 @@ export * from './datagrid/index.js'
 
 // Select
 export * from './select/index.js'
+
+// Repeater
+export * from './repeater/index.js'
+
+// Persist
+export * from './persist/index.js'
 
 // Dict
 export { dict, dictFormat } from './dict.js'

@@ -9,7 +9,7 @@
  * Relation/action/generic columns use manual `staticRender`.
  */
 
-import React from 'react'
+import React, { ReactNode } from 'react'
 import type { FieldRefBase, HasOneRef, HasManyRef, FilterHandler, FilterArtifact, EntityAccessor, EnumFilterArtifact, EnumListFilterArtifact, SelectionMeta } from '@contember/bindx'
 import { SelectionScope } from '@contember/bindx'
 import { FIELD_REF_META, createCollectorProxy } from '@contember/bindx-react'
@@ -47,6 +47,7 @@ interface FieldRefMetaCarrier {
 		readonly fieldName: string
 		readonly isArray: boolean
 		readonly isRelation: boolean
+		readonly enumName?: string
 	}
 }
 
@@ -58,6 +59,11 @@ export function hasFieldRefMeta(ref: unknown): ref is FieldRefMetaCarrier {
 /** Extract field name from a field ref (works in both collector and runtime proxies). */
 export function extractFieldName(ref: unknown): string | null {
 	return hasFieldRefMeta(ref) ? ref[FIELD_REF_META].fieldName : null
+}
+
+/** Extract enum name from a field ref (if field is an enum). */
+export function extractEnumName(ref: unknown): string | undefined {
+	return hasFieldRefMeta(ref) ? ref[FIELD_REF_META].enumName : undefined
 }
 
 /** Extract related entity type name from a relation field ref. */
@@ -123,13 +129,13 @@ export interface DataGridBooleanColumnProps<T> extends DataGridScalarColumnProps
 export interface DataGridUuidColumnProps<T> extends DataGridScalarColumnPropsBase<T> {}
 export interface DataGridIsDefinedColumnProps<T> extends DataGridScalarColumnPropsBase<T> {}
 
-interface EnumExtraProps {
-	options: readonly string[]
+interface EnumExtraProps<T extends string> {
+	options: Record<T, ReactNode>
 }
 
-export interface DataGridEnumColumnProps<T> extends DataGridScalarColumnPropsBase<T>, EnumExtraProps {}
+export interface DataGridEnumColumnProps<T extends string> extends DataGridScalarColumnPropsBase<T>, EnumExtraProps<NoInfer<T>> {}
 
-export interface DataGridEnumListColumnProps<T> extends DataGridScalarColumnPropsBase<T>, EnumExtraProps {}
+export interface DataGridEnumListColumnProps<T extends string> extends DataGridScalarColumnPropsBase<T>, EnumExtraProps<NoInfer<T>> {}
 
 // ============================================================================
 // Scalar Columns via createColumn()
@@ -158,13 +164,13 @@ export const DataGridBooleanColumn = createColumn(booleanColumnDef, {
 	renderCell: renderBooleanDefault,
 })
 
-export const DataGridEnumColumn = createColumn<string | null, EnumFilterArtifact, EnumExtraProps>(enumColumnDef, {
+export const DataGridEnumColumn = createColumn<string | null, EnumFilterArtifact, EnumExtraProps<string>>(enumColumnDef, {
 	renderCell: renderScalarDefault,
-})
+}) as <TValue extends string>(props: DataGridEnumColumnProps<TValue>) => ReactNode
 
-export const DataGridEnumListColumn = createColumn<readonly string[] | null, EnumListFilterArtifact, EnumExtraProps>(enumListColumnDef, {
+export const DataGridEnumListColumn = createColumn<readonly string[] | null, EnumListFilterArtifact, EnumExtraProps<string>>(enumListColumnDef, {
 	renderCell: renderEnumListDefault,
-})
+}) as <TValue extends string>(props: DataGridEnumListColumnProps<TValue>) => ReactNode
 
 export const DataGridUuidColumn = createColumn(uuidColumnDef, {
 	renderCell: renderScalarDefault,

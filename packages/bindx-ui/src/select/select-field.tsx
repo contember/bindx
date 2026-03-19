@@ -1,31 +1,30 @@
 /**
  * SelectField — styled single-select input for has-one relations.
  *
- * Renders a button that opens a popover with searchable option list.
- * Selected entity is displayed in the input, with clear/disconnect button.
+ * `options` and `queryField` are optional:
+ * - `options` is auto-derived from the field's relation target entity
+ * - `queryField` is auto-derived from the children render function's field accesses
  *
  * Usage:
  * ```tsx
  * <Entity entity={schema.Article} by={{ id }}>
  *   {article => (
- *     <SelectField
- *       relation={article.category}
- *       options={schema.Category}
- *       queryField={['name']}
- *     >
- *       {it => <Field field={it.name} />}
+ *     <SelectField field={article.category}>
+ *       {it => it.name.value}
  *     </SelectField>
  *   )}
  * </Entity>
  * ```
  */
 
-import React, { type ReactNode, useState } from 'react'
-import type { EntityAccessor, EntityDef, HasOneRef, OrderDirection } from '@contember/bindx'
-import { isPlaceholderId } from '@contember/bindx'
+import React, { type ReactNode, useMemo, useState } from 'react'
+import type { EntityAccessor, HasOneRef, OrderDirection } from '@contember/bindx'
+import { entityDef, isPlaceholderId, FIELD_REF_META } from '@contember/bindx'
 import type { FieldRefBase } from '@contember/bindx'
+import { HasOne, withCollector } from '@contember/bindx-react'
 import { Select, SelectEachValue, SelectPlaceholder } from '@contember/bindx-dataview'
 import { FormHasOneRelationScope } from '@contember/bindx-form'
+import { FormContainer } from '../form/container.js'
 import { Popover, PopoverTrigger } from '../ui/popover.js'
 import { Button } from '../ui/button.js'
 import { ChevronDownIcon, XIcon } from 'lucide-react'
@@ -38,41 +37,60 @@ import {
 	SelectPopoverContent,
 } from './ui.js'
 
-export interface SelectFieldProps {
-	/** Has-one relation ref */
-	relation: HasOneRef<object>
-	/** Entity definition for the options list */
-	options: EntityDef
+/** Extract the target entity type from a HasOneRef */
+type RelationTarget<F> = F extends HasOneRef<infer TEntity, any> ? TEntity : object
+
+/** Scalar field keys of an entity (for filter/sorting) */
+type ScalarKeys<T> = { [K in keyof T]: T[K] extends (object | object[] | null) ? never : K }[keyof T] & string
+
+export interface SelectFieldProps<F extends HasOneRef<any> = HasOneRef<object>> {
+	/** Has-one relation field */
+	field: F
 	/** Per-item render function */
-	children: (it: EntityAccessor<object>) => ReactNode
+	children: (it: EntityAccessor<RelationTarget<F>>) => ReactNode
 	/** Placeholder when nothing is selected */
 	placeholder?: ReactNode
-	/** Field(s) to search across */
+	/** Field(s) to search across. Auto-derived from children if omitted. */
 	queryField?: FieldRefBase<unknown> | FieldRefBase<unknown>[] | string[]
-	/** Initial sort order */
-	initialSorting?: Partial<Record<string, OrderDirection>>
-	/** Static filter for the options list */
-	filter?: Record<string, unknown>
+	/** Initial sort order — keys are typed to the target entity's scalar fields */
+	initialSorting?: Partial<Record<ScalarKeys<RelationTarget<F>>, OrderDirection>>
+	/** Filter for the options list — typed to the target entity */
+	filter?: Partial<Record<ScalarKeys<RelationTarget<F>>, unknown>>
+	/** Field label */
+	label?: ReactNode
+	/** Field description */
+	description?: ReactNode
 	/** Whether this field is required */
 	required?: boolean
 }
 
-export function SelectField({
-	relation,
-	options,
+export const SelectField = withCollector(function SelectField<F extends HasOneRef<any>>({
+	field,
 	children,
 	placeholder,
 	queryField,
 	initialSorting,
 	filter,
+	label,
+	description,
 	required,
-}: SelectFieldProps): ReactNode {
+}: SelectFieldProps<F>): ReactNode {
 	const [open, setOpen] = useState(false)
 
+	const options = useMemo(() => {
+		if (!field) return null
+		const meta = field[FIELD_REF_META]
+		if (meta?.entityType) return entityDef(meta.entityType)
+		throw new Error('SelectField: cannot derive options entity from field.')
+	}, [field])
+
+	if (!field || !options) return null
+
 	return (
-		<FormHasOneRelationScope relation={relation} required={required}>
-			<Select
-				relation={relation}
+		<FormHasOneRelationScope relation={field} required={required}>
+			<FormContainer label={label} description={description} required={required}>
+				<Select
+				relation={field}
 				options={options}
 				onSelect={() => setOpen(false)}
 			>
@@ -88,13 +106,13 @@ export function SelectField({
 										{entity => children(entity)}
 									</SelectEachValue>
 									<SelectInputActionsUI>
-										{!isPlaceholderId(relation.$entity.id) && (
+										{!isPlaceholderId(field.$entity.id) && (
 											<Button
 												size="xs"
 												variant="ghost"
 												onClick={(e: React.MouseEvent) => {
 													e.stopPropagation()
-													relation.$disconnect()
+													field.$disconnect()
 												}}
 											>
 												<XIcon className="w-4 h-4" />
@@ -117,6 +135,11 @@ export function SelectField({
 					</Popover>
 				</div>
 			</Select>
+			</FormContainer>
 		</FormHasOneRelationScope>
 	)
-}
+}, (props) => (
+	<HasOne field={props.field}>
+		{entity => props.children(entity)}
+	</HasOne>
+))
