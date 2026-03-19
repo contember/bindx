@@ -3,7 +3,8 @@
  */
 
 // Re-export all styled primitives
-export { DefaultDataGrid, type DefaultDataGridProps } from './default-grid.js'
+export { DefaultDataGrid, type DefaultDataGridProps, DefaultHasManyDataGrid, type DefaultHasManyDataGridProps } from './default-grid.js'
+export { DefaultDataGridLayout, type DefaultDataGridLayoutProps } from './default-layout.js'
 export { DataGridToolbarUI, type DataGridToolbarUIProps } from './toolbar.js'
 export { DataGridPaginationUI, type DataGridPaginationUIProps, DataGridPerPageSelector } from './pagination.js'
 export { DataGridColumnHeaderUI, type DataGridColumnHeaderUIProps } from './column-header.js'

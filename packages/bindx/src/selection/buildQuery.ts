@@ -20,6 +20,8 @@ export interface QueryFieldSpec {
 	limit?: number
 	/** For has-many: offset */
 	offset?: number
+	/** For has-many: request totalCount via paginateRelation */
+	totalCount?: boolean
 }
 
 /**
@@ -50,6 +52,13 @@ export function buildQueryFromSelection(meta: SelectionMeta): QuerySpec {
 	}
 
 	for (const [_alias, fieldMeta] of meta.fields) {
+		// Skip relation fields where no nested fields were selected.
+		// This occurs when a relation handle is passed as a prop (e.g., HasManyDataGrid's `field` prop)
+		// without any of its fields being read during JSX collection. The consuming component
+		// is expected to handle its own data fetching for that relation.
+		if (fieldMeta.isRelation && fieldMeta.nested && fieldMeta.nested.fields.size === 0) {
+			continue
+		}
 		fields.push(buildFieldSpecFromSelection(fieldMeta))
 	}
 
@@ -81,6 +90,9 @@ function buildFieldSpecFromSelection(meta: SelectionFieldMeta): QueryFieldSpec {
 			}
 			if (meta.hasManyParams.offset !== undefined) {
 				spec.offset = meta.hasManyParams.offset
+			}
+			if (meta.hasManyParams.totalCount) {
+				spec.totalCount = true
 			}
 		}
 

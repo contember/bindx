@@ -14,51 +14,23 @@
  *   )}
  * </DefaultDataGrid>
  * ```
- *
- * With named layouts:
- * ```tsx
- * <DefaultDataGrid entity={schema.Article}>
- *   {it => (
- *     <>
- *       <DataGridTextColumn field={it.title} header="Title" />
- *       <DataGridLayout name="grid" label="Grid" item={it}>
- *         {(item: typeof it) => (
- *           <div><Field field={item.title} /></div>
- *         )}
- *       </DataGridLayout>
- *       <DataGridToolbarContent>
- *         <DataGridTextFilter field={it.title} label="Title" />
- *       </DataGridToolbarContent>
- *     </>
- *   )}
- * </DefaultDataGrid>
- * ```
  */
 import React, { type ReactElement, type ReactNode } from 'react'
 import type { EntityAccessor } from '@contember/bindx'
 import {
 	DataGrid,
 	type DataGridProps,
-	DataViewLayout,
-	DataViewEachRow,
-	DataViewEmpty,
-	DataViewNonEmpty,
-	useDataViewContext,
+	HasManyDataGrid,
+	type HasManyDataGridProps,
 } from '@contember/bindx-dataview'
-import { DataGridToolbarUI } from './toolbar.js'
-import { DataGridLoader } from './loader.js'
-import { DataGridPaginationUI } from './pagination.js'
-import { DataGridContainer } from './table.js'
-import { DataGridAutoTable } from './auto-table.js'
-import { DataGridNoResults } from './empty.js'
+import { DefaultDataGridLayout, type DefaultDataGridLayoutProps } from './default-layout.js'
 
 export type DefaultDataGridProps<TEntity extends object = object> =
 	& Omit<DataGridProps<TEntity>, 'children'>
+	& DefaultDataGridLayoutProps
 	& {
 		/** Children render function: receives entity proxy `it`, returns column/toolbar/layout markers */
 		children: (it: EntityAccessor<TEntity>) => ReactNode
-		stickyToolbar?: boolean
-		stickyPagination?: boolean
 	}
 
 export function DefaultDataGrid<TEntity extends object>({
@@ -82,48 +54,30 @@ export function DefaultDataGrid<TEntity extends object>({
 	)
 }
 
-interface DefaultDataGridLayoutProps {
-	stickyToolbar?: boolean
-	stickyPagination?: boolean
-}
+export type DefaultHasManyDataGridProps<TEntity extends object = object> =
+	& Omit<HasManyDataGridProps<TEntity>, 'children'>
+	& DefaultDataGridLayoutProps
+	& {
+		children: (it: EntityAccessor<TEntity>) => ReactNode
+	}
 
-function DefaultDataGridLayout({
+export function DefaultHasManyDataGrid<TEntity extends object>({
+	children,
 	stickyToolbar,
 	stickyPagination,
-}: DefaultDataGridLayoutProps): ReactElement {
-	const { toolbarContent, layoutRenders } = useDataViewContext()
-
+	...props
+}: DefaultHasManyDataGridProps<TEntity>): ReactElement {
 	return (
-		<DataGridContainer>
-			{toolbarContent && (
-				<DataGridToolbarUI sticky={stickyToolbar}>
-					{toolbarContent}
-				</DataGridToolbarUI>
+		<HasManyDataGrid {...props}>
+			{it => (
+				<>
+					{children(it)}
+					<DefaultDataGridLayout
+						stickyToolbar={stickyToolbar}
+						stickyPagination={stickyPagination}
+					/>
+				</>
 			)}
-
-			<DataGridLoader>
-				<DataViewEmpty>
-					<DataGridNoResults />
-				</DataViewEmpty>
-
-				<DataViewNonEmpty>
-					<DataViewLayout name="table">
-						<DataGridAutoTable />
-					</DataViewLayout>
-
-					{Array.from(layoutRenders.entries()).map(([name, render]) => (
-						<DataViewLayout key={name} name={name}>
-							<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-								<DataViewEachRow>
-									{render}
-								</DataViewEachRow>
-							</div>
-						</DataViewLayout>
-					))}
-				</DataViewNonEmpty>
-			</DataGridLoader>
-
-			<DataGridPaginationUI sticky={stickyPagination} />
-		</DataGridContainer>
+		</HasManyDataGrid>
 	)
 }

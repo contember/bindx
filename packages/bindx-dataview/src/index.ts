@@ -1,5 +1,6 @@
 // Core DataGrid
 export { DataGrid, type DataGridProps, QUERY_FILTER_NAME } from './DataGrid.js'
+export { HasManyDataGrid, type HasManyDataGridProps } from './HasManyDataGrid.js'
 
 // Column type definitions (Layer 1: headless behavior)
 export {

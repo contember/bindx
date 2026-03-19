@@ -3,7 +3,7 @@ import { createCollectorProxy } from '../jsx/proxy.js'
 import { collectSelection, debugSelection } from '../jsx/analyzer.js'
 import { mergeSelections } from '../jsx/SelectionMeta.js'
 import { buildQueryFromSelection, SelectionScope } from '@contember/bindx'
-import type { SelectionMeta } from '@contember/bindx'
+import type { SelectionMeta, SchemaRegistry } from '@contember/bindx'
 import type { EntityAccessor } from '../jsx/types.js'
 import { BindxContext } from './BackendAdapterContext.js'
 
@@ -66,17 +66,25 @@ export function useSelectionCollection(
 	// Cache for selection to avoid unnecessary refetches
 	const selectionCacheRef = useRef<SelectionCache | null>(null)
 
+	const schemaRegistry = bindxContext?.schema ?? null
+
 	// Collection phase - runs on every render but caches based on content
 	const result = useMemo((): SelectionCollectionResult => {
 		// Create collector proxy using SelectionScope tree
 		const scope = new SelectionScope()
-		const collector = createCollectorProxy<unknown>(scope)
+		const collector = createCollectorProxy<unknown>(scope, entityType, schemaRegistry as SchemaRegistry<Record<string, object>> | null)
 
 		// Call collect function with the proxy to gather field access
 		const jsx = collectRef.current(collector)
 
 		// Analyze the returned JSX for component-level selections
-		const jsxSel = collectSelection(jsx)
+		let jsxSel: SelectionMeta
+		try {
+			jsxSel = collectSelection(jsx)
+		} catch {
+			// staticRender of nested components may crash during collection
+			jsxSel = { fields: new Map() }
+		}
 
 		// Convert scope to SelectionMeta and merge with JSX selection
 		const selection = scope.toSelectionMeta()
@@ -108,7 +116,7 @@ export function useSelectionCollection(
 		selectionCacheRef.current = newCache
 
 		return newCache
-	}, [entityType, depsKey]) // Only depend on entity identity and deps key
+	}, [entityType, depsKey, schemaRegistry]) // Only depend on entity identity, deps key, and schema
 
 	return result
 }
