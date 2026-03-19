@@ -33,4 +33,5 @@ export {
 	// Type extraction helpers
 	type ExtractHasOneEntityName,
 	type ExtractHasManyEntityName,
+	type ExtractRoleMap,
 } from './types.js'

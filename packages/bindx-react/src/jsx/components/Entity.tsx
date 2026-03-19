@@ -3,18 +3,19 @@ import { useBindxContext, useSchemaRegistry } from '../../hooks/BackendAdapterCo
 import { useEntity } from '../../hooks/useEntity.js'
 import { useSelectionCollection } from '../../hooks/useSelectionCollection.js'
 import type { EntityAccessor, SelectionMeta } from '../types.js'
-import { type EntityDef, type EntityUniqueWhere, type AnyBrand, type FieldError, EntityHandle, type SnapshotStore, type ActionDispatcher, type SchemaRegistry } from '@contember/bindx'
+import { type EntityDef, type EntityUniqueWhere, type AnyBrand, type FieldError, EntityHandle, type SnapshotStore, type ActionDispatcher, type SchemaRegistry, type CommonEntity } from '@contember/bindx'
 
 // ==================== Props Types ====================
 
 /**
  * Base props shared by both edit and create modes.
+ * TRoleMap is the role map from EntityDef — entity type resolved as CommonEntity<TRoleMap>.
  */
-interface EntityBaseProps<TEntity extends object> {
+interface EntityBaseProps<TRoleMap extends Record<string, object>> {
 	/** Entity definition reference */
-	entity: EntityDef<TEntity>
+	entity: EntityDef<TRoleMap>
 	/** Render function receiving typed entity accessor with direct field access */
-	children: (entity: EntityAccessor<TEntity>) => React.ReactNode
+	children: (entity: EntityAccessor<CommonEntity<TRoleMap>>) => React.ReactNode
 	/** Error fallback */
 	error?: (error: FieldError) => React.ReactNode
 }
@@ -22,7 +23,7 @@ interface EntityBaseProps<TEntity extends object> {
 /**
  * Props for editing an existing entity (fetched by unique field)
  */
-interface EntityByProps<TEntity extends object> extends EntityBaseProps<TEntity> {
+interface EntityByProps<TRoleMap extends Record<string, object>> extends EntityBaseProps<TRoleMap> {
 	/** Unique field(s) to identify the entity (e.g., { id: '...' } or { slug: '...' }) */
 	by: EntityUniqueWhere
 	create?: never
@@ -36,7 +37,7 @@ interface EntityByProps<TEntity extends object> extends EntityBaseProps<TEntity>
 /**
  * Props for creating a new entity
  */
-interface EntityCreateProps<TEntity extends object> extends EntityBaseProps<TEntity> {
+interface EntityCreateProps<TRoleMap extends Record<string, object>> extends EntityBaseProps<TRoleMap> {
 	by?: never
 	/** Create a new entity instead of fetching an existing one */
 	create: true
@@ -49,9 +50,9 @@ interface EntityCreateProps<TEntity extends object> extends EntityBaseProps<TEnt
 /**
  * Props for Entity component - union of edit mode (by) and create mode
  */
-export type EntityProps<TEntity extends object = object> =
-	| EntityByProps<TEntity>
-	| EntityCreateProps<TEntity>
+export type EntityProps<TRoleMap extends Record<string, object> = Record<string, object>> =
+	| EntityByProps<TRoleMap>
+	| EntityCreateProps<TRoleMap>
 
 // ==================== Internal Props Types ====================
 
@@ -300,13 +301,13 @@ function EntityHandleRenderer({
  * </Entity>
  * ```
  */
-function EntityImpl<TEntity extends object>(
-	props: EntityProps<TEntity>,
+function EntityImpl<TRoleMap extends Record<string, object>>(
+	props: EntityProps<TRoleMap>,
 ): ReactElement | null {
 	const isCreateMode = 'create' in props && props.create === true
 
 	if (isCreateMode) {
-		const createProps = props as EntityCreateProps<TEntity>
+		const createProps = props as EntityCreateProps<TRoleMap>
 		return (
 			<EntityCreateMode
 				entityType={createProps.entity.$name}
@@ -317,7 +318,7 @@ function EntityImpl<TEntity extends object>(
 		)
 	}
 
-	const byProps = props as EntityByProps<TEntity>
+	const byProps = props as EntityByProps<TRoleMap>
 	return (
 		<EntityByMode
 			entityType={byProps.entity.$name}

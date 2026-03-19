@@ -34,7 +34,7 @@ import { createComponentBuilder } from './componentBuilder.js'
  */
 // eslint-disable-next-line @typescript-eslint/ban-types
 export function createComponent(): ComponentBuilder<ComponentBuilderState<{}, object, readonly string[]>>
-export function createComponent<TRoles extends readonly string[]>(
+export function createComponent<const TRoles extends readonly string[]>(
 	options: CreateComponentOptions<TRoles>,
 // eslint-disable-next-line @typescript-eslint/ban-types
 ): ComponentBuilder<ComponentBuilderState<{}, object, TRoles>>

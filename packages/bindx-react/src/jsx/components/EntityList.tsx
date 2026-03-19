@@ -1,5 +1,5 @@
 import React, { memo, type ReactElement } from 'react'
-import { type EntityDef, type EntityWhere, type EntityOrderBy, type FieldError } from '@contember/bindx'
+import { type EntityDef, type EntityWhere, type EntityOrderBy, type FieldError, type CommonEntity } from '@contember/bindx'
 import { useEntityList } from '../../hooks/useEntityList.js'
 import { useSelectionCollection } from '../../hooks/useSelectionCollection.js'
 import type { EntityAccessor } from '../types.js'
@@ -7,19 +7,19 @@ import type { EntityAccessor } from '../types.js'
 /**
  * Props for EntityList component
  */
-export interface EntityListProps<TEntity extends object = object> {
+export interface EntityListProps<TRoleMap extends Record<string, object> = Record<string, object>> {
 	/** Entity definition reference */
-	entity: EntityDef<TEntity>
+	entity: EntityDef<TRoleMap>
 	/** Optional filter criteria - type-safe based on entity schema */
-	filter?: EntityWhere<TEntity>
+	filter?: EntityWhere<CommonEntity<TRoleMap>>
 	/** Optional ordering - type-safe based on entity schema */
-	orderBy?: readonly EntityOrderBy<TEntity>[]
+	orderBy?: readonly EntityOrderBy<CommonEntity<TRoleMap>>[]
 	/** Optional limit */
 	limit?: number
 	/** Optional offset */
 	offset?: number
 	/** Render function receiving typed entity accessor with direct field access */
-	children: (entity: EntityAccessor<TEntity>, index: number) => React.ReactNode
+	children: (entity: EntityAccessor<CommonEntity<TRoleMap>>, index: number) => React.ReactNode
 	/** Loading fallback */
 	loading?: React.ReactNode
 	/** Error fallback */
@@ -46,7 +46,7 @@ export interface EntityListProps<TEntity extends object = object> {
  * </EntityList>
  * ```
  */
-function EntityListComponent<TEntity extends object>({
+function EntityListComponent<TRoleMap extends Record<string, object>>({
 	entity,
 	filter,
 	orderBy,
@@ -56,7 +56,7 @@ function EntityListComponent<TEntity extends object>({
 	loading,
 	error: errorFallback,
 	empty,
-}: EntityListProps<TEntity>): ReactElement | null {
+}: EntityListProps<TRoleMap>): ReactElement | null {
 	const entityType = entity.$name
 
 	// Stable options key for dependency tracking
@@ -106,7 +106,7 @@ function EntityListComponent<TEntity extends object>({
 	const items = result.items.map((item, index) => {
 		return (
 			<React.Fragment key={item.id}>
-				{children(item as unknown as EntityAccessor<TEntity>, index)}
+				{children(item as unknown as EntityAccessor<CommonEntity<TRoleMap>>, index)}
 			</React.Fragment>
 		)
 	})

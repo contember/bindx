@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react'
-import type { EntityDef, EntityAccessor, SelectionInput, SelectionMeta, FieldError, SchemaRegistry } from '@contember/bindx'
+import type { EntityDef, EntityAccessor, SelectionInput, SelectionMeta, FieldError, SchemaRegistry, CommonEntity, EntityForRoles, RoleNames } from '@contember/bindx'
 import { EntityHandle, isTempId, resolveSelectionMeta, buildQueryFromSelection, setEntityData, createLoadError } from '@contember/bindx'
 import { useBindxContext, useSchemaRegistry } from './BackendAdapterContext.js'
 import { useStoreSubscription } from './useStoreSubscription.js'
@@ -142,9 +142,26 @@ function createErrorListAccessor(error: FieldError): ErrorEntityListAccessor {
 // ============================================================================
 
 /**
- * Hook to fetch and manage a list of entities with full type inference.
+ * Hook to fetch and manage a list of entities with role-expanded type inference.
  *
- * Accepts an EntityDef reference and a selection definer for full type safety.
+ * @example
+ * ```tsx
+ * const authors = useEntityList(schema.Author, { roles: ['admin'] }, e => e.name().internalNotes())
+ * ```
+ */
+export function useEntityList<
+	TRoleMap extends Record<string, object>,
+	TRoles extends RoleNames<TRoleMap>,
+	TResult extends object,
+>(
+	entity: EntityDef<TRoleMap>,
+	options: UseEntityListOptions & { roles: readonly TRoles[] },
+	definer: SelectionInput<EntityForRoles<TRoleMap, TRoles>, TResult>,
+): EntityListAccessorResult<TResult>
+
+/**
+ * Hook to fetch and manage a list of entities with full type inference.
+ * Uses the common (narrowest) entity type when no roles are specified.
  *
  * @example
  * ```tsx
@@ -153,10 +170,10 @@ function createErrorListAccessor(error: FieldError): ErrorEntityListAccessor {
  * return authors.items.map(a => <div key={a.id}>{a.name.value}</div>)
  * ```
  */
-export function useEntityList<TEntity extends object, TResult extends object>(
-	entity: EntityDef<TEntity>,
+export function useEntityList<TRoleMap extends Record<string, object>, TResult extends object>(
+	entity: EntityDef<TRoleMap>,
 	options: UseEntityListOptions,
-	definer: SelectionInput<TEntity, TResult>,
+	definer: SelectionInput<CommonEntity<TRoleMap>, TResult>,
 ): EntityListAccessorResult<TResult>
 
 /**

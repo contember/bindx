@@ -12,6 +12,7 @@ import type {
 	OrderDirection,
 	DataViewLayout,
 	SelectionValues,
+	CommonEntity,
 } from '@contember/bindx'
 import type { StateStorageOrName } from './stateStorage.js'
 import {
@@ -28,11 +29,11 @@ export { QUERY_FILTER_NAME }
 // DataGrid Props
 // ============================================================================
 
-export interface DataGridProps<TEntity extends object = object> {
+export interface DataGridProps<TRoleMap extends Record<string, object> = Record<string, object>> {
 	/** Entity definition */
-	entity: EntityDef<TEntity>
+	entity: EntityDef<TRoleMap>
 	/** Children render function: receives entity proxy `it`, returns column markers + layout */
-	children: (it: EntityAccessor<TEntity>) => ReactNode
+	children: (it: EntityAccessor<CommonEntity<TRoleMap>>) => ReactNode
 	/** Initial sorting (supports multi-column: { title: 'asc', date: 'desc' }) */
 	initialSorting?: Partial<Record<string, OrderDirection>>
 	/** Items per page. null = show all. Default: 50 */
@@ -57,7 +58,7 @@ export interface DataGridProps<TEntity extends object = object> {
 // Implementation
 // ============================================================================
 
-function DataGridImpl<TEntity extends object>({
+function DataGridImpl<TRoleMap extends Record<string, object>>({
 	entity,
 	children,
 	initialSorting,
@@ -69,13 +70,13 @@ function DataGridImpl<TEntity extends object>({
 	currentPageStateStorage,
 	pagingSettingsStorage,
 	storageKey,
-}: DataGridProps<TEntity>): ReactElement | null {
+}: DataGridProps<TRoleMap>): ReactElement | null {
 	const { schema: schemaRegistry } = useBindxContext()
 	const entityType = entity.$name
 	const contextKey = useDataViewKey()
 	const effectiveStorageKey = storageKey ?? contextKey
 
-	const setup = useDataGridSetup<TEntity>({
+	const setup = useDataGridSetup<CommonEntity<TRoleMap>>({
 		entityType,
 		schemaRegistry,
 		children,

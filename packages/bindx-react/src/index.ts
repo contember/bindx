@@ -21,6 +21,14 @@ export type {
 	InferEntityNames,
 	EntityDef,
 	InferEntityDef,
+	// Role types
+	UnionToIntersection,
+	RoleNames,
+	CommonEntity,
+	EntityForRoles,
+	ResolveEntity,
+	SingleRoleMap,
+	DefaultRole,
 	// Selection types
 	SelectionBuilder,
 	SelectionMeta,
@@ -54,6 +62,7 @@ export type {
 	// Type extraction helpers
 	ExtractHasOneEntityName,
 	ExtractHasManyEntityName,
+	ExtractRoleMap,
 	// Adapter types
 	BackendAdapter,
 	QueryOptions,
@@ -128,6 +137,8 @@ export {
 	hasMany,
 	defineSchema,
 	entityDef,
+	roleEntityDef,
+	DEFAULT_ROLE,
 	SchemaRegistry,
 	// Selection utilities
 	createFragment,
@@ -284,6 +295,9 @@ export {
 	schemaNamesToDef,
 } from './hooks/index.js'
 
+// Role context
+export { RoleProvider, useHasRole, type RoleProviderProps } from './roles/index.js'
+
 // Undo hook types
 export type { UndoHookResult } from './hooks/useUndo.js'
 
@@ -299,6 +313,8 @@ export {
 	type EntityProps,
 	EntityList,
 	type EntityListProps,
+	HasRole,
+	type HasRoleProps,
 	BINDX_COMPONENT,
 	// Condition DSL for <If> component
 	cond,

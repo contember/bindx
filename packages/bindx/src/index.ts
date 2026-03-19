@@ -71,6 +71,7 @@ export type {
 	// Type extraction helpers
 	ExtractHasOneEntityName,
 	ExtractHasManyEntityName,
+	ExtractRoleMap,
 } from './handles/index.js'
 
 // Brand types
@@ -126,7 +127,19 @@ export type {
 // ============================================================================
 
 // Schema utilities
-export { scalar, hasOne, hasMany, defineSchema, entityDef, SchemaRegistry, ContemberSchema, SchemaLoader } from './schema/index.js'
+export { scalar, hasOne, hasMany, defineSchema, entityDef, roleEntityDef, SchemaRegistry, ContemberSchema, SchemaLoader } from './schema/index.js'
+
+// Role types
+export type {
+	UnionToIntersection,
+	RoleNames,
+	CommonEntity,
+	EntityForRoles,
+	ResolveEntity,
+	SingleRoleMap,
+	DefaultRole,
+} from './schema/index.js'
+export { DEFAULT_ROLE } from './schema/index.js'
 
 // Contember schema types
 export type {

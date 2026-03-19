@@ -12,6 +12,8 @@ export type { BindxGeneratorOptions, GeneratedFiles } from './BindxGenerator'
 export { EntityTypeSchemaGenerator } from './EntityTypeSchemaGenerator'
 export { EnumTypeSchemaGenerator } from './EnumTypeSchemaGenerator'
 export { NameSchemaGenerator } from './NameSchemaGenerator'
+export { RoleSchemaGenerator } from './RoleSchemaGenerator'
+export type { RoleSchemaGeneratorOptions } from './RoleSchemaGenerator'
 export type { BindxSchemaNames, BindxSchemaEntityNames } from './NameSchemaGenerator'
 
 export { columnToTsType, getEnumTypeName, capitalizeFirstLetter } from './utils'

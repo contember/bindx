@@ -607,6 +607,7 @@ export interface EntityRef<
 
 /**
  * EntityRefBase with direct field access via Proxy (for implicit mode).
+ * TRoleMap carries the role map for HasRole type inference.
  */
 export type EntityAccessorBase<
 	TEntity,
@@ -614,11 +615,16 @@ export type EntityAccessorBase<
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
 	TSchema extends Record<string, object> = Record<string, object>,
+	TRoleMap extends Record<string, object> = Record<string, object>,
 > = EntityRefBase<TEntity, TSelected, TBrand, TEntityName, TSchema> &
-	SelectedEntityFieldsBase<TEntity, TSelected, TSchema>
+	SelectedEntityFieldsBase<TEntity, TSelected, TSchema> & {
+		/** @internal phantom — role map for HasRole inference */
+		readonly __roleMap?: TRoleMap
+	}
 
 /**
  * EntityRef with direct field access via Proxy (for explicit mode).
+ * TRoleMap carries the role map for HasRole type inference.
  */
 export type EntityAccessor<
 	TEntity,
@@ -626,8 +632,12 @@ export type EntityAccessor<
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
 	TSchema extends Record<string, object> = Record<string, object>,
+	TRoleMap extends Record<string, object> = Record<string, object>,
 > = EntityRef<TEntity, TSelected, TBrand, TEntityName, TSchema> &
-	SelectedEntityFields<TEntity, TSelected, TSchema>
+	SelectedEntityFields<TEntity, TSelected, TSchema> & {
+		/** @internal phantom — role map for HasRole inference */
+		readonly __roleMap?: TRoleMap
+	}
 
 // ============================================================================
 // ENTITY FIELDS MAPPING TYPES
@@ -704,6 +714,16 @@ export type SelectedEntityFields<
 // ============================================================================
 // Type Extraction Helpers
 // ============================================================================
+
+/**
+ * Extracts the role map from an EntityAccessor or EntityAccessorBase.
+ */
+export type ExtractRoleMap<T> =
+	T extends EntityAccessor<any, any, any, any, any, infer TRoleMap>
+		? TRoleMap
+		: T extends EntityAccessorBase<any, any, any, any, any, infer TRoleMap>
+			? TRoleMap
+			: Record<string, object>
 
 export type ExtractHasOneEntityName<T> =
 	T extends HasOneRef<any, any, any, infer TEntityName, any>

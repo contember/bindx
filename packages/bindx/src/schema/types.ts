@@ -3,6 +3,8 @@
  * Provides type-safe entity and relation definitions.
  */
 
+import type { CommonEntity, SingleRoleMap } from './roles.js'
+
 /**
  * Relation type discriminator
  */
@@ -184,33 +186,52 @@ export type InferEntityNames<TSchema extends SchemaDefinition<any>> = keyof TSch
 
 /**
  * A type-safe reference to an entity in the schema.
- * Carries the entity type as a phantom type parameter.
+ * Carries a role map as a phantom type parameter: Record<roleName, entityType>.
+ *
+ * For schemas without ACL, the role map is `{ _default: TEntity }`.
+ * For schemas with ACL, each role maps to a per-role entity type.
  *
  * @example
  * ```ts
- * const Article = entityDef<ArticleType>('Article')
- * useEntity(Article, { by: { id } }, e => e.title())
+ * // Without roles (convenience):
+ * const Article = entityDef<ArticleType>('Article')  // → EntityDef<{ _default: ArticleType }>
+ *
+ * // With roles (generator):
+ * const Article = roleEntityDef<{ admin: Article$admin; public: Article$public }>('Article')
  * ```
  */
-export interface EntityDef<TEntity extends object = object> {
+export interface EntityDef<TRoleMap extends Record<string, object> = Record<string, object>> {
 	readonly $name: string
-	/** @internal phantom type — not present at runtime */
-	readonly $type?: TEntity
+	/** @internal phantom type for role map — not present at runtime */
+	readonly $roleMap?: TRoleMap
 	/** @internal reference to the schema definition for collection-time field lookups */
 	readonly $schema?: SchemaDefinition<Record<string, object>>
 }
 
 /**
- * Infers the entity type from an EntityDef
+ * Infers the common (default) entity type from an EntityDef.
+ * Returns the union of all role entity types — only common fields are accessible.
  */
-export type InferEntityDef<T> = T extends EntityDef<infer E> ? E : never
+export type InferEntityDef<T> = T extends EntityDef<infer TRoleMap> ? CommonEntity<TRoleMap> : never
 
 /**
  * Creates a type-safe entity definition reference.
+ * Wraps the entity type in a single-role map: `{ _default: TEntity }`.
  *
  * @param name - The entity name as used in the schema
  * @param schema - Optional schema definition for collection-time field lookups
  */
-export function entityDef<TEntity extends object>(name: string, schema?: SchemaDefinition<Record<string, object>>): EntityDef<TEntity> {
+export function entityDef<TEntity extends object>(name: string, schema?: SchemaDefinition<Record<string, object>>): EntityDef<SingleRoleMap<TEntity>> {
+	return schema ? { $name: name, $schema: schema } : { $name: name }
+}
+
+/**
+ * Creates a role-aware entity definition reference.
+ * Used by the generator when ACL roles are present.
+ *
+ * @param name - The entity name as used in the schema
+ * @param schema - Optional schema definition for collection-time field lookups
+ */
+export function roleEntityDef<TRoleMap extends Record<string, object>>(name: string, schema?: SchemaDefinition<Record<string, object>>): EntityDef<TRoleMap> {
 	return schema ? { $name: name, $schema: schema } : { $name: name }
 }

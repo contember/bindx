@@ -4,12 +4,13 @@
  * Generates TypeScript schema files from Contember Model.Schema.
  */
 
-import { Model } from '@contember/schema'
+import { Model, Acl } from '@contember/schema'
 import { EntityTypeSchemaGenerator } from './EntityTypeSchemaGenerator'
 import { EnumTypeSchemaGenerator } from './EnumTypeSchemaGenerator'
 import { NameSchemaGenerator } from './NameSchemaGenerator'
+import { RoleSchemaGenerator, type RoleSchemaGeneratorOptions } from './RoleSchemaGenerator'
 
-export interface BindxGeneratorOptions {
+export interface BindxGeneratorOptions extends RoleSchemaGeneratorOptions {
 	// Reserved for future options
 }
 
@@ -26,20 +27,27 @@ export class BindxGenerator {
 	private readonly entityTypeSchemaGenerator: EntityTypeSchemaGenerator
 	private readonly enumTypeSchemaGenerator: EnumTypeSchemaGenerator
 	private readonly nameSchemaGenerator: NameSchemaGenerator
+	private readonly roleSchemaGenerator: RoleSchemaGenerator
 
 	constructor(private readonly options: BindxGeneratorOptions = {}) {
 		this.entityTypeSchemaGenerator = new EntityTypeSchemaGenerator()
 		this.enumTypeSchemaGenerator = new EnumTypeSchemaGenerator()
 		this.nameSchemaGenerator = new NameSchemaGenerator()
+		this.roleSchemaGenerator = new RoleSchemaGenerator(options)
 	}
 
 	/**
 	 * Generate schema files
 	 */
-	generate(model: Model.Schema): GeneratedFiles {
+	generate(model: Model.Schema, acl?: Acl.Schema): GeneratedFiles {
 		const enumsCode = this.enumTypeSchemaGenerator.generate(model)
-		const entitiesCode = this.entityTypeSchemaGenerator.generate(model)
+		let entitiesCode = this.entityTypeSchemaGenerator.generate(model)
 		const namesSchema = this.nameSchemaGenerator.generate(model)
+
+		// Append per-role entity types if ACL is provided
+		if (acl) {
+			entitiesCode += '\n' + this.roleSchemaGenerator.generateRoleEntities(model, acl)
+		}
 
 		const namesCode = `import type { BindxSchemaNames } from './types'
 
@@ -47,7 +55,9 @@ export const schemaNames: BindxSchemaNames = ${JSON.stringify(namesSchema, null,
 `
 
 		const typesCode = this.generateTypesFile()
-		const schemaCode = this.generateSchemaFile(model)
+		const schemaCode = acl
+			? this.roleSchemaGenerator.generateSchemaFile(model, acl)
+			: this.generateSchemaFile(model)
 
 		const indexCode = `export * from './enums'
 export * from './entities'
@@ -125,8 +135,20 @@ export interface BindxSchemaNames {
  */
 export function generate(
 	model: Model.Schema,
+	aclOrOptions?: Acl.Schema | BindxGeneratorOptions,
 	options?: BindxGeneratorOptions,
 ): GeneratedFiles {
-	const generator = new BindxGenerator(options)
-	return generator.generate(model)
+	// Support both generate(model, acl, options) and generate(model, options)
+	let acl: Acl.Schema | undefined
+	let opts: BindxGeneratorOptions | undefined
+
+	if (aclOrOptions && 'roles' in aclOrOptions) {
+		acl = aclOrOptions
+		opts = options
+	} else {
+		opts = aclOrOptions as BindxGeneratorOptions | undefined
+	}
+
+	const generator = new BindxGenerator(opts)
+	return generator.generate(model, acl)
 }

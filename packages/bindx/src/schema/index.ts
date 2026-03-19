@@ -17,7 +17,19 @@ export {
 	hasMany,
 	defineSchema,
 	entityDef,
+	roleEntityDef,
 } from './types.js'
+
+export {
+	type UnionToIntersection,
+	type RoleNames,
+	type CommonEntity,
+	type EntityForRoles,
+	type ResolveEntity,
+	type SingleRoleMap,
+	type DefaultRole,
+	DEFAULT_ROLE,
+} from './roles.js'
 
 export { SchemaRegistry } from './SchemaRegistry.js'
 

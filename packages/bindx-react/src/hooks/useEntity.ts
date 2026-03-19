@@ -9,6 +9,9 @@ import type {
 	EntitySnapshot,
 	LoadStatus,
 	SelectedEntityFields,
+	CommonEntity,
+	EntityForRoles,
+	RoleNames,
 } from '@contember/bindx'
 import {
 	EntityHandle,
@@ -213,7 +216,26 @@ function createNotFoundAccessor(id: string): NotFoundEntityAccessor {
 // ============================================================================
 
 /**
+ * Hook to fetch and manage a single entity with role-expanded type inference.
+ *
+ * @example
+ * ```tsx
+ * const article = useEntity(schema.Article, { by: { id }, roles: ['admin'] }, e => e.title().internalNotes())
+ * ```
+ */
+export function useEntity<
+	TRoleMap extends Record<string, object>,
+	TRoles extends RoleNames<TRoleMap>,
+	TResult extends object,
+>(
+	entity: EntityDef<TRoleMap>,
+	options: UseEntityOptions & { roles: readonly TRoles[] },
+	definer: SelectionInput<EntityForRoles<TRoleMap, TRoles>, TResult>,
+): EntityAccessorResult<EntityForRoles<TRoleMap, TRoles>, TResult>
+
+/**
  * Hook to fetch and manage a single entity with full type inference.
+ * Uses the common (narrowest) entity type when no roles are specified.
  *
  * @example
  * ```tsx
@@ -222,11 +244,11 @@ function createNotFoundAccessor(id: string): NotFoundEntityAccessor {
  * return <input value={article.title.value} onChange={...} />
  * ```
  */
-export function useEntity<TEntity extends object, TResult extends object>(
-	entity: EntityDef<TEntity>,
+export function useEntity<TRoleMap extends Record<string, object>, TResult extends object>(
+	entity: EntityDef<TRoleMap>,
 	options: UseEntityOptions,
-	definer: SelectionInput<TEntity, TResult>,
-): EntityAccessorResult<TEntity, TResult>
+	definer: SelectionInput<CommonEntity<TRoleMap>, TResult>,
+): EntityAccessorResult<CommonEntity<TRoleMap>, TResult>
 
 /**
  * Hook to fetch and manage a single entity with pre-resolved selection.

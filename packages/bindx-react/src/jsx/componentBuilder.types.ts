@@ -16,6 +16,7 @@ import type {
 	AnyBrand,
 	SelectionMeta,
 	EntityDef,
+	ResolveEntity,
 } from '@contember/bindx'
 import type { SelectionProvider } from './types.js'
 import type { Condition } from './conditions.js'
@@ -334,17 +335,19 @@ export interface ComponentBuilder<
 > {
 	/**
 	 * Add an entity prop with implicit selection (collected from JSX).
+	 * Entity type is resolved based on the builder's roles via ResolveEntity.
 	 *
 	 * @param propName - Name of the prop
 	 * @param entity - EntityDef reference
 	 */
-	entity<TPropName extends string, TEntity extends object>(
+	entity<TPropName extends string, TRoleMap extends Record<string, object>>(
 		propName: TPropName,
-		entity: EntityDef<TEntity>,
-	): ComponentBuilder<AddImplicitEntity<TState, TPropName, TEntity>>
+		entity: EntityDef<TRoleMap>,
+	): ComponentBuilder<AddImplicitEntity<TState, TPropName, ResolveEntity<TRoleMap, TState['__roles'][number]>>>
 
 	/**
 	 * Add an entity prop with explicit selection (from selector function).
+	 * Entity type is resolved based on the builder's roles via ResolveEntity.
 	 *
 	 * @param propName - Name of the prop
 	 * @param entity - EntityDef reference
@@ -352,13 +355,13 @@ export interface ComponentBuilder<
 	 */
 	entity<
 		TPropName extends string,
-		TEntity extends object,
+		TRoleMap extends Record<string, object>,
 		TSelected extends object,
 	>(
 		propName: TPropName,
-		entity: EntityDef<TEntity>,
-		selector: (e: SelectionBuilder<TEntity>) => SelectionBuilder<TEntity, TSelected, object>,
-	): ComponentBuilder<AddExplicitEntity<TState, TPropName, TEntity, TSelected>>
+		entity: EntityDef<TRoleMap>,
+		selector: (e: SelectionBuilder<ResolveEntity<TRoleMap, TState['__roles'][number]>>) => SelectionBuilder<ResolveEntity<TRoleMap, TState['__roles'][number]>, TSelected, object>,
+	): ComponentBuilder<AddExplicitEntity<TState, TPropName, ResolveEntity<TRoleMap, TState['__roles'][number]>, TSelected>>
 
 	/**
 	 * Add interface-based entity props that accept any EntityRef with matching fields.
