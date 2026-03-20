@@ -95,14 +95,17 @@ export function el(selector: string): ElementHandle {
 		click(): void {
 			exec(`agent-browser wait ${quoted}`)
 			exec(`agent-browser click ${quoted}`)
+			Bun.sleepSync(500)
 		},
 		fill(value: string): void {
 			exec(`agent-browser wait ${quoted}`)
 			exec(`agent-browser fill ${quoted} ${q(value)}`)
+			Bun.sleepSync(500)
 		},
 		select(optionText: string): void {
 			exec(`agent-browser wait ${quoted}`)
 			exec(`agent-browser select ${quoted} ${q(optionText)}`)
+			Bun.sleepSync(500)
 		},
 	}
 }
