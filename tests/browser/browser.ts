@@ -3,6 +3,7 @@ import { describe, beforeAll, afterAll } from 'bun:test'
 import crypto from 'node:crypto'
 
 const TIMEOUT = 30_000
+const ACTION_DELAY = process.env['CI'] ? 800 : 300
 const PLAYGROUND_URL = process.env['PLAYGROUND_URL'] ?? 'http://localhost:15180'
 
 let currentSession: string | null = null
@@ -67,15 +68,15 @@ export function el(selector: string): ElementHandle {
 		},
 		click(): void {
 			exec(`agent-browser click ${quoted}`)
-			exec('agent-browser wait 300')
+			exec(`agent-browser wait ${ACTION_DELAY}`)
 		},
 		fill(value: string): void {
 			exec(`agent-browser fill ${quoted} ${q(value)}`)
-			exec('agent-browser wait 300')
+			exec(`agent-browser wait ${ACTION_DELAY}`)
 		},
 		select(optionText: string): void {
 			exec(`agent-browser select ${quoted} ${q(optionText)}`)
-			exec('agent-browser wait 300')
+			exec(`agent-browser wait ${ACTION_DELAY}`)
 		},
 	}
 }
@@ -97,7 +98,7 @@ export function browserTest(name: string, fn: () => void): void {
 		beforeAll(() => {
 			currentSession = `test-${crypto.randomUUID().slice(0, 8)}`
 			exec(`agent-browser open ${PLAYGROUND_URL}`)
-			exec('agent-browser wait 2000')
+			exec(`agent-browser wait ${process.env['CI'] ? 4000 : 2000}`)
 		})
 		afterAll(() => {
 			try {
