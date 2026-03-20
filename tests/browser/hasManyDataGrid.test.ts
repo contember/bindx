@@ -6,7 +6,7 @@ const scope = tid('hasmany-datagrid-example')
 browserTest('HasMany DataGrid', () => {
 	describe('parent entity', () => {
 		test('shows author name', () => {
-			expect(el('hasmany-datagrid-author').text).toContain('John Doe')
+			waitFor(() => el('hasmany-datagrid-author').text.includes('John Doe'))
 		})
 	})
 
