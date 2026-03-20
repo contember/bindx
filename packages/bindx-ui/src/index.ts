@@ -25,6 +25,10 @@ export { Loader, LoaderIcon, type LoaderProps } from './ui/loader.js'
 export { Progress } from './ui/progress.js'
 export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor } from './ui/popover.js'
 export { Tooltip, type TooltipProps } from './ui/tooltip.js'
+export {
+	Sheet, SheetPortal, SheetOverlay, SheetTrigger, SheetClose,
+	SheetContent, SheetHeader, SheetFooter, SheetTitle, SheetDescription,
+} from './ui/sheet.js'
 
 // Form Components
 export {

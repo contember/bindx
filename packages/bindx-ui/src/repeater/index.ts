@@ -6,3 +6,9 @@ export {
 	RepeaterEmptyUI,
 	RepeaterItemActionsUI,
 } from './default-repeater.js'
+
+export {
+	DefaultBlockRepeater,
+	type DefaultBlockRepeaterProps,
+	type BlockRenderDefinition,
+} from './default-block-repeater.js'

@@ -11,6 +11,10 @@ export const dict = {
 		empty: 'No items.',
 		addItem: 'Add item',
 	},
+	blockRepeater: {
+		addBlock: 'Add block',
+		close: 'Close',
+	},
 	uploader: {
 		uploadErrors: {
 			httpError: 'HTTP error',

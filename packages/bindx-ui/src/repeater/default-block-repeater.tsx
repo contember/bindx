@@ -1,0 +1,490 @@
+import { useState, type ReactNode } from 'react'
+import type { EntityAccessor, HasManyRef, AnyBrand } from '@contember/bindx'
+import { HasMany, withCollector } from '@contember/bindx-react'
+import {
+	BlockRepeater,
+	type BlockDefinition,
+	type BlockRepeaterItemInfo,
+	type BlockRepeaterItems,
+	type BlockRepeaterMethods,
+	sortEntities,
+	repairEntitiesOrder,
+} from '@contember/bindx-repeater'
+import {
+	DndContext,
+	closestCenter,
+	MouseSensor,
+	TouchSensor,
+	KeyboardSensor,
+	useSensor,
+	useSensors,
+	type DragEndEvent,
+	DragOverlay,
+} from '@dnd-kit/core'
+import {
+	SortableContext,
+	useSortable,
+	verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { GripVerticalIcon, PlusCircleIcon, Trash2Icon } from 'lucide-react'
+import { Button } from '../ui/button.js'
+import {
+	Sheet,
+	SheetContent,
+	SheetHeader,
+	SheetTitle,
+	SheetFooter,
+	SheetClose,
+} from '../ui/sheet.js'
+import {
+	RepeaterWrapperUI,
+	RepeaterEmptyUI,
+	collectionItemInfo,
+} from './default-repeater.js'
+import { dict } from '../dict.js'
+import { uic } from '../utils/uic.js'
+
+// ============================================================================
+// Types
+// ============================================================================
+
+/**
+ * Block definition with render and optional form for dual-mode.
+ *
+ * - `render` always required — used as inline content (no form) or preview (with form)
+ * - `form` optional — when present, render shows a clickable preview and form opens in a sheet
+ */
+export interface BlockRenderDefinition<
+	TEntity,
+	TSelected = TEntity,
+	TBrand extends AnyBrand = AnyBrand,
+	TEntityName extends string = string,
+	TSchema extends Record<string, object> = Record<string, object>,
+> extends BlockDefinition {
+	render: (
+		entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>,
+		info: BlockRepeaterItemInfo,
+	) => ReactNode
+	form?: (
+		entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>,
+		info: BlockRepeaterItemInfo,
+	) => ReactNode
+}
+
+export interface DefaultBlockRepeaterProps<
+	TEntity extends object = object,
+	TSelected = TEntity,
+	TBrand extends AnyBrand = AnyBrand,
+	TEntityName extends string = string,
+	TSchema extends Record<string, object> = Record<string, object>,
+	TBlockNames extends string = string,
+> {
+	/** The has-many relation field */
+	readonly field: HasManyRef<TEntity, TSelected, TBrand, TEntityName, TSchema>
+	/** Name of the scalar field used to discriminate block types */
+	readonly discriminationField: string
+	/** Optional field name for sorting — enables drag-and-drop when set */
+	readonly sortableBy?: string
+	/** Section title */
+	readonly title?: ReactNode
+	/** Whether to show the remove button on each item */
+	readonly showRemoveButton?: boolean
+	/** Block definitions with render (and optional form) functions */
+	readonly blocks: Record<TBlockNames, BlockRenderDefinition<TEntity, TSelected, TBrand, TEntityName, TSchema>>
+}
+
+// ============================================================================
+// UI Components
+// ============================================================================
+
+const BlockRepeaterItemUI = uic('div', {
+	baseClass: 'rounded-sm border border-gray-200 bg-gray-50 relative group/repeater-item',
+})
+
+const BlockRepeaterItemContentUI = uic('div', {
+	baseClass: 'p-4',
+})
+
+const BlockRepeaterItemActionsUI = uic('div', {
+	baseClass: 'absolute top-1 right-2 flex gap-2',
+})
+
+// ============================================================================
+// DefaultBlockRepeater
+// ============================================================================
+
+export const DefaultBlockRepeater = withCollector(function DefaultBlockRepeater<
+	TEntity extends object,
+	TSelected,
+	TBrand extends AnyBrand,
+	TEntityName extends string,
+	TSchema extends Record<string, object>,
+	TBlockNames extends string,
+>({
+	field,
+	discriminationField,
+	sortableBy,
+	title,
+	showRemoveButton = true,
+	blocks,
+}: DefaultBlockRepeaterProps<TEntity, TSelected, TBrand, TEntityName, TSchema, TBlockNames>): ReactNode {
+	return (
+		<BlockRepeater
+			field={field}
+			discriminationField={discriminationField}
+			sortableBy={sortableBy}
+			blocks={blocks}
+		>
+			{(items, methods) => (
+				<RepeaterWrapperUI>
+					{title && <h3 className="font-medium">{title}</h3>}
+
+					{methods.isEmpty && (
+						<RepeaterEmptyUI>{dict.repeater.empty}</RepeaterEmptyUI>
+					)}
+
+					{sortableBy ? (
+						<SortableBlockList
+							items={items}
+							methods={methods}
+							field={field}
+							sortableBy={sortableBy}
+							blocks={blocks}
+							showRemoveButton={showRemoveButton}
+						/>
+					) : (
+						<PlainBlockList
+							items={items}
+							blocks={blocks}
+							showRemoveButton={showRemoveButton}
+						/>
+					)}
+
+					<div className="flex gap-2">
+						{methods.blockList.map(b => (
+							<AddBlockButton key={b.name} onClick={() => methods.addItem(b.name)}>
+								{b.label ?? b.name}
+							</AddBlockButton>
+						))}
+					</div>
+				</RepeaterWrapperUI>
+			)}
+		</BlockRepeater>
+	)
+}, (props) => (
+	<HasMany field={props.field}>
+		{item => {
+			const blockCollectionInfo: BlockRepeaterItemInfo = {
+				...collectionItemInfo,
+				blockType: null,
+				block: undefined,
+			}
+			return (
+				<>
+					{Object.values<BlockRenderDefinition<object>>(props.blocks).map((blockDef, i) => {
+						const info = { ...blockCollectionInfo, index: i }
+						return (
+							<React.Fragment key={i}>
+								{blockDef.render(item, info)}
+								{blockDef.form?.(item, info)}
+							</React.Fragment>
+						)
+					})}
+				</>
+			)
+		}}
+	</HasMany>
+))
+
+// ============================================================================
+// Non-sortable list (no DnD)
+// ============================================================================
+
+import React from 'react'
+
+interface PlainBlockListProps<TEntity, TSelected, TBrand extends AnyBrand, TEntityName extends string, TSchema extends Record<string, object>, TBlockNames extends string> {
+	items: BlockRepeaterItems<TEntity, TSelected, TBrand, TEntityName, TSchema>
+	blocks: Record<TBlockNames, BlockRenderDefinition<TEntity, TSelected, TBrand, TEntityName, TSchema>>
+	showRemoveButton: boolean
+}
+
+function PlainBlockList<TEntity, TSelected, TBrand extends AnyBrand, TEntityName extends string, TSchema extends Record<string, object>, TBlockNames extends string>({
+	items,
+	blocks,
+	showRemoveButton,
+}: PlainBlockListProps<TEntity, TSelected, TBrand, TEntityName, TSchema, TBlockNames>): ReactNode {
+	return (
+		<>
+			{items.map((entity, info) => (
+				<BlockItem
+					key={entity.id}
+					entity={entity}
+					info={info}
+					blocks={blocks}
+					showRemoveButton={showRemoveButton}
+				/>
+			))}
+		</>
+	)
+}
+
+// ============================================================================
+// Sortable list (DnD)
+// ============================================================================
+
+interface SortableBlockListProps<TEntity, TSelected, TBrand extends AnyBrand, TEntityName extends string, TSchema extends Record<string, object>, TBlockNames extends string> {
+	items: BlockRepeaterItems<TEntity, TSelected, TBrand, TEntityName, TSchema>
+	methods: BlockRepeaterMethods<TBlockNames>
+	field: HasManyRef<TEntity, TSelected, TBrand, TEntityName, TSchema>
+	sortableBy: string
+	blocks: Record<TBlockNames, BlockRenderDefinition<TEntity, TSelected, TBrand, TEntityName, TSchema>>
+	showRemoveButton: boolean
+}
+
+function SortableBlockList<TEntity extends object, TSelected, TBrand extends AnyBrand, TEntityName extends string, TSchema extends Record<string, object>, TBlockNames extends string>({
+	items,
+	field,
+	sortableBy,
+	blocks,
+	showRemoveButton,
+}: SortableBlockListProps<TEntity, TSelected, TBrand, TEntityName, TSchema, TBlockNames>): ReactNode {
+	const [activeId, setActiveId] = useState<string | null>(null)
+
+	const sensors = useSensors(
+		useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+		useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+		useSensor(KeyboardSensor),
+	)
+
+	// Collect entity IDs for SortableContext
+	const entityIds: string[] = []
+	items.map((entity) => {
+		entityIds.push(entity.id)
+		return null
+	})
+
+	const handleDragEnd = (event: DragEndEvent): void => {
+		setActiveId(null)
+		const { active, over } = event
+		if (!over || active.id === over.id) return
+
+		const sorted = sortEntities(field.items, sortableBy) as EntityAccessor<TEntity, TSelected>[]
+		const oldIndex = sorted.findIndex(e => e.id === active.id)
+		const newIndex = sorted.findIndex(e => e.id === over.id)
+		if (oldIndex === -1 || newIndex === -1) return
+
+		// Reorder: remove from old, insert at new
+		const moved = [...sorted]
+		const [item] = moved.splice(oldIndex, 1)
+		moved.splice(newIndex, 0, item!)
+		repairEntitiesOrder(moved, sortableBy)
+	}
+
+	return (
+		<DndContext
+			sensors={sensors}
+			collisionDetection={closestCenter}
+			onDragStart={(e: { active: { id: string | number } }) => setActiveId(String(e.active.id))}
+			onDragEnd={handleDragEnd}
+			onDragCancel={() => setActiveId(null)}
+		>
+			<SortableContext items={entityIds} strategy={verticalListSortingStrategy}>
+				{items.map((entity, info) => (
+					<SortableBlockItem
+						key={entity.id}
+						entity={entity}
+						info={info}
+						blocks={blocks}
+						showRemoveButton={showRemoveButton}
+					/>
+				))}
+			</SortableContext>
+			<DragOverlay>
+				{activeId && items.map((entity, info) => {
+					if (entity.id !== activeId) return null
+					return (
+						<BlockRepeaterItemUI key={entity.id} className="shadow-lg opacity-90">
+							<BlockItemContent entity={entity} info={info} blocks={blocks} showRemoveButton={false} />
+						</BlockRepeaterItemUI>
+					)
+				})}
+			</DragOverlay>
+		</DndContext>
+	)
+}
+
+// ============================================================================
+// Sortable item wrapper
+// ============================================================================
+
+interface SortableBlockItemProps<TEntity, TSelected, TBrand extends AnyBrand, TEntityName extends string, TSchema extends Record<string, object>, TBlockNames extends string> {
+	entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>
+	info: BlockRepeaterItemInfo
+	blocks: Record<TBlockNames, BlockRenderDefinition<TEntity, TSelected, TBrand, TEntityName, TSchema>>
+	showRemoveButton: boolean
+}
+
+function SortableBlockItem<TEntity, TSelected, TBrand extends AnyBrand, TEntityName extends string, TSchema extends Record<string, object>, TBlockNames extends string>({
+	entity,
+	info,
+	blocks,
+	showRemoveButton,
+}: SortableBlockItemProps<TEntity, TSelected, TBrand, TEntityName, TSchema, TBlockNames>): ReactNode {
+	const {
+		attributes,
+		listeners,
+		setNodeRef,
+		setActivatorNodeRef,
+		transform,
+		transition,
+		isDragging,
+	} = useSortable({ id: entity.id })
+
+	const style = {
+		transform: CSS.Transform.toString(transform),
+		transition,
+		opacity: isDragging ? 0.4 : undefined,
+	}
+
+	return (
+		<BlockRepeaterItemUI ref={setNodeRef} style={style} {...attributes}>
+			<div className="flex">
+				<button
+					ref={setActivatorNodeRef}
+					{...listeners}
+					className="flex items-center px-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 touch-none"
+					tabIndex={-1}
+				>
+					<GripVerticalIcon size={16} />
+				</button>
+				<div className="flex-1 min-w-0">
+					<BlockItemContent entity={entity} info={info} blocks={blocks} showRemoveButton={showRemoveButton} />
+				</div>
+			</div>
+		</BlockRepeaterItemUI>
+	)
+}
+
+// ============================================================================
+// Block item (plain, no sortable wrapper)
+// ============================================================================
+
+interface BlockItemProps<TEntity, TSelected, TBrand extends AnyBrand, TEntityName extends string, TSchema extends Record<string, object>, TBlockNames extends string> {
+	entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>
+	info: BlockRepeaterItemInfo
+	blocks: Record<TBlockNames, BlockRenderDefinition<TEntity, TSelected, TBrand, TEntityName, TSchema>>
+	showRemoveButton: boolean
+}
+
+function BlockItem<TEntity, TSelected, TBrand extends AnyBrand, TEntityName extends string, TSchema extends Record<string, object>, TBlockNames extends string>({
+	entity,
+	info,
+	blocks,
+	showRemoveButton,
+}: BlockItemProps<TEntity, TSelected, TBrand, TEntityName, TSchema, TBlockNames>): ReactNode {
+	return (
+		<BlockRepeaterItemUI key={entity.id}>
+			<BlockItemContent entity={entity} info={info} blocks={blocks} showRemoveButton={showRemoveButton} />
+		</BlockRepeaterItemUI>
+	)
+}
+
+// ============================================================================
+// Block item content with dual-mode (render/form)
+// ============================================================================
+
+function BlockItemContent<TEntity, TSelected, TBrand extends AnyBrand, TEntityName extends string, TSchema extends Record<string, object>, TBlockNames extends string>({
+	entity,
+	info,
+	blocks,
+	showRemoveButton,
+}: BlockItemProps<TEntity, TSelected, TBrand, TEntityName, TSchema, TBlockNames>): ReactNode {
+	const [editOpen, setEditOpen] = useState(entity.$isNew)
+
+	const blockDef = info.blockType !== null
+		? (blocks as Record<string, BlockRenderDefinition<TEntity, TSelected, TBrand, TEntityName, TSchema>>)[info.blockType]
+		: undefined
+
+	if (!blockDef) return null
+
+	const hasForm = blockDef.form !== undefined
+
+	// Dual mode: render is preview, form opens in sheet
+	if (hasForm) {
+		return (
+			<>
+				<div
+					className="p-4 cursor-pointer hover:bg-gray-100 transition-colors"
+					onClick={() => setEditOpen(true)}
+				>
+					{showRemoveButton && (
+						<BlockRepeaterItemActionsUI>
+							<Button
+								variant="link"
+								size="sm"
+								className="gap-1 px-0 group/button"
+								onClick={(e: React.MouseEvent) => { e.stopPropagation(); info.remove() }}
+							>
+								<Trash2Icon className="group-hover/button:text-red-600" size={16} />
+							</Button>
+						</BlockRepeaterItemActionsUI>
+					)}
+					{blockDef.render(entity, info)}
+				</div>
+				<Sheet open={editOpen} onOpenChange={setEditOpen} modal={false}>
+					<SheetContent onFocusOutside={(e: Event) => e.preventDefault()}>
+						<SheetHeader>
+							<SheetTitle className="flex items-center gap-2">
+								{info.block?.label ?? info.blockType}
+								<Button
+									variant="link"
+									size="sm"
+									className="gap-1 px-0 group/button ml-auto"
+									onClick={() => { info.remove(); setEditOpen(false) }}
+								>
+									<Trash2Icon className="group-hover/button:text-red-600" size={16} />
+								</Button>
+							</SheetTitle>
+						</SheetHeader>
+						<div className="my-4">
+							{blockDef.form!(entity, info)}
+						</div>
+						<SheetFooter>
+							<SheetClose asChild>
+								<Button variant="outline">{dict.blockRepeater.close}</Button>
+							</SheetClose>
+						</SheetFooter>
+					</SheetContent>
+				</Sheet>
+			</>
+		)
+	}
+
+	// Inline mode: render is the full content
+	return (
+		<BlockRepeaterItemContentUI>
+			{showRemoveButton && (
+				<BlockRepeaterItemActionsUI>
+					<Button variant="link" size="sm" className="gap-1 px-0 group/button" onClick={info.remove}>
+						<Trash2Icon className="group-hover/button:text-red-600" size={16} />
+					</Button>
+				</BlockRepeaterItemActionsUI>
+			)}
+			{blockDef.render(entity, info)}
+		</BlockRepeaterItemContentUI>
+	)
+}
+
+// ============================================================================
+// Add block button
+// ============================================================================
+
+function AddBlockButton({ children, onClick }: { children?: ReactNode; onClick: () => void }): ReactNode {
+	return (
+		<Button variant="link" size="sm" className="gap-1 px-0" onClick={onClick}>
+			<PlusCircleIcon size={16} />
+			<span>{children ?? dict.blockRepeater.addBlock}</span>
+		</Button>
+	)
+}
