@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react'
 import { ContemberBindxProvider } from '@contember/bindx-react'
 import { GraphQlClient } from '@contember/graphql-client'
+import { UploaderClientContext, S3UploadClient, createContentApiS3Signer } from '@contember/bindx-uploader'
 import { schemaNames } from './generated/names.js'
 import {
 	ArticleEditor,
@@ -25,10 +26,16 @@ const client = new GraphQlClient({
 	apiToken: import.meta.env['VITE_CONTEMBER_API_TOKEN'],
 })
 
+const s3Client = new S3UploadClient({
+	signUrl: createContentApiS3Signer(client),
+})
+
 function AppProvider({ children }: { children: ReactNode }) {
 	return (
 		<ContemberBindxProvider client={client} schema={schemaNames} undoManager={true} debug={true}>
-			{children}
+			<UploaderClientContext value={s3Client}>
+				{children}
+			</UploaderClientContext>
 		</ContemberBindxProvider>
 	)
 }

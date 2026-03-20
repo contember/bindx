@@ -1,8 +1,20 @@
 import { type ReactNode } from 'react'
 import { useEntity } from '@contember/bindx-react'
 import { BlockRepeater } from '@contember/bindx-repeater'
-import { InputField, DefaultBlockRepeater } from '@contember/bindx-ui'
+import { Uploader, createImageFileType } from '@contember/bindx-uploader'
+import {
+	InputField,
+	DefaultBlockRepeater,
+	UploaderDropzone,
+	UploaderProgress,
+	UploadedImageView,
+} from '@contember/bindx-ui'
 import { schema } from '../../generated/schema.js'
+import type { ArticleBlock } from '../../generated/entities.js'
+
+const imageFileType = createImageFileType<ArticleBlock>({
+	urlField: 'imageUrl',
+})
 
 /**
  * Headless BlockRepeater example — full control over rendering
@@ -119,7 +131,13 @@ export function StyledBlockRepeaterExample({ id }: { id: string }): ReactNode {
 					image: {
 						label: 'Image',
 						render: (block) => (
-							<InputField field={block.imageUrl} label="Image URL" />
+							<Uploader entity={block} fileType={imageFileType}>
+								{block.imageUrl.value
+									? <UploadedImageView url={block.imageUrl.value} onRemove={() => block.imageUrl.setValue(null)} />
+									: <UploaderDropzone />
+								}
+								<UploaderProgress />
+							</Uploader>
 						),
 					},
 				}}
@@ -166,14 +184,24 @@ export function DualModeBlockRepeaterExample({ id }: { id: string }): ReactNode 
 						render: (block) => (
 							<div className="py-1">
 								{block.imageUrl.value ? (
-									<p className="text-sm text-blue-600 underline">{block.imageUrl.value}</p>
+									<img
+										src={block.imageUrl.value}
+										alt="Block image"
+										className="max-h-24 rounded object-contain"
+									/>
 								) : (
-									<p className="text-sm italic text-gray-400">No image URL</p>
+									<p className="text-sm italic text-gray-400">No image</p>
 								)}
 							</div>
 						),
 						form: (block) => (
-							<InputField field={block.imageUrl} label="Image URL" />
+							<Uploader entity={block} fileType={imageFileType}>
+								{block.imageUrl.value
+									? <UploadedImageView url={block.imageUrl.value} onRemove={() => block.imageUrl.setValue(null)} />
+									: <UploaderDropzone />
+								}
+								<UploaderProgress />
+							</Uploader>
 						),
 					},
 				}}

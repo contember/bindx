@@ -15,6 +15,7 @@
 		"@contember/bindx-ui": "workspace:*",
 		"@contember/bindx-editor": "workspace:*",
 		"@contember/bindx-repeater": "workspace:*",
+		"@contember/bindx-uploader": "workspace:*",
 		"@contember/bindx-react": "workspace:*",
 		"@contember/client-content": "^2.1.0-alpha.30",
 		"@contember/graphql-client": "^2.1.0-alpha.30",
