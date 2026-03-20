@@ -15,6 +15,9 @@ import {
 	SimpleBlockEditorExample,
 	DataGridExample,
 	HasManyDataGridExample,
+	HeadlessBlockRepeaterExample,
+	StyledBlockRepeaterExample,
+	DualModeBlockRepeaterExample,
 } from './components/index.js'
 
 const client = new GraphQlClient({
@@ -121,8 +124,20 @@ export function App() {
 
 					<hr />
 
+					<section data-testid="section-block-repeater">
+						<h2>7. Block Repeater</h2>
+						<p>Repeater with type discrimination — each block renders differently based on its type.</p>
+						<HeadlessBlockRepeaterExample id="00000000-0000-0000-0000-000000000e01" />
+						<hr className="my-4" />
+						<StyledBlockRepeaterExample id="00000000-0000-0000-0000-000000000e01" />
+						<hr className="my-4" />
+						<DualModeBlockRepeaterExample id="00000000-0000-0000-0000-000000000e01" />
+					</section>
+
+					<hr />
+
 					<section data-testid="section-hasmany-datagrid">
-						<h2>7. HasMany DataGrid</h2>
+						<h2>8. HasMany DataGrid</h2>
 						<p>Data grid for a has-many relation field (Author → Articles).</p>
 						<HasManyDataGridExample id="00000000-0000-0000-0000-000000000a01" />
 					</section>

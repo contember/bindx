@@ -32,6 +32,9 @@ const ids = {
 	ref4: '00000000-0000-0000-0000-000000000d04',
 	article1: '00000000-0000-0000-0000-000000000e01',
 	article2: '00000000-0000-0000-0000-000000000e02',
+	block1: '00000000-0000-0000-0000-000000000f01',
+	block2: '00000000-0000-0000-0000-000000000f02',
+	block3: '00000000-0000-0000-0000-000000000f03',
 }
 
 async function seed(): Promise<void> {
@@ -114,6 +117,27 @@ async function seed(): Promise<void> {
 				calloutVariant: "info"
 			}) { ok }
 
+			block1: createArticleBlock(data: {
+				id: "${ids.block1}"
+				blockType: "text"
+				order: 0
+				textContent: "Welcome to the block repeater demo. Each block has a type."
+			}) { ok }
+
+			block2: createArticleBlock(data: {
+				id: "${ids.block2}"
+				blockType: "image"
+				order: 1
+				imageUrl: "https://picsum.photos/600/300"
+			}) { ok }
+
+			block3: createArticleBlock(data: {
+				id: "${ids.block3}"
+				blockType: "text"
+				order: 2
+				textContent: "You can add, remove, and reorder blocks."
+			}) { ok }
+
 			article1: createArticle(data: {
 				id: "${ids.article1}"
 				title: "Introduction to React"
@@ -131,6 +155,11 @@ async function seed(): Promise<void> {
 					{ connect: { id: "${ids.ref2}" } }
 					{ connect: { id: "${ids.ref3}" } }
 					{ connect: { id: "${ids.ref4}" } }
+				]
+				blocks: [
+					{ connect: { id: "${ids.block1}" } }
+					{ connect: { id: "${ids.block2}" } }
+					{ connect: { id: "${ids.block3}" } }
 				]
 			}) { ok }
 

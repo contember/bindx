@@ -1,0 +1,148 @@
+{
+	"formatVersion": 6,
+	"modifications": [
+		{
+			"modification": "createEntity",
+			"entity": {
+				"name": "ArticleBlock",
+				"primary": "id",
+				"primaryColumn": "id",
+				"tableName": "article_block",
+				"fields": {
+					"id": {
+						"name": "id",
+						"columnName": "id",
+						"columnType": "uuid",
+						"nullable": false,
+						"type": "Uuid"
+					}
+				},
+				"unique": [],
+				"indexes": [],
+				"eventLog": {
+					"enabled": true
+				}
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "ArticleBlock",
+			"field": {
+				"name": "blockType",
+				"columnName": "block_type",
+				"columnType": "text",
+				"nullable": false,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "ArticleBlock",
+			"field": {
+				"name": "order",
+				"columnName": "order",
+				"columnType": "integer",
+				"nullable": false,
+				"type": "Integer"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "ArticleBlock",
+			"field": {
+				"name": "textContent",
+				"columnName": "text_content",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createColumn",
+			"entityName": "ArticleBlock",
+			"field": {
+				"name": "imageUrl",
+				"columnName": "image_url",
+				"columnType": "text",
+				"nullable": true,
+				"type": "String"
+			}
+		},
+		{
+			"modification": "createRelation",
+			"entityName": "ArticleBlock",
+			"owningSide": {
+				"type": "ManyHasOne",
+				"name": "article",
+				"target": "Article",
+				"joiningColumn": {
+					"columnName": "article_id",
+					"onDelete": "cascade"
+				},
+				"nullable": true,
+				"inversedBy": "blocks"
+			},
+			"inverseSide": {
+				"type": "OneHasMany",
+				"name": "blocks",
+				"target": "ArticleBlock",
+				"ownedBy": "article"
+			}
+		},
+		{
+			"modification": "patchAclSchema",
+			"patch": [
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/ArticleBlock",
+					"value": {
+						"predicates": {},
+						"operations": {
+							"read": {
+								"id": true,
+								"article": true,
+								"blockType": true,
+								"order": true,
+								"textContent": true,
+								"imageUrl": true
+							},
+							"create": {
+								"id": true,
+								"article": true,
+								"blockType": true,
+								"order": true,
+								"textContent": true,
+								"imageUrl": true
+							},
+							"update": {
+								"id": true,
+								"article": true,
+								"blockType": true,
+								"order": true,
+								"textContent": true,
+								"imageUrl": true
+							},
+							"delete": true,
+							"customPrimary": true
+						}
+					}
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/Article/operations/read/blocks",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/Article/operations/create/blocks",
+					"value": true
+				},
+				{
+					"op": "add",
+					"path": "/roles/admin/entities/Article/operations/update/blocks",
+					"value": true
+				}
+			]
+		}
+	]
+}

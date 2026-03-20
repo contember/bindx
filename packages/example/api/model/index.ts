@@ -28,6 +28,7 @@ export class Article {
 	location = c.oneHasOne(Location)
 	tags = c.manyHasMany(Tag, 'articles')
 	contentReferences = c.oneHasMany(ContentReference, 'article')
+	blocks = c.oneHasMany(ArticleBlock, 'article')
 }
 
 export class ContentReference {
@@ -41,4 +42,12 @@ export class ContentReference {
 	embedType = c.stringColumn()
 	calloutText = c.stringColumn()
 	calloutVariant = c.stringColumn()
+}
+
+export class ArticleBlock {
+	article = c.manyHasOne(Article, 'blocks').cascadeOnDelete()
+	blockType = c.stringColumn().notNull()
+	order = c.intColumn().notNull()
+	textContent = c.stringColumn()
+	imageUrl = c.stringColumn()
 }

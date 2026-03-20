@@ -14,6 +14,16 @@ export interface Article {
 		location: Location
 		tags: Tag[]
 		contentReferences: ContentReference[]
+		blocks: ArticleBlock[]
+}
+
+export interface ArticleBlock {
+		id: string
+		blockType: string
+		order: number
+		textContent: string | null
+		imageUrl: string | null
+		article: Article
 }
 
 export interface Author {
@@ -55,6 +65,7 @@ export interface Tag {
 
 export interface BindxEntities {
 	Article: Article
+	ArticleBlock: ArticleBlock
 	Author: Author
 	ContentReference: ContentReference
 	Location: Location

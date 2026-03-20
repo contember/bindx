@@ -18,6 +18,9 @@ export {
 	SimpleBlockEditorExample,
 	DataGridExample,
 	HasManyDataGridExample,
+	HeadlessBlockRepeaterExample,
+	StyledBlockRepeaterExample,
+	DualModeBlockRepeaterExample,
 } from './examples/index.js'
 
 // Undo/Redo demo

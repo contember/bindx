@@ -35,6 +35,10 @@ export const schemaNames: BindxSchemaNames = {
 				"contentReferences": {
 					"type": "many",
 					"entity": "ContentReference"
+				},
+				"blocks": {
+					"type": "many",
+					"entity": "ArticleBlock"
 				}
 			},
 			"scalars": [
@@ -43,6 +47,37 @@ export const schemaNames: BindxSchemaNames = {
 				"content",
 				"richContent",
 				"publishedAt"
+			]
+		},
+		"ArticleBlock": {
+			"name": "ArticleBlock",
+			"fields": {
+				"id": {
+					"type": "column"
+				},
+				"blockType": {
+					"type": "column"
+				},
+				"order": {
+					"type": "column"
+				},
+				"textContent": {
+					"type": "column"
+				},
+				"imageUrl": {
+					"type": "column"
+				},
+				"article": {
+					"type": "one",
+					"entity": "Article"
+				}
+			},
+			"scalars": [
+				"id",
+				"blockType",
+				"order",
+				"textContent",
+				"imageUrl"
 			]
 		},
 		"Author": {
