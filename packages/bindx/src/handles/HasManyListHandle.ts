@@ -289,6 +289,9 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			itemId,
 			this.alias,
 		)
+
+		// Register parent-child so that changes to the connected entity propagate to the parent
+		this.store.registerParentChild(this.entityType, this.entityId, this.itemType, itemId)
 	}
 
 	/**
@@ -325,6 +328,9 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			tempId,
 			this.alias,
 		)
+
+		// Register parent-child so that changes to the new entity propagate to the parent
+		this.store.registerParentChild(this.entityType, this.entityId, this.itemType, tempId)
 
 		return tempId
 	}
