@@ -71,7 +71,7 @@ export function createColumn<TValue, TFilterArtifact extends FilterArtifact, TEx
 		const fieldName = fieldRef ? extractFieldName(fieldRef) : null
 		const header = props['header'] as React.ReactNode | undefined
 		const sortable = (props['sortable'] as boolean | undefined) ?? columnType.defaultSortable
-		const filterEnabled = (props['filter'] as boolean | undefined) ?? true
+		const filterEnabled = (props['filter'] as boolean | undefined) ?? false
 		const children = props['children'] as ((value: TValue | null, accessor: EntityAccessor<object>) => React.ReactNode) | undefined
 		const rawOptions = props['options'] as readonly string[] | Readonly<Record<string, React.ReactNode>> | undefined
 		const enumOptions = Array.isArray(rawOptions)

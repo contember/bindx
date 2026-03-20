@@ -1,17 +1,22 @@
 import { execSync } from 'node:child_process'
 import { describe, beforeAll, afterAll } from 'bun:test'
+import crypto from 'node:crypto'
 
 const TIMEOUT = 25_000
 const PLAYGROUND_URL = process.env['PLAYGROUND_URL'] ?? 'http://localhost:15180'
 
+let currentSession: string | null = null
+
 function exec(cmd: string): string {
+	const sessionFlag = currentSession ? ` --session ${currentSession}` : ''
+	const fullCmd = cmd.replace(/^agent-browser\s/, `agent-browser${sessionFlag} `)
 	try {
-		const raw = execSync(cmd, { encoding: 'utf-8', timeout: TIMEOUT, stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+		const raw = execSync(fullCmd, { encoding: 'utf-8', timeout: TIMEOUT, stdio: ['pipe', 'pipe', 'pipe'] }).trim()
 		return raw.replace(/\x1B\[[0-9;]*m/g, '')
 	} catch (e: unknown) {
 		const err = e as { stdout?: string; stderr?: string; message?: string }
 		const output = err.stdout?.trim() ?? err.stderr?.trim() ?? err.message ?? 'unknown error'
-		throw new Error(`agent-browser command failed: ${cmd}\n${output}`)
+		throw new Error(`agent-browser command failed: ${fullCmd}\n${output}`)
 	}
 }
 
@@ -90,6 +95,7 @@ export function wait(ms: number): void {
 export function browserTest(name: string, fn: () => void): void {
 	describe(name, () => {
 		beforeAll(() => {
+			currentSession = `test-${crypto.randomUUID().slice(0, 8)}`
 			exec(`agent-browser open ${PLAYGROUND_URL}`)
 			exec('agent-browser wait --load networkidle')
 			exec('agent-browser wait 500')
@@ -100,6 +106,7 @@ export function browserTest(name: string, fn: () => void): void {
 			} catch {
 				// ignore close errors
 			}
+			currentSession = null
 		})
 		fn()
 	})
