@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'bun:test'
-import { browserTest, el, tid, wait } from './browser.js'
+import { browserTest, el, tid, waitFor } from './browser.js'
 
 const scope = tid('hasmany-datagrid-example')
 
@@ -54,8 +54,7 @@ browserTest('HasMany DataGrid', () => {
 	describe('column header interactions', () => {
 		test('clicking column header opens popover', () => {
 			el(`${scope} ${tid('datagrid-header-title')} button`).click()
-			wait(200)
-			expect(el('[data-radix-popper-content-wrapper]').exists).toBe(true)
+			waitFor(() => el('[data-radix-popper-content-wrapper]').exists)
 			el(`${scope} ${tid('datagrid-body')}`).click()
 		})
 	})

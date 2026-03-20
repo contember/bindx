@@ -2,8 +2,9 @@ import { execSync } from 'node:child_process'
 import { describe, beforeAll, afterAll } from 'bun:test'
 import crypto from 'node:crypto'
 
-const TIMEOUT = 30_000
-const ACTION_DELAY = process.env['CI'] ? 800 : 300
+const EXEC_TIMEOUT = 30_000
+const POLL_INTERVAL = 200
+const POLL_TIMEOUT = 10_000
 const PLAYGROUND_URL = process.env['PLAYGROUND_URL'] ?? 'http://localhost:15180'
 
 let currentSession: string | null = null
@@ -12,17 +13,13 @@ function exec(cmd: string): string {
 	const sessionFlag = currentSession ? `--session ${currentSession} ` : ''
 	const fullCmd = cmd.replace(/^agent-browser /, `agent-browser ${sessionFlag}`)
 	try {
-		const raw = execSync(fullCmd, { encoding: 'utf-8', timeout: TIMEOUT, stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+		const raw = execSync(fullCmd, { encoding: 'utf-8', timeout: EXEC_TIMEOUT, stdio: ['pipe', 'pipe', 'pipe'] }).trim()
 		return raw.replace(/\x1B\[[0-9;]*m/g, '')
 	} catch (e: unknown) {
 		const err = e as { stdout?: string; stderr?: string; message?: string }
 		const output = err.stdout?.trim() ?? err.stderr?.trim() ?? err.message ?? 'unknown error'
 		throw new Error(`agent-browser command failed: ${fullCmd}\n${output}`)
 	}
-}
-
-function sleep(ms: number): void {
-	Bun.sleepSync(ms)
 }
 
 function q(s: string): string {
@@ -34,6 +31,29 @@ function resolveSelector(selectorOrTestId: string): string {
 		return selectorOrTestId
 	}
 	return `[data-testid="${selectorOrTestId}"]`
+}
+
+/**
+ * Poll a condition until it returns true or timeout.
+ * Use instead of fixed sleep — stable on both fast local and slow CI.
+ */
+export function waitFor(
+	condition: () => boolean,
+	{ timeout = POLL_TIMEOUT, interval = POLL_INTERVAL }: { timeout?: number; interval?: number } = {},
+): void {
+	const start = Date.now()
+	while (Date.now() - start < timeout) {
+		try {
+			if (condition()) return
+		} catch {
+			// condition threw — treat as not yet ready
+		}
+		Bun.sleepSync(interval)
+	}
+	// One final check — let it throw naturally if still false
+	if (!condition()) {
+		throw new Error(`waitFor timed out after ${timeout}ms`)
+	}
 }
 
 export interface ElementHandle {
@@ -72,15 +92,12 @@ export function el(selector: string): ElementHandle {
 		},
 		click(): void {
 			exec(`agent-browser click ${quoted}`)
-			sleep(ACTION_DELAY)
 		},
 		fill(value: string): void {
 			exec(`agent-browser fill ${quoted} ${q(value)}`)
-			sleep(ACTION_DELAY)
 		},
 		select(optionText: string): void {
 			exec(`agent-browser select ${quoted} ${q(optionText)}`)
-			sleep(ACTION_DELAY)
 		},
 	}
 }
@@ -93,14 +110,22 @@ export function tid(testId: string): string {
 	return `[data-testid="${testId}"]`
 }
 
-export { sleep as wait }
+export function wait(ms: number): void {
+	Bun.sleepSync(ms)
+}
 
 export function browserTest(name: string, fn: () => void): void {
 	describe(name, () => {
 		beforeAll(() => {
 			currentSession = `test-${crypto.randomUUID().slice(0, 8)}`
 			exec(`agent-browser open ${PLAYGROUND_URL}`)
-			sleep(process.env['CI'] ? 5000 : 2000)
+			waitFor(() => {
+				try {
+					return exec('agent-browser get title').length > 0
+				} catch {
+					return false
+				}
+			}, { timeout: 15_000 })
 		}, 30_000)
 		afterAll(() => {
 			try {

@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'bun:test'
-import { browserTest, el, tid, wait } from './browser.js'
+import { browserTest, el, tid, waitFor } from './browser.js'
 
 const scope = tid('datagrid-example')
 
@@ -51,9 +51,8 @@ browserTest('DataGrid', () => {
 	describe('column header interactions', () => {
 		test('clicking column header opens popover with sort controls', () => {
 			el(`${scope} ${tid('datagrid-header-title')} button`).click()
-			wait(200)
 
-			expect(el('[data-radix-popper-content-wrapper]').exists).toBe(true)
+			waitFor(() => el('[data-radix-popper-content-wrapper]').exists)
 
 			el(`${scope} ${tid('datagrid-body')}`).click()
 		})
@@ -73,13 +72,13 @@ browserTest('DataGrid', () => {
 		test('clicking a row highlights it', () => {
 			el(`${scope} ${tid('datagrid-row-0')}`).click()
 
-			expect(el(`${scope} ${tid('datagrid-row-0')}[data-highlighted]`).exists).toBe(true)
+			waitFor(() => el(`${scope} ${tid('datagrid-row-0')}[data-highlighted]`).exists)
 		})
 
 		test('clicking another row moves highlight', () => {
 			el(`${scope} ${tid('datagrid-row-1')}`).click()
 
-			expect(el(`${scope} ${tid('datagrid-row-1')}[data-highlighted]`).exists).toBe(true)
+			waitFor(() => el(`${scope} ${tid('datagrid-row-1')}[data-highlighted]`).exists)
 			expect(el(`${scope} ${tid('datagrid-row-0')}[data-highlighted]`).exists).toBe(false)
 		})
 	})

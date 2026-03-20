@@ -1,9 +1,9 @@
 import { test, expect } from 'bun:test'
-import { browserTest, el } from './browser.js'
+import { browserTest, el, waitFor } from './browser.js'
 
 browserTest('Article with Author Select', () => {
 	test('section renders', () => {
-		expect(el('article-with-author-select').exists).toBe(true)
+		waitFor(() => el('article-with-author-select').exists)
 		expect(el('author-select-dropdown').exists).toBe(true)
 		expect(el('current-author-display').exists).toBe(true)
 	})
@@ -19,7 +19,7 @@ browserTest('Article with Author Select', () => {
 	test('changing author enables save and updates display', () => {
 		el('author-select-dropdown').select('Bob Wilson (bob@example.com)')
 
-		expect(el('author-select-save-button').isDisabled).toBe(false)
+		waitFor(() => !el('author-select-save-button').isDisabled)
 		expect(el('current-author-display').text).toContain('Bob Wilson')
 		expect(el('current-author-display').text).toContain('Changes will be applied on save')
 	})
@@ -27,6 +27,6 @@ browserTest('Article with Author Select', () => {
 	test('reset reverts author change', () => {
 		el('author-select-reset-button').click()
 
-		expect(el('author-select-save-button').isDisabled).toBe(true)
+		waitFor(() => el('author-select-save-button').isDisabled)
 	})
 })

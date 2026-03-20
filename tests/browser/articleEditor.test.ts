@@ -1,9 +1,9 @@
 import { test, expect } from 'bun:test'
-import { browserTest, el } from './browser.js'
+import { browserTest, el, waitFor } from './browser.js'
 
 browserTest('Article Editor', () => {
 	test('section renders with all sub-components', () => {
-		expect(el('article-editor').exists).toBe(true)
+		waitFor(() => el('article-editor').exists)
 		expect(el('article-title-input').exists).toBe(true)
 		expect(el('article-content-input').exists).toBe(true)
 		expect(el('article-author-select').exists).toBe(true)
@@ -23,7 +23,7 @@ browserTest('Article Editor', () => {
 	test('changing author enables save/reset and shows dirty notice', () => {
 		el('article-author-select').select('Jane Smith')
 
-		expect(el('article-save-button').isDisabled).toBe(false)
+		waitFor(() => !el('article-save-button').isDisabled)
 		expect(el('article-reset-button').isDisabled).toBe(false)
 		expect(el('article-dirty-notice').exists).toBe(true)
 	})
@@ -31,7 +31,7 @@ browserTest('Article Editor', () => {
 	test('removing a tag updates the tag list', () => {
 		el('remove-tag-React').click()
 
-		expect(el('tag-badge-React').exists).toBe(false)
+		waitFor(() => !el('tag-badge-React').exists)
 		expect(el('tag-badge-JavaScript').exists).toBe(true)
 		expect(el('tags-dirty-notice').exists).toBe(true)
 	})
@@ -39,13 +39,13 @@ browserTest('Article Editor', () => {
 	test('adding a tag shows it in the list', () => {
 		el('article-add-tag-select').select('TypeScript')
 
-		expect(el('tag-badge-TypeScript').exists).toBe(true)
+		waitFor(() => el('tag-badge-TypeScript').exists)
 	})
 
 	test('reset reverts all changes', () => {
 		el('article-reset-button').click()
 
-		expect(el('article-save-button').isDisabled).toBe(true)
+		waitFor(() => el('article-save-button').isDisabled)
 		expect(el('article-reset-button').isDisabled).toBe(true)
 		expect(el('article-dirty-notice').exists).toBe(false)
 		expect(el('tag-badge-React').exists).toBe(true)
