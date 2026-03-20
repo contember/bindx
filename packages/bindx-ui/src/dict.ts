@@ -14,6 +14,7 @@ export const dict = {
 	blockRepeater: {
 		addBlock: 'Add block',
 		close: 'Close',
+		delete: 'Delete',
 	},
 	uploader: {
 		uploadErrors: {

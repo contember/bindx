@@ -100,7 +100,7 @@ export interface DefaultBlockRepeaterProps<
 // ============================================================================
 
 const BlockRepeaterItemUI = uic('div', {
-	baseClass: 'rounded-sm border border-gray-200 bg-gray-50 relative group/repeater-item',
+	baseClass: 'rounded-lg border border-gray-200 bg-white relative group/repeater-item shadow-sm',
 })
 
 const BlockRepeaterItemContentUI = uic('div', {
@@ -108,7 +108,7 @@ const BlockRepeaterItemContentUI = uic('div', {
 })
 
 const BlockRepeaterItemActionsUI = uic('div', {
-	baseClass: 'absolute top-1 right-2 flex gap-2',
+	baseClass: 'absolute top-2 right-2 flex gap-1 opacity-0 group-hover/repeater-item:opacity-100 transition-opacity',
 })
 
 // ============================================================================
@@ -354,7 +354,7 @@ function SortableBlockItem<TEntity, TSelected, TBrand extends AnyBrand, TEntityN
 				<button
 					ref={setActivatorNodeRef}
 					{...listeners}
-					className="flex items-center px-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 touch-none"
+					className="flex items-center px-2 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none border-r border-gray-100"
 					tabIndex={-1}
 				>
 					<GripVerticalIcon size={16} />
@@ -416,18 +416,18 @@ function BlockItemContent<TEntity, TSelected, TBrand extends AnyBrand, TEntityNa
 		return (
 			<>
 				<div
-					className="p-4 cursor-pointer hover:bg-gray-100 transition-colors"
+					className="p-4 cursor-pointer hover:bg-gray-50 transition-colors rounded-lg"
 					onClick={() => setEditOpen(true)}
 				>
 					{showRemoveButton && (
 						<BlockRepeaterItemActionsUI>
 							<Button
-								variant="link"
-								size="sm"
-								className="gap-1 px-0 group/button"
+								variant="outline"
+								size="icon"
+								className="h-7 w-7 text-gray-400 hover:text-red-600 hover:border-red-200 bg-white"
 								onClick={(e: React.MouseEvent) => { e.stopPropagation(); info.remove() }}
 							>
-								<Trash2Icon className="group-hover/button:text-red-600" size={16} />
+								<Trash2Icon size={14} />
 							</Button>
 						</BlockRepeaterItemActionsUI>
 					)}
@@ -437,17 +437,18 @@ function BlockItemContent<TEntity, TSelected, TBrand extends AnyBrand, TEntityNa
 					<SheetContent onFocusOutside={(e: Event) => e.preventDefault()}>
 						<SheetHeader>
 							<SheetTitle>{info.block?.label ?? info.blockType}</SheetTitle>
-							<div className="flex items-center gap-1">
+							<div className="flex items-center gap-2">
 								<Button
-									variant="ghost"
+									variant="outline"
 									size="sm"
-									className="text-gray-400 hover:text-red-600"
+									className="gap-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 hover:border-red-200"
 									onClick={() => { info.remove(); setEditOpen(false) }}
 								>
 									<Trash2Icon size={16} />
+									{dict.blockRepeater.delete}
 								</Button>
 								<SheetClose asChild>
-									<Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600">
+									<Button variant="outline" size="sm">
 										<XIcon size={16} />
 									</Button>
 								</SheetClose>
@@ -472,8 +473,13 @@ function BlockItemContent<TEntity, TSelected, TBrand extends AnyBrand, TEntityNa
 		<BlockRepeaterItemContentUI>
 			{showRemoveButton && (
 				<BlockRepeaterItemActionsUI>
-					<Button variant="link" size="sm" className="gap-1 px-0 group/button" onClick={info.remove}>
-						<Trash2Icon className="group-hover/button:text-red-600" size={16} />
+					<Button
+						variant="outline"
+						size="icon"
+						className="h-7 w-7 text-gray-400 hover:text-red-600 hover:border-red-200 bg-white"
+						onClick={info.remove}
+					>
+						<Trash2Icon size={14} />
 					</Button>
 				</BlockRepeaterItemActionsUI>
 			)}
