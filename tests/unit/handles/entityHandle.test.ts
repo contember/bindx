@@ -92,7 +92,7 @@ describe('EntityHandle', () => {
 
 		test('should return entity type', () => {
 			const handle = createEntityHandle('a-1')
-			expect(handle.$type).toBe('Article')
+			expect(handle.entityType).toBe('Article')
 		})
 	})
 

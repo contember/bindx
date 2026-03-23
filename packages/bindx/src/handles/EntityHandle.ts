@@ -114,13 +114,6 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	}
 
 	/**
-	 * Gets the entity type.
-	 */
-	get type(): string {
-		return this.entityType
-	}
-
-	/**
 	 * Gets the current entity snapshot.
 	 */
 	getSnapshot(): EntitySnapshot<T> | undefined {
