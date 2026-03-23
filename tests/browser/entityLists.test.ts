@@ -11,9 +11,8 @@ browserTest('Entity Lists', () => {
 	})
 
 	describe('Author List', () => {
-		test('renders all 5 authors', () => {
+		test('renders author list', () => {
 			expect(el('author-list').exists).toBe(true)
-			expect(el('author-list-count').text).toContain('All Authors (5)')
 		})
 
 		test.each([

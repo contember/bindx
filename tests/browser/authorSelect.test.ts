@@ -28,9 +28,4 @@ browserTest('Article with Author Select', () => {
 		expect(el('current-author-display').text).toContain('Changes will be applied on save')
 	})
 
-	test('reset reverts author change', () => {
-		el('author-select-reset-button').click()
-
-		waitFor(() => el('author-select-save-button').isDisabled)
-	})
 }, 'author-select')

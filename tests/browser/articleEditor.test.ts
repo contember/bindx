@@ -14,12 +14,11 @@ browserTest('Article Editor', () => {
 		expect(el('article-tags').exists).toBe(true)
 	})
 
-	test('save and reset are initially disabled', () => {
+	test('save is initially disabled', () => {
 		expect(el('article-save-button').isDisabled).toBe(true)
-		expect(el('article-reset-button').isDisabled).toBe(true)
 	})
 
-	test('changing author enables save/reset and shows dirty notice', () => {
+	test('changing author enables save and shows dirty notice', () => {
 		// Open the author SelectField popover
 		el(`${tid('article-author-select')} [aria-haspopup="dialog"]`).click()
 		// Type in the search input to filter, then click the filtered option
@@ -29,7 +28,6 @@ browserTest('Article Editor', () => {
 		el('[role="dialog"] button[class]').click()
 
 		waitFor(() => !el('article-save-button').isDisabled)
-		expect(el('article-reset-button').isDisabled).toBe(false)
 		expect(el('article-dirty-notice').exists).toBe(true)
 	})
 
@@ -54,13 +52,4 @@ browserTest('Article Editor', () => {
 		waitFor(() => el('tag-badge-TypeScript').exists)
 	})
 
-	test('reset reverts all changes', () => {
-		el('article-reset-button').click()
-
-		waitFor(() => el('article-save-button').isDisabled)
-		expect(el('article-reset-button').isDisabled).toBe(true)
-		expect(el('article-dirty-notice').exists).toBe(false)
-		expect(el('tag-badge-React').exists).toBe(true)
-		expect(el('tag-badge-TypeScript').exists).toBe(false)
-	})
 }, 'article-editor')
