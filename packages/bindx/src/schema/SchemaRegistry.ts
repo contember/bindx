@@ -104,6 +104,26 @@ export class SchemaRegistry<TModels extends Record<string, object> = Record<stri
 	}
 
 	/**
+	 * Gets the enum name for an enum field.
+	 * Returns undefined if the field is not an enum or doesn't exist.
+	 */
+	getEnumName(entityType: string, fieldName: string): string | undefined {
+		const fieldDef = this.getFieldDef(entityType, fieldName)
+		if (!fieldDef || fieldDef.type !== 'enum') return undefined
+		return fieldDef.enumName
+	}
+
+	/**
+	 * Gets the column type for a scalar field (e.g. 'String', 'Integer', 'Date').
+	 * Returns undefined if the field is not a scalar or doesn't exist.
+	 */
+	getColumnType(entityType: string, fieldName: string): string | undefined {
+		const fieldDef = this.getFieldDef(entityType, fieldName)
+		if (!fieldDef || fieldDef.type !== 'scalar') return undefined
+		return fieldDef.columnType
+	}
+
+	/**
 	 * Gets the target entity type for a relation field.
 	 * Returns undefined if the field is not a relation or doesn't exist.
 	 */

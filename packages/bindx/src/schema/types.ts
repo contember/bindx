@@ -15,6 +15,7 @@ export type RelationType = 'hasOne' | 'hasMany'
  */
 export interface ScalarFieldDef {
 	readonly type: 'scalar'
+	readonly columnType?: string
 }
 
 /**

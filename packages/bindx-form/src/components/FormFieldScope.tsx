@@ -33,13 +33,17 @@ export function FormFieldScope<T>({
 
 	const entityName = meta?.entityType ?? 'unknown'
 	const fieldName = meta?.fieldName ?? 'unknown'
+	const enumName = meta?.enumName
+	const columnType = meta?.columnType
 
 	const fieldInfo = useMemo(
 		() => ({
 			entityName,
 			fieldName,
+			enumName,
+			columnType,
 		}),
-		[entityName, fieldName],
+		[entityName, fieldName, enumName, columnType],
 	)
 
 	// Determine required from props or default to false

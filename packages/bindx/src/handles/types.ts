@@ -122,6 +122,10 @@ export interface FieldRefMeta<TEntityName extends string = string> {
 	readonly isRelation: boolean
 	/** For enum fields: the enum type name (e.g. 'DeploymentStatus') */
 	readonly enumName?: string
+	/** For scalar fields: the column type (e.g. 'String', 'Integer', 'Date') */
+	readonly columnType?: string
+	/** For relation fields: the target entity type name */
+	readonly targetType?: string
 }
 
 /**

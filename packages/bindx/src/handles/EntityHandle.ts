@@ -248,12 +248,16 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			return cached as FieldHandle<T[K]>
 		}
 
+		const enumName = this.schema.getEnumName(this.entityType, cacheKey)
+		const columnType = this.schema.getColumnType(this.entityType, cacheKey)
 		const handle = FieldHandle.create<T[K]>(
 			this.entityType,
 			this.entityId,
 			[cacheKey],
 			this.store,
 			this.dispatcher,
+			enumName,
+			columnType,
 		)
 		this.fieldHandleCache.set(cacheKey, handle as FieldHandle<unknown>)
 

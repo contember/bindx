@@ -18,6 +18,7 @@ export interface FormFieldState {
 		readonly entityName: string
 		readonly fieldName: string
 		readonly enumName?: string
+		readonly columnType?: string
 	}
 }
 

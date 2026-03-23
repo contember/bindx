@@ -11,7 +11,7 @@ export interface BindxSchemaEntityNames {
 	readonly scalars: readonly string[]
 	readonly fields: {
 		readonly [fieldName: string]:
-			| { readonly type: 'column' }
+			| { readonly type: 'column'; readonly columnType?: string; readonly enumName?: string }
 			| { readonly type: 'one'; readonly entity: string }
 			| { readonly type: 'many'; readonly entity: string }
 	}
@@ -49,9 +49,9 @@ export class NameSchemaGenerator {
 						},
 						visitColumn: ctx => {
 							scalars.push(ctx.column.name)
-							fields[ctx.column.name] = {
-								type: 'column',
-							}
+							fields[ctx.column.name] = ctx.column.type === Model.ColumnType.Enum
+								? { type: 'column', columnType: ctx.column.columnType, enumName: ctx.column.columnType }
+								: { type: 'column', columnType: ctx.column.columnType }
 						},
 					})
 

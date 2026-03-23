@@ -35,6 +35,8 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle implements Fie
 		private readonly fieldPath: string[],
 		store: SnapshotStore,
 		dispatcher: ActionDispatcher,
+		private readonly _enumName?: string,
+		private readonly _columnType?: string,
 	) {
 		super(entityType, entityId, store, dispatcher)
 	}
@@ -45,8 +47,10 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle implements Fie
 		fieldPath: string[],
 		store: SnapshotStore,
 		dispatcher: ActionDispatcher,
+		enumName?: string,
+		columnType?: string,
 	): FieldHandle<T> {
-		return createAliasProxy(new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher))
+		return createAliasProxy(new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType))
 	}
 
 	/**
@@ -61,6 +65,8 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle implements Fie
 			fieldName: this.fieldName,
 			isArray: false,
 			isRelation: false,
+			enumName: this._enumName,
+			columnType: this._columnType,
 		}
 	}
 

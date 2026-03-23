@@ -36,7 +36,7 @@ const BASE_ENTITY_PROPERTIES: (string | symbol)[] = [
 export const ENTITY_HANDLE_PROPERTIES = new Set<string | symbol>([
 	...BASE_ENTITY_PROPERTIES,
 	// Entity-specific internals
-	'type', 'fieldHandleCache', 'relationHandleCache',
+	'fieldHandleCache', 'relationHandleCache',
 	// Internal methods (unlikely to be field names)
 	'field', 'hasOne', 'hasMany', 'getSnapshot',
 	'reset', 'commit',
