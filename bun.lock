@@ -21,7 +21,7 @@
     },
     "packages/bindx": {
       "name": "@contember/bindx",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@contember/client-content": "^2.1.0-alpha.30",
         "@contember/graphql-builder": "^2.1.0-alpha.30",
@@ -30,7 +30,7 @@
     },
     "packages/bindx-dataview": {
       "name": "@contember/bindx-dataview",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-react": "workspace:*",
@@ -43,7 +43,7 @@
     },
     "packages/bindx-editor": {
       "name": "@contember/bindx-editor",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-react": "workspace:*",
@@ -59,7 +59,7 @@
     },
     "packages/bindx-form": {
       "name": "@contember/bindx-form",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@radix-ui/react-slot": "^1.2.4",
@@ -70,7 +70,7 @@
     },
     "packages/bindx-generator": {
       "name": "@contember/bindx-generator",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@contember/schema": "^2.1.0-alpha.30",
         "@contember/schema-utils": "^2.1.0-alpha.30",
@@ -81,7 +81,7 @@
     },
     "packages/bindx-react": {
       "name": "@contember/bindx-react",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/client-content": "^2.1.0-alpha.30",
@@ -95,7 +95,7 @@
     },
     "packages/bindx-repeater": {
       "name": "@contember/bindx-repeater",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-react": "workspace:*",
@@ -106,7 +106,7 @@
     },
     "packages/bindx-ui": {
       "name": "@contember/bindx-ui",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-dataview": "workspace:*",
@@ -139,7 +139,7 @@
     },
     "packages/bindx-uploader": {
       "name": "@contember/bindx-uploader",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-react": "workspace:*",
@@ -154,7 +154,7 @@
     },
     "packages/example": {
       "name": "@contember/bindx-example",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-dataview": "workspace:*",
