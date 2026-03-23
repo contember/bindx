@@ -80,6 +80,7 @@ export const SelectField = withCollector(function SelectField<F extends HasOneRe
 	const options = useMemo(() => {
 		if (!field) return null
 		const meta = field[FIELD_REF_META]
+		if (meta?.targetType) return entityDef(meta.targetType)
 		if (meta?.entityType) return entityDef(meta.entityType)
 		throw new Error('SelectField: cannot derive options entity from field.')
 	}, [field])

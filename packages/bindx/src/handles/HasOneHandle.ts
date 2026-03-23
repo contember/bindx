@@ -117,6 +117,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			fieldName: this.fieldName,
 			isArray: false,
 			isRelation: true,
+			targetType: this.targetType,
 		}
 	}
 
@@ -264,6 +265,15 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 
 		const embeddedData = (parentSnapshot.data as Record<string, unknown>)[this.fieldName]
 		if (!embeddedData || typeof embeddedData !== 'object') {
+			return
+		}
+
+		// Only use embedded data if its ID matches the expected related entity ID.
+		// After $connect changes the relation to a different entity, the parent's embedded
+		// data still contains the OLD related entity — using it would store stale data
+		// under the new entity's key.
+		const embeddedId = (embeddedData as Record<string, unknown>)['id']
+		if (embeddedId !== id) {
 			return
 		}
 

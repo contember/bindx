@@ -100,6 +100,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			fieldName: this.fieldName,
 			isArray: true,
 			isRelation: true,
+			targetType: this.itemType,
 		}
 	}
 
