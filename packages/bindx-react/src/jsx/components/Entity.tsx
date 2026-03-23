@@ -245,6 +245,10 @@ interface EntityHandleRendererProps {
 /**
  * Shared component that creates an EntityHandle and renders children with it.
  * Used by both EntityByMode and EntityCreateMode.
+ *
+ * Subscribes to entity snapshot changes so that the handle reference changes
+ * when entity data changes. This is necessary because children may be wrapped
+ * in React.memo and need a new handle reference to trigger re-renders.
  */
 function EntityHandleRenderer({
 	entityId,
@@ -255,9 +259,21 @@ function EntityHandleRenderer({
 	selection,
 	children,
 }: EntityHandleRendererProps): ReactElement {
+	const subscribe = useCallback(
+		(callback: () => void) => store.subscribeToEntity(entityType, entityId, callback),
+		[store, entityType, entityId],
+	)
+
+	const getSnapshot = useCallback(
+		() => store.getEntitySnapshot(entityType, entityId)?.version ?? 0,
+		[store, entityType, entityId],
+	)
+
+	const version = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+
 	const handle = useMemo(
 		() => EntityHandle.create(entityId, entityType, store, dispatcher, schemaRegistry, undefined, selection),
-		[entityId, entityType, store, dispatcher, schemaRegistry, selection],
+		[entityId, entityType, store, dispatcher, schemaRegistry, selection, version],
 	)
 
 	useEffect(() => () => { handle.dispose() }, [handle])

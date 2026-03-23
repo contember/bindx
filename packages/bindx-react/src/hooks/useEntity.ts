@@ -409,9 +409,11 @@ export function useEntity(
 	}, [entityType, id, byKey, effectiveQueryKey, options.cache, batcher, store, dispatcher, selectionMeta])
 
 	// --- EntityHandle ---
+	// Include snapshot in deps so handle reference changes when entity data changes.
+	// This ensures memo-wrapped children that receive individual field handles re-render.
 	const handle = useMemo(
 		() => EntityHandle.create(id, entityType, store, dispatcher, schemaRegistry as SchemaRegistry<Record<string, object>>),
-		[id, entityType, store, dispatcher, schemaRegistry],
+		[id, entityType, store, dispatcher, schemaRegistry, snapshot],
 	)
 
 	useEffect(() => {

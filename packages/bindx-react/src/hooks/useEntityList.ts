@@ -248,6 +248,7 @@ export function useEntityList(
 
 	const listCacheRef = useRef<{
 		version: number
+		storeVersion: number
 		status: string
 		result: EntityListAccessorResult<object>
 	} | null>(null)
@@ -312,9 +313,10 @@ export function useEntityList(
 	const getSnapshot = useCallback((): EntityListAccessorResult<object> => {
 		const state = listStateRef.current
 		const version = versionRef.current
+		const storeVersion = store.getVersion()
 
 		const cache = listCacheRef.current
-		if (cache && cache.version === version && cache.status === state.status) {
+		if (cache && cache.version === version && cache.storeVersion === storeVersion && cache.status === state.status) {
 			return cache.result
 		}
 
@@ -350,6 +352,7 @@ export function useEntityList(
 
 		listCacheRef.current = {
 			version,
+			storeVersion,
 			status: state.status,
 			result,
 		}
