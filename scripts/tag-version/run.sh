@@ -51,6 +51,8 @@ fi
 
 bun run ./scripts/tag-version/bump-version.ts "$@"
 
+# Regenerate lockfile so workspace versions are up to date for bun pm pack
+rm bun.lock
 bun install
 
 git add .
