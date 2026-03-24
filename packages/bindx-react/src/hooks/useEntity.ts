@@ -322,7 +322,7 @@ export function useEntity(
 	}, [rawHandle])
 
 	// --- Build result ---
-	const result = useMemo((): UseEntityResult<any, any> => {
+	const result = useMemo((): UseEntityResult<object, object> => {
 		if (!loadState || loadState.status === 'loading' || (!snapshot && loadState.status === 'success')) {
 			return { $status: 'loading', $isLoading: true, $isError: false, $isNotFound: false, $error: null, id, $persist: persist, $reset: reset }
 		}
@@ -339,7 +339,8 @@ export function useEntity(
 		return createReadyResult(handle, persist, reset)
 	}, [snapshot, loadState, isPersisting, id, handle, persist, reset])
 
-	return result
+	// Proxy-based result satisfies the full UseEntityResult<T> at runtime via field access delegation
+	return result as UseEntityResult<any, any>
 }
 
 // ============================================================================
@@ -350,8 +351,8 @@ function createReadyResult(
 	handle: EntityAccessor<object, object>,
 	persist: () => Promise<void>,
 	reset: () => void,
-): ReadyEntityResult<any, any> {
-	const meta = {
+): UseEntityResult<object, object> {
+	const meta: Record<string, unknown> = {
 		$status: 'ready' as const,
 		$isLoading: false as const,
 		$isError: false as const,
@@ -361,10 +362,11 @@ function createReadyResult(
 		$reset: reset,
 	}
 
-	return new Proxy(handle as any, {
+	// Proxy merges status metadata onto EntityAccessor — satisfies ReadyEntityResult at runtime
+	return new Proxy(handle as object, {
 		get(target, prop, receiver) {
 			if (typeof prop === 'string' && prop in meta) {
-				return (meta as any)[prop]
+				return meta[prop]
 			}
 			return Reflect.get(target, prop, receiver)
 		},
@@ -374,5 +376,5 @@ function createReadyResult(
 			}
 			return Reflect.has(target, prop)
 		},
-	}) as any
+	}) as unknown as UseEntityResult<object, object>
 }

@@ -248,6 +248,14 @@ export class SchemaRegistry<TModels extends Record<string, object> = Record<stri
 	}
 }
 
+/** Raw field format from Contember SchemaNames (column/one/many with entity). */
+interface RawContemberFieldDef {
+	readonly type: string
+	readonly entity?: string
+	readonly target?: string
+	readonly inverse?: string
+}
+
 /**
  * Normalizes field definitions from Contember SchemaNames format
  * (column/one/many with entity) to bindx FieldDef format (scalar/hasOne/hasMany with target).
@@ -257,24 +265,23 @@ function normalizeEntityDef(entityDef: EntitySchemaDef): EntitySchemaDef {
 	let needsNormalization = false
 
 	for (const [fieldName, fieldDef] of Object.entries(entityDef.fields)) {
-		const raw = fieldDef as unknown as Record<string, unknown>
-		const type = raw['type'] as string
+		const raw = fieldDef as RawContemberFieldDef
 
-		if (type === 'column') {
+		if (raw.type === 'column') {
 			fields[fieldName] = { type: 'scalar' }
 			needsNormalization = true
-		} else if (type === 'one') {
+		} else if (raw.type === 'one') {
 			fields[fieldName] = {
 				type: 'hasOne',
-				target: (raw['entity'] as string) ?? (raw['target'] as string),
-				inverse: raw['inverse'] as string | undefined,
+				target: (raw.entity ?? raw.target)!,
+				inverse: raw.inverse,
 			}
 			needsNormalization = true
-		} else if (type === 'many') {
+		} else if (raw.type === 'many') {
 			fields[fieldName] = {
 				type: 'hasMany',
-				target: (raw['entity'] as string) ?? (raw['target'] as string),
-				inverse: raw['inverse'] as string | undefined,
+				target: (raw.entity ?? raw.target)!,
+				inverse: raw.inverse,
 			}
 			needsNormalization = true
 		} else {

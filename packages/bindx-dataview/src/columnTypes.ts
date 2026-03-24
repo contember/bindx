@@ -57,8 +57,7 @@ export function defineColumnType<TValue, TFilterArtifact extends FilterArtifact>
  */
 export function accessField(accessor: EntityAccessor<object>, fieldName: string): unknown {
 	// EntityAccessor is a Proxy — bracket access goes through the get trap
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	return (accessor as any)[fieldName]
+	return (accessor as unknown as Record<string, unknown>)[fieldName]
 }
 
 function extractScalarValue<T>(accessor: EntityAccessor<object>, fieldName: string): T | null {

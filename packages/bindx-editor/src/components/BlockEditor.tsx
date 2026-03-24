@@ -225,7 +225,7 @@ function BlockElementRenderer<
 		return <BlockElementWithRef block={block} renderProps={renderProps} />
 	}
 
-	return <>{block.render({ ...renderProps, isVoid: block.isVoid }, undefined as unknown as EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>)}</>
+	return <>{block.render({ ...renderProps, isVoid: block.isVoid }, null)}</>
 }
 
 function BlockElementWithRef<

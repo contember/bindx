@@ -21,7 +21,7 @@ export interface BlockDefinition<
 	isVoid: boolean
 	render: (
 		props: RenderElementProps & { isVoid: boolean },
-		ref: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>,
+		ref: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema> | null,
 	) => ReactNode
 	/** Static render for selection collection. Returns JSX with <Field>, <HasOne>, etc.
 	 *  Called during analysis phase with a collector proxy — must be pure (no hooks, no side effects). */

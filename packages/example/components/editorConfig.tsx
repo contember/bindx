@@ -160,76 +160,88 @@ export const simpleBlocks: BlockDefinitions<ContentReference> = {
 export const blocks: BlockDefinitions<ContentReference> = {
 	image: {
 		isVoid: true,
-		render: (props, ref) => (
-			<div {...props.attributes} contentEditable={false} style={{ padding: '12px', background: '#f5f5f5', borderRadius: '8px', margin: '8px 0' }}>
-				<Field field={ref.imageUrl}>
-					{url => <img src={url.value ?? 'https://via.placeholder.com/400x200'} alt="" style={{ maxWidth: '100%', borderRadius: '4px' }} />}
-				</Field>
-				<Field field={ref.caption}>
-					{caption => <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>{caption.value ?? 'No caption'}</p>}
-				</Field>
-				{props.children}
-			</div>
-		),
+		render: (props, ref) => {
+			if (!ref) return null
+			return (
+				<div {...props.attributes} contentEditable={false} style={{ padding: '12px', background: '#f5f5f5', borderRadius: '8px', margin: '8px 0' }}>
+					<Field field={ref.imageUrl}>
+						{url => <img src={url.value ?? 'https://via.placeholder.com/400x200'} alt="" style={{ maxWidth: '100%', borderRadius: '4px' }} />}
+					</Field>
+					<Field field={ref.caption}>
+						{caption => <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>{caption.value ?? 'No caption'}</p>}
+					</Field>
+					{props.children}
+				</div>
+			)
+		},
 		staticRender: ref => (
 			<><Field field={ref.imageUrl} /><Field field={ref.caption} /></>
 		),
 	},
 	quote: {
 		isVoid: true,
-		render: (props, ref) => (
-			<blockquote {...props.attributes} contentEditable={false} style={{ borderLeft: '4px solid #ccc', padding: '8px 16px', margin: '8px 0', fontStyle: 'italic', background: '#fafafa' }}>
-				<Field field={ref.quoteText}>
-					{text => <p><em>{text.value}</em></p>}
-				</Field>
-				<Field field={ref.quoteAuthor}>
-					{author => <footer style={{ fontSize: '12px', color: '#666' }}>— {author.value}</footer>}
-				</Field>
-				{props.children}
-			</blockquote>
-		),
+		render: (props, ref) => {
+			if (!ref) return null
+			return (
+				<blockquote {...props.attributes} contentEditable={false} style={{ borderLeft: '4px solid #ccc', padding: '8px 16px', margin: '8px 0', fontStyle: 'italic', background: '#fafafa' }}>
+					<Field field={ref.quoteText}>
+						{text => <p><em>{text.value}</em></p>}
+					</Field>
+					<Field field={ref.quoteAuthor}>
+						{author => <footer style={{ fontSize: '12px', color: '#666' }}>— {author.value}</footer>}
+					</Field>
+					{props.children}
+				</blockquote>
+			)
+		},
 		staticRender: ref => (
 			<><Field field={ref.quoteText} /><Field field={ref.quoteAuthor} /></>
 		),
 	},
 	embed: {
 		isVoid: true,
-		render: (props, ref) => (
-			<div {...props.attributes} contentEditable={false} style={{ padding: '12px', background: '#f0f0f0', borderRadius: '8px', margin: '8px 0' }}>
-				<Field field={ref.embedUrl}>
-					{url => (
-						<Field field={ref.embedType}>
-							{type =>
-								type.value === 'youtube'
-									? <iframe src={`https://youtube.com/embed/${extractYoutubeId(url.value)}`} style={{ width: '100%', height: '315px', border: 'none', borderRadius: '4px' }} title="YouTube video" />
-									: <a href={url.value ?? ''} target="_blank" rel="noopener noreferrer" style={{ color: '#1a73e8' }}>{url.value}</a>
-							}
-						</Field>
-					)}
-				</Field>
-				{props.children}
-			</div>
-		),
+		render: (props, ref) => {
+			if (!ref) return null
+			return (
+				<div {...props.attributes} contentEditable={false} style={{ padding: '12px', background: '#f0f0f0', borderRadius: '8px', margin: '8px 0' }}>
+					<Field field={ref.embedUrl}>
+						{url => (
+							<Field field={ref.embedType}>
+								{type =>
+									type.value === 'youtube'
+										? <iframe src={`https://youtube.com/embed/${extractYoutubeId(url.value)}`} style={{ width: '100%', height: '315px', border: 'none', borderRadius: '4px' }} title="YouTube video" />
+										: <a href={url.value ?? ''} target="_blank" rel="noopener noreferrer" style={{ color: '#1a73e8' }}>{url.value}</a>
+								}
+							</Field>
+						)}
+					</Field>
+					{props.children}
+				</div>
+			)
+		},
 		staticRender: ref => (
 			<><Field field={ref.embedUrl} /><Field field={ref.embedType} /></>
 		),
 	},
 	callout: {
 		isVoid: true,
-		render: (props, ref) => (
-			<div {...props.attributes} contentEditable={false} style={{ margin: '8px 0' }}>
-				<Field field={ref.calloutVariant}>
-					{variant => (
-						<div style={{ background: variantColors[variant.value ?? 'info'], padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.1)' }}>
-							<Field field={ref.calloutText}>
-								{text => <p style={{ margin: 0 }}>{text.value}</p>}
-							</Field>
-						</div>
-					)}
-				</Field>
-				{props.children}
-			</div>
-		),
+		render: (props, ref) => {
+			if (!ref) return null
+			return (
+				<div {...props.attributes} contentEditable={false} style={{ margin: '8px 0' }}>
+					<Field field={ref.calloutVariant}>
+						{variant => (
+							<div style={{ background: variantColors[variant.value ?? 'info'], padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.1)' }}>
+								<Field field={ref.calloutText}>
+									{text => <p style={{ margin: 0 }}>{text.value}</p>}
+								</Field>
+							</div>
+						)}
+					</Field>
+					{props.children}
+				</div>
+			)
+		},
 		staticRender: ref => (
 			<><Field field={ref.calloutText} /><Field field={ref.calloutVariant} /></>
 		),

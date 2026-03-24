@@ -15,7 +15,7 @@ export const createAlignHandler = (direction: AlignDirection): {
 		return Array.from(Editor.nodes(editor, { match: it => isAlignTarget(editor, it, direction) })).length > 0
 	},
 	isActive: ({ editor }) => {
-		return Array.from(Editor.nodes(editor, { match: it => isAlignTarget(editor, it, direction) && (it as any).align === direction })).length > 0
+		return Array.from(Editor.nodes(editor, { match: it => isAlignTarget(editor, it, direction) && 'align' in it && (it as Record<string, unknown>)['align'] === direction })).length > 0
 	},
 	toggle: ({ editor }) => {
 		Transforms.setNodes(editor, {

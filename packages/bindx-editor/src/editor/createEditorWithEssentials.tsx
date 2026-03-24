@@ -22,7 +22,7 @@ export const createEditorWithEssentials = ({ defaultElementType }: { defaultElem
 		slate: Slate,
 		formatVersion: 1,
 		defaultElementType,
-		isDefaultElement: element => 'type' in element && (element as any).type === defaultElementType,
+		isDefaultElement: element => 'type' in element && (element as Record<string, unknown>)['type'] === defaultElementType,
 		createDefaultElement: children => ({
 			type: defaultElementType,
 			children,

@@ -50,8 +50,8 @@ export const uic = <El extends React.ElementType, Variants extends ConfigSchema 
 	const cls = cva(config?.baseClass as string, {
 		variants: config?.variants as Record<string, Record<string, ClassValue>> | undefined,
 		defaultVariants: config?.defaultVariants as Record<string, string | null | undefined> | undefined,
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		compoundVariants: config?.compoundVariants as any,
+		// CVA compound variant types use ClassProp which doesn't structurally match our generic ConfigVariants
+		compoundVariants: config?.compoundVariants as never,
 	})
 	const passVariantProps = config?.passVariantProps ? new Set(config.passVariantProps) : undefined
 

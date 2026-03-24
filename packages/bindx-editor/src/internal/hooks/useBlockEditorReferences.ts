@@ -71,10 +71,10 @@ export function useBlockEditorReferences<
 			const tempId = references.add()
 			const entityAccessor = references.getById(tempId)
 
-			// Set discrimination field
-			const fieldHandle = entityAccessor as unknown as { field: (name: string) => { setValue: (v: unknown) => void } }
-			if ('field' in fieldHandle) {
-				fieldHandle.field(discriminationField).setValue(name)
+			// Set discrimination field via proxy (EntityAccessor proxy resolves string keys to field handles)
+			const fieldRef = (entityAccessor as Record<string, unknown>)[discriminationField]
+			if (fieldRef && typeof fieldRef === 'object' && 'setValue' in fieldRef) {
+				(fieldRef as { setValue: (v: unknown) => void }).setValue(name)
 			}
 
 			init?.(entityAccessor)

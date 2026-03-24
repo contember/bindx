@@ -38,7 +38,7 @@ export const indentListItem = (
 			BindxEditor.isElementType(
 				lastPreviousListItemChild,
 				parentListElement.type,
-				BindxEditor.elementToSpecifics(parentListElement) as any,
+				BindxEditor.elementToSpecifics(parentListElement) as Partial<SlateElement>,
 			)
 
 		if (previousEndsWithCompatibleList) {

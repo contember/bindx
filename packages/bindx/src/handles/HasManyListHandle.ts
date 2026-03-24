@@ -205,7 +205,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 
 		const rawData = data[this.alias] ?? data[this.fieldName]
 		if (Array.isArray(rawData) && 'totalCount' in rawData) {
-			return (rawData as unknown as { totalCount: number }).totalCount
+			return (rawData as Array<unknown> & { totalCount: number }).totalCount
 		}
 		return undefined
 	}

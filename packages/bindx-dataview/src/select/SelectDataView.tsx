@@ -86,7 +86,7 @@ function SelectDataViewImpl({
 
 	const { selection, queryKey } = useMemo(() => {
 		const scope = new SelectionScope()
-		const collector = createCollectorProxy<object>(scope, entityType, schemaRegistry ?? undefined) as unknown as EntityAccessor<object>
+		const collector = createCollectorProxy<object>(scope, entityType, schemaRegistry ?? undefined) as EntityAccessor<object>
 
 		if (selectionDefinerRef.current) {
 			const jsx = selectionDefinerRef.current(collector)

@@ -206,7 +206,7 @@ function HasManyDataGridImpl<TEntity extends object>({
 
 				const relationData = (result.data[alias] ?? result.data[fieldName]) as Array<Record<string, unknown>> | undefined
 				const totalCount = Array.isArray(relationData) && 'totalCount' in relationData
-					? (relationData as unknown as { totalCount: number }).totalCount
+					? (relationData as Array<Record<string, unknown>> & { totalCount: number }).totalCount
 					: undefined
 
 				if (!Array.isArray(relationData)) {

@@ -190,7 +190,7 @@ function createCollectorFieldRef(
 		items: [],
 		map: mapFn,
 		add: () => '',
-		getById: () => ({} as any),
+		getById: () => createCollectorProxy<unknown>(getChildScope(), targetEntityName, schemaRegistry),
 		remove: () => {},
 		move: () => {},
 		connect: () => {},

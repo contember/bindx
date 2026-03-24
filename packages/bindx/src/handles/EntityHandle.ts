@@ -29,16 +29,21 @@ import { createHandleProxy } from './proxyFactory.js'
 import type { SelectionMeta } from '../selection/types.js'
 import { UnfetchedFieldError } from '../errors/UnfetchedFieldError.js'
 
-interface CachedHandle<TRaw, TProxy> {
-	readonly raw: TRaw
-	readonly proxy: TProxy
-}
-
 /** Minimal internal interface for cached relation handles that need reset/dispose.
  * At runtime, the proxied handles satisfy this through delegation, even if the public type doesn't expose dispose(). */
 interface RelationHandleRaw {
 	reset(): void
 	dispose(): void
+}
+
+interface CachedFieldHandle {
+	readonly raw: FieldHandle<unknown>
+	readonly proxy: FieldRef<unknown>
+}
+
+interface CachedRelationHandle {
+	readonly raw: RelationHandleRaw
+	readonly proxy: HasOneAccessor<object> | HasManyRef<object>
 }
 
 /**
@@ -60,10 +65,10 @@ interface RelationHandleRaw {
  */
 export class EntityHandle<T extends object = object, TSelected = T> extends EntityRelatedHandle {
 	/** Cache for field handles to ensure stable identity */
-	private readonly fieldHandleCache = new Map<string, CachedHandle<FieldHandle<unknown>, FieldRef<unknown>>>()
+	private readonly fieldHandleCache = new Map<string, CachedFieldHandle>()
 
 	/** Cache for relation handles */
-	private readonly relationHandleCache = new Map<string, CachedHandle<RelationHandleRaw, HasOneAccessor<object> | HasManyRef<object>>>()
+	private readonly relationHandleCache = new Map<string, CachedRelationHandle>()
 
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
@@ -256,7 +261,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			columnType,
 		)
 		const proxy = FieldHandle.wrapProxy(raw)
-		this.fieldHandleCache.set(cacheKey, { raw, proxy } as CachedHandle<FieldHandle<unknown>, FieldRef<unknown>>)
+		this.fieldHandleCache.set(cacheKey, { raw, proxy } as CachedFieldHandle)
 
 		return proxy
 	}
@@ -291,7 +296,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			nestedSelection,
 		)
 		const proxy = HasOneHandle.wrapProxy(raw)
-		this.relationHandleCache.set(cacheKey, { raw, proxy } as unknown as CachedHandle<RelationHandleRaw, HasOneAccessor<object> | HasManyRef<object>>)
+		this.relationHandleCache.set(cacheKey, { raw, proxy })
 
 		return proxy
 	}
@@ -330,7 +335,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			effectiveAlias,
 			nestedSelection,
 		)
-		this.relationHandleCache.set(cacheKey, { raw: handle, proxy: handle } as unknown as CachedHandle<RelationHandleRaw, HasOneAccessor<object> | HasManyRef<object>>)
+		this.relationHandleCache.set(cacheKey, { raw: handle as unknown as RelationHandleRaw, proxy: handle })
 
 		return handle
 	}
@@ -366,7 +371,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			undefined,
 		)
 		const proxy = HasOneHandle.wrapProxy(raw)
-		this.relationHandleCache.set(cacheKey, { raw, proxy } as unknown as CachedHandle<RelationHandleRaw, HasOneAccessor<object> | HasManyRef<object>>)
+		this.relationHandleCache.set(cacheKey, { raw, proxy })
 
 		return raw
 	}
@@ -402,7 +407,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			fieldName,
 			undefined,
 		)
-		this.relationHandleCache.set(cacheKey, { raw: handle, proxy: handle } as unknown as CachedHandle<RelationHandleRaw, HasOneAccessor<object> | HasManyRef<object>>)
+		this.relationHandleCache.set(cacheKey, { raw: handle as unknown as RelationHandleRaw, proxy: handle })
 
 		return handle
 	}

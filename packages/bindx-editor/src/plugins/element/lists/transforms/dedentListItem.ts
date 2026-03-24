@@ -35,7 +35,7 @@ export const dedentListItem = (
 	const parentAndGrandParentAreCompatible = BindxEditor.isElementType(
 		grandParentListElement,
 		parentListElement.type,
-		parentListElementSpecifics as any,
+		parentListElementSpecifics as Partial<SlateElement>,
 	)
 
 	// TODO we need to handle following siblings!!!

@@ -102,14 +102,15 @@ export function useDataGridSetup<TEntity extends object>({
 	// ---- Phase 1: Collection ----
 	const { childrenJsx, columns, selection, queryKey, toolbarContent, layoutRenders, layoutElements, effectiveLayouts } = useMemo(() => {
 		const scope = new SelectionScope()
-		const collector = createCollectorProxy<TEntity>(scope, entityType, schemaRegistry ?? undefined) as unknown as EntityAccessor<TEntity>
+		// Collector proxy satisfies EntityAccessor interface at runtime for selection collection
+		const collector = createCollectorProxy<TEntity>(scope, entityType, schemaRegistry ?? undefined) as EntityAccessor<TEntity>
 
 		const jsx = children(collector)
 		const analysis = analyzeChildren(jsx, MARKER_TYPES)
 
-		const cols = analysis.getAll(ColumnLeaf) as unknown as ColumnLeafProps[]
-		const toolbarMarker = analysis.getFirst(DataGridToolbarContent) as DataGridToolbarContentProps | undefined
-		const layoutMarkers = analysis.getAll(DataGridLayout) as unknown as DataGridLayoutProps[]
+		const cols = analysis.getAll<ColumnLeafProps>(ColumnLeaf)
+		const toolbarMarker = analysis.getFirst<DataGridToolbarContentProps>(DataGridToolbarContent)
+		const layoutMarkers = analysis.getAll<DataGridLayoutProps>(DataGridLayout)
 
 		for (const col of cols) {
 			col.collectSelection?.(collector)
@@ -119,13 +120,13 @@ export function useDataGridSetup<TEntity extends object>({
 		const elements = new Map<string, readonly DataViewElementData[]>()
 		for (const marker of layoutMarkers) {
 			const layoutCallback = marker.children as (item: EntityAccessor<object>) => ReactNode
-			const layoutJsx = layoutCallback(collector as unknown as EntityAccessor<object>)
+			const layoutJsx = layoutCallback(collector as EntityAccessor<object>)
 			const layoutSel = collectSelection(layoutJsx)
 			mergeSelections(scope.toSelectionMeta(), layoutSel)
 			renders.set(marker.name, layoutCallback)
 
 			const elementAnalysis = analyzeChildren(layoutJsx, ELEMENT_MARKER_TYPES)
-			const elementProps = elementAnalysis.getAll(DataViewElement) as unknown as DataViewElementProps[]
+			const elementProps = elementAnalysis.getAll<DataViewElementProps>(DataViewElement)
 			if (elementProps.length > 0) {
 				elements.set(marker.name, elementProps.map(it => ({ name: it.name, label: it.label, fallback: it.fallback })))
 			}
