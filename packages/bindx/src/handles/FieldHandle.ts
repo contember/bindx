@@ -23,7 +23,7 @@ import { createAliasProxy } from './proxyFactory.js'
  * - Provides inputProps for form integration
  * - Implements FieldRef interface for JSX compatibility
  */
-export class FieldHandle<T = unknown> extends EntityRelatedHandle implements FieldRef<T> {
+export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	private _cachedInputProps: InputProps<T> | null = null
 	private _cachedInputPropsValue: T | null | undefined = undefined
 
@@ -49,8 +49,8 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle implements Fie
 		dispatcher: ActionDispatcher,
 		enumName?: string,
 		columnType?: string,
-	): FieldHandle<T> {
-		return createAliasProxy(new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType))
+	): FieldRef<T> {
+		return createAliasProxy<FieldHandle<T>, FieldRef<T>>(new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType))
 	}
 
 	static createRaw<T = unknown>(
@@ -65,8 +65,8 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle implements Fie
 		return new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType)
 	}
 
-	static wrapProxy<T>(handle: FieldHandle<T>): FieldHandle<T> {
-		return createAliasProxy(handle)
+	static wrapProxy<T>(handle: FieldHandle<T>): FieldRef<T> {
+		return createAliasProxy<FieldHandle<T>, FieldRef<T>>(handle)
 	}
 
 	/**
@@ -220,7 +220,7 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle implements Fie
 	 */
 	nested<K extends keyof NonNullable<T>>(
 		key: K,
-	): FieldHandle<NonNullable<T>[K]> {
+	): FieldRef<NonNullable<T>[K]> {
 		return FieldHandle.create<NonNullable<T>[K]>(
 			this.entityType,
 			this.entityId,

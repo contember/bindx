@@ -296,16 +296,21 @@ export function useEntity(
 	}, [entityType, id, byKey, effectiveQueryKey, options.cache, batcher, store, dispatcher, selectionMeta])
 
 	// --- EntityHandle ---
-	const handle = useMemo(
-		() => EntityHandle.create(id, entityType, store, dispatcher, schemaRegistry as SchemaRegistry<Record<string, object>>),
+	const rawHandle = useMemo(
+		() => EntityHandle.createRaw(id, entityType, store, dispatcher, schemaRegistry as SchemaRegistry<Record<string, object>>),
 		[id, entityType, store, dispatcher, schemaRegistry, snapshot],
+	)
+
+	const handle = useMemo(
+		() => EntityHandle.wrapProxy(rawHandle),
+		[rawHandle],
 	)
 
 	useEffect(() => {
 		return () => {
-			handle.$dispose()
+			rawHandle.dispose()
 		}
-	}, [handle])
+	}, [rawHandle])
 
 	// --- Persist & reset callbacks ---
 	const persist = useCallback(async () => {
@@ -313,8 +318,8 @@ export function useEntity(
 	}, [batchPersister, entityType, id])
 
 	const reset = useCallback(() => {
-		handle.$reset()
-	}, [handle])
+		rawHandle.reset()
+	}, [rawHandle])
 
 	// --- Build result ---
 	const result = useMemo((): UseEntityResult<any, any> => {
@@ -342,7 +347,7 @@ export function useEntity(
 // ============================================================================
 
 function createReadyResult(
-	handle: EntityHandle<any, any>,
+	handle: EntityAccessor<object, object>,
 	persist: () => Promise<void>,
 	reset: () => void,
 ): ReadyEntityResult<any, any> {

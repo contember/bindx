@@ -12,11 +12,11 @@ import {
 } from '../core/actions.js'
 import {
 	FIELD_REF_META,
-	type HasOneRef,
 	type FieldRefMeta,
 	type SelectedEntityFields,
 	type Unsubscribe,
 	type EntityAccessor,
+	type HasOneAccessor,
 } from './types.js'
 import { createClientError, type ErrorInput, type FieldError } from '../errors/types.js'
 import type {
@@ -44,38 +44,14 @@ import { createHandleProxy } from './proxyFactory.js'
  * @typeParam TEntity - The full entity type of the related entity
  * @typeParam TSelected - The selected subset of fields (defaults to TEntity for backwards compatibility)
  */
-export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> extends EntityRelatedHandle implements HasOneRef<TEntity, TSelected> {
+export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> extends EntityRelatedHandle {
 	private entityHandleCacheRaw: EntityHandle<TEntity, TSelected> | null = null
-	private entityHandleCacheProxy: EntityHandle<TEntity, TSelected> | null = null
-	private placeholderCache: PlaceholderHandle<TEntity, TSelected> | null = null
+	private entityHandleCacheProxy: EntityAccessor<TEntity, TSelected> | null = null
+	private placeholderCacheRaw: PlaceholderHandle<TEntity, TSelected> | null = null
+	private placeholderCacheProxy: EntityAccessor<TEntity, TSelected> | null = null
 
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
-
-	/** Type brand for schema - placeholder at runtime */
-	declare readonly __schema: Record<string, object>
-
-	// $ aliases - handled by proxy at runtime, declared for TypeScript
-	declare readonly $id: string
-	declare readonly $isDirty: boolean
-	declare readonly $isPersisting: boolean
-	declare readonly $state: 'connected' | 'disconnected' | 'deleted' | 'creating'
-	declare readonly $fields: SelectedEntityFields<TEntity, TSelected>
-	declare readonly $entity: EntityAccessor<TEntity, TSelected>
-	declare readonly $errors: readonly FieldError[]
-	declare readonly $hasError: boolean
-	declare readonly $relatedId: string | null
-	declare readonly $__entityName: string
-	declare $connect: (id: string) => void
-	declare $disconnect: () => void
-	declare $delete: () => void
-	declare $reset: () => void
-	declare $addError: (error: ErrorInput) => void
-	declare $clearErrors: () => void
-	declare $onConnect: (listener: EventListener<RelationConnectedEvent>) => Unsubscribe
-	declare $onDisconnect: (listener: EventListener<RelationDisconnectedEvent>) => Unsubscribe
-	declare $interceptConnect: (interceptor: Interceptor<RelationConnectingEvent>) => Unsubscribe
-	declare $interceptDisconnect: (interceptor: Interceptor<RelationDisconnectingEvent>) => Unsubscribe
 
 	private constructor(
 		parentEntityType: string,
@@ -102,8 +78,8 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		schema: SchemaRegistry,
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
-	): HasOneHandle<TEntity, TSelected> {
-		return createHandleProxy(new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection), (target) => target.entity.$fields)
+	): HasOneAccessor<TEntity, TSelected> {
+		return createHandleProxy<HasOneHandle<TEntity, TSelected>, HasOneAccessor<TEntity, TSelected>>(new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection), (target) => target.entityRaw.fields)
 	}
 
 	static createRaw<TEntity extends object = object, TSelected = TEntity>(
@@ -120,8 +96,8 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		return new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection)
 	}
 
-	static wrapProxy<TEntity extends object, TSelected>(handle: HasOneHandle<TEntity, TSelected>): HasOneHandle<TEntity, TSelected> {
-		return createHandleProxy(handle, (target) => target.entity.$fields)
+	static wrapProxy<TEntity extends object, TSelected>(handle: HasOneHandle<TEntity, TSelected>): HasOneAccessor<TEntity, TSelected> {
+		return createHandleProxy<HasOneHandle<TEntity, TSelected>, HasOneAccessor<TEntity, TSelected>>(handle, (target) => target.entityRaw.fields)
 	}
 
 	/**
@@ -217,19 +193,16 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	}
 
 	/**
-	 * Gets the related entity accessor with direct field access.
-	 * Implements HasOneRef.$entity - returns EntityAccessor for the related entity.
-	 * Returns PlaceholderHandle (with placeholder ID) if the relation is disconnected.
+	 * Gets the raw (unproxied) related entity handle.
+	 * Returns raw EntityHandle or raw PlaceholderHandle.
+	 * Used internally to avoid going through the proxy layer.
 	 */
-	get entity(): EntityAccessor<TEntity, TSelected> {
+	get entityRaw(): EntityHandle<TEntity, TSelected> | PlaceholderHandle<TEntity, TSelected> {
 		const id = this.relatedId
 
 		if (id) {
-			// Ensure the related entity has a snapshot in the store
-			// (it may be embedded in the parent entity's data)
 			this.ensureRelatedEntitySnapshot(id)
 
-			// Connected - return real entity handle
 			if (!this.entityHandleCacheRaw || this.entityHandleCacheRaw.id !== id) {
 				this.entityHandleCacheRaw = EntityHandle.createRaw<TEntity, TSelected>(
 					id,
@@ -242,12 +215,11 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 				)
 				this.entityHandleCacheProxy = EntityHandle.wrapProxy(this.entityHandleCacheRaw)
 			}
-			return this.entityHandleCacheProxy as unknown as EntityAccessor<TEntity, TSelected>
+			return this.entityHandleCacheRaw
 		}
 
-		// Disconnected - return placeholder handle
-		if (!this.placeholderCache) {
-			this.placeholderCache = PlaceholderHandle.create<TEntity, TSelected>(
+		if (!this.placeholderCacheRaw) {
+			this.placeholderCacheRaw = PlaceholderHandle.createRaw<TEntity, TSelected>(
 				this.entityType,
 				this.entityId,
 				this.fieldName,
@@ -256,9 +228,38 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 				this.dispatcher,
 				this.__brands,
 			)
+			this.placeholderCacheProxy = PlaceholderHandle.wrapProxy(this.placeholderCacheRaw)
 		}
-		// PlaceholderHandle implements EntityRef but for API consistency return as EntityAccessor
-		return this.placeholderCache as unknown as EntityAccessor<TEntity, TSelected>
+		return this.placeholderCacheRaw
+	}
+
+	/**
+	 * Gets the related entity accessor with direct field access.
+	 * Implements HasOneRef.$entity - returns EntityAccessor for the related entity.
+	 * Returns PlaceholderHandle (with placeholder ID) if the relation is disconnected.
+	 */
+	get entity(): EntityAccessor<TEntity, TSelected> {
+		const id = this.relatedId
+
+		if (id) {
+			// Ensure the related entity has a snapshot in the store
+			// (it may be embedded in the parent entity's data)
+			this.ensureRelatedEntitySnapshot(id)
+
+			// Connected - return real entity handle (populate raw cache via entityRaw if needed)
+			if (!this.entityHandleCacheRaw || this.entityHandleCacheRaw.id !== id) {
+				// entityRaw populates both raw and proxy caches
+				this.entityRaw
+			}
+			return this.entityHandleCacheProxy!
+		}
+
+		// Disconnected - return placeholder handle
+		if (!this.placeholderCacheRaw) {
+			// entityRaw populates both raw and proxy caches
+			this.entityRaw
+		}
+		return this.placeholderCacheProxy!
 	}
 
 	/**
@@ -380,6 +381,8 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		this.entityHandleCacheRaw?.dispose()
 		this.entityHandleCacheRaw = null
 		this.entityHandleCacheProxy = null
+		this.placeholderCacheRaw = null
+		this.placeholderCacheProxy = null
 	}
 
 	/**
@@ -483,47 +486,47 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	}
 
 	// ==================== EntityRef-compatible Properties ====================
-	// These make HasOneAccessor structurally compatible with EntityAccessor
+	// These delegate to entityRaw so that proxy resolution ($data→data, $isNew→isNew, etc.) works correctly.
 
-	/** Raw data snapshot of the related entity - delegates to $entity */
-	get $data(): TSelected | null { return this.entity.$data }
+	/** Raw data snapshot of the related entity - delegates to entityRaw */
+	get data(): TSelected | null { return this.entityRaw.data }
 
-	/** Whether this entity is new - delegates to $entity */
-	get $isNew(): boolean { return this.entity.$isNew }
+	/** Whether this entity is new - delegates to entityRaw */
+	get isNew(): boolean { return this.entityRaw.isNew }
 
-	/** Server-assigned ID after persistence - delegates to $entity */
-	get $persistedId(): string | null { return this.entity.$persistedId }
+	/** Server-assigned ID after persistence - delegates to entityRaw */
+	get persistedId(): string | null { return this.entityRaw.persistedId }
 
 	/** Type brand for entity name */
 	get __entityName(): string { return this.targetType }
 
-	/** Clear all errors - delegates to $entity */
-	$clearAllErrors(): void { this.entity.$clearAllErrors() }
+	/** Clear all errors - delegates to entityRaw */
+	clearAllErrors(): void { this.entityRaw.clearAllErrors() }
 
 	/** Subscribe to any event on the related entity */
-	$on<E extends AfterEventTypes>(
+	on<E extends AfterEventTypes>(
 		eventType: E,
 		listener: EventListener<EventTypeMap[E]>,
 	): Unsubscribe {
-		return this.entity.$on(eventType, listener)
+		return this.entityRaw.on(eventType, listener)
 	}
 
 	/** Intercept any before event on the related entity */
-	$intercept<E extends BeforeEventTypes>(
+	intercept<E extends BeforeEventTypes>(
 		eventType: E,
 		interceptor: Interceptor<EventTypeMap[E]>,
 	): Unsubscribe {
-		return this.entity.$intercept(eventType, interceptor)
+		return this.entityRaw.intercept(eventType, interceptor)
 	}
 
 	/** Subscribe to persist success events on the related entity */
-	$onPersisted(listener: EventListener<EntityPersistedEvent>): Unsubscribe {
-		return this.entity.$onPersisted(listener)
+	onPersisted(listener: EventListener<EntityPersistedEvent>): Unsubscribe {
+		return this.entityRaw.onPersisted(listener)
 	}
 
 	/** Intercept persist on the related entity */
-	$interceptPersisting(interceptor: Interceptor<EntityPersistingEvent>): Unsubscribe {
-		return this.entity.$interceptPersisting(interceptor)
+	interceptPersisting(interceptor: Interceptor<EntityPersistingEvent>): Unsubscribe {
+		return this.entityRaw.interceptPersisting(interceptor)
 	}
 
 }

@@ -37,10 +37,11 @@ const HANDLE_PASSTHROUGH_PROPERTIES = new Set<string | symbol>([
  * @param getFields - Function to get the fields object from the handle
  * @returns Proxied handle with direct field access support
  */
-export function createHandleProxy<T extends object>(
+export function createHandleProxy<T extends object, TResult = T>(
 	handle: T,
 	getFields: (target: T) => object,
-): T {
+): TResult {
+	// The proxy adds $ alias support and field access, making the handle satisfy the public type TResult at runtime
 	return new Proxy(handle, {
 		get(target, prop, _receiver) {
 			// Symbols and non-string props - pass through
@@ -75,7 +76,7 @@ export function createHandleProxy<T extends object>(
 			}
 			return Reflect.has(target, prop)
 		},
-	})
+	}) as unknown as TResult
 }
 
 /**
@@ -88,7 +89,8 @@ export function createHandleProxy<T extends object>(
  * @param handle - The handle instance to wrap
  * @returns Proxied handle with $ alias support
  */
-export function createAliasProxy<T extends object>(handle: T): T {
+export function createAliasProxy<T extends object, TResult = T>(handle: T): TResult {
+	// The proxy adds $ alias support, making the handle satisfy the public type TResult at runtime
 	return new Proxy(handle, {
 		get(target, prop, _receiver) {
 			// Symbols and non-string props - pass through
@@ -113,5 +115,5 @@ export function createAliasProxy<T extends object>(handle: T): T {
 			}
 			return value
 		},
-	})
+	}) as unknown as TResult
 }

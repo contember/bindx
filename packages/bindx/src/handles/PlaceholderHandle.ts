@@ -3,10 +3,10 @@ import type { SnapshotStore } from '../store/SnapshotStore.js'
 import { generatePlaceholderId } from '../store/SnapshotStore.js'
 import {
 	FIELD_REF_META,
-	type EntityRef,
 	type SelectedEntityFields,
 	type FieldRefMeta,
 	type Unsubscribe,
+	type EntityAccessor,
 } from './types.js'
 import type { ErrorInput, FieldError } from '../errors/types.js'
 import type {
@@ -28,34 +28,12 @@ import { createAliasProxy } from './proxyFactory.js'
  * @typeParam TEntity - The full entity type
  * @typeParam TSelected - The selected subset of fields
  */
-export class PlaceholderHandle<TEntity extends object = object, TSelected = TEntity>
-	implements EntityRef<TEntity, TSelected>
-{
+export class PlaceholderHandle<TEntity extends object = object, TSelected = TEntity> {
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
 
-	/** Type brand for schema - placeholder at runtime */
-	declare readonly __schema: Record<string, object>
-
 	/** Placeholder ID for this handle */
 	private readonly placeholderId: string
-
-	// $ aliases - handled by proxy at runtime, declared for TypeScript
-	declare readonly $fields: SelectedEntityFields<TEntity, TSelected>
-	declare readonly $data: TSelected | null
-	declare readonly $isDirty: boolean
-	declare readonly $persistedId: null
-	declare readonly $isNew: boolean
-	declare readonly $errors: readonly FieldError[]
-	declare readonly $isPersisting: boolean
-	declare readonly $hasError: boolean
-	declare $addError: (error: ErrorInput) => void
-	declare $clearErrors: () => void
-	declare $clearAllErrors: () => void
-	declare $on: <E extends AfterEventTypes>(eventType: E, listener: EventListener<EventTypeMap[E]>) => Unsubscribe
-	declare $intercept: <E extends BeforeEventTypes>(eventType: E, interceptor: Interceptor<EventTypeMap[E]>) => Unsubscribe
-	declare $onPersisted: (listener: EventListener<EntityPersistedEvent>) => Unsubscribe
-	declare $interceptPersisting: (interceptor: Interceptor<EntityPersistingEvent>) => Unsubscribe
 
 	private constructor(
 		private readonly parentEntityType: string,
@@ -78,8 +56,24 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 		store: SnapshotStore,
 		dispatcher: ActionDispatcher,
 		brands?: Set<symbol>,
+	): EntityAccessor<TEntity, TSelected> {
+		return PlaceholderHandle.wrapProxy(new PlaceholderHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, brands))
+	}
+
+	static createRaw<TEntity extends object = object, TSelected = TEntity>(
+		parentEntityType: string,
+		parentEntityId: string,
+		fieldName: string,
+		targetType: string,
+		store: SnapshotStore,
+		dispatcher: ActionDispatcher,
+		brands?: Set<symbol>,
 	): PlaceholderHandle<TEntity, TSelected> {
-		return createAliasProxy(new PlaceholderHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, brands))
+		return new PlaceholderHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, brands)
+	}
+
+	static wrapProxy<TEntity extends object, TSelected>(handle: PlaceholderHandle<TEntity, TSelected>): EntityAccessor<TEntity, TSelected> {
+		return createAliasProxy<PlaceholderHandle<TEntity, TSelected>, EntityAccessor<TEntity, TSelected>>(handle)
 	}
 
 	/**

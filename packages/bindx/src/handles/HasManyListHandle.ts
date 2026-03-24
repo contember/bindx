@@ -27,9 +27,9 @@ import { createAliasProxy } from './proxyFactory.js'
  * @typeParam TEntity - The full entity type of items in the relation
  * @typeParam TSelected - The selected subset of fields (defaults to TEntity for backwards compatibility)
  */
-export class HasManyListHandle<TEntity extends object = object, TSelected = TEntity> extends EntityRelatedHandle implements HasManyRef<TEntity, TSelected> {
+export class HasManyListHandle<TEntity extends object = object, TSelected = TEntity> extends EntityRelatedHandle {
 	private itemHandleCacheRaw = new Map<string, EntityHandle<TEntity, TSelected>>()
-	private itemHandleCacheProxy = new Map<string, EntityHandle<TEntity, TSelected>>()
+	private itemHandleCacheProxy = new Map<string, EntityAccessor<TEntity, TSelected>>()
 
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
@@ -85,8 +85,8 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		brands?: Set<symbol>,
 		alias?: string,
 		selection?: SelectionMeta,
-	): HasManyListHandle<TEntity, TSelected> {
-		return createAliasProxy(new HasManyListHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection))
+	): HasManyRef<TEntity, TSelected> {
+		return createAliasProxy<HasManyListHandle<TEntity, TSelected>, HasManyRef<TEntity, TSelected>>(new HasManyListHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection))
 	}
 
 	/**
@@ -239,7 +239,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			this.itemHandleCacheProxy.set(itemId, proxy)
 		}
 
-		return proxy as unknown as EntityAccessor<TEntity, TSelected>
+		return proxy
 	}
 
 	/**

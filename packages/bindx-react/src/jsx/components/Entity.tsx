@@ -272,14 +272,19 @@ function EntityHandleRenderer({
 
 	const version = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
-	const handle = useMemo(
-		() => EntityHandle.create(entityId, entityType, store, dispatcher, schemaRegistry, undefined, selection),
+	const rawHandle = useMemo(
+		() => EntityHandle.createRaw(entityId, entityType, store, dispatcher, schemaRegistry, undefined, selection),
 		[entityId, entityType, store, dispatcher, schemaRegistry, selection, version],
 	)
 
-	useEffect(() => () => { handle.$dispose() }, [handle])
+	const handle = useMemo(
+		() => EntityHandle.wrapProxy(rawHandle),
+		[rawHandle],
+	)
 
-	return <>{children(handle as unknown as EntityAccessor<unknown>)}</>
+	useEffect(() => () => { rawHandle.dispose() }, [rawHandle])
+
+	return <>{children(handle as EntityAccessor<unknown>)}</>
 }
 
 // ==================== Main Entity Component ====================

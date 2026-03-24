@@ -11,7 +11,7 @@ import {
 	clearEntityErrors,
 	clearAllErrors as clearAllErrorsAction,
 } from '../core/actions.js'
-import { type EntityRef, type SelectedEntityFields, type Unsubscribe, type EntityAccessor } from './types.js'
+import { type FieldRef, type HasOneAccessor, type HasManyRef, type SelectedEntityFields, type Unsubscribe, type EntityAccessor } from './types.js'
 import { deepEqual } from '../utils/deepEqual.js'
 import { createClientError, type ErrorInput, type FieldError } from '../errors/types.js'
 import type {
@@ -29,12 +29,16 @@ import { createHandleProxy } from './proxyFactory.js'
 import type { SelectionMeta } from '../selection/types.js'
 import { UnfetchedFieldError } from '../errors/UnfetchedFieldError.js'
 
-// Type for relation handle cache
-type RelationHandle = HasOneHandle<object> | HasManyListHandle<object>
+interface CachedHandle<TRaw, TProxy> {
+	readonly raw: TRaw
+	readonly proxy: TProxy
+}
 
-interface CachedHandle<T> {
-	readonly raw: T
-	readonly proxy: T
+/** Minimal internal interface for cached relation handles that need reset/dispose.
+ * At runtime, the proxied handles satisfy this through delegation, even if the public type doesn't expose dispose(). */
+interface RelationHandleRaw {
+	reset(): void
+	dispose(): void
 }
 
 /**
@@ -54,50 +58,15 @@ interface CachedHandle<T> {
  * @typeParam T - The full entity type
  * @typeParam TSelected - The selected subset of fields (defaults to T for backwards compatibility)
  */
-export class EntityHandle<T extends object = object, TSelected = T> extends EntityRelatedHandle implements EntityRef<T, TSelected> {
+export class EntityHandle<T extends object = object, TSelected = T> extends EntityRelatedHandle {
 	/** Cache for field handles to ensure stable identity */
-	private readonly fieldHandleCache = new Map<string, CachedHandle<FieldHandle<unknown>>>()
+	private readonly fieldHandleCache = new Map<string, CachedHandle<FieldHandle<unknown>, FieldRef<unknown>>>()
 
 	/** Cache for relation handles */
-	private readonly relationHandleCache = new Map<string, CachedHandle<RelationHandle>>()
+	private readonly relationHandleCache = new Map<string, CachedHandle<RelationHandleRaw, HasOneAccessor<object> | HasManyRef<object>>>()
 
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
-
-	/** Type brand for schema - placeholder at runtime */
-	declare readonly __schema: Record<string, object>
-
-	// $ aliases - handled by proxy at runtime, declared for TypeScript
-	declare readonly $fields: SelectedEntityFields<T, TSelected>
-	declare readonly $data: TSelected | null
-	declare readonly $isDirty: boolean
-	declare readonly $persistedId: string | null
-	declare readonly $isNew: boolean
-	declare readonly $errors: readonly FieldError[]
-	declare readonly $hasError: boolean
-	declare readonly $entityType: string
-	declare readonly $serverData: T | undefined
-	declare readonly $isLoaded: boolean
-	declare readonly $isLoading: boolean
-	declare readonly $isError: boolean
-	declare readonly $error: FieldError | undefined
-	declare readonly $isPersisting: boolean
-	declare readonly $__entityName: string
-	declare $getSnapshot: () => EntitySnapshot<T> | undefined
-	declare $getDirtyFields: () => readonly string[]
-	declare $field: <K extends keyof T>(fieldName: K) => FieldHandle<T[K]>
-	declare $hasOne: <TRelated extends object>(fieldName: string, nestedSelection?: SelectionMeta) => HasOneHandle<TRelated>
-	declare $hasMany: <TItem extends object>(fieldName: string, alias?: string, nestedSelection?: SelectionMeta) => HasManyListHandle<TItem>
-	declare $reset: () => void
-	declare $commit: () => void
-	declare $dispose: () => void
-	declare $addError: (error: ErrorInput) => void
-	declare $clearErrors: () => void
-	declare $clearAllErrors: () => void
-	declare $on: <E extends AfterEventTypes>(eventType: E, listener: EventListener<EventTypeMap[E]>) => Unsubscribe
-	declare $intercept: <E extends BeforeEventTypes>(eventType: E, interceptor: Interceptor<EventTypeMap[E]>) => Unsubscribe
-	declare $onPersisted: (listener: EventListener<EntityPersistedEvent>) => Unsubscribe
-	declare $interceptPersisting: (interceptor: Interceptor<EntityPersistingEvent>) => Unsubscribe
 
 	private constructor(
 		id: string,
@@ -120,7 +89,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 		schema: SchemaRegistry,
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
-	): EntityHandle<T, TSelected> {
+	): EntityAccessor<T, TSelected> {
 		return EntityHandle.wrapProxy(new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands, selection))
 	}
 
@@ -136,8 +105,8 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 		return new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands, selection)
 	}
 
-	static wrapProxy<T extends object, TSelected>(handle: EntityHandle<T, TSelected>): EntityHandle<T, TSelected> {
-		return createHandleProxy(handle, (target) => target.fields)
+	static wrapProxy<T extends object, TSelected>(handle: EntityHandle<T, TSelected>): EntityAccessor<T, TSelected> {
+		return createHandleProxy<EntityHandle<T, TSelected>, EntityAccessor<T, TSelected>>(handle, (target) => target.fields)
 	}
 
 	/**
@@ -228,18 +197,18 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			const relationType = this.schema.getRelationType(this.entityType, fieldName)
 
 			if (relationType === 'hasOne') {
-				const handle = this.hasOne(fieldName)
+				const rawHandle = this.getHasOneHandleRaw(fieldName)
 				// Check if the relation itself is dirty (connect/disconnect)
-				if (handle.$isDirty) {
+				if (rawHandle.isDirty) {
 					return true
 				}
 				// Check if the target entity has dirty fields
-				if (handle.$entity.$isDirty) {
+				if (rawHandle.entityRaw.isDirty) {
 					return true
 				}
 			} else if (relationType === 'hasMany') {
-				const handle = this.hasMany(fieldName)
-				if (handle.isDirty) {
+				const rawHandle = this.getHasManyHandleRaw(fieldName)
+				if (rawHandle.isDirty) {
 					return true
 				}
 			}
@@ -267,12 +236,12 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	 * Gets a field handle for a specific field.
 	 * Returns cached handle to ensure stable identity.
 	 */
-	field<K extends keyof T>(fieldName: K): FieldHandle<T[K]> {
+	field<K extends keyof T>(fieldName: K): FieldRef<T[K]> {
 		const cacheKey = String(fieldName)
 		const cached = this.fieldHandleCache.get(cacheKey)
 
 		if (cached) {
-			return cached.proxy as FieldHandle<T[K]>
+			return cached.proxy as FieldRef<T[K]>
 		}
 
 		const enumName = this.schema.getEnumName(this.entityType, cacheKey)
@@ -287,7 +256,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			columnType,
 		)
 		const proxy = FieldHandle.wrapProxy(raw)
-		this.fieldHandleCache.set(cacheKey, { raw, proxy } as CachedHandle<FieldHandle<unknown>>)
+		this.fieldHandleCache.set(cacheKey, { raw, proxy } as CachedHandle<FieldHandle<unknown>, FieldRef<unknown>>)
 
 		return proxy
 	}
@@ -295,12 +264,12 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	/**
 	 * Gets a has-one relation handle.
 	 */
-	hasOne<TRelated extends object>(fieldName: string, nestedSelection?: SelectionMeta): HasOneHandle<TRelated> {
+	hasOne<TRelated extends object>(fieldName: string, nestedSelection?: SelectionMeta): HasOneAccessor<TRelated> {
 		const cacheKey = `hasOne:${fieldName}`
 		const cached = this.relationHandleCache.get(cacheKey)
 
 		if (cached) {
-			return cached.proxy as HasOneHandle<TRelated>
+			return cached.proxy as HasOneAccessor<TRelated>
 		}
 
 		const targetType = this.schema.getRelationTarget(this.entityType, fieldName)
@@ -322,7 +291,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			nestedSelection,
 		)
 		const proxy = HasOneHandle.wrapProxy(raw)
-		this.relationHandleCache.set(cacheKey, { raw, proxy } as CachedHandle<RelationHandle>)
+		this.relationHandleCache.set(cacheKey, { raw, proxy } as unknown as CachedHandle<RelationHandleRaw, HasOneAccessor<object> | HasManyRef<object>>)
 
 		return proxy
 	}
@@ -333,13 +302,13 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	 * @param alias - Optional alias for the relation. When the same field is used multiple times
 	 *                with different parameters (filter, orderBy, limit), each needs a unique alias.
 	 */
-	hasMany<TItem extends object>(fieldName: string, alias?: string, nestedSelection?: SelectionMeta): HasManyListHandle<TItem> {
+	hasMany<TItem extends object>(fieldName: string, alias?: string, nestedSelection?: SelectionMeta): HasManyRef<TItem> {
 		const effectiveAlias = alias ?? fieldName
 		const cacheKey = `hasMany:${effectiveAlias}`
 		const cached = this.relationHandleCache.get(cacheKey)
 
 		if (cached) {
-			return cached.proxy as HasManyListHandle<TItem>
+			return cached.proxy as HasManyRef<TItem>
 		}
 
 		const targetType = this.schema.getRelationTarget(this.entityType, fieldName)
@@ -361,7 +330,79 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			effectiveAlias,
 			nestedSelection,
 		)
-		this.relationHandleCache.set(cacheKey, { raw: handle, proxy: handle } as CachedHandle<RelationHandle>)
+		this.relationHandleCache.set(cacheKey, { raw: handle, proxy: handle } as unknown as CachedHandle<RelationHandleRaw, HasOneAccessor<object> | HasManyRef<object>>)
+
+		return handle
+	}
+
+	/**
+	 * Gets a raw (unproxied) has-one relation handle from cache.
+	 * Creates the handle if not cached yet.
+	 */
+	private getHasOneHandleRaw(fieldName: string): HasOneHandle<object> {
+		const cacheKey = `hasOne:${fieldName}`
+		const cached = this.relationHandleCache.get(cacheKey)
+
+		if (cached) {
+			return cached.raw as HasOneHandle<object>
+		}
+
+		const targetType = this.schema.getRelationTarget(this.entityType, fieldName)
+		if (!targetType) {
+			throw new Error(
+				`Field "${fieldName}" is not a relation on entity "${this.entityType}"`,
+			)
+		}
+
+		const raw = HasOneHandle.createRaw(
+			this.entityType,
+			this.entityId,
+			fieldName,
+			targetType,
+			this.store,
+			this.dispatcher,
+			this.schema,
+			undefined,
+			undefined,
+		)
+		const proxy = HasOneHandle.wrapProxy(raw)
+		this.relationHandleCache.set(cacheKey, { raw, proxy } as unknown as CachedHandle<RelationHandleRaw, HasOneAccessor<object> | HasManyRef<object>>)
+
+		return raw
+	}
+
+	/**
+	 * Gets a raw (unproxied) has-many relation handle from cache.
+	 * Creates the handle if not cached yet.
+	 */
+	private getHasManyHandleRaw(fieldName: string): HasManyRef<object> {
+		const cacheKey = `hasMany:${fieldName}`
+		const cached = this.relationHandleCache.get(cacheKey)
+
+		if (cached) {
+			return cached.proxy as HasManyRef<object>
+		}
+
+		const targetType = this.schema.getRelationTarget(this.entityType, fieldName)
+		if (!targetType) {
+			throw new Error(
+				`Field "${fieldName}" is not a relation on entity "${this.entityType}"`,
+			)
+		}
+
+		const handle = HasManyListHandle.create(
+			this.entityType,
+			this.entityId,
+			fieldName,
+			targetType,
+			this.store,
+			this.dispatcher,
+			this.schema,
+			this.__brands,
+			fieldName,
+			undefined,
+		)
+		this.relationHandleCache.set(cacheKey, { raw: handle, proxy: handle } as unknown as CachedHandle<RelationHandleRaw, HasOneAccessor<object> | HasManyRef<object>>)
 
 		return handle
 	}
