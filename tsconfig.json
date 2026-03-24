@@ -2,6 +2,7 @@
 	"extends": "./tsconfig.base.json",
 	"references": [
 		{ "path": "./tests" },
+		{ "path": "./packages/bindx-client" },
 		{ "path": "./packages/bindx" },
 		{ "path": "./packages/bindx-form" },
 		{ "path": "./packages/bindx-repeater" },

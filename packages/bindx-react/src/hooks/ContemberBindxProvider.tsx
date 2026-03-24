@@ -1,23 +1,44 @@
 import { memo, useMemo, type ReactNode } from 'react'
 import { GraphQlClient } from '@contember/graphql-client'
-import { ContentClient, ContentQueryBuilder, type SchemaNames } from '@contember/client-content'
+import { ContentClient } from '@contember/bindx-client'
 import { ContemberAdapter, SnapshotStore, ActionDispatcher, BatchPersister, MutationCollector, ContemberSchemaMutationAdapter, UndoManager, SchemaRegistry, type SchemaDefinition, type FieldDef, type UndoManagerConfig, type UpdateMode } from '@contember/bindx'
 import { BindxContext, type BindxContextValue } from './BackendAdapterContext.js'
 import { QueryBatcher } from '../batching/QueryBatcher.js'
+
+/**
+ * Runtime schema names format (from Contember API / generated code).
+ * Used by ContemberBindxProvider for backwards compatibility.
+ */
+export interface SchemaNames {
+	readonly entities: {
+		readonly [entityName: string]: {
+			readonly name: string
+			readonly scalars: readonly string[]
+			readonly fields: {
+				readonly [fieldName: string]:
+					| { readonly type: 'column'; readonly enumName?: string; readonly columnType?: string }
+					| { readonly type: 'many' | 'one'; readonly entity: string }
+			}
+		}
+	}
+	readonly enums?: {
+		readonly [enumName: string]: readonly string[]
+	}
+}
 
 /**
  * Converts SchemaNames (Contember format) to SchemaDefinition (bindx format)
  * so that a SchemaRegistry can be created for standalone hooks.
  */
 export function schemaNamesToDef(schemaNames: SchemaNames): SchemaDefinition<Record<string, object>> {
-	const enumsMap = (schemaNames as { enums?: Record<string, readonly string[]> }).enums ?? {}
+	const enumsMap = schemaNames.enums ?? {}
 	const entities: Record<string, { fields: Record<string, FieldDef> }> = {}
 	for (const [entityName, entity] of Object.entries(schemaNames.entities)) {
 		const fields: Record<string, FieldDef> = {}
 		for (const [fieldName, fieldDef] of Object.entries(entity.fields)) {
 			if (fieldDef.type === 'column') {
-				const enumName = (fieldDef as { enumName?: string }).enumName
-				const columnType = (fieldDef as { columnType?: string }).columnType
+				const enumName = fieldDef.enumName
+				const columnType = fieldDef.columnType
 				const enumValues = enumName ? enumsMap[enumName] : undefined
 				if (enumName && enumValues) {
 					fields[fieldName] = { type: 'enum', enumName, values: enumValues }
@@ -64,35 +85,6 @@ export interface ContemberBindxProviderProps {
 
 /**
  * Provider component that combines Contember authentication with bindx data binding.
- *
- * @example
- * ```tsx
- * import { ContemberBindxProvider, useUndo } from '@contember/bindx-react'
- * import { schema } from './generated/schema'
- *
- * function App() {
- *   return (
- *     <ContemberBindxProvider
- *       client={graphQlClient}
- *       schema={schema}
- *       undoManager={true}
- *     >
- *       <ArticleEditor id="123" />
- *     </ContemberBindxProvider>
- *   )
- * }
- *
- * // Access undo/redo in child components
- * function UndoControls() {
- *   const { canUndo, canRedo, undo, redo } = useUndo()
- *   return (
- *     <div>
- *       <button onClick={undo} disabled={!canUndo}>Undo</button>
- *       <button onClick={redo} disabled={!canRedo}>Redo</button>
- *     </div>
- *   )
- * }
- * ```
  */
 export const ContemberBindxProvider = memo(function ContemberBindxProvider({
 	schema,
@@ -108,7 +100,12 @@ export const ContemberBindxProvider = memo(function ContemberBindxProvider({
 	// Create GraphQL client and adapter
 	const bindxValue = useMemo((): BindxContextValue => {
 
-		const adapter = new ContemberAdapter(new ContentClient(graphQlClient), new ContentQueryBuilder(schema))
+		// Create schema registry from SchemaNames for standalone hooks
+		const schemaRegistry = new SchemaRegistry(schemaNamesToDef(schema))
+
+		// Create adapter using new bindx-client ContentClient
+		const contentClient = new ContentClient(graphQlClient)
+		const adapter = new ContemberAdapter(contentClient, schemaRegistry)
 		const batcher = new QueryBatcher(adapter)
 
 		const store = customStore ?? new SnapshotStore()
@@ -123,9 +120,6 @@ export const ContemberBindxProvider = memo(function ContemberBindxProvider({
 		if (undoManager) {
 			dispatcher.addMiddleware(undoManager.createMiddleware())
 		}
-
-		// Create schema registry from SchemaNames for standalone hooks
-		const schemaRegistry = new SchemaRegistry(schemaNamesToDef(schema))
 
 		// Create mutation collector for proper nested operations
 		// Use ContemberSchemaMutationAdapter to wrap SchemaNames

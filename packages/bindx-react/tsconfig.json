@@ -11,6 +11,7 @@
 	},
 	"include": ["./src/**/*"],
 	"references": [
+		{ "path": "../bindx-client" },
 		{ "path": "../bindx" }
 	]
 }

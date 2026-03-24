@@ -1,4 +1,22 @@
-import type { SchemaNames } from '@contember/client-content'
+/**
+ * Runtime schema names format (from Contember API / generated code).
+ */
+export interface SchemaNames {
+	readonly entities: {
+		readonly [entityName: string]: {
+			readonly name: string
+			readonly scalars: readonly string[]
+			readonly fields: {
+				readonly [fieldName: string]:
+					| { readonly type: 'column'; readonly enumName?: string; readonly columnType?: string }
+					| { readonly type: 'many' | 'one'; readonly entity: string }
+			}
+		}
+	}
+	readonly enums?: {
+		readonly [enumName: string]: readonly string[]
+	}
+}
 import type { MutationSchemaProvider } from './MutationSchemaProvider.js'
 
 /**

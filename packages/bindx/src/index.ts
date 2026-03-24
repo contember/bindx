@@ -224,7 +224,7 @@ export { deepEqual } from './utils/deepEqual.js'
 export { generateHasManyAlias } from './utils/aliasGenerator.js'
 
 // Contember integration
-export { MutationCollector, ContemberSchemaMutationAdapter } from './contember/index.js'
+export { MutationCollector, ContemberSchemaMutationAdapter, type SchemaNames } from './contember/index.js'
 export type { MutationSchemaProvider, EntityMutationResult } from './contember/index.js'
 
 // Undo/Redo
@@ -328,8 +328,27 @@ export {
 } from './errors/index.js'
 
 
-// Re-export Contember types for convenience
-export type { SchemaNames, SchemaEntityNames } from '@contember/client-content'
+// Re-export bindx-client types
+export {
+	ContentClient,
+	type ContentClientOptions,
+	type ContentQuery,
+	type ContentMutation,
+	ContentOperation,
+	type MutationResult as ClientMutationResult,
+	MutationFailedError,
+	type QuerySpecContext,
+	querySpecToGraphQl,
+	buildGetArgs,
+	buildListArgs,
+	buildCreateArgs,
+	buildUpdateArgs,
+	buildDeleteArgs,
+	buildMutationSelection,
+	mutationFragments,
+	unwrapPaginateResult,
+} from '@contember/bindx-client'
+export { qb } from '@contember/bindx-client'
 
 // DataView / DataGrid
 export type {
