@@ -1,0 +1,6 @@
+export { ContentOperation, type ContentQuery, type ContentMutation } from './ContentOperation.js'
+export { ContentOperationSet } from './ContentOperationSet.js'
+export { createQueryOperationSet } from './createQueryOperationSet.js'
+export { createMutationOperationSet } from './createMutationOperationSet.js'
+export type { MutationResult, MutationError, MutationErrorPathElement, ValidationResult, ValidationError, TransactionResult } from './types.js'
+export { MutationFailedError } from './MutationFailedError.js'
