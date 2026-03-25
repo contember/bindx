@@ -107,7 +107,7 @@ export interface BindxSchemaEntityNames {
 	readonly scalars: readonly string[]
 	readonly fields: {
 		readonly [fieldName: string]:
-			| { readonly type: 'column'; readonly enumName?: string }
+			| { readonly type: 'column'; readonly columnType?: string; readonly enumName?: string }
 			| { readonly type: 'one'; readonly entity: string }
 			| { readonly type: 'many'; readonly entity: string }
 	}
