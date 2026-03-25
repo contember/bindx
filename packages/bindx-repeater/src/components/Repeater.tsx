@@ -7,7 +7,7 @@ import type {
 	SelectionMeta,
 } from '@contember/bindx'
 import { SelectionScope, FIELD_REF_META } from '@contember/bindx'
-import { createCollectorProxy, mergeSelections, BINDX_COMPONENT, type SelectionProvider } from '@contember/bindx-react'
+import { createCollectorProxy, mergeSelections, BINDX_COMPONENT, SCOPE_REF, type SelectionProvider } from '@contember/bindx-react'
 import type {
 	RepeaterProps,
 	RepeaterItems,
@@ -186,8 +186,11 @@ const repeaterWithSelection = Repeater as typeof Repeater & SelectionProvider & 
 repeaterWithSelection.getSelection = (
 	props: RepeaterProps<unknown>,
 	collectNested: (children: ReactNode) => SelectionMeta,
-): SelectionFieldMeta => {
-	const meta = props.field[FIELD_REF_META]
+): SelectionFieldMeta | null => {
+	// Check if the field is a collector proxy with a scope reference (collection phase).
+	const fieldScope = props.field && typeof props.field === 'object' && SCOPE_REF in props.field
+		? (props.field as Record<symbol, unknown>)[SCOPE_REF] as SelectionScope
+		: null
 
 	// Create scope and collector proxy
 	const scope = new SelectionScope()
@@ -226,6 +229,25 @@ repeaterWithSelection.getSelection = (
 	const nestedSelection = scope.toSelectionMeta()
 	mergeSelections(nestedSelection, jsxSelection)
 
+	// Add sortableBy field to selection if specified
+	if (props.sortableBy) {
+		nestedSelection.fields.set(props.sortableBy, {
+			fieldName: props.sortableBy,
+			alias: props.sortableBy,
+			path: [props.sortableBy],
+			isArray: false,
+			isRelation: false,
+		})
+	}
+
+	// If we have a scope reference, merge directly into the scope tree and return null
+	if (fieldScope) {
+		fieldScope.mergeFromSelectionMeta(nestedSelection)
+		return null
+	}
+
+	// Fallback: return SelectionFieldMeta for non-collector refs
+	const meta = props.field[FIELD_REF_META]
 	return {
 		fieldName: meta.fieldName,
 		alias: meta.fieldName,

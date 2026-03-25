@@ -2,6 +2,7 @@
 export {
 	BINDX_COMPONENT,
 	FIELD_REF_META,
+	SCOPE_REF,
 	type FieldRefMeta,
 	// Full types
 	type FieldRef,

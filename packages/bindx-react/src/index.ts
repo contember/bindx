@@ -316,6 +316,7 @@ export {
 	HasRole,
 	type HasRoleProps,
 	BINDX_COMPONENT,
+	SCOPE_REF,
 	// Condition DSL for <If> component
 	cond,
 	type Condition,

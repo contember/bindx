@@ -8,7 +8,7 @@ import type {
 	FieldRef,
 } from '@contember/bindx'
 import { SelectionScope, FIELD_REF_META } from '@contember/bindx'
-import { createCollectorProxy, mergeSelections, BINDX_COMPONENT, type SelectionProvider } from '@contember/bindx-react'
+import { createCollectorProxy, mergeSelections, BINDX_COMPONENT, SCOPE_REF, type SelectionProvider } from '@contember/bindx-react'
 import type {
 	BlockRepeaterProps,
 	BlockRepeaterItems,
@@ -206,8 +206,13 @@ const blockRepeaterWithSelection = BlockRepeater as typeof BlockRepeater & Selec
 blockRepeaterWithSelection.getSelection = (
 	props: BlockRepeaterProps<unknown>,
 	collectNested: (children: ReactNode) => SelectionMeta,
-): SelectionFieldMeta => {
-	const meta = props.field[FIELD_REF_META]
+): SelectionFieldMeta | null => {
+	// Check if the field is a collector proxy with a scope reference (collection phase).
+	// When present, we merge the collected selection directly into the scope tree,
+	// which correctly handles deeply nested relations (e.g., page.blocks.items).
+	const fieldScope = props.field && typeof props.field === 'object' && SCOPE_REF in props.field
+		? (props.field as Record<symbol, unknown>)[SCOPE_REF] as SelectionScope
+		: null
 
 	const scope = new SelectionScope()
 	const collectorEntity = createCollectorProxy<unknown>(scope)
@@ -245,12 +250,31 @@ blockRepeaterWithSelection.getSelection = (
 	nestedSelection.fields.set(props.discriminationField, {
 		fieldName: props.discriminationField,
 		alias: props.discriminationField,
-		path: [...meta.path, meta.fieldName],
+		path: [props.discriminationField],
 		isArray: false,
 		isRelation: false,
-		nested: { fields: new Map() },
 	})
 
+	// Add sortableBy field to selection if specified
+	if (props.sortableBy) {
+		nestedSelection.fields.set(props.sortableBy, {
+			fieldName: props.sortableBy,
+			alias: props.sortableBy,
+			path: [props.sortableBy],
+			isArray: false,
+			isRelation: false,
+		})
+	}
+
+	// If we have a scope reference, merge directly into the scope tree and return null
+	// (no flat SelectionFieldMeta needed — the scope tree captures the full nesting)
+	if (fieldScope) {
+		fieldScope.mergeFromSelectionMeta(nestedSelection)
+		return null
+	}
+
+	// Fallback: return SelectionFieldMeta for non-collector refs (e.g., explicit selection)
+	const meta = props.field[FIELD_REF_META]
 	return {
 		fieldName: meta.fieldName,
 		alias: meta.fieldName,

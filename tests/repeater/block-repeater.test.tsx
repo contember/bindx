@@ -540,10 +540,22 @@ describe('BlockRepeater', () => {
 			() => ({ fields: new Map() }),
 		)
 
-		// Should include the discrimination field 'type' in nested selection
-		const typeField = result.nested.fields.get('type')
+		// When field is a collector proxy (has SCOPE_REF), getSelection merges into scope and returns null
+		expect(result).toBeNull()
+
+		// The discrimination field and accessed fields should be in the scope tree
+		const selection = scope.toSelectionMeta()
+		const blocksField = selection.fields.get('blocks')
+		expect(blocksField).toBeDefined()
+		expect(blocksField!.isRelation).toBe(true)
+
+		const typeField = blocksField!.nested!.fields.get('type')
 		expect(typeField).toBeDefined()
-		expect(typeField.fieldName).toBe('type')
-		expect(typeField.isRelation).toBe(false)
+		expect(typeField!.fieldName).toBe('type')
+		expect(typeField!.isRelation).toBe(false)
+
+		// Content field should also be in the selection
+		const contentField = blocksField!.nested!.fields.get('content')
+		expect(contentField).toBeDefined()
 	})
 })
