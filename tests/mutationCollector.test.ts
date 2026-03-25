@@ -496,6 +496,39 @@ describe('MutationCollector', () => {
 			})
 		})
 
+		test('should return create with connected relation from RelationStore', () => {
+			store.setEntityData('Article', '__temp_456', {
+				id: '__temp_456',
+				title: 'New Article',
+			}, false)
+			store.setExistsOnServer('Article', '__temp_456', false)
+
+			// Connect author via RelationStore (same as $connect does)
+			store.getOrCreateRelation('Article', '__temp_456', 'author', {
+				currentId: 'auth-1',
+				serverId: null,
+				state: 'connected',
+				serverState: 'disconnected',
+				placeholderData: {},
+			})
+
+			// Mark auth-1 as existing on server
+			store.setEntityData('Author', 'auth-1', { id: 'auth-1', name: 'John' }, true)
+			store.setExistsOnServer('Author', 'auth-1', true)
+
+			const result = collector.collectMutation('Article', '__temp_456')
+
+			expect(result).toEqual({
+				type: 'create',
+				entityType: 'Article',
+				entityId: '__temp_456',
+				data: {
+					title: 'New Article',
+					author: { connect: { id: 'auth-1' } },
+				},
+			})
+		})
+
 		test('should return delete for entity scheduled for deletion', () => {
 			store.setEntityData('Article', 'a-1', {
 				id: 'a-1',

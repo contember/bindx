@@ -171,7 +171,9 @@ export class MutationCollector implements MutationDataCollector {
 			const relationType = this.schemaProvider.getRelationType(entityType, fieldName)
 
 			if (relationType === 'hasOne') {
+				// Check embedded data first, then fall back to RelationStore
 				const relationOp = this.collectCreateOneRelation(value)
+					?? this.collectHasOneOperation(entityType, entityId, fieldName)
 				if (relationOp !== null) {
 					createData[fieldName] = relationOp
 				}
@@ -312,9 +314,15 @@ export class MutationCollector implements MutationDataCollector {
 					// Check if current entity exists on server
 					if (currentId && this.isExistingEntity(currentId)) {
 						return { connect: { id: currentId } }
+					} else if (currentId && isTempId(currentId)) {
+						// Temp entity — generate inline create with its collected data
+						const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
+						if (targetType) {
+							const createData = this.collectCreateData(targetType, currentId)
+							return { create: createData ?? {} }
+						}
+						return { create: {} }
 					} else if (currentId) {
-						// Entity doesn't exist - might need to create it
-						// For now, just connect (the entity should be created separately)
 						return { connect: { id: currentId } }
 					}
 				} else if (currentId && serverId && currentId === serverId) {
