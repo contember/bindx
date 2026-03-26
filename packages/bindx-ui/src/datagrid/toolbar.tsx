@@ -11,17 +11,17 @@ import {
 	dataAttribute,
 } from '@contember/bindx-dataview'
 import { FilterIcon, RefreshCcwIcon, SettingsIcon } from 'lucide-react'
-import { Button } from '../ui/button.js'
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.js'
+import { Button } from '#bindx-ui/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '#bindx-ui/ui/popover'
 import { cn } from '../utils/cn.js'
 import { dict } from '../dict.js'
-import { DataGridToolbarVisibleElements } from './elements.js'
-import { DataGridAutoExport } from './export.js'
-import { DataGridLayoutSwitcher } from './layout-switcher.js'
-import { DataGridPerPageSelector } from './pagination.js'
-import { DataGridToolbarWrapperUI } from './ui.js'
-import { DataGridShowFiltersContext } from './filters/mobile.js'
-import { DataGridTextFilterInner } from './filters/text.js'
+import { DataGridToolbarVisibleElements } from '#bindx-ui/datagrid/elements'
+import { DataGridAutoExport } from '#bindx-ui/datagrid/export'
+import { DataGridLayoutSwitcher } from '#bindx-ui/datagrid/layout-switcher'
+import { DataGridPerPageSelector } from '#bindx-ui/datagrid/pagination'
+import { DataGridToolbarWrapperUI } from '#bindx-ui/datagrid/ui'
+import { DataGridShowFiltersContext } from '#bindx-ui/datagrid/filters/mobile'
+import { DataGridTextFilterInner } from '#bindx-ui/datagrid/filters/text'
 
 export interface DataGridToolbarUIProps {
 	children?: ReactNode

@@ -12,10 +12,10 @@ export {
 	UploaderFileProgressSuccessUI,
 	UploaderRepeaterItemsWrapperUI,
 	UploaderRepeaterItemUI,
-} from './ui.js'
+} from '#bindx-ui/upload/ui'
 
 // Dropzone
-export { UploaderDropzone, type UploaderDropzoneProps } from './dropzone.js'
+export { UploaderDropzone, type UploaderDropzoneProps } from '#bindx-ui/upload/dropzone'
 
 // Progress
 export {
@@ -24,7 +24,7 @@ export {
 	AbortButton,
 	DismissButton,
 	type UploaderFileProgressUIProps,
-} from './progress.js'
+} from '#bindx-ui/upload/progress'
 
 // Views
-export * from './view/index.js'
+export * from '#bindx-ui/upload/view/index'

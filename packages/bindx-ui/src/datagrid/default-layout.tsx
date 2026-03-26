@@ -10,12 +10,12 @@ import {
 	DataViewNonEmpty,
 	useDataViewContext,
 } from '@contember/bindx-dataview'
-import { DataGridToolbarUI } from './toolbar.js'
-import { DataGridLoader } from './loader.js'
-import { DataGridPaginationUI } from './pagination.js'
-import { DataGridContainer } from './table.js'
-import { DataGridAutoTable } from './auto-table.js'
-import { DataGridNoResults } from './empty.js'
+import { DataGridToolbarUI } from '#bindx-ui/datagrid/toolbar'
+import { DataGridLoader } from '#bindx-ui/datagrid/loader'
+import { DataGridPaginationUI } from '#bindx-ui/datagrid/pagination'
+import { DataGridContainer } from '#bindx-ui/datagrid/table'
+import { DataGridAutoTable } from '#bindx-ui/datagrid/auto-table'
+import { DataGridNoResults } from '#bindx-ui/datagrid/empty'
 
 export interface DefaultDataGridLayoutProps {
 	stickyToolbar?: boolean

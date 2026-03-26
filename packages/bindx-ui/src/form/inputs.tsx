@@ -1,7 +1,7 @@
 import { type ComponentProps, type ReactNode, useMemo } from 'react'
-import { CheckboxInput, Input, RadioInput } from '../ui/input.js'
-import { TextareaAutosize } from '../ui/textarea.js'
-import { FormLabelUI } from './ui.js'
+import { CheckboxInput, Input, RadioInput } from '#bindx-ui/ui/input'
+import { TextareaAutosize } from '#bindx-ui/ui/textarea'
+import { FormLabelUI } from '#bindx-ui/form/ui'
 import {
 	FormCheckbox,
 	FormFieldScope,
@@ -11,9 +11,9 @@ import {
 	useFormFieldState,
 } from '@contember/bindx-form'
 import type { FieldRef } from '@contember/bindx'
-import { FormContainer, type FormContainerProps } from './container.js'
-import { useEnumOptionsFormatter } from '../labels/enumLabels.js'
-import { FormFieldLabel } from './labels.js'
+import { FormContainer, type FormContainerProps } from '#bindx-ui/form/container'
+import { useEnumOptionsFormatter } from '#bindx-ui/labels/enumLabels'
+import { FormFieldLabel } from '#bindx-ui/form/labels'
 
 export interface InputFieldProps<T> extends Omit<FormContainerProps, 'children'> {
 	readonly field: FieldRef<T>

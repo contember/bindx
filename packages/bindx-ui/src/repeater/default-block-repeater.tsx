@@ -28,7 +28,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVerticalIcon, PlusCircleIcon, Trash2Icon, XIcon } from 'lucide-react'
-import { Button } from '../ui/button.js'
+import { Button } from '#bindx-ui/ui/button'
 import {
 	Sheet,
 	SheetContent,
@@ -37,12 +37,12 @@ import {
 	SheetTitle,
 	SheetFooter,
 	SheetClose,
-} from '../ui/sheet.js'
+} from '#bindx-ui/ui/sheet'
 import {
 	RepeaterWrapperUI,
 	RepeaterEmptyUI,
 	collectionItemInfo,
-} from './default-repeater.js'
+} from '#bindx-ui/repeater/default-repeater'
 import { dict } from '../dict.js'
 import { uic } from '../utils/uic.js'
 

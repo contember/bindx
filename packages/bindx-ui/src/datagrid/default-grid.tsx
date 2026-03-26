@@ -23,7 +23,7 @@ import {
 	HasManyDataGrid,
 	type HasManyDataGridProps,
 } from '@contember/bindx-dataview'
-import { DefaultDataGridLayout, type DefaultDataGridLayoutProps } from './default-layout.js'
+import { DefaultDataGridLayout, type DefaultDataGridLayoutProps } from '#bindx-ui/datagrid/default-layout'
 
 export type DefaultDataGridProps<TRoleMap extends Record<string, object> = Record<string, object>> =
 	& Omit<DataGridProps<TRoleMap>, 'children'>

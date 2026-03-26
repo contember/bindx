@@ -1,4 +1,4 @@
-export { FormContainer, type FormContainerProps } from './container.js'
+export { FormContainer, type FormContainerProps } from '#bindx-ui/form/container'
 export {
 	InputField,
 	TextareaField,
@@ -8,9 +8,9 @@ export {
 	type TextareaFieldProps,
 	type CheckboxFieldProps,
 	type RadioEnumFieldProps,
-} from './inputs.js'
-export { SelectEnumField, type SelectEnumFieldProps } from './select-enum-field.js'
-export { FormFieldLabel } from './labels.js'
+} from '#bindx-ui/form/inputs'
+export { SelectEnumField, type SelectEnumFieldProps } from '#bindx-ui/form/select-enum-field'
+export { FormFieldLabel } from '#bindx-ui/form/labels'
 export {
 	FormLayout,
 	FormDescriptionUI,
@@ -18,4 +18,4 @@ export {
 	FormLabelWrapperUI,
 	FormLabelUI,
 	FormContainerUI,
-} from './ui.js'
+} from '#bindx-ui/form/ui'

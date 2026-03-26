@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { Loader } from '../ui/loader.js'
+import { Loader } from '#bindx-ui/ui/loader'
 import { uic } from '../utils/uic.js'
 
 export const UploaderDropzoneWrapperUI = uic('div', {

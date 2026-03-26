@@ -1,8 +1,8 @@
 import { type ReactNode } from 'react'
-import { FormContainerUI, FormDescriptionUI, FormErrorUI, FormLabelUI, FormLabelWrapperUI } from './ui.js'
-import { useErrorFormatter } from '../errors/useErrorFormatter.js'
+import { FormContainerUI, FormDescriptionUI, FormErrorUI, FormLabelUI, FormLabelWrapperUI } from '#bindx-ui/form/ui'
+import { useErrorFormatter } from '#bindx-ui/errors/useErrorFormatter'
 import { FormError, FormFieldStateProvider, FormLabel, useFormFieldState } from '@contember/bindx-form'
-import { FormFieldLabel } from './labels.js'
+import { FormFieldLabel } from '#bindx-ui/form/labels'
 import type { FieldError } from '@contember/bindx'
 
 export interface FormContainerProps {

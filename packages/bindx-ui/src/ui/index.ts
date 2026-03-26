@@ -1,3 +1,3 @@
-export { Input, InputLike, InputBare, CheckboxInput, RadioInput, inputConfig } from './input.js'
-export { Label } from './label.js'
-export { Textarea, TextareaAutosize } from './textarea.js'
+export { Input, InputLike, InputBare, CheckboxInput, RadioInput, inputConfig } from '#bindx-ui/ui/input'
+export { Label } from '#bindx-ui/ui/label'
+export { Textarea, TextareaAutosize } from '#bindx-ui/ui/textarea'

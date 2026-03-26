@@ -25,18 +25,18 @@ import { HasOne, withCollector } from '@contember/bindx-react'
 import { Select, SelectEachValue, SelectPlaceholder } from '@contember/bindx-dataview'
 import { useHasOne } from '@contember/bindx-react'
 import { FormHasOneRelationScope } from '@contember/bindx-form'
-import { FormContainer } from '../form/container.js'
-import { Popover, PopoverTrigger } from '../ui/popover.js'
-import { Button } from '../ui/button.js'
+import { FormContainer } from '#bindx-ui/form/container'
+import { Popover, PopoverTrigger } from '#bindx-ui/ui/popover'
+import { Button } from '#bindx-ui/ui/button'
 import { ChevronDownIcon, XIcon } from 'lucide-react'
-import { DefaultSelectDataView } from './list.js'
+import { DefaultSelectDataView } from '#bindx-ui/select/list'
 import {
 	SelectDefaultPlaceholderUI,
 	SelectInputActionsUI,
 	SelectInputUI,
 	SelectInputWrapperUI,
 	SelectPopoverContent,
-} from './ui.js'
+} from '#bindx-ui/select/ui'
 
 // `infer _S` (not `any`) is load-bearing — see relationTargetInference.test.ts.
 type RelationTarget<F> = F extends HasOneRef<infer TEntity, infer _S> ? TEntity : object

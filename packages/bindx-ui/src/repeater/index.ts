@@ -5,10 +5,10 @@ export {
 	RepeaterItemUI,
 	RepeaterEmptyUI,
 	RepeaterItemActionsUI,
-} from './default-repeater.js'
+} from '#bindx-ui/repeater/default-repeater'
 
 export {
 	DefaultBlockRepeater,
 	type DefaultBlockRepeaterProps,
 	type BlockRenderDefinition,
-} from './default-block-repeater.js'
+} from '#bindx-ui/repeater/default-block-repeater'

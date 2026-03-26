@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { formatBytes, formatDate, formatDuration, truncateUrl } from './utils.js'
+import { formatBytes, formatDate, formatDuration, truncateUrl } from '#bindx-ui/upload/view/utils'
 
 export interface MetadataProps {
 	url?: string | null

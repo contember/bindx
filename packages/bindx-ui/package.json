@@ -43,5 +43,8 @@
 		"url": "https://github.com/contember/bindx.git",
 		"directory": "packages/bindx-ui"
 	},
-	"license": "MIT"
+	"license": "MIT",
+	"imports": {
+		"#bindx-ui/*": "./src/*"
+	}
 }

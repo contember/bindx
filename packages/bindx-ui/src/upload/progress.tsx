@@ -11,8 +11,8 @@ import {
 	type UploaderFileStateError,
 	type UploaderFileStateSuccess,
 } from '@contember/bindx-uploader'
-import { Progress } from '../ui/progress.js'
-import { Button } from '../ui/button.js'
+import { Progress } from '#bindx-ui/ui/progress'
+import { Button } from '#bindx-ui/ui/button'
 import { dict } from '../dict.js'
 import {
 	UploaderFileProgressWrapperUI,
@@ -21,7 +21,7 @@ import {
 	UploaderFileProgressActionsUI,
 	UploaderFileProgressErrorUI,
 	UploaderFileProgressSuccessUI,
-} from './ui.js'
+} from '#bindx-ui/upload/ui'
 
 export interface UploaderFileProgressUIProps {
 	file: File

@@ -3,7 +3,7 @@ import type { EntityRef, HasManyRef, AnyBrand } from '@contember/bindx'
 import { HasMany, withCollector } from '@contember/bindx-react'
 import { Repeater, type RepeaterItemInfo } from '@contember/bindx-repeater'
 import { PlusCircleIcon, Trash2Icon } from 'lucide-react'
-import { Button } from '../ui/button.js'
+import { Button } from '#bindx-ui/ui/button'
 import { uic } from '../utils/uic.js'
 import { dict } from '../dict.js'
 

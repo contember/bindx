@@ -4,7 +4,7 @@
 import { CheckSquareIcon, FilterIcon, FilterXIcon, PlusIcon, SquareIcon, XIcon } from 'lucide-react'
 import { forwardRef, type ReactEventHandler, type ReactNode, useCallback } from 'react'
 import { dict } from '../dict.js'
-import { Button } from '../ui/button.js'
+import { Button } from '#bindx-ui/ui/button'
 import { cn } from '../utils/cn.js'
 import { uic } from '../utils/uic.js'
 

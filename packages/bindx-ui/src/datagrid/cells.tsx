@@ -6,8 +6,8 @@
  */
 import type { ReactElement, ReactNode } from 'react'
 import type { FieldRef } from '@contember/bindx'
-import { DataGridTooltipLabel } from './ui.js'
-import { DataGridEnumFieldTooltip, DataGridHasOneTooltip, DataGridHasManyTooltip } from './tooltips.js'
+import { DataGridTooltipLabel } from '#bindx-ui/datagrid/ui'
+import { DataGridEnumFieldTooltip, DataGridHasOneTooltip, DataGridHasManyTooltip } from '#bindx-ui/datagrid/tooltips'
 
 // ============================================================================
 // DataGridEnumCell

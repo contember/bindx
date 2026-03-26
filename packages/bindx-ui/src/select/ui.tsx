@@ -1,6 +1,6 @@
 import { uic } from '../utils/uic.js'
-import { Button } from '../ui/button.js'
-import { PopoverContent } from '../ui/popover.js'
+import { Button } from '#bindx-ui/ui/button'
+import { PopoverContent } from '#bindx-ui/ui/popover'
 import { forwardRef } from 'react'
 import { CheckIcon, PlusIcon, XIcon } from 'lucide-react'
 import { dict } from '../dict.js'

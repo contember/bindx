@@ -12,8 +12,8 @@ import type { FieldRef } from '@contember/bindx'
 import { ArrowDownAZIcon, ArrowUpDownIcon, ArrowUpZaIcon, EyeOffIcon, FilterIcon } from 'lucide-react'
 import { cn } from '../utils/cn.js'
 import { dict } from '../dict.js'
-import { Button } from '../ui/button.js'
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.js'
+import { Button } from '#bindx-ui/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '#bindx-ui/ui/popover'
 
 export interface DataGridColumnHeaderUIProps {
 	children: ReactNode

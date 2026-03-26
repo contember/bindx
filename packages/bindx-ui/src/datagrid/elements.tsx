@@ -4,7 +4,7 @@
 import { EyeIcon, EyeOffIcon } from 'lucide-react'
 import { Fragment, type ReactElement, type ReactNode } from 'react'
 import { type DataViewElementData, DataViewVisibilityTrigger, useDataViewContext, useDataViewElements } from '@contember/bindx-dataview'
-import { useFieldLabelFormatter } from '../labels/index.js'
+import { useFieldLabelFormatter } from '#bindx-ui/labels/index'
 import { dict } from '../dict.js'
 
 export interface DataGridToolbarVisibleElementsProps {

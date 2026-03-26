@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useNotifications, useDismissNotification } from '@contember/bindx-react'
 import type { Notification, NotificationType } from '@contember/bindx'
-import { cn } from '../utils/cn.js'
+import { cn } from '#bindx-ui/utils/cn'
 
 const typeStyles: Record<NotificationType, { border: string; icon: string; bg: string }> = {
 	success: {

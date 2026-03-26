@@ -19,11 +19,11 @@ import {
 	DataViewHighlightRow,
 	useSelectHandleSelect,
 } from '@contember/bindx-dataview'
-import { Loader } from '../ui/loader.js'
-import { Button } from '../ui/button.js'
+import { Loader } from '#bindx-ui/ui/loader'
+import { Button } from '#bindx-ui/ui/button'
 import { ArrowBigDownDash } from 'lucide-react'
-import { SelectDefaultFilter } from './filter.js'
-import { SelectListItemUI } from './ui.js'
+import { SelectDefaultFilter } from '#bindx-ui/select/filter'
+import { SelectListItemUI } from '#bindx-ui/select/ui'
 
 export interface DefaultSelectDataViewProps {
 	/** Per-item render function */
