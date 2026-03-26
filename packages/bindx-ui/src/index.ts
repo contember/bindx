@@ -13,10 +13,10 @@ export {
 	Input,
 	InputLike,
 	InputBare,
-	CheckboxInput,
-	RadioInput,
 	inputConfig,
 } from '#bindx-ui/ui/input'
+export { CheckboxInput } from '#bindx-ui/ui/checkbox-input'
+export { RadioInput } from '#bindx-ui/ui/radio-input'
 export { Label } from '#bindx-ui/ui/label'
 export { Textarea, TextareaAutosize } from '#bindx-ui/ui/textarea'
 export { Button, AnchorButton, buttonConfig } from '#bindx-ui/ui/button'
@@ -26,9 +26,12 @@ export { Progress } from '#bindx-ui/ui/progress'
 export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor } from '#bindx-ui/ui/popover'
 export { Tooltip, type TooltipProps } from '#bindx-ui/ui/tooltip'
 export {
-	Sheet, SheetPortal, SheetOverlay, SheetTrigger, SheetClose,
-	SheetContent, SheetHeader, SheetBody, SheetFooter, SheetTitle, SheetDescription,
+	Sheet, SheetTrigger, SheetClose, SheetContent,
 } from '#bindx-ui/ui/sheet'
+export {
+	SheetPortal, SheetOverlay,
+	SheetHeader, SheetBody, SheetFooter, SheetTitle, SheetDescription,
+} from '#bindx-ui/ui/sheet-layout'
 
 // Form Components
 export {

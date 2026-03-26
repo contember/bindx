@@ -4,7 +4,7 @@ import { BlockRepeater } from '@contember/bindx-repeater'
 import { Uploader, createImageFileType } from '@contember/bindx-uploader'
 import {
 	InputField,
-	DefaultBlockRepeater,
+	DefaultBlockRepeater as StyledBlockRepeater,
 	UploaderDropzone,
 	UploaderProgress,
 	UploadedImageView,
@@ -100,7 +100,7 @@ export function HeadlessBlockRepeaterPage({ id }: { id: string }): ReactNode {
 }
 
 /**
- * Styled DefaultBlockRepeater — inline mode (DnD enabled).
+ * Styled BlockRepeater — inline mode (DnD enabled).
  * Uses Entity JSX for data binding.
  */
 export function StyledBlockRepeaterPage({ id }: { id: string }): ReactNode {
@@ -114,7 +114,7 @@ export function StyledBlockRepeaterPage({ id }: { id: string }): ReactNode {
 			{article => (
 				<div>
 					<h3 className="font-medium mb-2">Inline mode (DnD + inline editing)</h3>
-					<DefaultBlockRepeater
+					<StyledBlockRepeater
 						field={article.blocks}
 						discriminationField="blockType"
 						sortableBy="order"
@@ -148,7 +148,7 @@ export function StyledBlockRepeaterPage({ id }: { id: string }): ReactNode {
 }
 
 /**
- * Styled DefaultBlockRepeater — dual mode (preview + sheet edit).
+ * Styled BlockRepeater — dual mode (preview + sheet edit).
  * Uses Entity JSX for data binding.
  */
 export function DualModeBlockRepeaterPage({ id }: { id: string }): ReactNode {
@@ -163,7 +163,7 @@ export function DualModeBlockRepeaterPage({ id }: { id: string }): ReactNode {
 				<div>
 					<h3 className="font-medium mb-2">Dual mode (preview + sheet edit)</h3>
 					<p className="text-sm text-gray-500 mb-2">Click a block to edit in a side sheet. Drag the handle to reorder.</p>
-					<DefaultBlockRepeater
+					<StyledBlockRepeater
 						field={article.blocks}
 						discriminationField="blockType"
 						sortableBy="order"

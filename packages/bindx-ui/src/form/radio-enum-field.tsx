@@ -1,94 +1,14 @@
-import { type ComponentProps, type ReactNode, useMemo } from 'react'
-import { CheckboxInput, Input, RadioInput } from '#bindx-ui/ui/input'
-import { TextareaAutosize } from '#bindx-ui/ui/textarea'
+import { type ReactNode, useMemo } from 'react'
+import { RadioInput } from '#bindx-ui/ui/radio-input'
 import { FormLabelUI } from '#bindx-ui/form/ui'
 import {
-	FormCheckbox,
 	FormFieldScope,
-	FormInput,
-	FormLabel,
 	FormRadioInput,
 	useFormFieldState,
 } from '@contember/bindx-form'
 import type { FieldRef } from '@contember/bindx'
 import { FormContainer, type FormContainerProps } from '#bindx-ui/form/container'
 import { useEnumOptionsFormatter } from '#bindx-ui/labels/enumLabels'
-import { FormFieldLabel } from '#bindx-ui/form/labels'
-
-export interface InputFieldProps<T> extends Omit<FormContainerProps, 'children'> {
-	readonly field: FieldRef<T>
-	readonly required?: boolean
-	readonly inputProps?: ComponentProps<typeof Input>
-	readonly formatValue?: (value: T | null) => string
-	readonly parseValue?: (value: string) => T | null
-}
-
-export const InputField = <T,>({
-	field,
-	label,
-	description,
-	inputProps,
-	required,
-	parseValue,
-	formatValue,
-}: InputFieldProps<T>): ReactNode => (
-	<FormFieldScope field={field}>
-		<FormContainer description={description} label={label} required={required}>
-			<FormInput field={field} parseValue={parseValue} formatValue={formatValue}>
-				<Input required={required} {...(inputProps ?? {})} />
-			</FormInput>
-		</FormContainer>
-	</FormFieldScope>
-)
-
-export interface TextareaFieldProps<T> extends Omit<FormContainerProps, 'children'> {
-	readonly field: FieldRef<T>
-	readonly required?: boolean
-	readonly inputProps?: ComponentProps<typeof TextareaAutosize>
-}
-
-export const TextareaField = <T,>({
-	field,
-	label,
-	description,
-	inputProps,
-	required,
-}: TextareaFieldProps<T>): ReactNode => (
-	<FormFieldScope field={field}>
-		<FormContainer description={description} label={label} required={required}>
-			<FormInput field={field}>
-				<TextareaAutosize required={required} {...(inputProps ?? {})} />
-			</FormInput>
-		</FormContainer>
-	</FormFieldScope>
-)
-
-export interface CheckboxFieldProps extends Omit<FormContainerProps, 'children'> {
-	readonly field: FieldRef<boolean>
-	readonly required?: boolean
-	readonly inputProps?: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'defaultValue'>
-}
-
-export const CheckboxField = ({
-	field,
-	label,
-	description,
-	inputProps,
-	required,
-}: CheckboxFieldProps): ReactNode => (
-	<FormFieldScope field={field}>
-		<FormContainer description={description} label={false}>
-			<div className="flex gap-2 items-center">
-				<FormCheckbox field={field}>
-					<CheckboxInput required={required} {...inputProps} />
-				</FormCheckbox>
-				<FormLabel>
-					<FormLabelUI required={required}>{label ?? <FormFieldLabel />}</FormLabelUI>
-				</FormLabel>
-			</div>
-		</FormContainer>
-	</FormFieldScope>
-)
 
 export interface RadioEnumFieldProps<T> extends Omit<FormContainerProps, 'children'> {
 	readonly field: FieldRef<T>

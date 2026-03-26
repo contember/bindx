@@ -39,7 +39,7 @@ function labelFormatter(entityName: string, fieldName: string): ReactNode | null
  * DataGrid with filtering, sorting, pagination, and multiple layouts.
  *
  * Demonstrates:
- * - DefaultDataGrid with marker-based columns
+ * - DataGrid with marker-based columns
  * - Table layout (auto-rendered from column metadata)
  * - Grid and rows custom layouts via DataGridLayout marker
  * - Toolbar content with filters

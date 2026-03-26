@@ -11,9 +11,9 @@ import {
 	SelectInputActionsUI,
 	SelectInputUI,
 	SelectInputWrapperUI,
-	SelectListItemUI,
-	SelectPopoverContent,
-} from '#bindx-ui/select/ui'
+} from '#bindx-ui/select/input-ui'
+import { SelectListItemUI } from '#bindx-ui/select/ui'
+import { SelectPopoverContent } from '#bindx-ui/select/popover-ui'
 
 export interface SelectEnumFieldProps<T> extends Omit<FormContainerProps, 'children'> {
 	readonly field: FieldRef<T>

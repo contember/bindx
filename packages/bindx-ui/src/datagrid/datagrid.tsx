@@ -18,15 +18,15 @@
 import React, { type ReactElement, type ReactNode } from 'react'
 import type { CommonEntity, EntityAccessor } from '@contember/bindx'
 import {
-	DataGrid,
-	type DataGridProps,
-	HasManyDataGrid,
-	type HasManyDataGridProps,
+	DataGrid as DataGridCore,
+	type DataGridProps as DataGridCoreProps,
+	HasManyDataGrid as HasManyDataGridCore,
+	type HasManyDataGridProps as HasManyDataGridCoreProps,
 } from '@contember/bindx-dataview'
-import { DefaultDataGridLayout, type DefaultDataGridLayoutProps } from '#bindx-ui/datagrid/default-layout'
+import { DefaultDataGridLayout, type DefaultDataGridLayoutProps } from '#bindx-ui/datagrid/layout'
 
 export type DefaultDataGridProps<TRoleMap extends Record<string, object> = Record<string, object>> =
-	& Omit<DataGridProps<TRoleMap>, 'children'>
+	& Omit<DataGridCoreProps<TRoleMap>, 'children'>
 	& DefaultDataGridLayoutProps
 	& {
 		/** Children render function: receives entity proxy `it`, returns column/toolbar/layout markers */
@@ -40,7 +40,7 @@ export function DefaultDataGrid<TRoleMap extends Record<string, object>>({
 	...dataGridProps
 }: DefaultDataGridProps<TRoleMap>): ReactElement {
 	return (
-		<DataGrid {...dataGridProps}>
+		<DataGridCore {...dataGridProps}>
 			{it => (
 				<>
 					{children(it)}
@@ -50,12 +50,12 @@ export function DefaultDataGrid<TRoleMap extends Record<string, object>>({
 					/>
 				</>
 			)}
-		</DataGrid>
+		</DataGridCore>
 	)
 }
 
 export type DefaultHasManyDataGridProps<TEntity extends object = object> =
-	& Omit<HasManyDataGridProps<TEntity>, 'children'>
+	& Omit<HasManyDataGridCoreProps<TEntity>, 'children'>
 	& DefaultDataGridLayoutProps
 	& {
 		children: (it: EntityAccessor<TEntity>) => ReactNode
@@ -68,7 +68,7 @@ export function DefaultHasManyDataGrid<TEntity extends object>({
 	...props
 }: DefaultHasManyDataGridProps<TEntity>): ReactElement {
 	return (
-		<HasManyDataGrid {...props}>
+		<HasManyDataGridCore {...props}>
 			{it => (
 				<>
 					{children(it)}
@@ -78,6 +78,6 @@ export function DefaultHasManyDataGrid<TEntity extends object>({
 					/>
 				</>
 			)}
-		</HasManyDataGrid>
+		</HasManyDataGridCore>
 	)
 }

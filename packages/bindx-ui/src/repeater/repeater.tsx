@@ -1,35 +1,16 @@
 import type { ReactNode } from 'react'
 import type { EntityRef, HasManyRef, AnyBrand } from '@contember/bindx'
 import { HasMany, withCollector } from '@contember/bindx-react'
-import { Repeater, type RepeaterItemInfo } from '@contember/bindx-repeater'
+import { Repeater as RepeaterCore, type RepeaterItemInfo } from '@contember/bindx-repeater'
 import { PlusCircleIcon, Trash2Icon } from 'lucide-react'
 import { Button } from '#bindx-ui/ui/button'
-import { uic } from '../utils/uic.js'
 import { dict } from '../dict.js'
-
-// ============================================================================
-// UI Components
-// ============================================================================
-
-const RepeaterWrapperUI = uic('div', {
-	baseClass: 'flex flex-col gap-2 relative bg-background mb-4',
-})
-
-const RepeaterItemUI = uic('div', {
-	baseClass: 'rounded-sm border border-gray-200 bg-gray-50 p-4 relative group/repeater-item',
-})
-
-const RepeaterEmptyUI = uic('div', {
-	baseClass: 'italic text-sm text-gray-600',
-})
-
-const RepeaterItemActionsUI = uic('div', {
-	baseClass: 'absolute top-1 right-2 flex gap-2',
-})
-
-// ============================================================================
-// DefaultRepeater
-// ============================================================================
+import {
+	RepeaterWrapperUI,
+	RepeaterItemUI,
+	RepeaterEmptyUI,
+	RepeaterItemActionsUI,
+} from '#bindx-ui/repeater/repeater-ui'
 
 export interface DefaultRepeaterProps<
 	TEntity extends object = object,
@@ -85,7 +66,7 @@ export const DefaultRepeater = withCollector(function DefaultRepeater<
 	children,
 }: DefaultRepeaterProps<TEntity, TSelected, TBrand, TEntityName, TSchema>): ReactNode {
 	return (
-		<Repeater field={field} sortableBy={sortableBy}>
+		<RepeaterCore field={field} sortableBy={sortableBy}>
 			{(items, { addItem, isEmpty }) => (
 				<RepeaterWrapperUI>
 					{title && <h3 className="font-medium">{title}</h3>}
@@ -116,7 +97,7 @@ export const DefaultRepeater = withCollector(function DefaultRepeater<
 					)}
 				</RepeaterWrapperUI>
 			)}
-		</Repeater>
+		</RepeaterCore>
 	)
 }, (props) => (
 	<HasMany field={props.field}>
@@ -135,10 +116,6 @@ function AddButton({ children, onClick }: { children?: ReactNode; onClick: () =>
 	)
 }
 
-// ============================================================================
-// Exports for customization
-// ============================================================================
-
 /** Mock item info for use in staticRender during selection collection. */
 export const collectionItemInfo: RepeaterItemInfo = Object.freeze({
 	index: 0,
@@ -148,10 +125,3 @@ export const collectionItemInfo: RepeaterItemInfo = Object.freeze({
 	moveUp: () => {},
 	moveDown: () => {},
 })
-
-export {
-	RepeaterWrapperUI,
-	RepeaterItemUI,
-	RepeaterEmptyUI,
-	RepeaterItemActionsUI,
-}

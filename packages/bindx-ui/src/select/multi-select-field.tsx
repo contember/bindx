@@ -30,16 +30,18 @@ import { Popover, PopoverTrigger } from '#bindx-ui/ui/popover'
 import { ChevronDownIcon } from 'lucide-react'
 import { DefaultSelectDataView } from '#bindx-ui/select/list'
 import {
-	MultiSelectItemContentUI,
-	MultiSelectItemRemoveButtonUI,
-	MultiSelectItemUI,
-	MultiSelectItemWrapperUI,
 	SelectDefaultPlaceholderUI,
 	SelectInputActionsUI,
 	SelectInputUI,
 	SelectInputWrapperUI,
-	SelectPopoverContent,
-} from '#bindx-ui/select/ui'
+} from '#bindx-ui/select/input-ui'
+import {
+	MultiSelectItemContentUI,
+	MultiSelectItemRemoveButtonUI,
+	MultiSelectItemUI,
+	MultiSelectItemWrapperUI,
+} from '#bindx-ui/select/multi-select-ui'
+import { SelectPopoverContent } from '#bindx-ui/select/popover-ui'
 
 // `infer _S` (not `any`) is load-bearing — see relationTargetInference.test.ts.
 type HasManyTarget<F> = F extends HasManyRef<infer TEntity, infer _S> ? TEntity : object

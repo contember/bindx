@@ -35,8 +35,8 @@ import {
 	SelectInputActionsUI,
 	SelectInputUI,
 	SelectInputWrapperUI,
-	SelectPopoverContent,
-} from '#bindx-ui/select/ui'
+} from '#bindx-ui/select/input-ui'
+import { SelectPopoverContent } from '#bindx-ui/select/popover-ui'
 
 // `infer _S` (not `any`) is load-bearing — see relationTargetInference.test.ts.
 type RelationTarget<F> = F extends HasOneRef<infer TEntity, infer _S> ? TEntity : object

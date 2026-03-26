@@ -3,8 +3,8 @@
  */
 
 // Re-export all styled primitives
-export { DefaultDataGrid, type DefaultDataGridProps, DefaultHasManyDataGrid, type DefaultHasManyDataGridProps } from '#bindx-ui/datagrid/default-grid'
-export { DefaultDataGridLayout, type DefaultDataGridLayoutProps } from '#bindx-ui/datagrid/default-layout'
+export { DefaultDataGrid, type DefaultDataGridProps, DefaultHasManyDataGrid, type DefaultHasManyDataGridProps } from '#bindx-ui/datagrid/datagrid'
+export { DefaultDataGridLayout, type DefaultDataGridLayoutProps } from '#bindx-ui/datagrid/layout'
 export { DataGridToolbarUI, type DataGridToolbarUIProps } from '#bindx-ui/datagrid/toolbar'
 export { DataGridPaginationUI, type DataGridPaginationUIProps, DataGridPerPageSelector } from '#bindx-ui/datagrid/pagination'
 export { DataGridColumnHeaderUI, type DataGridColumnHeaderUIProps } from '#bindx-ui/datagrid/column-header'
@@ -56,7 +56,7 @@ export {
 	type DataGridHasOneCellProps,
 	DataGridHasManyCell,
 	type DataGridHasManyCellProps,
-} from '#bindx-ui/datagrid/cells'
+} from '#bindx-ui/datagrid/cells/index'
 
 // Tooltips
 export {
@@ -136,4 +136,4 @@ export {
 	type DataGridHasManyColumnProps,
 	type DataGridActionColumnProps,
 	type DataGridColumnProps,
-} from '#bindx-ui/datagrid/columns'
+} from '#bindx-ui/datagrid/columns/index'

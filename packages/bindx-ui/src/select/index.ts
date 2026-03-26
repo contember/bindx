@@ -3,16 +3,20 @@ export { MultiSelectField, type MultiSelectFieldProps } from '#bindx-ui/select/m
 export { DefaultSelectDataView, type DefaultSelectDataViewProps } from '#bindx-ui/select/list'
 export { SelectDefaultFilter } from '#bindx-ui/select/filter'
 export { useOnHighlight } from '#bindx-ui/select/highlight'
+export { SelectListItemUI } from '#bindx-ui/select/ui'
 export {
 	SelectInputWrapperUI,
 	SelectInputUI,
 	SelectInputActionsUI,
-	SelectListItemUI,
 	SelectDefaultPlaceholderUI,
+} from '#bindx-ui/select/input-ui'
+export {
 	MultiSelectItemWrapperUI,
 	MultiSelectItemUI,
 	MultiSelectItemContentUI,
 	MultiSelectItemRemoveButtonUI,
+} from '#bindx-ui/select/multi-select-ui'
+export {
 	SelectPopoverContent,
 	SelectCreateNewTrigger,
-} from '#bindx-ui/select/ui'
+} from '#bindx-ui/select/popover-ui'

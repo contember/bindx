@@ -7,7 +7,7 @@ import React, { type ReactNode } from 'react'
 import type { EntityAccessor, OrderDirection } from '@contember/bindx'
 import type { FieldRef } from '@contember/bindx'
 import {
-	SelectDataView,
+	SelectDataView as SelectDataViewCore,
 	SelectOption,
 	SelectItemTrigger,
 	DataViewInfiniteLoadProvider,
@@ -43,7 +43,7 @@ export function DefaultSelectDataView({
 	filter,
 }: DefaultSelectDataViewProps): ReactNode {
 	return (
-		<SelectDataView
+		<SelectDataViewCore
 			queryField={queryField}
 			initialSorting={initialSorting}
 			filter={filter}
@@ -52,7 +52,7 @@ export function DefaultSelectDataView({
 			<SelectListInner>
 				{children}
 			</SelectListInner>
-		</SelectDataView>
+		</SelectDataViewCore>
 	)
 }
 

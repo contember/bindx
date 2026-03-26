@@ -1,9 +1,4 @@
-// Re-export from split files for backward compatibility
-export {
-	DataGridFilterActionButtonUI,
-	DataGridExcludeActionButtonUI,
-} from '#bindx-ui/datagrid/ui/button-ui'
-
+export { DataGridFilterActionButtonUI, DataGridExcludeActionButtonUI } from '#bindx-ui/datagrid/ui/button-ui'
 export {
 	DataGridActiveFilterUI,
 	DataGridSingleFilterUI,
@@ -12,5 +7,4 @@ export {
 	type DataGridFilterSelectItemProps,
 	DataGridToolbarWrapperUI,
 } from '#bindx-ui/datagrid/ui/filter-ui'
-
 export { DataGridTooltipLabel } from '#bindx-ui/datagrid/ui/label-ui'

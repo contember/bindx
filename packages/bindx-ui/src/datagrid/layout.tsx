@@ -1,5 +1,5 @@
 /**
- * Shared layout for DefaultDataGrid and DefaultHasManyDataGrid.
+ * Shared layout for DataGrid and HasManyDataGrid.
  * Renders toolbar, loader, table/custom layouts, pagination.
  */
 import React, { type ReactElement } from 'react'
