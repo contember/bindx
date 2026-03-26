@@ -2,9 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
+import { bindxUI } from '../bindx-ui/src/vite-plugin.js'
 
 export default defineConfig({
-	plugins: [tailwindcss(), react()],
+	plugins: [tailwindcss(), react(), bindxUI({ dir: './ui-overrides' })],
 	root: __dirname,
 	server: {
 		port: 15180,

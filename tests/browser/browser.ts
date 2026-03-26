@@ -149,6 +149,10 @@ export function browserTest(name: string, fn: () => void, hash?: string): void {
 	})
 }
 
+export function evalJs(js: string): string {
+	return exec(`agent-browser eval ${q(js)}`)
+}
+
 export function screenshot(path?: string): string {
 	const target = path ?? `/tmp/browser-test-${Date.now()}.png`
 	exec(`agent-browser screenshot ${target}`)
