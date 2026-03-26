@@ -1,9 +1,12 @@
 import { existsSync } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { resolve, join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Plugin, ResolvedConfig } from 'vite'
 
 const BINDX_UI_PREFIX = '#bindx-ui/'
 const EXTENSIONS = ['.tsx', '.ts', '.jsx', '.js']
+
+const packageSrcDir = resolve(dirname(fileURLToPath(import.meta.url)))
 
 export interface BindxUIPluginOptions {
 	/** Directory where local component overrides live. Default: './src/ui' */
@@ -12,15 +15,13 @@ export interface BindxUIPluginOptions {
 
 export function bindxUI(options: BindxUIPluginOptions = {}): Plugin {
 	let resolvedDir: string
-	let config: ResolvedConfig
 
 	return {
 		name: 'bindx-ui-override',
 		enforce: 'pre',
 
 		configResolved(resolvedConfig: ResolvedConfig): void {
-			config = resolvedConfig
-			resolvedDir = resolve(config.root, options.dir ?? './src/ui')
+			resolvedDir = resolve(resolvedConfig.root, options.dir ?? './src/ui')
 		},
 
 		resolveId(source: string): string | null {
@@ -30,6 +31,7 @@ export function bindxUI(options: BindxUIPluginOptions = {}): Plugin {
 
 			const componentPath = source.slice(BINDX_UI_PREFIX.length)
 
+			// Check for local override first
 			for (const ext of EXTENSIONS) {
 				const localPath = join(resolvedDir, componentPath + ext)
 				if (existsSync(localPath)) {
@@ -37,8 +39,15 @@ export function bindxUI(options: BindxUIPluginOptions = {}): Plugin {
 				}
 			}
 
-			// Fallback to package default
-			return `@contember/bindx-ui/_internal/${componentPath}`
+			// Fallback: resolve directly to the source file in the package
+			for (const ext of EXTENSIONS) {
+				const packagePath = join(packageSrcDir, componentPath + ext)
+				if (existsSync(packagePath)) {
+					return packagePath
+				}
+			}
+
+			return null
 		},
 	}
 }
