@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 import { discoverComponents } from './registry.js'
 import { loadMetadata, saveMetadata, type EjectedEntry } from './metadata.js'
 import { getPackageVersion } from './paths.js'
+import { getGitRef, getGitPath } from './git.js'
 
 export function eject(componentPath: string, targetDir: string): void {
 	const components = discoverComponents()
@@ -45,6 +46,8 @@ export function eject(componentPath: string, targetDir: string): void {
 			path: component.path,
 			version,
 			originalHash: hashContent(source),
+			gitRef: getGitRef(),
+			gitPath: getGitPath(component.sourcePath),
 		}
 		metadata.ejected[component.path] = entry
 

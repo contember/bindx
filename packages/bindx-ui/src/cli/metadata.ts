@@ -5,6 +5,8 @@ export interface EjectedEntry {
 	path: string
 	version: string
 	originalHash: string
+	gitRef?: string
+	gitPath?: string
 }
 
 export interface BindxUIMetadata {

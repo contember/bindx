@@ -44,7 +44,8 @@ describe('Vite Plugin', () => {
 		const resolveId = plugin.resolveId as (source: string) => string | null
 		const result = resolveId('#bindx-ui/ui/button')
 
-		expect(result).toBe('@contember/bindx-ui/_internal/ui/button')
+		// Plugin resolves directly to package source file
+		expect(result).toMatch(/packages\/bindx-ui\/src\/ui\/button\.tsx$/)
 	})
 
 	test('checks multiple extensions', () => {
