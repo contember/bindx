@@ -137,6 +137,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 
 	/**
 	 * Gets the relation state.
+	 * Falls back to snapshot data when no explicit relation state exists,
+	 * so server-loaded has-one relations report 'connected' without
+	 * requiring a prior RelationStore entry.
 	 */
 	get state(): 'connected' | 'disconnected' | 'deleted' | 'creating' {
 		const relation = this.store.getRelation(
@@ -144,7 +147,14 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			this.entityId,
 			this.fieldName,
 		)
-		return relation?.state ?? 'disconnected'
+		if (relation) {
+			return relation.state
+		}
+		// No explicit relation state — check if snapshot has embedded data
+		if (this.relatedId !== null) {
+			return 'connected'
+		}
+		return 'disconnected'
 	}
 
 	/**

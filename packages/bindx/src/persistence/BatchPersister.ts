@@ -85,10 +85,12 @@ export class BatchPersister {
 		options?: BatchPersisterOptions,
 	) {
 		this.changeRegistry = new ChangeRegistry(store)
-		this.mutationCollector = options?.mutationCollector
 		this.undoManager = options?.undoManager
 		this.schema = options?.schema
 		this.defaultUpdateMode = options?.defaultUpdateMode ?? 'optimistic'
+		// Use provided mutationCollector, or auto-create one from schema
+		this.mutationCollector = options?.mutationCollector
+			?? (options?.schema ? new MutationCollector(store, options.schema) : undefined)
 	}
 
 	/**
@@ -381,10 +383,13 @@ export class BatchPersister {
 		entities: DirtyEntity[],
 		scope: PersistScope,
 	): TransactionMutation[] {
-		// Tell MutationCollector which entities have their own top-level mutations
-		// so it skips generating nested updates for them
+		// Exclude only non-create entities from nesting —
+		// new entities should be nested inside their parent's mutation
+		// to maintain correct relation connections without transaction support.
 		if (this.mutationCollector instanceof MutationCollector) {
-			const excludedIds = new Set(entities.map(e => e.entityId))
+			const excludedIds = new Set(
+				entities.filter(e => e.changeType !== 'create').map(e => e.entityId),
+			)
 			this.mutationCollector.setExcludedEntities(excludedIds)
 		}
 
@@ -407,11 +412,14 @@ export class BatchPersister {
 				// Field-specific collection
 				data = this.collectFieldsData(entity.entityType, entity.entityId, scope.fields)
 			} else if (entity.changeType === 'create') {
-				data = this.mutationCollector?.collectCreateData?.(entity.entityType, entity.entityId)
-					?? this.collectCreateDataWithRelationCheck(entity)
+				const mc = this.mutationCollector
+				data = mc?.collectCreateData
+					? mc.collectCreateData(entity.entityType, entity.entityId)
+					: this.collectCreateDataWithRelationCheck(entity)
 			} else {
-				data = this.mutationCollector?.collectUpdateData(entity.entityType, entity.entityId)
-					?? this.collectUpdateDataWithRelationCheck(entity)
+				data = this.mutationCollector
+					? this.mutationCollector.collectUpdateData(entity.entityType, entity.entityId)
+					: this.collectUpdateDataWithRelationCheck(entity)
 			}
 
 			if (data && Object.keys(data).length > 0) {
@@ -421,6 +429,15 @@ export class BatchPersister {
 					operation: entity.changeType,
 					data,
 				})
+			}
+		}
+
+		// Remove standalone create mutations for entities that were included
+		// as nested inline creates inside another entity's mutation.
+		if (this.mutationCollector instanceof MutationCollector) {
+			const nestedIds = this.mutationCollector.getNestedEntityIds()
+			if (nestedIds.size > 0) {
+				return mutations.filter(m => !(m.operation === 'create' && nestedIds.has(m.entityId)))
 			}
 		}
 
