@@ -6,7 +6,7 @@ const headless = tid('headless-block-repeater')
 browserTest('Block Repeater', () => {
 	describe('initial state', () => {
 		test('headless repeater renders empty state', () => {
-			waitFor(() => el(`${headless}`).exists, { timeout: 15_000 })
+			waitFor(() => el(`${headless}`).exists && el(`${headless}`).text.includes('No blocks yet'), { timeout: 15_000 })
 			expect(el(`${headless}`).text).toContain('No blocks yet')
 		})
 
@@ -47,7 +47,10 @@ browserTest('Block Repeater', () => {
 		})
 
 		test('last block has move-down disabled', () => {
-			waitFor(() => el(`${tid('block-item-image')} ${tid('move-down')}`).exists)
+			waitFor(() => {
+				const btn = el(`${tid('block-item-image')} ${tid('move-down')}`)
+				return btn.exists && btn.isDisabled
+			})
 			expect(el(`${tid('block-item-image')} ${tid('move-down')}`).isDisabled).toBe(true)
 		})
 
