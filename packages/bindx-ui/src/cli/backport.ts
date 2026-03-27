@@ -1,5 +1,4 @@
-import { createHash } from 'node:crypto'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -9,6 +8,7 @@ import { getPackageVersion } from './paths.js'
 import { getGitRef, getGitPath, getOriginalSource } from './git.js'
 import { threeWayMerge } from './merge.js'
 import { generateAgentPrompt, generateAgentBatchPrompt, type AgentBatchSummaryItem } from './agent-prompt.js'
+import { hashContent, stripHeader, isExecError } from './utils.js'
 
 interface BackportOptions {
 	agent?: boolean
@@ -138,6 +138,9 @@ export function backport(componentPath: string, targetDir: string, options: Back
 	if (result.status === 'conflict') {
 		const header = createHeader(version, componentPath)
 		writeFileSync(localPath, header + result.content, 'utf-8')
+		// Update metadata to track conflict state — prevents re-merging conflict markers on next run
+		updateMetadata(metadata, componentPath, component.sourcePath, version, upstreamSource)
+		saveMetadata(targetDir, metadata)
 		console.log(`  ⚠ ${componentPath} — ${result.conflictCount} conflict(s), resolve manually or use --agent`)
 		return
 	}
@@ -169,6 +172,7 @@ export function backportAll(targetDir: string, options: BackportOptions): void {
 	const batchItems: AgentBatchSummaryItem[] = []
 	const autoUpdated: string[] = []
 	const upToDate: string[] = []
+	let metadataChanged = false
 
 	for (const componentPath of paths) {
 		const entry = metadata.ejected[componentPath]
@@ -224,6 +228,7 @@ export function backportAll(targetDir: string, options: BackportOptions): void {
 				const header = createHeader(version, componentPath)
 				writeFileSync(localPath, header + upstreamSource, 'utf-8')
 				updateMetadata(metadata, componentPath, component.sourcePath, version, upstreamSource)
+				metadataChanged = true
 			}
 			autoUpdated.push(componentPath)
 			continue
@@ -233,6 +238,7 @@ export function backportAll(targetDir: string, options: BackportOptions): void {
 		if (localHash === upstreamHash) {
 			if (!options.dryRun) {
 				updateMetadata(metadata, componentPath, component.sourcePath, version, upstreamSource)
+				metadataChanged = true
 			}
 			upToDate.push(componentPath)
 			continue
@@ -242,8 +248,8 @@ export function backportAll(targetDir: string, options: BackportOptions): void {
 		batchItems.push({ componentPath, ejectVersion: entry.version, status: 'merge-needed', localFilePath: localPath })
 	}
 
-	// Save metadata for auto-updated components
-	if (!options.dryRun && autoUpdated.length > 0) {
+	// Save metadata for auto-updated and hash-matched components
+	if (!options.dryRun && metadataChanged) {
 		saveMetadata(targetDir, metadata)
 	}
 
@@ -345,7 +351,7 @@ function computeDiffs(base: string, local: string, upstream: string): { localDif
 
 function runDiff(fileA: string, fileB: string): string {
 	try {
-		return execSync(`diff -u "${fileA}" "${fileB}"`, { encoding: 'utf-8' })
+		return execFileSync('diff', ['-u', fileA, fileB], { encoding: 'utf-8' })
 	} catch (error: unknown) {
 		if (isExecError(error)) {
 			return error.stdout
@@ -354,31 +360,6 @@ function runDiff(fileA: string, fileB: string): string {
 	}
 }
 
-function stripHeader(content: string): string {
-	const firstNewline = content.indexOf('\n')
-	if (firstNewline === -1) {
-		return content
-	}
-	const firstLine = content.slice(0, firstNewline)
-	if (firstLine.startsWith('// Ejected from')) {
-		return content.slice(firstNewline + 1)
-	}
-	return content
-}
-
 function createHeader(version: string, path: string): string {
 	return `// Ejected from @contember/bindx-ui@${version} — ${path}\n`
-}
-
-function isExecError(error: unknown): error is { stdout: string } {
-	return (
-		typeof error === 'object'
-		&& error !== null
-		&& 'stdout' in error
-		&& typeof (error as { stdout: unknown }).stdout === 'string'
-	)
-}
-
-function hashContent(content: string): string {
-	return createHash('sha256').update(content).digest('hex').slice(0, 16)
 }

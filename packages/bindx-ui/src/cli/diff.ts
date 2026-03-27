@@ -1,12 +1,13 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { discoverComponents } from './registry.js'
 import { loadMetadata } from './metadata.js'
 import { getOriginalSource } from './git.js'
+import { stripHeader, isExecError } from './utils.js'
 
 export function diff(componentPath: string, targetDir: string, mode?: 'upstream' | 'local'): void {
 	if (mode === 'upstream') {
@@ -97,7 +98,7 @@ function findComponent(componentPath: string): { path: string; sourcePath: strin
 
 function printDiff(fileA: string, fileB: string): void {
 	try {
-		const output = execSync(`diff -u "${fileA}" "${fileB}"`, { encoding: 'utf-8' })
+		const output = execFileSync('diff', ['-u', fileA, fileB], { encoding: 'utf-8' })
 		if (output.length === 0) {
 			console.log('No differences.')
 		} else {
@@ -125,25 +126,4 @@ function printDiffFromStrings(contentA: string, contentB: string, labelA: string
 	} finally {
 		rmSync(tempDir, { recursive: true, force: true })
 	}
-}
-
-function isExecError(error: unknown): error is { stdout: string } {
-	return (
-		typeof error === 'object'
-		&& error !== null
-		&& 'stdout' in error
-		&& typeof (error as { stdout: unknown }).stdout === 'string'
-	)
-}
-
-function stripHeader(content: string): string {
-	const firstNewline = content.indexOf('\n')
-	if (firstNewline === -1) {
-		return content
-	}
-	const firstLine = content.slice(0, firstNewline)
-	if (firstLine.startsWith('// Ejected from')) {
-		return content.slice(firstNewline + 1)
-	}
-	return content
 }
