@@ -1,7 +1,8 @@
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { isExecError } from './utils.js'
 
 export interface MergeResult {
 	status: 'clean' | 'conflict' | 'error'
@@ -20,7 +21,7 @@ export function threeWayMerge(local: string, base: string, upstream: string): Me
 		writeFileSync(baseFile, base, 'utf-8')
 		writeFileSync(upstreamFile, upstream, 'utf-8')
 
-		const result = execSync(`diff3 -m "${localFile}" "${baseFile}" "${upstreamFile}"`, {
+		const result = execFileSync('diff3', ['-m', localFile, baseFile, upstreamFile], {
 			encoding: 'utf-8',
 		})
 
@@ -35,17 +36,6 @@ export function threeWayMerge(local: string, base: string, upstream: string): Me
 	} finally {
 		rmSync(tempDir, { recursive: true, force: true })
 	}
-}
-
-function isExecError(error: unknown): error is { stdout: string; status: number } {
-	return (
-		typeof error === 'object'
-		&& error !== null
-		&& 'stdout' in error
-		&& typeof (error as { stdout: unknown }).stdout === 'string'
-		&& 'status' in error
-		&& typeof (error as { status: unknown }).status === 'number'
-	)
 }
 
 function countConflictMarkers(content: string): number {

@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { loadMetadata } from './metadata.js'
 import { discoverComponents } from './registry.js'
 import { getPackageVersion } from './paths.js'
 import { getOriginalSource } from './git.js'
+import { hashContent, stripHeader } from './utils.js'
 
 export function status(targetDir: string): void {
 	const metadata = loadMetadata(targetDir)
@@ -90,20 +90,4 @@ function resolveStatusLabel(
 	}
 
 	return `✓ ${entry.path} (up to date with v${entry.version})`
-}
-
-function stripHeader(content: string): string {
-	const firstNewline = content.indexOf('\n')
-	if (firstNewline === -1) {
-		return content
-	}
-	const firstLine = content.slice(0, firstNewline)
-	if (firstLine.startsWith('// Ejected from')) {
-		return content.slice(firstNewline + 1)
-	}
-	return content
-}
-
-function hashContent(content: string): string {
-	return createHash('sha256').update(content).digest('hex').slice(0, 16)
 }

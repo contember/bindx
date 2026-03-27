@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { discoverComponents } from './registry.js'
 import { loadMetadata, saveMetadata, type EjectedEntry } from './metadata.js'
 import { getPackageVersion } from './paths.js'
 import { getGitRef, getGitPath } from './git.js'
+import { hashContent } from './utils.js'
 
 export function eject(componentPath: string, targetDir: string): void {
 	const components = discoverComponents()
@@ -56,15 +56,14 @@ export function eject(componentPath: string, targetDir: string): void {
 
 	saveMetadata(targetDir, metadata)
 
-	const dependents = findDependents(componentPath, components)
-	if (dependents.length > 0) {
-		console.log(`\n  Used by: ${dependents.map(d => d.path).join(', ')}`)
-		console.log(`  (these will auto-resolve your version via Vite plugin)`)
+	// Skip dependents hint for glob ejections — the pattern won't match real imports
+	if (!isGlob) {
+		const dependents = findDependents(componentPath, components)
+		if (dependents.length > 0) {
+			console.log(`\n  Used by: ${dependents.map(d => d.path).join(', ')}`)
+			console.log(`  (these will auto-resolve your version via Vite plugin)`)
+		}
 	}
-}
-
-function hashContent(content: string): string {
-	return createHash('sha256').update(content).digest('hex').slice(0, 16)
 }
 
 function findDependents(
