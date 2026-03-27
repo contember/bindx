@@ -5,7 +5,7 @@ import { eject } from './eject.js'
 import { restore } from './restore.js'
 import { status } from './status.js'
 import { diff } from './diff.js'
-import { backport, backportAll, syncMetadata } from './backport.js'
+import { backport, backportAll, syncMetadata, skipComponent } from './backport.js'
 
 const args = process.argv.slice(2)
 const command = args[0]
@@ -26,6 +26,7 @@ Commands:
   backport <path>           Backport upstream changes to ejected component
   backport --all            Backport all ejected components
   backport --sync <path>    Sync metadata after agent-assisted merge
+  backport --skip <path>    Skip backport, acknowledge upstream changes
 
 Options:
   --agent                   Generate AI agent prompt instead of merging
@@ -102,6 +103,7 @@ switch (command) {
 	}
 	case 'backport': {
 		const isSync = hasFlag('--sync')
+		const isSkip = hasFlag('--skip')
 		const isAll = hasFlag('--all')
 		const isAgent = hasFlag('--agent')
 		const isDryRun = hasFlag('--dry-run')
@@ -114,6 +116,12 @@ switch (command) {
 				process.exit(1)
 			}
 			syncMetadata(componentPath, targetDir)
+		} else if (isSkip) {
+			if (!componentPath) {
+				console.error('Missing component path. Usage: bindx-ui backport --skip <component-path>')
+				process.exit(1)
+			}
+			skipComponent(componentPath, targetDir)
 		} else if (isAll) {
 			backportAll(targetDir, { agent: isAgent, dryRun: isDryRun })
 		} else {

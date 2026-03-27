@@ -1,14 +1,14 @@
 import { createHash } from 'node:crypto'
 import { execSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
-import { loadMetadata, saveMetadata, type BindxUIMetadata } from './metadata.js'
-import { discoverComponents } from './registry.js'
+import { loadMetadata, saveMetadata, type BindxUIMetadata, type EjectedEntry } from './metadata.js'
+import { discoverComponents, type ComponentEntry } from './registry.js'
 import { getPackageVersion } from './paths.js'
 import { getGitRef, getGitPath, getOriginalSource } from './git.js'
 import { threeWayMerge } from './merge.js'
-import { generateAgentPrompt } from './agent-prompt.js'
+import { generateAgentPrompt, generateAgentBatchPrompt, type AgentBatchSummaryItem } from './agent-prompt.js'
 
 interface BackportOptions {
 	agent?: boolean
@@ -24,30 +24,58 @@ export function backport(componentPath: string, targetDir: string, options: Back
 		process.exit(1)
 	}
 
+	const components = discoverComponents()
+	const component = components.find(c => c.path === componentPath)
+	const localPath = resolve(targetDir, componentPath + '.tsx')
+
+	// Edge case: upstream removed
+	if (!component) {
+		console.log(`  ✗ ${componentPath} — removed from upstream package. Your local file is preserved.`)
+		return
+	}
+
+	// Edge case: local file missing
+	if (!existsSync(localPath)) {
+		console.log(`  ✗ ${componentPath} — local file missing. Run 'bindx-ui eject ${componentPath}' to re-eject.`)
+		return
+	}
+
+	// Edge case: no git ref
 	if (!entry.gitRef || !entry.gitPath) {
-		console.error(`Git ref not available for ${componentPath}. Re-eject the component or use --agent for AI-assisted merge.`)
+		if (options.agent) {
+			console.error(`Git ref not available for ${componentPath}. Cannot generate diffs. Re-eject the component to enable backporting.`)
+		} else {
+			console.error(`Git ref not available for ${componentPath}. Re-eject the component or use --agent for AI-assisted merge.`)
+		}
 		process.exit(1)
 	}
 
-	const baseSource = retrieveBaseSource(entry.gitRef, entry.gitPath)
-	const component = findUpstreamComponent(componentPath)
-	const upstreamSource = readFileSync(component.sourcePath, 'utf-8')
+	// Edge case: git history unavailable (shallow clone, rewritten history)
+	let baseSource: string
+	try {
+		baseSource = getOriginalSource(entry.gitRef, entry.gitPath)
+	} catch {
+		console.error(`Cannot retrieve base version at ${entry.gitRef}:${entry.gitPath}.`)
+		console.error(`The git history may be shallow or rewritten. Try: git fetch --unshallow`)
+		process.exit(1)
+	}
 
-	const localPath = resolve(targetDir, componentPath + '.tsx')
+	const upstreamSource = readFileSync(component.sourcePath, 'utf-8')
 	const localRaw = readFileSync(localPath, 'utf-8')
 	const localSource = stripHeader(localRaw)
 
 	const baseHash = hashContent(baseSource)
 	const upstreamHash = hashContent(upstreamSource)
 	const localHash = hashContent(localSource)
-
 	const version = getPackageVersion()
 
+	// Fast path: upstream unchanged
 	if (baseHash === upstreamHash) {
 		console.log(`  ✓ ${componentPath} — already up to date`)
 		return
 	}
 
+	// Fast path: user hasn't modified → auto-update
 	if (baseHash === localHash) {
 		if (options.dryRun) {
 			console.log(`  → ${componentPath} — would auto-update (no local changes)`)
@@ -55,21 +83,25 @@ export function backport(componentPath: string, targetDir: string, options: Back
 		}
 		const header = createHeader(version, componentPath)
 		writeFileSync(localPath, header + upstreamSource, 'utf-8')
-		updateMetadata(metadata, componentPath, targetDir, component.sourcePath, version, upstreamSource)
+		updateMetadata(metadata, componentPath, component.sourcePath, version, upstreamSource)
+		saveMetadata(targetDir, metadata)
 		console.log(`  ✓ ${componentPath} — auto-updated (no local changes)`)
 		return
 	}
 
+	// Fast path: local already matches upstream
 	if (localHash === upstreamHash) {
 		if (options.dryRun) {
 			console.log(`  ✓ ${componentPath} — local matches upstream, would update metadata`)
 			return
 		}
-		updateMetadata(metadata, componentPath, targetDir, component.sourcePath, version, upstreamSource)
+		updateMetadata(metadata, componentPath, component.sourcePath, version, upstreamSource)
+		saveMetadata(targetDir, metadata)
 		console.log(`  ✓ ${componentPath} — local matches upstream, metadata updated`)
 		return
 	}
 
+	// Agent mode: print prompt
 	if (options.agent) {
 		const diffs = computeDiffs(baseSource, localSource, upstreamSource)
 		const prompt = generateAgentPrompt({
@@ -91,12 +123,14 @@ export function backport(componentPath: string, targetDir: string, options: Back
 		return
 	}
 
+	// Three-way merge
 	const result = threeWayMerge(localSource, baseSource, upstreamSource)
 
 	if (result.status === 'clean') {
 		const header = createHeader(version, componentPath)
 		writeFileSync(localPath, header + result.content, 'utf-8')
-		updateMetadata(metadata, componentPath, targetDir, component.sourcePath, version, upstreamSource)
+		updateMetadata(metadata, componentPath, component.sourcePath, version, upstreamSource)
+		saveMetadata(targetDir, metadata)
 		console.log(`  ✓ ${componentPath} — merged cleanly`)
 		return
 	}
@@ -120,9 +154,102 @@ export function backportAll(targetDir: string, options: BackportOptions): void {
 		return
 	}
 
-	for (const componentPath of paths) {
-		backport(componentPath, targetDir, options)
+	// In non-agent mode, just iterate
+	if (!options.agent) {
+		for (const componentPath of paths) {
+			backport(componentPath, targetDir, options)
+		}
+		return
 	}
+
+	// Agent mode: collect status for all components, auto-update what we can, then generate batch prompt
+	const components = discoverComponents()
+	const componentMap = new Map(components.map(c => [c.path, c]))
+	const version = getPackageVersion()
+	const batchItems: AgentBatchSummaryItem[] = []
+	const autoUpdated: string[] = []
+	const upToDate: string[] = []
+
+	for (const componentPath of paths) {
+		const entry = metadata.ejected[componentPath]
+		if (!entry) continue
+
+		const component = componentMap.get(componentPath)
+		const localPath = resolve(targetDir, componentPath + '.tsx')
+
+		// Edge case: upstream removed
+		if (!component) {
+			batchItems.push({ componentPath, ejectVersion: entry.version, status: 'upstream-removed', localFilePath: localPath })
+			continue
+		}
+
+		// Edge case: local file missing
+		if (!existsSync(localPath)) {
+			batchItems.push({ componentPath, ejectVersion: entry.version, status: 'local-missing', localFilePath: localPath })
+			continue
+		}
+
+		// Edge case: no git ref
+		if (!entry.gitRef || !entry.gitPath) {
+			batchItems.push({ componentPath, ejectVersion: entry.version, status: 'no-git-ref', localFilePath: localPath })
+			continue
+		}
+
+		// Edge case: git history unavailable
+		let baseSource: string
+		try {
+			baseSource = getOriginalSource(entry.gitRef, entry.gitPath)
+		} catch {
+			batchItems.push({ componentPath, ejectVersion: entry.version, status: 'no-git-ref', localFilePath: localPath })
+			continue
+		}
+
+		const upstreamSource = readFileSync(component.sourcePath, 'utf-8')
+		const localRaw = readFileSync(localPath, 'utf-8')
+		const localSource = stripHeader(localRaw)
+
+		const baseHash = hashContent(baseSource)
+		const upstreamHash = hashContent(upstreamSource)
+		const localHash = hashContent(localSource)
+
+		// Already up to date
+		if (baseHash === upstreamHash) {
+			upToDate.push(componentPath)
+			continue
+		}
+
+		// Auto-update: user hasn't modified
+		if (baseHash === localHash) {
+			if (!options.dryRun) {
+				const header = createHeader(version, componentPath)
+				writeFileSync(localPath, header + upstreamSource, 'utf-8')
+				updateMetadata(metadata, componentPath, component.sourcePath, version, upstreamSource)
+			}
+			autoUpdated.push(componentPath)
+			continue
+		}
+
+		// Local matches upstream already
+		if (localHash === upstreamHash) {
+			if (!options.dryRun) {
+				updateMetadata(metadata, componentPath, component.sourcePath, version, upstreamSource)
+			}
+			upToDate.push(componentPath)
+			continue
+		}
+
+		// Both changed — needs merge
+		batchItems.push({ componentPath, ejectVersion: entry.version, status: 'merge-needed', localFilePath: localPath })
+	}
+
+	// Save metadata for auto-updated components
+	if (!options.dryRun && autoUpdated.length > 0) {
+		saveMetadata(targetDir, metadata)
+	}
+
+	// Generate batch prompt
+	const prompt = generateAgentBatchPrompt(batchItems, version, autoUpdated, upToDate)
+	console.log(prompt)
 }
 
 export function syncMetadata(componentPath: string, targetDir: string): void {
@@ -134,23 +261,6 @@ export function syncMetadata(componentPath: string, targetDir: string): void {
 		process.exit(1)
 	}
 
-	const component = findUpstreamComponent(componentPath)
-	const upstreamSource = readFileSync(component.sourcePath, 'utf-8')
-	const version = getPackageVersion()
-
-	updateMetadata(metadata, componentPath, targetDir, component.sourcePath, version, upstreamSource)
-	console.log(`  ✓ ${componentPath} — metadata synced to v${version}`)
-}
-
-function retrieveBaseSource(gitRef: string, gitPath: string): string {
-	try {
-		return getOriginalSource(gitRef, gitPath)
-	} catch {
-		throw new Error(`Cannot retrieve base version at ${gitRef}:${gitPath}. The git history may have been rewritten.`)
-	}
-}
-
-function findUpstreamComponent(componentPath: string): { path: string; sourcePath: string } {
 	const components = discoverComponents()
 	const component = components.find(c => c.path === componentPath)
 
@@ -159,13 +269,47 @@ function findUpstreamComponent(componentPath: string): { path: string; sourcePat
 		process.exit(1)
 	}
 
-	return component
+	const upstreamSource = readFileSync(component.sourcePath, 'utf-8')
+	const version = getPackageVersion()
+
+	updateMetadata(metadata, componentPath, component.sourcePath, version, upstreamSource)
+	saveMetadata(targetDir, metadata)
+	console.log(`  ✓ ${componentPath} — metadata synced to v${version}`)
+}
+
+export function skipComponent(componentPath: string, targetDir: string): void {
+	const metadata = loadMetadata(targetDir)
+	const entry = metadata.ejected[componentPath]
+
+	if (!entry) {
+		console.error(`Component ${componentPath} is not ejected.`)
+		process.exit(1)
+	}
+
+	const components = discoverComponents()
+	const component = components.find(c => c.path === componentPath)
+
+	if (!component) {
+		// Upstream removed — just update version to mark as acknowledged
+		entry.version = getPackageVersion()
+		saveMetadata(targetDir, metadata)
+		console.log(`  ✓ ${componentPath} — skipped (upstream removed, acknowledged)`)
+		return
+	}
+
+	// Update git ref to current HEAD so future backports use this as base
+	// This means: "I've seen the upstream changes and chose to keep my version"
+	const upstreamSource = readFileSync(component.sourcePath, 'utf-8')
+	const version = getPackageVersion()
+
+	updateMetadata(metadata, componentPath, component.sourcePath, version, upstreamSource)
+	saveMetadata(targetDir, metadata)
+	console.log(`  ✓ ${componentPath} — skipped (upstream changes acknowledged, base updated)`)
 }
 
 function updateMetadata(
 	metadata: BindxUIMetadata,
 	componentPath: string,
-	targetDir: string,
 	sourcePath: string,
 	version: string,
 	upstreamSource: string,
@@ -177,7 +321,6 @@ function updateMetadata(
 		gitRef: getGitRef(),
 		gitPath: getGitPath(sourcePath),
 	}
-	saveMetadata(targetDir, metadata)
 }
 
 function computeDiffs(base: string, local: string, upstream: string): { localDiff: string; upstreamDiff: string } {
