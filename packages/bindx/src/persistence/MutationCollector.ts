@@ -31,6 +31,7 @@ export interface EntityMutationResult {
  */
 export class MutationCollector implements MutationDataCollector {
 	private excludedEntityIds: ReadonlySet<string> = new Set()
+	private readonly _nestedEntityIds: Set<string> = new Set()
 
 	constructor(
 		private readonly store: SnapshotStore,
@@ -44,6 +45,16 @@ export class MutationCollector implements MutationDataCollector {
 	 */
 	setExcludedEntities(ids: ReadonlySet<string>): void {
 		this.excludedEntityIds = ids
+		this._nestedEntityIds.clear()
+	}
+
+	/**
+	 * Returns IDs of entities that were included as nested inline creates
+	 * inside another entity's mutation data. These entities don't need
+	 * their own standalone top-level mutations.
+	 */
+	getNestedEntityIds(): ReadonlySet<string> {
+		return this._nestedEntityIds
 	}
 
 	// ==================== Main Collection Methods ====================
@@ -178,7 +189,9 @@ export class MutationCollector implements MutationDataCollector {
 					createData[fieldName] = relationOp
 				}
 			} else if (relationType === 'hasMany') {
+				// Try embedded data first, then fall back to RelationStore
 				const relationOps = this.collectCreateManyRelation(value)
+					?? this.collectHasManyOperations(entityType, entityId, fieldName)
 				if (relationOps !== null && relationOps.length > 0) {
 					createData[fieldName] = relationOps
 				}
@@ -316,6 +329,7 @@ export class MutationCollector implements MutationDataCollector {
 						return { connect: { id: currentId } }
 					} else if (currentId && isTempId(currentId)) {
 						// Temp entity — generate inline create with its collected data
+						this._nestedEntityIds.add(currentId)
 						const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
 						if (targetType) {
 							const createData = this.collectCreateData(targetType, currentId)
@@ -426,6 +440,7 @@ export class MutationCollector implements MutationDataCollector {
 		// Created entities -> create (using entity snapshot data)
 		if (targetType) {
 			for (const tempId of hasManyState.createdEntities) {
+				this._nestedEntityIds.add(tempId)
 				const itemSnapshot = this.store.getEntitySnapshot(targetType, tempId)
 				if (itemSnapshot) {
 					const createData = { ...itemSnapshot.data as Record<string, unknown> }

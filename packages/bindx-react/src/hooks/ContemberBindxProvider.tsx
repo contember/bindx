@@ -129,6 +129,7 @@ export const ContemberBindxProvider = memo(function ContemberBindxProvider({
 		const batchPersister = new BatchPersister(adapter, store, dispatcher, {
 			mutationCollector,
 			undoManager: undoManager ?? undefined,
+			schema: schemaRegistry,
 			defaultUpdateMode,
 		})
 
