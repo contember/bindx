@@ -1,6 +1,6 @@
 {
 	"name": "@contember/bindx-form",
-	"version": "0.1.13",
+	"version": "0.1.14",
 	"description": "Form components for React data binding",
 	"type": "module",
 	"main": "./src/index.ts",
