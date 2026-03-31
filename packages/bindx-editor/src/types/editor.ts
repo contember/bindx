@@ -27,8 +27,8 @@ export interface WithEssentials {
 
 	canContainAnyBlocks: (element: SlateElement | Editor) => boolean
 
-	serializeNodes: (nodes: Array<Descendant>, errorMessage?: string) => string
-	deserializeNodes: (serializedNodes: string, errorMessage?: string) => Array<SlateElement | SlateText>
+	serializeNodes: (nodes: Array<Descendant>, errorMessage?: string) => SerializableEditorNode
+	deserializeNodes: (serializedNodes: SerializableEditorNode | string, errorMessage?: string) => Array<SlateElement | SlateText>
 
 	upgradeFormatBySingleVersion: (node: SlateNode, oldVersion: number) => SlateNode
 

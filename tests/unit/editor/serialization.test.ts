@@ -15,29 +15,32 @@ const createMockEditor = (formatVersion = 1): Editor => {
 // Import the pure functions directly
 // We need to test these through the BindxEditor namespace since they depend on editor methods
 describe('serialization', () => {
-	test('serializeNodes produces valid JSON with formatVersion', async () => {
+	test('serializeNodes produces SerializableEditorNode with formatVersion', async () => {
 		const { serializeNodes } = await import('@contember/bindx-editor')
 		const editor = createMockEditor()
 		const nodes = [{ type: 'paragraph', children: [{ text: 'Hello world' }] }]
 
 		const result = serializeNodes(editor, nodes as any)
-		const parsed: SerializableEditorNode = JSON.parse(result)
 
-		expect(parsed.formatVersion).toBe(1)
-		expect(parsed.children).toHaveLength(1)
-		expect(parsed.children[0]).toEqual({ type: 'paragraph', children: [{ text: 'Hello world' }] })
+		expect(result.formatVersion).toBe(1)
+		expect(result.children).toHaveLength(1)
+		expect(result.children[0]).toEqual({ type: 'paragraph', children: [{ text: 'Hello world' }] })
 	})
 
-	test('serializeNodes throws on circular reference', async () => {
-		const { serializeNodes } = await import('@contember/bindx-editor')
+	test('permissivelyDeserializeNodes accepts JSON object directly', async () => {
+		const { permissivelyDeserializeNodes } = await import('@contember/bindx-editor')
 		const editor = createMockEditor()
-		const circular: any = { type: 'paragraph', children: [] }
-		circular.self = circular
+		const input: SerializableEditorNode = {
+			formatVersion: 1,
+			children: [{ type: 'paragraph', children: [{ text: 'Test' }] }] as any,
+		}
 
-		expect(() => serializeNodes(editor, [circular])).toThrow()
+		const result = permissivelyDeserializeNodes(editor, input)
+		expect(result).toHaveLength(1)
+		expect(result[0]).toEqual({ type: 'paragraph', children: [{ text: 'Test' }] })
 	})
 
-	test('permissivelyDeserializeNodes parses valid JSON', async () => {
+	test('permissivelyDeserializeNodes parses valid JSON string', async () => {
 		const { permissivelyDeserializeNodes } = await import('@contember/bindx-editor')
 		const editor = createMockEditor()
 		const input = JSON.stringify({

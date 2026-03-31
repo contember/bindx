@@ -8,12 +8,13 @@ import type { FieldRef } from '@contember/bindx'
 import { FIELD_REF_META } from '@contember/bindx'
 import type { RichTextEditorProps } from '../types/editorProps.js'
 import { BINDX_COMPONENT, type SelectionFieldMeta, type SelectionProvider } from '@contember/bindx-react'
+import type { SerializableEditorNode } from '../types/editor.js'
 
 export type { RichTextEditorProps }
 
 export function RichTextEditor({ field, plugins, children }: RichTextEditorProps): ReactNode {
 	// At runtime, field is always a full FieldRef (proxy provides all properties)
-	const fullField = field as FieldRef<string | null>
+	const fullField = field as FieldRef<SerializableEditorNode | null>
 
 	const [editor] = useState(() => {
 		const { editor } = createEditor({
@@ -60,7 +61,6 @@ export function RichTextEditor({ field, plugins, children }: RichTextEditorProps
 
 	const valueNodes = useRichTextFieldNodes({ editor, field: fullField })
 
-	const serialize = editor.serializeNodes
 	const onChange = useCallback(
 		(value: Descendant[]) => {
 			if (SlateNode.string({ type: 'dummy', children: value }) === '' && fullField.serverValue === null) {
@@ -69,10 +69,14 @@ export function RichTextEditor({ field, plugins, children }: RichTextEditorProps
 			}
 
 			if (SlateElement.isElement(value[0])) {
-				fullField.setValue(serialize(value[0].children))
+				const contentJson: SerializableEditorNode = {
+					formatVersion: editor.formatVersion,
+					children: value[0].children,
+				}
+				fullField.setValue(contentJson)
 			}
 		},
-		[fullField, serialize],
+		[fullField, editor.formatVersion],
 	)
 
 	return (

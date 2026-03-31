@@ -5,8 +5,11 @@ import type { FieldRefBase, HasManyRefBase, EntityAccessor, AnyBrand } from '@co
 import type { SerializableEditorNode } from './editor.js'
 import type { EditorPlugin } from './plugins.js'
 
+type JSONPrimitive = string | number | boolean | null
+type JSONValue = JSONPrimitive | { readonly [K in string]?: JSONValue } | readonly JSONValue[]
+
 export interface RichTextEditorProps {
-	field: FieldRefBase<string | null>
+	field: FieldRefBase<SerializableEditorNode | null> | FieldRefBase<JSONValue | null>
 	plugins?: EditorPlugin[]
 	children: (editor: Editor) => ReactNode
 }
@@ -37,7 +40,7 @@ export type BlockDefinitions<
 > = Record<string, BlockDefinition<TEntity, TSelected, TBrand, TEntityName, TSchema>>
 
 export interface BlockEditorBaseProps {
-	field: FieldRefBase<SerializableEditorNode | null>
+	field: FieldRefBase<SerializableEditorNode | null> | FieldRefBase<JSONValue | null>
 	plugins?: EditorPlugin[]
 	children: (editor: Editor) => ReactNode
 }
@@ -49,7 +52,7 @@ export interface BlockEditorWithReferencesProps<
 	TEntityName extends string = string,
 	TSchema extends Record<string, object> = Record<string, object>,
 > {
-	field: FieldRefBase<SerializableEditorNode | null>
+	field: FieldRefBase<SerializableEditorNode | null> | FieldRefBase<JSONValue | null>
 	references: HasManyRefBase<TEntity, TSelected, TBrand, TEntityName, TSchema>
 	discriminationField: keyof TEntity & string
 	blocks: BlockDefinitions<TEntity, TSelected, TBrand, TEntityName, TSchema>

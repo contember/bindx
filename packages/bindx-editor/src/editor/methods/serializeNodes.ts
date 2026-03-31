@@ -5,13 +5,12 @@ export const serializeNodes = <E extends SlateEditor>(
 	editor: E,
 	elements: Array<SlateElement | SlateText>,
 	errorMessage?: string,
-): string => {
+): SerializableEditorNode => {
 	try {
-		const serialized: SerializableEditorNode = {
+		return {
 			formatVersion: editor.formatVersion,
 			children: elements,
 		}
-		return JSON.stringify(serialized)
 	} catch {
 		throw new Error(errorMessage ?? 'Editor: serialization error')
 	}

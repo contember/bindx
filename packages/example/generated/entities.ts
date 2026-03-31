@@ -7,7 +7,7 @@ export type JSONArray = readonly JSONValue[]
 export interface Article {
 		id: string
 		title: string
-		content: string | null
+		content: JSONValue | null
 		richContent: JSONValue | null
 		publishedAt: string | null
 		author: Author

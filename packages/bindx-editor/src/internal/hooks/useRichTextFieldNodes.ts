@@ -1,17 +1,18 @@
 import type { FieldRef } from '@contember/bindx'
 import { Descendant, Editor } from 'slate'
 import { useRef } from 'react'
+import type { SerializableEditorNode } from '../../types/editor.js'
 
 export interface UseRichTextFieldNodesOptions {
 	editor: Editor
-	field: FieldRef<string | null>
+	field: FieldRef<SerializableEditorNode | null>
 }
 
 export const useRichTextFieldNodes = ({
 	editor,
 	field,
 }: UseRichTextFieldNodesOptions): Descendant[] => {
-	const cacheRef = useRef<{ value: string | null; nodes: Descendant[] } | null>(null)
+	const cacheRef = useRef<{ value: SerializableEditorNode | null; nodes: Descendant[] } | null>(null)
 
 	const fieldValue = field.value
 
@@ -19,21 +20,12 @@ export const useRichTextFieldNodes = ({
 		return cacheRef.current.nodes
 	}
 
-	if (typeof fieldValue !== 'string' && fieldValue !== null) {
-		throw new Error('RichTextEditor: the underlying field does not contain a string value.')
-	}
-
 	const elements: Descendant[] =
-		fieldValue === null || fieldValue === ''
+		fieldValue === null || (typeof fieldValue === 'object' && 'children' in fieldValue && fieldValue.children.length === 0)
 			? [editor.createDefaultElement([{ text: '' }])]
-			: [
-				editor.createDefaultElement(
-					editor.deserializeNodes(
-						fieldValue,
-						'RichTextEditor: the underlying field contains invalid JSON.',
-					) as Descendant[],
-				),
-			  ]
+			: typeof fieldValue === 'object' && fieldValue !== null && 'children' in fieldValue
+				? [editor.createDefaultElement(fieldValue.children as Descendant[])]
+				: [editor.createDefaultElement([{ text: '' }])]
 
 	cacheRef.current = { value: fieldValue, nodes: elements }
 

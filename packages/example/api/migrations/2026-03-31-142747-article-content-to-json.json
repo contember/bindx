@@ -1,0 +1,15 @@
+{
+	"formatVersion": 6,
+	"modifications": [
+		{
+			"modification": "updateColumnDefinition",
+			"entityName": "Article",
+			"fieldName": "content",
+			"definition": {
+				"columnType": "jsonb",
+				"nullable": true,
+				"type": "Json"
+			}
+		}
+	]
+}

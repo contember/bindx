@@ -21,7 +21,7 @@ export class Location {
 
 export class Article {
 	title = c.stringColumn().notNull()
-	content = c.stringColumn()
+	content = c.jsonColumn()
 	richContent = c.jsonColumn()
 	publishedAt = c.dateTimeColumn()
 	author = c.manyHasOne(Author, 'articles')

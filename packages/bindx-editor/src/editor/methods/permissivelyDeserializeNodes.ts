@@ -4,16 +4,22 @@ import type { SerializableEditorNode } from '../../types/editor.js'
 
 export const permissivelyDeserializeNodes = <E extends SlateEditor>(
 	editor: E,
-	serializedElement: string,
+	serializedElement: SerializableEditorNode | string,
 	errorMessage?: string,
 ): Array<SlateElement | SlateText> => {
 	let deserialized: SerializableEditorNode | SlateElement | null = null
-	try {
-		deserialized = JSON.parse(serializedElement)
-	} catch {}
+
+	if (typeof serializedElement === 'string') {
+		try {
+			deserialized = JSON.parse(serializedElement)
+		} catch {}
+	} else {
+		deserialized = serializedElement
+	}
 
 	if (typeof deserialized !== 'object' || deserialized === null) {
-		return [editor.createDefaultElement([{ text: serializedElement }])]
+		const fallbackText = typeof serializedElement === 'string' ? serializedElement : ''
+		return [editor.createDefaultElement([{ text: fallbackText }])]
 	}
 
 	if ('formatVersion' in deserialized) {
