@@ -55,7 +55,7 @@ export class RoleSchemaGenerator {
 				.join('\n')
 
 			if (roleEntries) {
-				code += `export interface ${entity.name}$Roles {\n${roleEntries}\n}\n\n`
+				code += `export type ${entity.name}$Roles = {\n${roleEntries}\n}\n\n`
 			}
 		}
 
@@ -184,7 +184,7 @@ ${entries}
 		roleAccess: Map<string, Set<string>>,
 	): string {
 		const typeName = this.roleEntityName(roleName, entity.name)
-		let code = `export interface ${typeName} {\n`
+		let code = `export type ${typeName} = {\n`
 
 		acceptEveryFieldVisitor(model, entity, {
 			visitColumn: ctx => {

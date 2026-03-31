@@ -28,14 +28,14 @@ describe('EntityTypeSchemaGenerator', () => {
 		const code = generator.generate(testModel)
 
 		// Check Author entity
-		expect(code).toContain('export interface Author {')
+		expect(code).toContain('export type Author = {')
 		expect(code).toContain('id: string')
 		expect(code).toContain('name: string')
 		expect(code).toContain('email: string | null')
 		expect(code).toContain('posts: Post[]')
 
 		// Check Post entity
-		expect(code).toContain('export interface Post {')
+		expect(code).toContain('export type Post = {')
 		expect(code).toContain('author: Author')
 		expect(code).toContain('tags: Tag[]')
 		expect(code).toContain('status: PostStatusEnum')
