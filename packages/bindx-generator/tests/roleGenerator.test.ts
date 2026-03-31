@@ -67,22 +67,22 @@ describe('RoleSchemaGenerator', () => {
 		const code = generator.generateRoleEntities(testModel, testAcl)
 
 		// Admin types should have all fields
-		expect(code).toContain('export interface Author$admin')
-		expect(code).toContain('export interface Post$admin')
-		expect(code).toContain('export interface Tag$admin')
+		expect(code).toContain('export type Author$admin')
+		expect(code).toContain('export type Post$admin')
+		expect(code).toContain('export type Tag$admin')
 
 		// Public types should have limited fields
-		expect(code).toContain('export interface Author$public')
-		expect(code).toContain('export interface Post$public')
+		expect(code).toContain('export type Author$public')
+		expect(code).toContain('export type Post$public')
 
 		// Admin Author should have email and salary
-		const adminAuthorMatch = code.match(/export interface Author\$admin \{([^}]+)\}/)
+		const adminAuthorMatch = code.match(/export type Author\$admin = \{([^}]+)\}/)
 		expect(adminAuthorMatch).not.toBeNull()
 		expect(adminAuthorMatch![1]).toContain('email')
 		expect(adminAuthorMatch![1]).toContain('salary')
 
 		// Public Author should NOT have email or salary
-		const publicAuthorMatch = code.match(/export interface Author\$public \{([^}]+)\}/)
+		const publicAuthorMatch = code.match(/export type Author\$public = \{([^}]+)\}/)
 		expect(publicAuthorMatch).not.toBeNull()
 		expect(publicAuthorMatch![1]).not.toContain('email')
 		expect(publicAuthorMatch![1]).not.toContain('salary')
@@ -92,7 +92,7 @@ describe('RoleSchemaGenerator', () => {
 		const generator = new RoleSchemaGenerator()
 		const code = generator.generateRoleEntities(testModel, testAcl)
 
-		expect(code).toContain('export interface Author$Roles')
+		expect(code).toContain('export type Author$Roles')
 		expect(code).toContain('readonly admin: Author$admin')
 		expect(code).toContain('readonly public: Author$public')
 
@@ -104,13 +104,13 @@ describe('RoleSchemaGenerator', () => {
 		const code = generator.generateRoleEntities(testModel, testAcl)
 
 		// Admin Post should reference Author$admin
-		const adminPostMatch = code.match(/export interface Post\$admin \{([^}]+)\}/)
+		const adminPostMatch = code.match(/export type Post\$admin = \{([^}]+)\}/)
 		expect(adminPostMatch).not.toBeNull()
 		expect(adminPostMatch![1]).toContain('author: Author$admin')
 		expect(adminPostMatch![1]).toContain('tags: Tag$admin[]')
 
 		// Public Post should reference Author$public
-		const publicPostMatch = code.match(/export interface Post\$public \{([^}]+)\}/)
+		const publicPostMatch = code.match(/export type Post\$public = \{([^}]+)\}/)
 		expect(publicPostMatch).not.toBeNull()
 		expect(publicPostMatch![1]).toContain('author: Author$public')
 	})
@@ -138,9 +138,9 @@ describe('generate() with ACL', () => {
 		const files = generate(testModel, testAcl)
 
 		// entities.ts should have both base and role types
-		expect(files['entities.ts']).toContain('export interface Author {')
-		expect(files['entities.ts']).toContain('export interface Author$admin {')
-		expect(files['entities.ts']).toContain('export interface Author$public {')
+		expect(files['entities.ts']).toContain('export type Author = {')
+		expect(files['entities.ts']).toContain('export type Author$admin = {')
+		expect(files['entities.ts']).toContain('export type Author$public = {')
 	})
 
 	test('generates role-aware schema.ts', () => {

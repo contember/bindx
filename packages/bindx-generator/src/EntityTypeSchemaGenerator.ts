@@ -49,7 +49,7 @@ export type JSONArray = readonly JSONValue[]
 	}
 
 	private generateEntityTypeCode(model: Model.Schema, entity: Model.Entity): string {
-		let code = `export interface ${entity.name} {\n`
+		let code = `export type ${entity.name} = {\n`
 
 		let columnsCode = ''
 		let hasOneCode = ''
