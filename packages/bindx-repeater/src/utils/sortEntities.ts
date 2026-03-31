@@ -16,6 +16,9 @@ export function sortEntities<T extends object, S = T>(
 		return items
 	}
 
+	if (!Array.isArray(items)) {
+		return []
+	}
 	return [...items].sort((a, b) => {
 		const aField = (a as Record<string, unknown>)[orderField] as FieldRef<number> | undefined
 		const bField = (b as Record<string, unknown>)[orderField] as FieldRef<number> | undefined

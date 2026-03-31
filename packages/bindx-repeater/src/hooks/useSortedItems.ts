@@ -20,7 +20,8 @@ export function useSortedItems<
 	hasMany: HasManyRef<T, S, TBrand, TEntityName, TSchema>,
 	orderField: string | undefined,
 ): EntityAccessor<T, S, TBrand, TEntityName, TSchema>[] {
-	const items = hasMany.items
+	const rawItems = hasMany?.items
+	const items = Array.isArray(rawItems) ? rawItems : []
 
 	const sortedItems = useMemo(
 		() => sortEntities(items, orderField) as EntityAccessor<T, S, TBrand, TEntityName, TSchema>[],

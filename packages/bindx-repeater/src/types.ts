@@ -128,10 +128,15 @@ export interface RepeaterProps<
 // ============================================================================
 
 /**
- * Minimal block definition for headless use.
+ * Block definition for headless use.
+ * Optional render/form functions declare block-specific field selections.
  */
-export interface BlockDefinition {
+export interface BlockDefinition<TEntity extends object = object, TSelected = TEntity> {
 	label?: ReactNode
+	/** Render function for block preview. Used for selection collection. */
+	render?: (entity: EntityAccessor<TEntity, TSelected>) => ReactNode
+	/** Form function for block editing. Used for selection collection. */
+	form?: (entity: EntityAccessor<TEntity, TSelected>) => ReactNode
 }
 
 /**

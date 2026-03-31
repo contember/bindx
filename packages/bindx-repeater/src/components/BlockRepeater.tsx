@@ -243,6 +243,18 @@ blockRepeaterWithSelection.getSelection = (
 	const syntheticChildren = props.children(mockItems, mockMethods)
 	const jsxSelection = collectNested(syntheticChildren)
 
+	// Collect field selections from block render/form functions
+	for (const blockDef of Object.values(props.blocks) as BlockDefinition[]) {
+		if (blockDef.render) {
+			const renderJsx = blockDef.render(collectorEntity as EntityAccessor)
+			if (renderJsx) mergeSelections(scope.toSelectionMeta(), collectNested(renderJsx))
+		}
+		if (blockDef.form) {
+			const formJsx = blockDef.form(collectorEntity as EntityAccessor)
+			if (formJsx) mergeSelections(scope.toSelectionMeta(), collectNested(formJsx))
+		}
+	}
+
 	const nestedSelection = scope.toSelectionMeta()
 	mergeSelections(nestedSelection, jsxSelection)
 
