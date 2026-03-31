@@ -19,6 +19,7 @@ import type {
 	EntityPersistingEvent,
 } from '../events/types.js'
 import { createAliasProxy } from './proxyFactory.js'
+import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 
 /**
  * PlaceholderHandle provides access to a placeholder entity (for creating new entities).
@@ -42,6 +43,7 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 		private readonly targetType: string,
 		private readonly store: SnapshotStore,
 		private readonly dispatcher: ActionDispatcher,
+		private readonly schema: SchemaRegistry | null,
 		brands?: Set<symbol>,
 	) {
 		this.__brands = brands
@@ -55,9 +57,10 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 		targetType: string,
 		store: SnapshotStore,
 		dispatcher: ActionDispatcher,
+		schema?: SchemaRegistry | null,
 		brands?: Set<symbol>,
 	): EntityAccessor<TEntity, TSelected> {
-		return PlaceholderHandle.wrapProxy(new PlaceholderHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, brands))
+		return PlaceholderHandle.wrapProxy(new PlaceholderHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema ?? null, brands))
 	}
 
 	static createRaw<TEntity extends object = object, TSelected = TEntity>(
@@ -67,9 +70,10 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 		targetType: string,
 		store: SnapshotStore,
 		dispatcher: ActionDispatcher,
+		schema?: SchemaRegistry | null,
 		brands?: Set<symbol>,
 	): PlaceholderHandle<TEntity, TSelected> {
-		return new PlaceholderHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, brands)
+		return new PlaceholderHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema ?? null, brands)
 	}
 
 	static wrapProxy<TEntity extends object, TSelected>(handle: PlaceholderHandle<TEntity, TSelected>): EntityAccessor<TEntity, TSelected> {
@@ -144,8 +148,24 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 
 	/**
 	 * Creates a field handle for placeholder data.
+	 * For has-many relations, returns an empty has-many-like handle with items/map/length.
 	 */
 	private createPlaceholderFieldHandle(fieldName: string): unknown {
+		// For has-many relations, return an empty has-many-like handle
+		if (this.schema?.isHasMany(this.targetType, fieldName)) {
+			const emptyItems: EntityAccessor<object>[] = []
+			const emptyHasMany: Record<string, unknown> = {
+				get items() { return emptyItems },
+				get length() { return 0 },
+				map: () => [],
+				add: () => { throw new Error(`Cannot add items to disconnected has-many relation "${fieldName}" on placeholder entity`) },
+				remove: () => {},
+				$state: 'disconnected',
+				[Symbol.iterator]: () => emptyItems[Symbol.iterator](),
+			}
+			return emptyHasMany
+		}
+
 		const self = this
 
 		return {

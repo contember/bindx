@@ -236,6 +236,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 				this.targetType,
 				this.store,
 				this.dispatcher,
+				this.schema,
 				this.__brands,
 			)
 			this.placeholderCacheProxy = PlaceholderHandle.wrapProxy(this.placeholderCacheRaw)
