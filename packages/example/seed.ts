@@ -141,7 +141,7 @@ async function seed(): Promise<void> {
 			article1: createArticle(data: {
 				id: "${ids.article1}"
 				title: "Introduction to React"
-				content: "React is a JavaScript library for building user interfaces..."
+				content: "{\\"formatVersion\\":1,\\"children\\":[{\\"type\\":\\"paragraph\\",\\"children\\":[{\\"text\\":\\"React is a JavaScript library for building user interfaces...\\"}]}]}"
 				richContent: "{\\"formatVersion\\":2,\\"children\\":[{\\"type\\":\\"paragraph\\",\\"children\\":[{\\"text\\":\\"This is a block editor example with \\"},{\\"text\\":\\"bold text\\",\\"bold\\":true},{\\"text\\":\\" and \\"},{\\"text\\":\\"italic text\\",\\"italic\\":true},{\\"text\\":\\".\\"}]},{\\"type\\":\\"image\\",\\"referenceId\\":\\"${ids.ref1}\\",\\"children\\":[{\\"text\\":\\"\\"}]},{\\"type\\":\\"paragraph\\",\\"children\\":[{\\"text\\":\\"Here is an inspiring quote:\\"}]},{\\"type\\":\\"quote\\",\\"referenceId\\":\\"${ids.ref2}\\",\\"children\\":[{\\"text\\":\\"\\"}]},{\\"type\\":\\"paragraph\\",\\"children\\":[{\\"text\\":\\"Check out this video:\\"}]},{\\"type\\":\\"embed\\",\\"referenceId\\":\\"${ids.ref3}\\",\\"children\\":[{\\"text\\":\\"\\"}]},{\\"type\\":\\"callout\\",\\"referenceId\\":\\"${ids.ref4}\\",\\"children\\":[{\\"text\\":\\"\\"}]},{\\"type\\":\\"paragraph\\",\\"children\\":[{\\"text\\":\\"Try editing this content!\\"}]}]}"
 				publishedAt: "2024-01-15T00:00:00.000Z"
 				author: { connect: { id: "${ids.author1}" } }
@@ -166,7 +166,7 @@ async function seed(): Promise<void> {
 			article2: createArticle(data: {
 				id: "${ids.article2}"
 				title: "TypeScript Best Practices"
-				content: "TypeScript adds static typing to JavaScript..."
+				content: "{\\"formatVersion\\":1,\\"children\\":[{\\"type\\":\\"paragraph\\",\\"children\\":[{\\"text\\":\\"TypeScript adds static typing to JavaScript...\\"}]}]}"
 				publishedAt: "2024-02-20T00:00:00.000Z"
 				author: { connect: { id: "${ids.author2}" } }
 				location: { connect: { id: "${ids.location2}" } }

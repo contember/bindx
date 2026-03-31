@@ -7,8 +7,6 @@ import {
 	EditorMarkTrigger,
 	EditorElementTrigger,
 } from '@contember/bindx-editor'
-import type { FieldRefBase } from '@contember/bindx'
-import type { SerializableEditorNode } from '@contember/bindx-editor'
 import { schema } from '../generated/index.js'
 import {
 	richTextPlugins,
@@ -90,7 +88,7 @@ export function BlockEditorPage({ id }: { id: string }): ReactNode {
 					<h3><Field field={article.title} /></h3>
 
 					<BlockEditor
-						field={article.richContent as unknown as FieldRefBase<SerializableEditorNode | null>}
+						field={article.richContent}
 						references={article.contentReferences}
 						discriminationField="type"
 						blocks={blocks}
@@ -188,7 +186,7 @@ export function SimpleBlockEditorPage({ id }: { id: string }): ReactNode {
 					<h3><Field field={article.title} /></h3>
 
 					<BlockEditor
-						field={article.richContent as unknown as FieldRefBase<SerializableEditorNode | null>}
+						field={article.richContent}
 						plugins={blockEditorPlugins}
 					>
 						{editor => (
