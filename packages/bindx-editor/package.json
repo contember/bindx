@@ -1,6 +1,6 @@
 {
 	"name": "@contember/bindx-editor",
-	"version": "0.1.21",
+	"version": "0.1.22",
 	"description": "Slate-based rich text and block editor for Contember Bindx",
 	"type": "module",
 	"main": "./src/index.ts",
