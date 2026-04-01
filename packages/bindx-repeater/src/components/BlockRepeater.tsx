@@ -201,13 +201,16 @@ export function BlockRepeater<
 	return <>{children(items, methods)}</>
 }
 
-// Static method for selection extraction
-const blockRepeaterWithSelection = BlockRepeater as typeof BlockRepeater & SelectionProvider & { [BINDX_COMPONENT]: true }
+// Wrap BlockRepeater with selection extraction inside a factory function
+// so the property assignments are not module-level side effects
+// (Vite dep optimizer marks module-level side effects for DCE).
+function createBlockRepeaterWithSelection() {
+	const component = BlockRepeater as typeof BlockRepeater & SelectionProvider & { [BINDX_COMPONENT]: true }
 
-blockRepeaterWithSelection.getSelection = (
-	props: BlockRepeaterProps<unknown>,
-	collectNested: (children: ReactNode) => SelectionMeta,
-): SelectionFieldMeta | null => {
+	component.getSelection = (
+		props: BlockRepeaterProps<unknown>,
+		collectNested: (children: ReactNode) => SelectionMeta,
+	): SelectionFieldMeta | null => {
 	// Check if the field is a collector proxy with a scope reference (collection phase).
 	// When present, we merge the collected selection directly into the scope tree,
 	// which correctly handles deeply nested relations (e.g., page.blocks.items).
@@ -217,8 +220,6 @@ blockRepeaterWithSelection.getSelection = (
 
 	const scope = new SelectionScope()
 	const collectorEntity = createCollectorProxy<unknown>(scope)
-
-	const blockJsx: ReactNode[] = []
 
 	const mockItems: BlockRepeaterItems<unknown> = {
 		map: (fn) => {
@@ -232,13 +233,6 @@ blockRepeaterWithSelection.getSelection = (
 				blockType: null,
 				block: undefined,
 			})
-			// Call block render/form functions inside the map callback so the
-			// collector proxy records field accesses. This code must execute inside
-			// a callback passed through props.children() to survive Rolldown DCE.
-			for (const blockDef of Object.values(props.blocks) as BlockDefinition[]) {
-				if (blockDef.render) blockJsx.push(blockDef.render(collectorEntity as EntityAccessor<object>))
-				if (blockDef.form) blockJsx.push(blockDef.form(collectorEntity as EntityAccessor<object>))
-			}
 			return []
 		},
 		length: 0,
@@ -251,6 +245,14 @@ blockRepeaterWithSelection.getSelection = (
 	}
 
 	const syntheticChildren = props.children(mockItems, mockMethods)
+
+	// Call block render/form functions so the collector proxy records field accesses
+	const blockJsx: ReactNode[] = []
+	for (const blockDef of Object.values(props.blocks) as BlockDefinition[]) {
+		if (blockDef.render) blockJsx.push(blockDef.render(collectorEntity as EntityAccessor<object>))
+		if (blockDef.form) blockJsx.push(blockDef.form(collectorEntity as EntityAccessor<object>))
+	}
+
 	const jsxSelection = collectNested([syntheticChildren, ...blockJsx])
 
 	const nestedSelection = scope.toSelectionMeta()
@@ -295,6 +297,10 @@ blockRepeaterWithSelection.getSelection = (
 	}
 }
 
-blockRepeaterWithSelection[BINDX_COMPONENT] = true
+	component[BINDX_COMPONENT] = true
+	return component
+}
+
+const blockRepeaterWithSelection = createBlockRepeaterWithSelection()
 
 export { blockRepeaterWithSelection as BlockRepeaterWithMeta }
