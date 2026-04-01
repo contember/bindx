@@ -1,6 +1,6 @@
 {
 	"name": "@contember/bindx-uploader",
-	"version": "0.1.22",
+	"version": "0.1.23",
 	"description": "File upload components for bindx data binding",
 	"type": "module",
 	"main": "./src/index.ts",
