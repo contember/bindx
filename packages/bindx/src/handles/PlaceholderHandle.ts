@@ -18,7 +18,7 @@ import type {
 	EntityPersistedEvent,
 	EntityPersistingEvent,
 } from '../events/types.js'
-import { createAliasProxy } from './proxyFactory.js'
+import { createHandleProxy } from './proxyFactory.js'
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 
 /**
@@ -77,7 +77,7 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	}
 
 	static wrapProxy<TEntity extends object, TSelected>(handle: PlaceholderHandle<TEntity, TSelected>): EntityAccessor<TEntity, TSelected> {
-		return createAliasProxy<PlaceholderHandle<TEntity, TSelected>, EntityAccessor<TEntity, TSelected>>(handle)
+		return createHandleProxy<PlaceholderHandle<TEntity, TSelected>, EntityAccessor<TEntity, TSelected>>(handle, (target) => target.fields)
 	}
 
 	/**

@@ -265,11 +265,15 @@ export class ActionDispatcher {
 					action.fieldPath,
 					action.value,
 				)
+				// When setting placeholder data on a disconnected relation, transition to 'creating'
+				const stateUpdate = (!relation || relation.state === 'disconnected')
+					? { state: 'creating' as const, placeholderData: newPlaceholderData }
+					: { placeholderData: newPlaceholderData }
 				this.store.setRelation(
 					action.entityType,
 					action.entityId,
 					action.fieldName,
-					{ placeholderData: newPlaceholderData },
+					stateUpdate,
 				)
 				break
 			}
