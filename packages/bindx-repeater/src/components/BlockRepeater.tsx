@@ -218,6 +218,15 @@ blockRepeaterWithSelection.getSelection = (
 	const scope = new SelectionScope()
 	const collectorEntity = createCollectorProxy<unknown>(scope)
 
+	// Collect block render/form JSX so the collector proxy records field accesses.
+	// Done inside mockItems.map callback to survive Rolldown dead-code elimination
+	// (the callback is invoked by props.children which Rolldown cannot analyze).
+	const blockJsx: ReactNode[] = []
+	for (const blockDef of Object.values(props.blocks) as BlockDefinition[]) {
+		if (blockDef.render) blockJsx.push(blockDef.render(collectorEntity as EntityAccessor<object>))
+		if (blockDef.form) blockJsx.push(blockDef.form(collectorEntity as EntityAccessor<object>))
+	}
+
 	const mockItems: BlockRepeaterItems<unknown> = {
 		map: (fn) => {
 			fn(collectorEntity, {
@@ -242,20 +251,10 @@ blockRepeaterWithSelection.getSelection = (
 	}
 
 	const syntheticChildren = props.children(mockItems, mockMethods)
-	const jsxSelection = collectNested(syntheticChildren)
-
-	// Call block render/form functions so the collector proxy records field accesses.
-	// Collect JSX from block definitions and pass to collectNested alongside children.
-	const blockJsx: ReactNode[] = []
-	for (const blockDef of Object.values(props.blocks) as BlockDefinition[]) {
-		if (blockDef.render) blockJsx.push(blockDef.render(collectorEntity as EntityAccessor<object>))
-		if (blockDef.form) blockJsx.push(blockDef.form(collectorEntity as EntityAccessor<object>))
-	}
-	const blockSelection = collectNested(blockJsx)
+	const jsxSelection = collectNested([syntheticChildren, ...blockJsx])
 
 	const nestedSelection = scope.toSelectionMeta()
 	mergeSelections(nestedSelection, jsxSelection)
-	mergeSelections(nestedSelection, blockSelection)
 
 	// Add discrimination field to selection
 	nestedSelection.fields.set(props.discriminationField, {
