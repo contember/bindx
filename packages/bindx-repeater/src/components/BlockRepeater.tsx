@@ -245,10 +245,10 @@ blockRepeaterWithSelection.getSelection = (
 	const jsxSelection = collectNested(syntheticChildren)
 
 	// Call block render/form functions so the collector proxy records field accesses.
-	// Results are passed to collectNested to prevent bundler dead-code elimination.
+	// Collect JSX selections from block render/form output and merge into jsxSelection.
 	for (const blockDef of Object.values(props.blocks) as BlockDefinition[]) {
-		if (blockDef.render) collectNested(blockDef.render(collectorEntity as EntityAccessor<object>))
-		if (blockDef.form) collectNested(blockDef.form(collectorEntity as EntityAccessor<object>))
+		if (blockDef.render) mergeSelections(jsxSelection, collectNested(blockDef.render(collectorEntity as EntityAccessor<object>)))
+		if (blockDef.form) mergeSelections(jsxSelection, collectNested(blockDef.form(collectorEntity as EntityAccessor<object>)))
 	}
 
 	const nestedSelection = scope.toSelectionMeta()
