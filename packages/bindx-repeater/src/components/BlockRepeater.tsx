@@ -245,14 +245,17 @@ blockRepeaterWithSelection.getSelection = (
 	const jsxSelection = collectNested(syntheticChildren)
 
 	// Call block render/form functions so the collector proxy records field accesses.
-	// Collect JSX selections from block render/form output and merge into jsxSelection.
+	// Collect JSX from block definitions and pass to collectNested alongside children.
+	const blockJsx: ReactNode[] = []
 	for (const blockDef of Object.values(props.blocks) as BlockDefinition[]) {
-		if (blockDef.render) mergeSelections(jsxSelection, collectNested(blockDef.render(collectorEntity as EntityAccessor<object>)))
-		if (blockDef.form) mergeSelections(jsxSelection, collectNested(blockDef.form(collectorEntity as EntityAccessor<object>)))
+		if (blockDef.render) blockJsx.push(blockDef.render(collectorEntity as EntityAccessor<object>))
+		if (blockDef.form) blockJsx.push(blockDef.form(collectorEntity as EntityAccessor<object>))
 	}
+	const blockSelection = collectNested(blockJsx)
 
 	const nestedSelection = scope.toSelectionMeta()
 	mergeSelections(nestedSelection, jsxSelection)
+	mergeSelections(nestedSelection, blockSelection)
 
 	// Add discrimination field to selection
 	nestedSelection.fields.set(props.discriminationField, {
