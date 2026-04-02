@@ -1,16 +1,5 @@
-import { createComponent, HasMany } from '@contember/bindx-react'
+import { createComponent, Field, HasMany, Attribute } from '@contember/bindx-react'
 import { schema } from '../generated/index.js'
-
-const TagBadge = createComponent()
-	.entity('tag', schema.Tag, t => t.name().color())
-	.render(({ tag }) => (
-		<span
-			className="inline-block px-2 py-0.5 rounded text-white text-sm mr-1"
-			style={{ backgroundColor: tag.color.value ?? '#666' }}
-		>
-			{tag.name.value}
-		</span>
-	))
 
 /**
  * Reusable fragment component for displaying article tags.
@@ -22,7 +11,13 @@ export const ArticleTags = createComponent()
 	.render(({ article, className }) => (
 		<div className={className ?? 'article-tags'}>
 			<HasMany field={article.tags}>
-				{tag => <TagBadge key={tag.id} tag={tag} />}
+				{tag => (
+					<Attribute field={tag.color} format={color => ({ style: { backgroundColor: color.value ?? '#666' } })}>
+						<span className="inline-block px-2 py-0.5 rounded text-white text-sm mr-1">
+							<Field field={tag.name} />
+						</span>
+					</Attribute>
+				)}
 			</HasMany>
 		</div>
 	))

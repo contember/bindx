@@ -315,6 +315,8 @@ export type { UndoHookResult } from './hooks/useUndo.js'
 
 // JSX Components
 export {
+	Attribute,
+	type AttributeProps,
 	Field,
 	HasMany,
 	HasOne,

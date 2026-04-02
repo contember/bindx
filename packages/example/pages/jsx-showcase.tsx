@@ -1,21 +1,10 @@
 import type { ReactNode } from 'react'
-import { Entity, Field, HasMany, HasOne, If, Show, createComponent } from '@contember/bindx-react'
+import { Entity, Field, HasMany, HasOne, If, Show, Attribute, createComponent } from '@contember/bindx-react'
 import { schema } from '../generated/index.js'
 
 // ============================================================================
 // createComponent-based fragments (participate in selection collection)
 // ============================================================================
-
-const TagBadge = createComponent()
-	.entity('tag', schema.Tag, t => t.name().color())
-	.render(({ tag }) => (
-		<span
-			className="inline-block px-1.5 py-0.5 rounded text-white text-xs"
-			style={{ backgroundColor: tag.color.value ?? '#666' }}
-		>
-			{tag.name.value}
-		</span>
-	))
 
 const AuthorEditForm = createComponent()
 	.entity('author', schema.Author)
@@ -129,7 +118,13 @@ export function JsxShowcasePage({ authorId }: { authorId: string }): ReactNode {
 									{/* Nested HasMany relation */}
 									<div className="flex gap-1 mt-1">
 										<HasMany field={article.tags}>
-											{tag => <TagBadge key={tag.id} tag={tag} />}
+											{tag => (
+								<Attribute key={tag.id} field={tag.color} format={color => ({ style: { backgroundColor: color.value ?? '#666' } })}>
+									<span className="inline-block px-1.5 py-0.5 rounded text-white text-xs">
+										<Field field={tag.name} />
+									</span>
+								</Attribute>
+							)}
 										</HasMany>
 									</div>
 
@@ -207,7 +202,13 @@ function ArticleDetailPage({ articleId }: { articleId: string }): ReactNode {
 					</div>
 					<footer className="flex gap-1">
 						<HasMany field={article.tags}>
-							{tag => <TagBadge key={tag.id} tag={tag} />}
+							{tag => (
+								<Attribute key={tag.id} field={tag.color} format={color => ({ style: { backgroundColor: color.value ?? '#666' } })}>
+									<span className="inline-block px-1.5 py-0.5 rounded text-white text-xs">
+										<Field field={tag.name} />
+									</span>
+								</Attribute>
+							)}
 						</HasMany>
 					</footer>
 				</article>

@@ -52,6 +52,7 @@ export {
 } from './analyzer.js'
 
 // Components
+export { Attribute, AttributeWithMeta, type AttributeProps } from './components/Attribute.js'
 export { Field, FieldWithMeta } from './components/Field.js'
 export { HasMany, HasManyWithMeta } from './components/HasMany.js'
 export { HasOne, HasOneWithMeta } from './components/HasOne.js'

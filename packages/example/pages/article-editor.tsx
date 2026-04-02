@@ -1,18 +1,7 @@
 import type { ReactNode } from 'react'
-import { Entity, Field, HasOne, usePersist, createComponent } from '@contember/bindx-react'
+import { Entity, Field, HasOne, Attribute, usePersist } from '@contember/bindx-react'
 import { InputField, SelectField, MultiSelectField, Button } from '@contember/bindx-ui'
 import { schema } from '../generated/index.js'
-
-const TagSelectBadge = createComponent()
-	.entity('tag', schema.Tag, t => t.name().color())
-	.render(({ tag }) => (
-		<span
-			data-testid={`tag-badge-${tag.name.value}`}
-			style={{ color: tag.color.value ?? undefined }}
-		>
-			{tag.name.value}
-		</span>
-	))
 
 /**
  * Full article editor using Entity JSX with usePersist for saving.
@@ -63,7 +52,17 @@ export function ArticleEditorPage({ id }: { id: string }): ReactNode {
 
 					<div className="form-section" data-testid="article-tags">
 						<MultiSelectField field={article.tags} label="Tags">
-							{it => <TagSelectBadge tag={it} />}
+							{it => (
+								<Attribute field={it.color} format={color => ({ style: { color: color.value ?? undefined } })}>
+									<span>
+										<Field field={it.name}>
+											{name => (
+												<span data-testid={`tag-badge-${name.value}`}>{name.value}</span>
+											)}
+										</Field>
+									</span>
+								</Attribute>
+							)}
 						</MultiSelectField>
 
 						{article.tags.isDirty && (

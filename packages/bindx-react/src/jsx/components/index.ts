@@ -1,3 +1,6 @@
+// Attribute component
+export { Attribute, AttributeWithMeta, type AttributeProps } from './Attribute.js'
+
 // Field component
 export { Field, FieldWithMeta } from './Field.js'
 
