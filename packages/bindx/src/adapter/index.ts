@@ -18,4 +18,4 @@ export type {
 } from './types.js'
 export { MockAdapter, type MockDataStore, type MockAdapterOptions } from './MockAdapter.js'
 export { MockQueryEngine } from './MockQueryEngine.js'
-export { ContemberAdapter, type ContemberAdapterOptions } from './ContemberAdapter.js'
+export { ContemberAdapter, type ContemberAdapterOptions, unwrapPaginateFields } from './ContemberAdapter.js'

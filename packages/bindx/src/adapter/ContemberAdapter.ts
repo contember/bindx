@@ -253,7 +253,7 @@ export class ContemberAdapter implements BackendAdapter {
  * but the store expects flat arrays keyed by the original field name.
  * This function uses the QuerySpec to identify which fields need unwrapping.
  */
-function unwrapPaginateFields(data: Record<string, unknown>, spec: QuerySpec): Record<string, unknown> {
+export function unwrapPaginateFields(data: Record<string, unknown>, spec: QuerySpec): Record<string, unknown> {
 	const result: Record<string, unknown> = {}
 
 	// Copy all fields from data first

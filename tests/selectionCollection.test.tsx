@@ -11,6 +11,7 @@ import {
 	Field,
 	HasMany,
 	HasOne,
+	If,
 	buildQueryFromSelection,
 	COMPONENT_SELECTIONS,
 	withCollector,
@@ -314,6 +315,129 @@ describe('Selection Collection with Schema', () => {
 		// No flat 'name' at VoucherUsage level
 		const flatName = usagesSpec!.nested!.fields.find((f: any) => f.name === 'name')
 		expect(flatName).toBeUndefined()
+	})
+
+	test('createComponent fragment inside <If> is captured in selection', () => {
+		const { SelectionScope } = require('@contember/bindx')
+		const { createCollectorProxy, collectSelection, mergeSelections } = require('@contember/bindx-react')
+
+		const VoucherCode = createComponent()
+			.entity('entity', schema.Voucher)
+			.render(({ entity }: any) => (
+				<div>
+					<span>{entity.code.value}</span>
+					<span>{entity.label.value}</span>
+				</div>
+			))
+		// Trigger collection
+		;(VoucherCode as any).$entity
+
+		const registry = new SchemaRegistry(schemaDef)
+		const scope = new SelectionScope()
+		const collector = createCollectorProxy(scope, 'Voucher', registry)
+
+		// Simulate Entity children callback with createComponent fragment inside <If>
+		const jsx = (
+			<If
+				condition={true}
+				then={<VoucherCode entity={collector} />}
+			/>
+		)
+
+		const jsxSel = collectSelection(jsx)
+		const selection = scope.toSelectionMeta()
+		mergeSelections(selection, jsxSel)
+
+		const query = buildQueryFromSelection(selection)
+
+		// code and label from VoucherCode should be in the query
+		const codeSpec = query.fields.find((f: any) => f.name === 'code')
+		expect(codeSpec).toBeDefined()
+		const labelSpec = query.fields.find((f: any) => f.name === 'label')
+		expect(labelSpec).toBeDefined()
+	})
+
+	test('createComponent fragment inside <If> else branch is captured', () => {
+		const { SelectionScope } = require('@contember/bindx')
+		const { createCollectorProxy, collectSelection, mergeSelections } = require('@contember/bindx-react')
+
+		const VoucherCode = createComponent()
+			.entity('entity', schema.Voucher)
+			.render(({ entity }: any) => <span>{entity.code.value}</span>)
+		;(VoucherCode as any).$entity
+
+		const VoucherLabel = createComponent()
+			.entity('entity', schema.Voucher)
+			.render(({ entity }: any) => <span>{entity.label.value}</span>)
+		;(VoucherLabel as any).$entity
+
+		const registry = new SchemaRegistry(schemaDef)
+		const scope = new SelectionScope()
+		const collector = createCollectorProxy(scope, 'Voucher', registry)
+
+		const jsx = (
+			<If
+				condition={true}
+				then={<VoucherCode entity={collector} />}
+				else={<VoucherLabel entity={collector} />}
+			/>
+		)
+
+		const jsxSel = collectSelection(jsx)
+		const selection = scope.toSelectionMeta()
+		mergeSelections(selection, jsxSel)
+
+		const query = buildQueryFromSelection(selection)
+
+		// Both branches should contribute their fields
+		expect(query.fields.find((f: any) => f.name === 'code')).toBeDefined()
+		expect(query.fields.find((f: any) => f.name === 'label')).toBeDefined()
+	})
+
+	test('createComponent fragment with HasMany inside <If> preserves relation selection', () => {
+		const { SelectionScope } = require('@contember/bindx')
+		const { createCollectorProxy, collectSelection, mergeSelections } = require('@contember/bindx-react')
+
+		const VoucherUsages = createComponent()
+			.entity('entity', schema.Voucher)
+			.render(({ entity }: any) => (
+				<HasMany field={entity.usages}>
+					{(usage: any) => (
+						<div>
+							<Field field={usage.organization.name} />
+							<Field field={usage.creditedAmount} />
+						</div>
+					)}
+				</HasMany>
+			))
+		;(VoucherUsages as any).$entity
+
+		const registry = new SchemaRegistry(schemaDef)
+		const scope = new SelectionScope()
+		const collector = createCollectorProxy(scope, 'Voucher', registry)
+
+		const jsx = (
+			<If
+				condition={true}
+				then={<VoucherUsages entity={collector} />}
+			/>
+		)
+
+		const jsxSel = collectSelection(jsx)
+		const selection = scope.toSelectionMeta()
+		mergeSelections(selection, jsxSel)
+
+		const query = buildQueryFromSelection(selection)
+
+		// usages should be in the query with nested fields
+		const usagesSpec = query.fields.find((f: any) => f.name === 'usages')
+		expect(usagesSpec).toBeDefined()
+		expect(usagesSpec!.nested).toBeDefined()
+
+		const orgSpec = usagesSpec!.nested!.fields.find((f: any) => f.name === 'organization')
+		expect(orgSpec).toBeDefined()
+		expect(orgSpec!.nested).toBeDefined()
+		expect(orgSpec!.nested!.fields.find((f: any) => f.name === 'name')).toBeDefined()
 	})
 
 	test('SelectField with staticRender collects has-one relation fields', () => {
