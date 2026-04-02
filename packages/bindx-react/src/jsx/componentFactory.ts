@@ -29,7 +29,7 @@ import type {
 	SelectionPropMeta,
 } from './componentBuilder.types.js'
 import type { SelectionProvider, SelectionFieldMeta } from './types.js'
-import { FIELD_REF_META, BINDX_COMPONENT } from './types.js'
+import { FIELD_REF_META, BINDX_COMPONENT, SCOPE_REF } from './types.js'
 import { createCollectorProxy } from './proxy.js'
 import { collectSelection } from './analyzer.js'
 import { type Condition, evaluateCondition } from './conditions.js'
@@ -403,8 +403,19 @@ function createGetSelection(
 		for (const [propName, meta] of selectionsMap) {
 			const propValue = props[propName]
 
+			if (!propValue || typeof propValue !== 'object') {
+				continue
+			}
+
+			// Case 0: Collection phase — prop has SCOPE_REF, merge directly into scope
+			if (SCOPE_REF in propValue) {
+				const targetScope = (propValue as { [SCOPE_REF]: SelectionScope })[SCOPE_REF]
+				targetScope.mergeFromSelectionMeta(meta.selection)
+				continue
+			}
+
 			// Case 1: Prop is a field reference (from relation)
-			if (propValue && typeof propValue === 'object' && FIELD_REF_META in propValue) {
+			if (FIELD_REF_META in propValue) {
 				const refMeta = (propValue as { [FIELD_REF_META]: { path: string[]; fieldName: string } })[FIELD_REF_META]
 
 				for (const [_key, field] of meta.selection.fields) {
@@ -417,7 +428,7 @@ function createGetSelection(
 				}
 			}
 			// Case 2: Prop is an EntityRef from root level
-			else if (propValue && typeof propValue === 'object' && 'id' in propValue && 'fields' in propValue) {
+			else if ('id' in propValue && 'fields' in propValue) {
 				for (const [_key, field] of meta.selection.fields) {
 					if (field.path.length === 1) {
 						fields.push({ ...field })
