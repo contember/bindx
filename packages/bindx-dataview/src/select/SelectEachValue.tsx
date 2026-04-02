@@ -13,11 +13,11 @@
  */
 
 import React, { type ReactNode } from 'react'
-import type { EntityAccessor } from '@contember/bindx'
+import type { EntityRef } from '@contember/bindx'
 import { useSelectCurrentEntities } from './selectContext.js'
 
 export interface SelectEachValueProps {
-	children: (entity: EntityAccessor<object>, index: number) => ReactNode
+	children: (entity: EntityRef<object>, index: number) => ReactNode
 }
 
 export function SelectEachValue({ children }: SelectEachValueProps): ReactNode {

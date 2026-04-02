@@ -3,7 +3,7 @@
  */
 
 import { createContext, useContext } from 'react'
-import type { EntityAccessor, EntityDef } from '@contember/bindx'
+import type { EntityRef, EntityDef } from '@contember/bindx'
 
 // ============================================================================
 // Types
@@ -11,21 +11,21 @@ import type { EntityAccessor, EntityDef } from '@contember/bindx'
 
 export type SelectAction = 'select' | 'unselect' | 'toggle'
 
-export type SelectHandler = (entity: EntityAccessor<object>, action?: SelectAction) => void
+export type SelectHandler = (entity: EntityRef<object>, action?: SelectAction) => void
 
 export interface SelectEvents {
-	onSelect?: (entity: EntityAccessor<object>) => void
-	onUnselect?: (entity: EntityAccessor<object>) => void
+	onSelect?: (entity: EntityRef<object>) => void
+	onUnselect?: (entity: EntityRef<object>) => void
 }
 
 // ============================================================================
 // Contexts
 // ============================================================================
 
-const SelectCurrentEntitiesContext = createContext<readonly EntityAccessor<object>[] | null>(null)
+const SelectCurrentEntitiesContext = createContext<readonly EntityRef<object>[] | null>(null)
 SelectCurrentEntitiesContext.displayName = 'SelectCurrentEntitiesContext'
 
-const SelectIsSelectedContext = createContext<((entity: EntityAccessor<object>) => boolean) | null>(null)
+const SelectIsSelectedContext = createContext<((entity: EntityRef<object>) => boolean) | null>(null)
 SelectIsSelectedContext.displayName = 'SelectIsSelectedContext'
 
 const SelectHandleSelectContext = createContext<SelectHandler | null>(null)
@@ -38,7 +38,7 @@ SelectOptionsContext.displayName = 'SelectOptionsContext'
 // Hooks
 // ============================================================================
 
-export function useSelectCurrentEntities(): readonly EntityAccessor<object>[] {
+export function useSelectCurrentEntities(): readonly EntityRef<object>[] {
 	const ctx = useContext(SelectCurrentEntitiesContext)
 	if (ctx === null) {
 		throw new Error('useSelectCurrentEntities must be used within a Select or MultiSelect')
@@ -46,7 +46,7 @@ export function useSelectCurrentEntities(): readonly EntityAccessor<object>[] {
 	return ctx
 }
 
-export function useSelectIsSelected(): (entity: EntityAccessor<object>) => boolean {
+export function useSelectIsSelected(): (entity: EntityRef<object>) => boolean {
 	const ctx = useContext(SelectIsSelectedContext)
 	if (ctx === null) {
 		throw new Error('useSelectIsSelected must be used within a Select or MultiSelect')

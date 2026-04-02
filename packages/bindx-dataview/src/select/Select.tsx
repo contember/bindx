@@ -15,7 +15,7 @@
  */
 
 import { type ReactNode, useCallback, useMemo } from 'react'
-import type { EntityAccessor, EntityDef, HasOneRef } from '@contember/bindx'
+import type { EntityRef, EntityDef, HasOneRef } from '@contember/bindx'
 import { useHasOne } from '@contember/bindx-react'
 import { isPlaceholderId } from '@contember/bindx'
 import {
@@ -50,13 +50,13 @@ export function Select({
 	const currentId = isConnected ? entityId : null
 
 	const entitiesArr = useMemo(
-		(): readonly EntityAccessor<object>[] =>
-			isConnected ? [entity as EntityAccessor<object>] : [],
+		(): readonly EntityRef<object>[] =>
+			isConnected ? [entity as EntityRef<object>] : [],
 		[isConnected, entity],
 	)
 
 	const handleSelect = useCallback<SelectHandler>(
-		(selected: EntityAccessor<object>, action: SelectAction = 'toggle') => {
+		(selected: EntityRef<object>, action: SelectAction = 'toggle') => {
 			if (action === 'toggle') {
 				action = selected.id === currentId ? 'unselect' : 'select'
 			}
@@ -72,7 +72,7 @@ export function Select({
 	)
 
 	const isSelected = useCallback(
-		(entity: EntityAccessor<object>): boolean => entity.id === currentId,
+		(entity: EntityRef<object>): boolean => entity.id === currentId,
 		[currentId],
 	)
 

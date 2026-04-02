@@ -15,7 +15,7 @@
  */
 
 import { type ReactNode, useCallback, useMemo } from 'react'
-import type { EntityAccessor, EntityDef, HasManyRef } from '@contember/bindx'
+import type { EntityRef, EntityDef, HasManyRef } from '@contember/bindx'
 import { useHasMany } from '@contember/bindx-react'
 import {
 	SelectCurrentEntitiesContext,
@@ -50,12 +50,12 @@ export function MultiSelect({
 	)
 
 	const entitiesArr = useMemo(
-		(): readonly EntityAccessor<object>[] => items as EntityAccessor<object>[],
+		(): readonly EntityRef<object>[] => items as EntityRef<object>[],
 		[items],
 	)
 
 	const handleSelect = useCallback<SelectHandler>(
-		(entity: EntityAccessor<object>, action: SelectAction = 'toggle') => {
+		(entity: EntityRef<object>, action: SelectAction = 'toggle') => {
 			const isCurrentlySelected = selectedIds.has(entity.id)
 			if (action === 'toggle') {
 				action = isCurrentlySelected ? 'unselect' : 'select'
@@ -72,7 +72,7 @@ export function MultiSelect({
 	)
 
 	const isSelected = useCallback(
-		(entity: EntityAccessor<object>): boolean => selectedIds.has(entity.id),
+		(entity: EntityRef<object>): boolean => selectedIds.has(entity.id),
 		[selectedIds],
 	)
 

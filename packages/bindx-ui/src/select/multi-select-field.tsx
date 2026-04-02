@@ -19,7 +19,7 @@
  */
 
 import React, { type ReactNode, useMemo } from 'react'
-import type { EntityAccessor, HasManyRef, OrderDirection } from '@contember/bindx'
+import type { EntityRef, HasManyRef, OrderDirection } from '@contember/bindx'
 import { entityDef, FIELD_REF_META } from '@contember/bindx'
 import type { FieldRef } from '@contember/bindx'
 import { HasMany, withCollector } from '@contember/bindx-react'
@@ -51,7 +51,7 @@ export interface MultiSelectFieldProps<F extends HasManyRef<any> = HasManyRef<ob
 	/** Has-many relation field */
 	field: F
 	/** Per-item render function */
-	children: (it: EntityAccessor<HasManyTarget<F>>) => ReactNode
+	children: (it: EntityRef<HasManyTarget<F>>) => ReactNode
 	/** Placeholder when nothing is selected */
 	placeholder?: ReactNode
 	/** Field(s) to search across. Auto-derived from children if omitted. */
@@ -109,7 +109,7 @@ export const MultiSelectField = withCollector(function MultiSelectField<F extend
 												{(entity) => (
 													<MultiSelectItemUI>
 														<MultiSelectItemContentUI>
-															{children(entity as EntityAccessor<HasManyTarget<F>>)}
+															{children(entity as EntityRef<HasManyTarget<F>>)}
 														</MultiSelectItemContentUI>
 														<MultiSelectItemRemoveButtonUI
 															onClick={(e: React.MouseEvent) => {
@@ -133,7 +133,7 @@ export const MultiSelectField = withCollector(function MultiSelectField<F extend
 									initialSorting={initialSorting}
 									filter={filter}
 								>
-									{children as (it: EntityAccessor<object>) => ReactNode}
+									{children as (it: EntityRef<object>) => ReactNode}
 								</DefaultSelectDataView>
 							</SelectPopoverContent>
 						</Popover>

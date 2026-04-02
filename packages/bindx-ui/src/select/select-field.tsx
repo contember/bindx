@@ -18,7 +18,7 @@
  */
 
 import React, { type ReactNode, useMemo, useState } from 'react'
-import type { EntityAccessor, HasOneRef, OrderDirection } from '@contember/bindx'
+import type { EntityRef, HasOneRef, OrderDirection } from '@contember/bindx'
 import { entityDef, isPlaceholderId, FIELD_REF_META } from '@contember/bindx'
 import type { FieldRef } from '@contember/bindx'
 import { HasOne, withCollector } from '@contember/bindx-react'
@@ -48,7 +48,7 @@ export interface SelectFieldProps<F extends HasOneRef<any> = HasOneRef<any>> {
 	/** Has-one relation field */
 	field: F
 	/** Per-item render function */
-	children: (it: EntityAccessor<RelationTarget<F>>) => ReactNode
+	children: (it: EntityRef<RelationTarget<F>>) => ReactNode
 	/** Placeholder when nothing is selected */
 	placeholder?: ReactNode
 	/** Field(s) to search across. Auto-derived from children if omitted. */
@@ -106,7 +106,7 @@ export const SelectField = withCollector(function SelectField<F extends HasOneRe
 										{placeholder ?? <SelectDefaultPlaceholderUI />}
 									</SelectPlaceholder>
 									<SelectEachValue>
-										{entity => children(entity as EntityAccessor<RelationTarget<F>>)}
+										{entity => children(entity as EntityRef<RelationTarget<F>>)}
 									</SelectEachValue>
 									<SelectInputActionsUI>
 										{!isPlaceholderId(fieldAccessor.$entity.id) && (
@@ -132,7 +132,7 @@ export const SelectField = withCollector(function SelectField<F extends HasOneRe
 								initialSorting={initialSorting}
 								filter={filter}
 							>
-								{children as (it: EntityAccessor<object>) => ReactNode}
+								{children as (it: EntityRef<object>) => ReactNode}
 							</DefaultSelectDataView>
 						</SelectPopoverContent>
 					</Popover>

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { EntityAccessor, HasManyRef, AnyBrand } from '@contember/bindx'
+import type { EntityRef, HasManyRef, AnyBrand } from '@contember/bindx'
 import { HasMany, withCollector } from '@contember/bindx-react'
 import { Repeater, type RepeaterItemInfo } from '@contember/bindx-repeater'
 import { PlusCircleIcon, Trash2Icon } from 'lucide-react'
@@ -52,7 +52,7 @@ export interface DefaultRepeaterProps<
 	readonly showRemoveButton?: boolean
 	/** Per-item render function */
 	readonly children: (
-		entity: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>,
+		entity: EntityRef<TEntity, TSelected, TBrand, TEntityName, TSchema>,
 		info: RepeaterItemInfo,
 	) => ReactNode
 }
