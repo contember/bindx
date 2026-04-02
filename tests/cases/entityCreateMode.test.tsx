@@ -13,6 +13,8 @@ import {
 	Entity,
 	Field,
 	isTempId,
+	useField,
+	type FieldRef,
 } from '@contember/bindx-react'
 
 afterEach(() => {
@@ -69,6 +71,11 @@ function getByTestId(container: Element, testId: string): Element {
 	const el = container.querySelector(`[data-testid="${testId}"]`)
 	if (!el) throw new Error(`Element with data-testid="${testId}" not found`)
 	return el
+}
+
+function FieldValue<T>({ field, testId }: { field: FieldRef<T>; testId: string }): React.ReactElement {
+	const acc = useField(field)
+	return <span data-testid={testId}>{String(acc.value ?? 'empty')}</span>
 }
 
 describe('Entity Create Mode', () => {
@@ -138,11 +145,11 @@ describe('Entity Create Mode', () => {
 				<BindxProvider adapter={adapter} schema={schema}>
 					<Entity entity={entityDefs.Author} create>
 						{author => {
-							setNameFn = author.$fields.name.setValue
+							setNameFn = author.name.setValue
 							return (
 								<div data-testid="author">
-									<span data-testid="name">{author.$fields.name.value ?? 'empty'}</span>
-									<Field field={author.$fields.name} />
+									<FieldValue field={author.name} testId="name" />
+									<Field field={author.name} />
 								</div>
 							)
 						}}
@@ -182,7 +189,7 @@ describe('Entity Create Mode', () => {
 							<div data-testid="author">
 								<span data-testid="is-new">{author.$isNew ? 'new' : 'existing'}</span>
 								<span data-testid="persisted-id">{author.$persistedId ?? 'none'}</span>
-								<Field field={author.$fields.name} />
+								<Field field={author.name} />
 							</div>
 						)}
 					</Entity>
@@ -326,7 +333,9 @@ describe('Entity Create Mode', () => {
 					<Entity entity={entityDefs.Author} by={{ id: 'author-1' }}>
 						{author => (
 							<div data-testid="author">
-								<span data-testid="name">{author.$fields.name.value}</span>
+								<Field field={author.name}>
+									{field => <span data-testid="name">{String(field.value ?? '')}</span>}
+								</Field>
 								<span data-testid="is-new">{author.$isNew ? 'new' : 'existing'}</span>
 								<span data-testid="persisted-id">{author.$persistedId ?? 'none'}</span>
 							</div>

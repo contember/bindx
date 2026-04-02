@@ -7,13 +7,16 @@ import {
 	MockAdapter,
 	HasOne,
 	useEntity,
+	useAccessor,
 } from '@contember/bindx-react'
+import type { EntityRef } from '@contember/bindx'
 import {
 	testSchema,
 	schema,
 	createMockData,
 	createHasOneMockData,
 } from '../../shared'
+import type { Author, Location } from '../../shared'
 
 afterEach(() => {
 	cleanup()
@@ -27,6 +30,75 @@ function getByTestId(container: Element, testId: string): Element {
 
 function queryByTestId(container: Element, testId: string): Element | null {
 	return container.querySelector(`[data-testid="${testId}"]`)
+}
+
+function AuthorNameEmail<TSelected extends Pick<Author, 'name' | 'email'>>({ author }: { author: EntityRef<Author, TSelected> }): React.ReactElement {
+	const acc = useAccessor(author)
+	return (
+		<div data-testid="author">
+			<span data-testid="author-name">{acc.name.value}</span>
+			<span data-testid="author-email">{acc.email.value}</span>
+		</div>
+	)
+}
+
+function AuthorNameWithUpdate<TSelected extends Pick<Author, 'name'>>({ author, testIdName, testIdBtn, newName }: { author: EntityRef<Author, TSelected>; testIdName: string; testIdBtn: string; newName: string }): React.ReactElement {
+	const acc = useAccessor(author)
+	return (
+		<div>
+			<span data-testid={testIdName}>{acc.name.value}</span>
+			<button
+				data-testid={testIdBtn}
+				onClick={() => acc.name.setValue(newName)}
+			>
+				Update
+			</button>
+		</div>
+	)
+}
+
+function AuthorInfo<TSelected extends Pick<Author, 'name' | 'email'>>({ author }: { author: EntityRef<Author, TSelected> }): React.ReactElement {
+	const acc = useAccessor(author)
+	return (
+		<div data-testid="author-info">
+			{acc.name.value} ({acc.email.value})
+		</div>
+	)
+}
+
+function AuthorName<TSelected extends Pick<Author, 'name'>>({ author, testId }: { author: EntityRef<Author, TSelected>; testId: string }): React.ReactElement {
+	const acc = useAccessor(author)
+	return <span data-testid={testId}>{acc.name.value}</span>
+}
+
+function LocationInfo<TSelected extends Pick<Location, 'label' | 'lat' | 'lng'>>({ location }: { location: EntityRef<Location, TSelected> }): React.ReactElement {
+	const acc = useAccessor(location)
+	return (
+		<div data-testid="location">
+			<span data-testid="label">{acc.label.value}</span>
+			<span data-testid="lat">{acc.lat.value}</span>
+			<span data-testid="lng">{acc.lng.value}</span>
+		</div>
+	)
+}
+
+function AuthorCard<TSelected extends Pick<Author, 'name' | 'email'>>({ author }: { author: EntityRef<Author, TSelected> }): React.ReactElement {
+	const acc = useAccessor(author)
+	return (
+		<div data-testid="author-card" className="card">
+			<header>
+				<h2 data-testid="author-name">{acc.name.value}</h2>
+			</header>
+			<main>
+				<a href={`mailto:${acc.email.value}`} data-testid="author-email">
+					{acc.email.value}
+				</a>
+			</main>
+			<footer>
+				<span data-testid="author-id">ID: {acc.id}</span>
+			</footer>
+		</div>
+	)
 }
 
 describe('HasOne component', () => {
@@ -49,12 +121,7 @@ describe('HasOne component', () => {
 				return (
 					<div>
 						<HasOne field={article.author}>
-							{author => (
-								<div data-testid="author">
-									<span data-testid="author-name">{author.name.value}</span>
-									<span data-testid="author-email">{author.email.value}</span>
-								</div>
-							)}
+							{author => <AuthorNameEmail author={author} />}
 						</HasOne>
 					</div>
 				)
@@ -136,15 +203,7 @@ describe('HasOne component', () => {
 				return (
 					<div>
 						<HasOne field={article.author}>
-							{author => {
-								const name = author.name.value
-								const email = author.email.value
-								return (
-									<div data-testid="author-info">
-										{name} ({email})
-									</div>
-								)
-							}}
+							{author => <AuthorInfo author={author} />}
 						</HasOne>
 					</div>
 				)
@@ -179,17 +238,7 @@ describe('HasOne component', () => {
 				return (
 					<div>
 						<HasOne field={article.author}>
-							{author => (
-								<div>
-									<span data-testid="author-name">{author.name.value}</span>
-									<button
-										data-testid="update-btn"
-										onClick={() => author.name.setValue('Jane Doe')}
-									>
-										Update
-									</button>
-								</div>
-							)}
+							{author => <AuthorNameWithUpdate author={author} testIdName="author-name" testIdBtn="update-btn" newName="Jane Doe" />}
 						</HasOne>
 					</div>
 				)
@@ -274,13 +323,7 @@ describe('HasOne component', () => {
 				return (
 					<div>
 						<HasOne field={article.location}>
-							{location => (
-								<div data-testid="location">
-									<span data-testid="label">{location.label.value}</span>
-									<span data-testid="lat">{location.lat.value}</span>
-									<span data-testid="lng">{location.lng.value}</span>
-								</div>
-							)}
+							{location => <LocationInfo location={location} />}
 						</HasOne>
 					</div>
 				)
@@ -321,21 +364,7 @@ describe('HasOne component', () => {
 				return (
 					<div>
 						<HasOne field={article.author}>
-							{author => (
-								<div data-testid="author-card" className="card">
-									<header>
-										<h2 data-testid="author-name">{author.name.value}</h2>
-									</header>
-									<main>
-										<a href={`mailto:${author.email.value}`} data-testid="author-email">
-											{author.email.value}
-										</a>
-									</main>
-									<footer>
-										<span data-testid="author-id">ID: {author.id}</span>
-									</footer>
-								</div>
-							)}
+							{author => <AuthorCard author={author} />}
 						</HasOne>
 					</div>
 				)
@@ -379,17 +408,7 @@ describe('HasOne component', () => {
 				return (
 					<div>
 						<HasOne field={article.author}>
-							{author => (
-								<div>
-									<span data-testid="author-name">{author.name.value}</span>
-									<button
-										data-testid="update-btn"
-										onClick={() => author.name.setValue('Updated Name')}
-									>
-										Update
-									</button>
-								</div>
-							)}
+							{author => <AuthorNameWithUpdate author={author} testIdName="author-name" testIdBtn="update-btn" newName="Updated Name" />}
 						</HasOne>
 					</div>
 				)
@@ -436,7 +455,7 @@ describe('HasOne component', () => {
 					<div>
 						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
 						<HasOne field={article.author}>
-							{author => <span data-testid="author-name">{author.name.value}</span>}
+							{author => <AuthorName author={author} testId="author-name" />}
 						</HasOne>
 					</div>
 				)

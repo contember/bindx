@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { Entity, Field } from '@contember/bindx-react'
+import { Entity, Field, useField } from '@contember/bindx-react'
+import type { FieldRef } from '@contember/bindx'
 import {
 	RichTextEditor,
 	BlockEditor,
@@ -67,9 +68,7 @@ export function RichTextEditorPage({ id }: { id: string }): ReactNode {
 						)}
 					</RichTextEditor>
 
-					{article.content.isDirty && (
-						<p style={{ color: 'orange', fontSize: '12px' }} data-testid="rte-dirty-notice">Content has been modified</p>
-					)}
+					<DirtyNotice field={article.content} />
 				</div>
 			)}
 		</Entity>
@@ -214,6 +213,12 @@ export function SimpleBlockEditorPage({ id }: { id: string }): ReactNode {
 			)}
 		</Entity>
 	)
+}
+
+function DirtyNotice<T>({ field }: { field: FieldRef<T> }): ReactNode {
+	const acc = useField(field)
+	if (!acc.isDirty) return null
+	return <p style={{ color: 'orange', fontSize: '12px' }} data-testid="rte-dirty-notice">Content has been modified</p>
 }
 
 /**

@@ -8,17 +8,85 @@ import {
 	HasMany,
 	isTempId,
 	useEntity,
+	useField,
+	useAccessor,
 } from '@contember/bindx-react'
+import type { FieldRef, EntityRef } from '@contember/bindx'
 import {
 	testSchema,
 	schema,
 	createMockData,
 	createHasManyMockData,
 } from '../../shared'
+import type { Tag } from '../../shared'
 
 afterEach(() => {
 	cleanup()
 })
+
+function TagName({ field }: { field: FieldRef<string> }): React.ReactElement {
+	const acc = useField(field)
+	return <span data-testid="tag-name">{acc.value}</span>
+}
+
+function TagNameIndexed({ field, index }: { field: FieldRef<string>; index: number }): React.ReactElement {
+	const acc = useField(field)
+	return <span data-testid={`tag-name-${index}`}>{acc.value}</span>
+}
+
+function TagFieldValues({ tag }: { tag: EntityRef<Tag, Pick<Tag, 'id' | 'name' | 'color'>> }): React.ReactElement {
+	const acc = useAccessor(tag)
+	const name = acc.name.value
+	const color = acc.color.value
+	return (
+		<div
+			data-testid="tag"
+			style={{ backgroundColor: color ?? undefined }}
+		>
+			{name}
+		</div>
+	)
+}
+
+function TagNameMutable({ tag, index }: { tag: EntityRef<Tag, Pick<Tag, 'id' | 'name'>>; index: number }): React.ReactElement {
+	const acc = useAccessor(tag)
+	return (
+		<div data-testid={`tag-${index}`}>
+			<span data-testid={`tag-name-${index}`}>{acc.name.value}</span>
+			<button
+				data-testid={`update-btn-${index}`}
+				onClick={() => acc.name.setValue(`Updated ${index}`)}
+			>
+				Update
+			</button>
+		</div>
+	)
+}
+
+function TagNameMutableFixed({ tag, index }: { tag: EntityRef<Tag, Pick<Tag, 'id' | 'name'>>; index: number }): React.ReactElement {
+	const acc = useAccessor(tag)
+	return (
+		<div data-testid={`tag-${index}`}>
+			<span data-testid={`tag-name-${index}`}>{acc.name.value}</span>
+			<button
+				data-testid={`update-${index}`}
+				onClick={() => acc.name.setValue('Updated')}
+			>
+				Update
+			</button>
+		</div>
+	)
+}
+
+function TagNameOptional({ field }: { field: FieldRef<string> }): React.ReactElement {
+	const acc = useField(field)
+	return <span>{acc.value ?? 'New Tag'}</span>
+}
+
+function TagNameNumbered({ field, index }: { field: FieldRef<string>; index: number }): React.ReactElement {
+	const acc = useField(field)
+	return <li data-testid={`item-${index}`}>{index + 1}. {acc.value}</li>
+}
 
 function getByTestId(container: Element, testId: string): Element {
 	const el = container.querySelector(`[data-testid="${testId}"]`)
@@ -58,7 +126,7 @@ describe('HasMany component', () => {
 						<HasMany field={article.tags}>
 							{tag => (
 								<div data-testid="tag">
-									<span data-testid="tag-name">{tag.name.value}</span>
+									<TagName field={tag.name} />
 								</div>
 							)}
 						</HasMany>
@@ -105,7 +173,7 @@ describe('HasMany component', () => {
 						<HasMany field={article.tags}>
 							{tag => (
 								<div data-testid="tag">
-									<span data-testid="tag-name">{tag.name.value}</span>
+									<TagName field={tag.name} />
 								</div>
 							)}
 						</HasMany>
@@ -151,7 +219,7 @@ describe('HasMany component', () => {
 						<HasMany field={article.tags}>
 							{tag => (
 								<div data-testid="tag">
-									<span data-testid="tag-name">{tag.name.value}</span>
+									<TagName field={tag.name} />
 								</div>
 							)}
 						</HasMany>
@@ -199,7 +267,7 @@ describe('HasMany component', () => {
 							{(tag, index) => (
 								<div data-testid={`tag-${index}`}>
 									<span data-testid={`tag-index-${index}`}>{index}</span>
-									<span data-testid={`tag-name-${index}`}>{tag.name.value}</span>
+									<TagNameIndexed field={tag.name} index={index} />
 								</div>
 							)}
 						</HasMany>
@@ -241,11 +309,7 @@ describe('HasMany component', () => {
 				return (
 					<ol data-testid="list">
 						<HasMany field={article.tags}>
-							{(tag, index) => (
-								<li data-testid={`item-${index}`}>
-									{index + 1}. {tag.name.value}
-								</li>
-							)}
+							{(tag, index) => <TagNameNumbered field={tag.name} index={index} />}
 						</HasMany>
 					</ol>
 				)
@@ -337,18 +401,7 @@ describe('HasMany component', () => {
 				return (
 					<div>
 						<HasMany field={article.tags}>
-							{tag => {
-								const name = tag.name.value
-								const color = tag.color.value
-								return (
-									<div
-										data-testid="tag"
-										style={{ backgroundColor: color ?? undefined }}
-									>
-										{name}
-									</div>
-								)
-							}}
+							{tag => <TagFieldValues tag={tag} />}
 						</HasMany>
 					</div>
 				)
@@ -387,17 +440,7 @@ describe('HasMany component', () => {
 				return (
 					<div>
 						<HasMany field={article.tags}>
-							{(tag, index) => (
-								<div data-testid={`tag-${index}`}>
-									<span data-testid={`tag-name-${index}`}>{tag.name.value}</span>
-									<button
-										data-testid={`update-btn-${index}`}
-										onClick={() => tag.name.setValue(`Updated ${index}`)}
-									>
-										Update
-									</button>
-								</div>
-							)}
+							{(tag, index) => <TagNameMutable tag={tag} index={index} />}
 						</HasMany>
 					</div>
 				)
@@ -448,7 +491,7 @@ describe('HasMany component', () => {
 						<HasMany field={article.tags}>
 							{tag => (
 								<div data-testid="tag">
-									<span>{tag.name.value ?? 'New Tag'}</span>
+									<TagNameOptional field={tag.name} />
 								</div>
 							)}
 						</HasMany>
@@ -551,17 +594,7 @@ describe('HasMany component', () => {
 				return (
 					<div>
 						<HasMany field={article.tags}>
-							{(tag, index) => (
-								<div data-testid={`tag-${index}`}>
-									<span data-testid={`tag-name-${index}`}>{tag.name.value}</span>
-									<button
-										data-testid={`update-${index}`}
-										onClick={() => tag.name.setValue('Updated')}
-									>
-										Update
-									</button>
-								</div>
-							)}
+							{(tag, index) => <TagNameMutableFixed tag={tag} index={index} />}
 						</HasMany>
 					</div>
 				)
@@ -611,7 +644,7 @@ describe('HasMany component', () => {
 					<div>
 						<span data-testid="length">{article.tags.length}</span>
 						<HasMany field={article.tags}>
-							{tag => <span data-testid="tag">{tag.name.value}</span>}
+							{tag => <span data-testid="tag"><TagName field={tag.name} /></span>}
 						</HasMany>
 					</div>
 				)

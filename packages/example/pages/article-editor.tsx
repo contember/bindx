@@ -1,19 +1,21 @@
 import type { ReactNode } from 'react'
-import { Entity, Field, HasOne, usePersist } from '@contember/bindx-react'
+import { Entity, Field, HasOne, usePersist, createComponent } from '@contember/bindx-react'
 import { InputField, SelectField, MultiSelectField, Button } from '@contember/bindx-ui'
 import { schema } from '../generated/index.js'
 
+const TagSelectBadge = createComponent()
+	.entity('tag', schema.Tag, t => t.name().color())
+	.render(({ tag }) => (
+		<span
+			data-testid={`tag-badge-${tag.name.value}`}
+			style={{ color: tag.color.value ?? undefined }}
+		>
+			{tag.name.value}
+		</span>
+	))
+
 /**
  * Full article editor using Entity JSX with usePersist for saving.
- *
- * Demonstrates:
- * - Entity component for single entity editing
- * - InputField bound to entity fields
- * - SelectField for has-one relation
- * - MultiSelectField for has-many relation
- * - HasOne for inline relation editing
- * - usePersist hook for persistence
- * - Dirty state tracking
  */
 export function ArticleEditorPage({ id }: { id: string }): ReactNode {
 	const { persistAll } = usePersist()
@@ -36,7 +38,7 @@ export function ArticleEditorPage({ id }: { id: string }): ReactNode {
 
 					<div className="form-section" data-testid="article-author-select">
 						<SelectField field={article.author} label="Author">
-							{it => it.name.value}
+							{it => <Field field={it.name} />}
 						</SelectField>
 					</div>
 
@@ -61,14 +63,7 @@ export function ArticleEditorPage({ id }: { id: string }): ReactNode {
 
 					<div className="form-section" data-testid="article-tags">
 						<MultiSelectField field={article.tags} label="Tags">
-							{it => (
-								<span
-									data-testid={`tag-badge-${it.name.value}`}
-									style={{ color: it.color.value ?? undefined }}
-								>
-									{it.name.value}
-								</span>
-							)}
+							{it => <TagSelectBadge tag={it} />}
 						</MultiSelectField>
 
 						{article.tags.isDirty && (

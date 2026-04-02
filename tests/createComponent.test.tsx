@@ -16,6 +16,7 @@ import {
 	hasMany,
 	COMPONENT_MARKER,
 	COMPONENT_SELECTIONS,
+	useAccessor,
 } from '@contember/bindx-react'
 
 afterEach(() => {
@@ -150,36 +151,46 @@ function createMockData() {
 // Simple component with one entity prop - explicit selection
 const AuthorCard = createComponent()
 	.entity('author', entityDefs.Author, e => e.name().email())
-	.render(({ author }) => (
-		<div data-testid="author-card">
-			<span data-testid="author-name">{author.$data?.name}</span>
-			<span data-testid="author-email">{author.$data?.email}</span>
-		</div>
-	))
+	.render(({ author }) => {
+		const acc = useAccessor(author)
+		return (
+			<div data-testid="author-card">
+				<span data-testid="author-name">{acc.$data?.name}</span>
+				<span data-testid="author-email">{acc.$data?.email}</span>
+			</div>
+		)
+	})
 
 // Component with scalar props
 const AuthorCardWithOptions = createComponent()
 	.entity('author', entityDefs.Author, e => e.name().email().bio())
 	.props<{ showEmail?: boolean; className?: string }>()
-	.render(({ author, showEmail, className }) => (
-		<div data-testid="author-card" className={className}>
-			<span data-testid="author-name">{author.$data?.name}</span>
-			{showEmail && <span data-testid="author-email">{author.$data?.email}</span>}
-			<span data-testid="author-bio">{author.$data?.bio}</span>
-		</div>
-	))
+	.render(({ author, showEmail, className }) => {
+		const acc = useAccessor(author)
+		return (
+			<div data-testid="author-card" className={className}>
+				<span data-testid="author-name">{acc.$data?.name}</span>
+				{showEmail && <span data-testid="author-email">{acc.$data?.email}</span>}
+				<span data-testid="author-bio">{acc.$data?.bio}</span>
+			</div>
+		)
+	})
 
 // Component with multiple entity props
 const ArticleWithAuthor = createComponent()
 	.entity('article', entityDefs.Article, e => e.title().content())
 	.entity('author', entityDefs.Author, e => e.name())
-	.render(({ article, author }) => (
-		<div data-testid="article-with-author">
-			<h1 data-testid="article-title">{article.$data?.title}</h1>
-			<p data-testid="article-content">{article.$data?.content}</p>
-			<span data-testid="author-name">{author.$data?.name}</span>
-		</div>
-	))
+	.render(({ article, author }) => {
+		const articleAcc = useAccessor(article)
+		const authorAcc = useAccessor(author)
+		return (
+			<div data-testid="article-with-author">
+				<h1 data-testid="article-title">{articleAcc.$data?.title}</h1>
+				<p data-testid="article-content">{articleAcc.$data?.content}</p>
+				<span data-testid="author-name">{authorAcc.$data?.name}</span>
+			</div>
+		)
+	})
 
 // Implicit mode - selection collected from JSX
 const ImplicitAuthorCard = createComponent()
@@ -270,11 +281,11 @@ describe('createComponent builder API', () => {
 		test('can merge fragments from different components', () => {
 			const AuthorName = createComponent()
 				.entity('author', entityDefs.Author, e => e.name())
-				.render(({ author }) => <span>{author.$data?.name}</span>)
+				.render(({ author }) => { const acc = useAccessor(author); return <span>{acc.$data?.name}</span> })
 
 			const AuthorEmail = createComponent()
 				.entity('author', entityDefs.Author, e => e.email())
-				.render(({ author }) => <span>{author.$data?.email}</span>)
+				.render(({ author }) => { const acc = useAccessor(author); return <span>{acc.$data?.email}</span> })
 
 			const merged = mergeFragments(AuthorName.$author, AuthorEmail.$author)
 
@@ -290,9 +301,10 @@ describe('createComponent builder API', () => {
 			const _testComponent = createComponent()
 				.entity('author', entityDefs.Author, e => e.name().email())
 				.render(({ author }) => {
+					const acc = useAccessor(author)
 					// These should be typed correctly
-					const name: string | undefined = author.$data?.name
-					const email: string | undefined = author.$data?.email
+					const name: string | undefined = acc.$data?.name
+					const email: string | undefined = acc.$data?.email
 					return <div>{name} {email}</div>
 				})
 
@@ -308,7 +320,7 @@ describe('createComponent builder API', () => {
 				.render(({ author, article }) => (
 					<div>
 						<span>{author.name.inputProps.value}</span>
-						<span>{article.$data?.title}</span>
+						<span>{article.title?.inputProps?.value}</span>
 					</div>
 				))
 
@@ -542,7 +554,7 @@ describe('createComponent.entityInterface', () => {
 				.render(({ item, article }) => (
 					<div>
 						<span data-testid="name">{item.name.inputProps.value}</span>
-						<span data-testid="title">{article.$data?.title}</span>
+						<span data-testid="title">{article.title?.inputProps?.value}</span>
 					</div>
 				))
 
@@ -621,19 +633,22 @@ describe('nested createComponent with relation entity', () => {
 			.entity('author', entityDefs.Author, e => e.name())
 			.render(({ author }) => (
 				<div data-testid="author-breadcrumbs">
-					<span data-testid="author-name">{author.name.value}</span>
+					<span data-testid="author-name">{author.name.inputProps.value}</span>
 				</div>
 			))
 
 		// ArticlePage has an Article entity with explicit selection, so article.author.$entity is available
 		const ArticlePage = createComponent()
 			.entity('article', entityDefs.Article, e => e.title().author(a => a.name()))
-			.render(({ article }) => (
-				<div data-testid="article-page">
-					<h1>{article.title.value}</h1>
-					<AuthorBreadcrumbs author={article.author.$entity} />
-				</div>
-			))
+			.render(({ article }) => {
+				const articleAcc = useAccessor(article)
+				return (
+					<div data-testid="article-page">
+						<h1>{article.title.inputProps.value}</h1>
+						<AuthorBreadcrumbs author={articleAcc.author.$entity} />
+					</div>
+				)
+			})
 
 		// Verify the selection was collected correctly
 		const articleMeta = ArticlePage.$article.__meta
@@ -654,18 +669,21 @@ describe('nested createComponent with relation entity', () => {
 			.entity('author', entityDefs.Author, e => e.name())
 			.render(({ author }) => (
 				<div data-testid="author-breadcrumbs">
-					<span data-testid="breadcrumb-author-name">{author.name.value}</span>
+					<span data-testid="breadcrumb-author-name">{author.name.inputProps.value}</span>
 				</div>
 			))
 
 		const ArticlePage = createComponent()
 			.entity('article', entityDefs.Article, e => e.title().author(a => a.name()))
-			.render(({ article }) => (
-				<div data-testid="article-page">
-					<h1 data-testid="article-title">{article.title.value}</h1>
-					<AuthorBreadcrumbs author={article.author.$entity} />
-				</div>
-			))
+			.render(({ article }) => {
+				const articleAcc = useAccessor(article)
+				return (
+					<div data-testid="article-page">
+						<h1 data-testid="article-title">{article.title.inputProps.value}</h1>
+						<AuthorBreadcrumbs author={articleAcc.author.$entity} />
+					</div>
+				)
+			})
 
 		const adapter = new MockAdapter(createMockData())
 
@@ -689,7 +707,7 @@ describe('nested createComponent with relation entity', () => {
 		const AuthorName = createComponent()
 			.entity('author', entityDefs.Author, e => e.name())
 			.render(({ author }) => (
-				<span data-testid="author-name">{author.name.value}</span>
+				<span data-testid="author-name">{author.name.inputProps.value}</span>
 			))
 
 		// AuthorCard uses AuthorName internally (explicit selection for name + email)
@@ -698,19 +716,22 @@ describe('nested createComponent with relation entity', () => {
 			.render(({ author }) => (
 				<div data-testid="author-card">
 					<AuthorName author={author} />
-					<span data-testid="author-email">{author.email.value}</span>
+					<span data-testid="author-email">{author.email.inputProps.value}</span>
 				</div>
 			))
 
 		// ArticleWithAuthor uses explicit selection so article.author.$entity is available
 		const ArticleWithAuthor = createComponent()
 			.entity('article', entityDefs.Article, e => e.title().author(a => a.name().email()))
-			.render(({ article }) => (
-				<div data-testid="article-with-author">
-					<h1>{article.title.value}</h1>
-					<AuthorCard author={article.author.$entity} />
-				</div>
-			))
+			.render(({ article }) => {
+				const articleAcc = useAccessor(article)
+				return (
+					<div data-testid="article-with-author">
+						<h1>{article.title.inputProps.value}</h1>
+						<AuthorCard author={articleAcc.author.$entity} />
+					</div>
+				)
+			})
 
 		// Verify the selection was collected correctly
 		const articleMeta = ArticleWithAuthor.$article.__meta

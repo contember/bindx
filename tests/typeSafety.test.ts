@@ -229,8 +229,8 @@ describe('Type Safety - Compile Time Checks', () => {
 			const TagDisplay = createComponent()
 				.entity('tag', entityDefs.Tag, e => e.name().color())
 				.render(({ tag }) => {
-					void tag.$data?.name
-					void tag.$data?.color
+					void tag.name
+					void tag.color
 					return null
 				})
 
@@ -283,7 +283,7 @@ describe('Type Safety - Runtime Behavior', () => {
 			const AuthorInfo = createComponent()
 				.entity('author', entityDefs.Author, e => e.name())
 				.render(({ author }) => {
-					void author.$data?.name
+					void author.name
 					return null
 				})
 
@@ -312,8 +312,8 @@ describe('Type Safety - Runtime Behavior', () => {
 			const TagList = createComponent()
 				.entity('tag', entityDefs.Tag, e => e.name().color())
 				.render(({ tag }) => {
-					void tag.$data?.name
-					void tag.$data?.color
+					void tag.name
+					void tag.color
 					return null
 				})
 
@@ -328,8 +328,8 @@ describe('Type Safety - Runtime Behavior', () => {
 				.entity('article', entityDefs.Article, e => e.title())
 				.entity('author', entityDefs.Author, e => e.name())
 				.render(({ article, author }) => {
-					void article.$data?.title
-					void author.$data?.name
+					void article.title
+					void author.name
 					return null
 				})
 
@@ -454,7 +454,7 @@ describe('Type Safety - Expected Errors', () => {
 		const AuthorCard = createComponent()
 			.entity('author', entityDefs.Author, e => e.name())
 			.render(({ author }) => {
-				void author.$data?.name
+				void author.name
 				return null
 			})
 
@@ -543,12 +543,11 @@ describe('Type Safety - Known Limitations', () => {
 		assertTrue<AssertExtends<TagsRef, Props['field']>>()
 
 		// The children callback receives EntityRef<Tag, SelectedTag>
-		// which should only allow accessing 'name', not 'color'
+		// which should only allow accessing 'name', not 'color' via direct proxy fields
 		type CallbackArg = Parameters<Props['children']>[0]
-		type CallbackFields = CallbackArg['$fields']
 
-		assertTrue<AssertExtends<'name', keyof CallbackFields>>()
-		assertFalse<AssertExtends<'color', keyof CallbackFields>>()
+		assertTrue<AssertExtends<'name', keyof CallbackArg>>()
+		assertFalse<AssertExtends<'color', keyof CallbackArg>>()
 	})
 
 	test('HasOneProps is selection-aware', () => {
@@ -560,13 +559,12 @@ describe('Type Safety - Known Limitations', () => {
 		assertTrue<AssertExtends<AuthorRef, Props['field']>>()
 
 		// The children callback receives EntityRef<Author, SelectedAuthor>
-		// which should only allow accessing 'name' and 'email', not 'bio'
+		// which should only allow accessing 'name' and 'email', not 'bio' via direct proxy fields
 		type CallbackArg = Parameters<Props['children']>[0]
-		type CallbackFields = CallbackArg['$fields']
 
-		assertTrue<AssertExtends<'name', keyof CallbackFields>>()
-		assertTrue<AssertExtends<'email', keyof CallbackFields>>()
-		assertFalse<AssertExtends<'bio', keyof CallbackFields>>()
+		assertTrue<AssertExtends<'name', keyof CallbackArg>>()
+		assertTrue<AssertExtends<'email', keyof CallbackArg>>()
+		assertFalse<AssertExtends<'bio', keyof CallbackArg>>()
 	})
 })
 
@@ -588,8 +586,8 @@ describe('Type Safety - Integration', () => {
 		const AuthorDisplay = createComponent()
 			.entity('author', entityDefs.Author, e => e.id().name())
 			.render(({ author }) => {
-				void author.$data?.id
-				void author.$data?.name
+				void author.id
+				void author.name
 				return null
 			})
 

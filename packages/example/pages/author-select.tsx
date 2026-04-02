@@ -5,11 +5,6 @@ import { schema } from '../generated/index.js'
 
 /**
  * Article form with author select using Entity JSX.
- *
- * Demonstrates:
- * - Entity component with relation editing
- * - SelectField for has-one relation
- * - usePersist for saving changes
  */
 export function AuthorSelectPage({ id }: { id: string }): ReactNode {
 	const { persistAll } = usePersist()
@@ -29,7 +24,7 @@ export function AuthorSelectPage({ id }: { id: string }): ReactNode {
 					<InputField field={article.content} label="Content" inputProps={{ 'data-testid': 'author-select-content-input' }} />
 
 					<SelectField field={article.author} label="Author">
-						{it => <>{it.name.value} ({it.email.value})</>}
+						{it => <><Field field={it.name} /> (<Field field={it.email} />)</>}
 					</SelectField>
 
 					<div className="current-author" data-testid="current-author-display">

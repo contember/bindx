@@ -16,9 +16,9 @@ const AuthorArticlesExplicit = createComponent()
 	.entity('author', schema.Author, e => e.name().articles({ limit: 5 }, a => a.id().title()))
 	.render(({ author }) => (
 		<ul>
-			<HasMany field={author.$fields.articles}>
+			<HasMany field={author.articles}>
 				{article => (
-					<li key={article.id}><Field field={article.$fields.title} /></li>
+					<li key={article.id}><Field field={article.title} /></li>
 				)}
 			</HasMany>
 		</ul>

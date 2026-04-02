@@ -516,7 +516,7 @@ describe('createComponent with roles', () => {
 			.entity('article', roleSchema.Article, e => e.title().content().internalNotes())
 			.render(({ article }) => (
 				<div data-testid="admin-article">
-					{article.$data?.title}
+					{void article.title}
 				</div>
 			))
 
@@ -529,7 +529,7 @@ describe('createComponent with roles', () => {
 			.entity('article', roleSchema.Article, e => e.title())
 			.render(({ article }) => (
 				<div data-testid="public-article">
-					{article.$data?.title}
+					{void article.title}
 				</div>
 			))
 
