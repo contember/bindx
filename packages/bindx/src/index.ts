@@ -166,7 +166,7 @@ export { EntityHandle, HasOneHandle, HasManyListHandle, FieldHandle } from './ha
 export { FIELD_REF_META } from './handles/index.js'
 
 // Adapter
-export { MockAdapter, ContemberAdapter } from './adapter/index.js'
+export { MockAdapter, ContemberAdapter, unwrapPaginateFields } from './adapter/index.js'
 
 // Core
 export { createEntityLoader, resolveSelectionMeta, buildQuery } from './core/index.js'

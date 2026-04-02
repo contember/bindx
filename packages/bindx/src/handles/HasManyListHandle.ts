@@ -191,6 +191,19 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			const connection = rawData as { edges: Array<{ node: Record<string, unknown> }> }
 			return connection.edges.map(edge => edge.node)
 		}
+		// Object with numeric keys (store may convert arrays to objects): { "0": {...}, "1": {...}, ...metadata }
+		if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+			const obj = rawData as Record<string, unknown>
+			const items: Array<Record<string, unknown>> = []
+			for (const [key, value] of Object.entries(obj)) {
+				if (/^\d+$/.test(key) && value && typeof value === 'object' && 'id' in (value as object)) {
+					items.push(value as Record<string, unknown>)
+				}
+			}
+			if (items.length > 0) {
+				return items
+			}
+		}
 		return null
 	}
 

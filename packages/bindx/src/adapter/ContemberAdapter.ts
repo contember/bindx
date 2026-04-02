@@ -253,7 +253,7 @@ export class ContemberAdapter implements BackendAdapter {
  * but the store expects flat arrays keyed by the original field name.
  * This function uses the QuerySpec to identify which fields need unwrapping.
  */
-function unwrapPaginateFields(data: Record<string, unknown>, spec: QuerySpec): Record<string, unknown> {
+export function unwrapPaginateFields(data: Record<string, unknown>, spec: QuerySpec): Record<string, unknown> {
 	const result: Record<string, unknown> = {}
 
 	// Copy all fields from data first
@@ -264,28 +264,45 @@ function unwrapPaginateFields(data: Record<string, unknown>, spec: QuerySpec): R
 		if (!fieldName) continue
 
 		if (field.isArray && field.nested) {
-			// Has-many field — look for paginate key or alias
+			// Has-many field — look for paginate key, alias, or plain field name
 			const paginateKey = `paginate${fieldName.charAt(0).toUpperCase()}${fieldName.slice(1)}`
 			const alias = field.name !== fieldName ? field.name : null
-			const lookupKey = alias ?? paginateKey
+			// Try alias first, then paginate key, then plain field name
+			const lookupKey = alias ?? (data[paginateKey] !== undefined ? paginateKey : fieldName)
 
 			const value = data[lookupKey]
 			handledKeys.add(lookupKey)
+			// Also mark the plain field name as handled to prevent duplicate in extra fields
+			if (lookupKey !== fieldName) handledKeys.add(fieldName)
 
 			if (value && typeof value === 'object' && 'edges' in value) {
 				const connection = value as { edges: { node: unknown }[]; pageInfo?: { totalCount: number } }
 				const items = unwrapPaginateResult(connection, !!field.totalCount) as Record<string, unknown>[]
 				result[field.name] = items.map(item => unwrapPaginateFields(item, field.nested!))
+			} else if (Array.isArray(value)) {
+				// Plain array — recurse into nested fields for each item
+				result[field.name] = value.map(item =>
+					typeof item === 'object' && item !== null
+						? unwrapPaginateFields(item as Record<string, unknown>, field.nested!)
+						: item,
+				)
 			} else {
 				result[field.name] = value
 			}
 		} else if (field.nested) {
-			// Has-one relation — recurse into nested
+			// Relation — recurse into nested
 			const lookupKey = field.name !== fieldName ? field.name : fieldName
 			const value = data[lookupKey]
 			handledKeys.add(lookupKey)
 
-			if (value && typeof value === 'object') {
+			if (Array.isArray(value)) {
+				// Has-many relation (isArray may not be set by selection builder when no params)
+				result[field.name] = value.map(item =>
+					typeof item === 'object' && item !== null
+						? unwrapPaginateFields(item as Record<string, unknown>, field.nested!)
+						: item,
+				)
+			} else if (value && typeof value === 'object') {
 				result[field.name] = unwrapPaginateFields(value as Record<string, unknown>, field.nested)
 			} else {
 				result[field.name] = value
