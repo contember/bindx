@@ -349,6 +349,60 @@ describe('HasManyListHandle', () => {
 
 			const plannedRemovals = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')
 			expect(plannedRemovals?.has('t-1')).toBe(true)
+			expect(plannedRemovals?.get('t-1')).toBe('disconnect')
+		})
+
+		test('should remove server entity with delete mode', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [{ id: 't-1', name: 'Tag 1' }],
+			}, true)
+
+			const handle = createHasManyHandle()
+			expect(handle.items.length).toBe(1)
+
+			handle.remove('t-1', 'delete')
+
+			const plannedRemovals = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')
+			expect(plannedRemovals?.has('t-1')).toBe(true)
+			expect(plannedRemovals?.get('t-1')).toBe('delete')
+		})
+
+		test('should remove server entity with explicit disconnect mode', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [{ id: 't-1', name: 'Tag 1' }],
+			}, true)
+
+			const handle = createHasManyHandle()
+			expect(handle.items.length).toBe(1)
+
+			handle.remove('t-1', 'disconnect')
+
+			const plannedRemovals = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')
+			expect(plannedRemovals?.has('t-1')).toBe(true)
+			expect(plannedRemovals?.get('t-1')).toBe('disconnect')
+		})
+
+		test('should exclude delete-mode removals from items', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [
+					{ id: 't-1', name: 'Tag 1' },
+					{ id: 't-2', name: 'Tag 2' },
+				],
+			}, true)
+
+			const handle = createHasManyHandle()
+			expect(handle.items.length).toBe(2)
+
+			handle.remove('t-1', 'delete')
+
+			expect(handle.items.length).toBe(1)
+			expect(handle.items[0]?.id as string).toBe('t-2')
 		})
 	})
 
