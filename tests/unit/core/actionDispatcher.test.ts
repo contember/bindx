@@ -223,6 +223,22 @@ describe('ActionDispatcher', () => {
 		})
 
 		describe('List Actions', () => {
+			test('CONNECT_TO_LIST should connect to has-many', () => {
+				store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
+				store.getOrCreateHasMany('Article', 'a-1', 'tags')
+
+				dispatcher.dispatch({
+					type: 'CONNECT_TO_LIST',
+					entityType: 'Article',
+					entityId: 'a-1',
+					fieldName: 'tags',
+					itemId: 't-1',
+				})
+
+				const state = store.getHasMany('Article', 'a-1', 'tags')
+				expect(state?.plannedConnections.has('t-1')).toBe(true)
+			})
+
 			test('ADD_TO_LIST should create entity and add to has-many', () => {
 				store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
 				store.getOrCreateHasMany('Article', 'a-1', 'tags')

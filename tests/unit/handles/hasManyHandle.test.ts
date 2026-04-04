@@ -943,20 +943,99 @@ describe('HasManyListHandle', () => {
 	// ==================== Event Subscriptions ====================
 
 	describe('Event Subscriptions', () => {
-		test('should register event listener without error', () => {
-			// Note: The ADD_TO_LIST action doesn't emit hasMany:connected events in the current implementation.
-			// This test verifies that the subscription mechanism works, not that events are emitted.
+		test('connect() should fire hasMany:connected listener', () => {
 			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test', tags: [] }, true)
+			store.setEntityData('Tag', 't-1', { id: 't-1', name: 'Tag 1' }, true)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags')
+
 			const handle = createHasManyHandle()
+			const listener = mock(() => {})
+			handle.onItemConnected(listener)
+
+			handle.connect('t-1')
+
+			expect(listener).toHaveBeenCalledTimes(1)
+		})
+
+		test('disconnect() should fire hasMany:disconnected listener', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [{ id: 't-1', name: 'Tag 1' }],
+			}, true)
+
+			const handle = createHasManyHandle()
+			expect(handle.items.length).toBe(1)
 
 			const listener = mock(() => {})
-			const unsubscribe = handle.onItemConnected(listener)
+			handle.onItemDisconnected(listener)
 
-			// Verify subscription returns an unsubscribe function
-			expect(typeof unsubscribe).toBe('function')
+			handle.disconnect('t-1')
 
-			// Cleanup
-			unsubscribe()
+			expect(listener).toHaveBeenCalledTimes(1)
+		})
+
+		test('add() should fire hasMany:connected listener', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test', tags: [] }, true)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags')
+
+			const handle = createHasManyHandle()
+			const listener = mock(() => {})
+			handle.onItemConnected(listener)
+
+			handle.add({ name: 'New Tag' })
+
+			expect(listener).toHaveBeenCalledTimes(1)
+		})
+
+		test('remove() should fire hasMany:disconnected listener', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [{ id: 't-1', name: 'Tag 1' }],
+			}, true)
+
+			const handle = createHasManyHandle()
+			expect(handle.items.length).toBe(1)
+
+			const listener = mock(() => {})
+			handle.onItemDisconnected(listener)
+
+			handle.remove('t-1')
+
+			expect(listener).toHaveBeenCalledTimes(1)
+		})
+
+		test('interceptor can cancel connect()', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test', tags: [] }, true)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags')
+
+			const handle = createHasManyHandle()
+			handle.interceptItemConnecting(() => ({ action: 'cancel' as const }))
+
+			handle.connect('t-1')
+
+			const state = store.getHasMany('Article', 'a-1', 'tags')
+			expect(state?.plannedConnections.has('t-1')).toBe(false)
+		})
+
+		test('interceptor can cancel disconnect()', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [{ id: 't-1', name: 'Tag 1' }],
+			}, true)
+
+			const handle = createHasManyHandle()
+			expect(handle.items.length).toBe(1)
+
+			handle.interceptItemDisconnecting(() => ({ action: 'cancel' as const }))
+
+			handle.disconnect('t-1')
+
+			// Disconnect should have been cancelled
+			const removals = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')
+			expect(removals?.has('t-1')).toBeFalsy()
 		})
 	})
 
