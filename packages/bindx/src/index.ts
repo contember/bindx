@@ -191,6 +191,10 @@ export {
 	clearRelationErrors,
 	clearAllServerErrors,
 	clearAllErrors,
+	connectToList,
+	addToList,
+	removeFromList,
+	moveInList,
 } from './core/actions.js'
 
 // Store

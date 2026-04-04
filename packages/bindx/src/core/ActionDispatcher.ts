@@ -146,7 +146,14 @@ export class ActionDispatcher {
 				}
 				break
 
-			// Other action types don't have modifiable properties in their before events
+			case 'CONNECT_TO_LIST':
+				if (event.type === 'hasMany:connecting') {
+					return {
+						...action,
+						itemId: event.itemId,
+					}
+				}
+				break
 		}
 
 		return action
@@ -278,6 +285,16 @@ export class ActionDispatcher {
 				break
 			}
 
+			case 'CONNECT_TO_LIST':
+				this.store.planHasManyConnection(
+					action.entityType,
+					action.entityId,
+					action.fieldName,
+					action.itemId,
+					action.alias,
+				)
+				break
+
 			case 'ADD_TO_LIST': {
 				// Create entity if itemId not provided
 				const itemId = action.itemId ?? this.store.createEntity(action.targetType, action.itemData)
@@ -287,6 +304,7 @@ export class ActionDispatcher {
 					action.entityId,
 					action.fieldName,
 					itemId,
+					action.alias,
 				)
 				break
 			}
@@ -298,6 +316,7 @@ export class ActionDispatcher {
 					action.fieldName,
 					action.itemKey,
 					action.removalType,
+					action.alias,
 				)
 				break
 
@@ -308,6 +327,7 @@ export class ActionDispatcher {
 					action.fieldName,
 					action.fromIndex,
 					action.toIndex,
+					action.alias,
 				)
 				break
 

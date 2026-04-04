@@ -26,6 +26,7 @@ const TRACKABLE_ACTION_TYPES = new Set<Action['type']>([
 	'DELETE_RELATION',
 	'RESET_ENTITY',
 	'RESET_RELATION',
+	'CONNECT_TO_LIST',
 	'ADD_TO_LIST',
 	'REMOVE_FROM_LIST',
 	'MOVE_IN_LIST',
@@ -119,6 +120,7 @@ export function getAffectedKeys(action: Action): StoreAffectedKeys {
 			)
 			break
 
+		case 'CONNECT_TO_LIST':
 		case 'ADD_TO_LIST':
 		case 'REMOVE_FROM_LIST':
 		case 'MOVE_IN_LIST':

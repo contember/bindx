@@ -123,10 +123,38 @@ export function createBeforeEvent(
 			} satisfies EntityResettingEvent
 		}
 
-		// HasMany events - these would need to be created from the store's planned operations
-		// For now, we handle ADD_TO_LIST and REMOVE_FROM_LIST actions
-		// Note: The current actions don't have a direct "connect to hasMany" action,
-		// but the store has planHasManyConnection/planHasManyRemoval methods
+		case 'CONNECT_TO_LIST': {
+			return {
+				type: 'hasMany:connecting',
+				timestamp,
+				entityType: action.entityType,
+				entityId: action.entityId,
+				fieldName: action.fieldName,
+				itemId: action.itemId,
+			} satisfies HasManyConnectingEvent
+		}
+
+		case 'ADD_TO_LIST': {
+			return {
+				type: 'hasMany:connecting',
+				timestamp,
+				entityType: action.entityType,
+				entityId: action.entityId,
+				fieldName: action.fieldName,
+				itemId: action.itemId ?? '',
+			} satisfies HasManyConnectingEvent
+		}
+
+		case 'REMOVE_FROM_LIST': {
+			return {
+				type: 'hasMany:disconnecting',
+				timestamp,
+				entityType: action.entityType,
+				entityId: action.entityId,
+				fieldName: action.fieldName,
+				itemId: action.itemKey,
+			} satisfies HasManyDisconnectingEvent
+		}
 
 		default:
 			return null
@@ -168,6 +196,11 @@ export function captureStateBeforeAction(
 				previousStatus: loadState?.status,
 			}
 		}
+
+		case 'CONNECT_TO_LIST':
+		case 'ADD_TO_LIST':
+		case 'REMOVE_FROM_LIST':
+			return {}
 
 		default:
 			return {}
@@ -334,6 +367,39 @@ export function createAfterEvent(
 				newStatus: action.status,
 				error: action.error,
 			} satisfies LoadStateChangedEvent
+		}
+
+		case 'CONNECT_TO_LIST': {
+			return {
+				type: 'hasMany:connected',
+				timestamp,
+				entityType: action.entityType,
+				entityId: action.entityId,
+				fieldName: action.fieldName,
+				itemId: action.itemId,
+			} satisfies HasManyConnectedEvent
+		}
+
+		case 'ADD_TO_LIST': {
+			return {
+				type: 'hasMany:connected',
+				timestamp,
+				entityType: action.entityType,
+				entityId: action.entityId,
+				fieldName: action.fieldName,
+				itemId: action.itemId ?? '',
+			} satisfies HasManyConnectedEvent
+		}
+
+		case 'REMOVE_FROM_LIST': {
+			return {
+				type: 'hasMany:disconnected',
+				timestamp,
+				entityType: action.entityType,
+				entityId: action.entityId,
+				fieldName: action.fieldName,
+				itemId: action.itemKey,
+			} satisfies HasManyDisconnectedEvent
 		}
 
 		default:
