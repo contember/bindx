@@ -6,6 +6,10 @@ import type { HasManyRemovalType } from '../store/RelationStore.js'
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 import type { SelectionMeta } from '../selection/types.js'
 import {
+	connectToList,
+	addToList,
+	removeFromList,
+	moveInList,
 	addRelationError,
 	clearRelationErrors,
 } from '../core/actions.js'
@@ -299,14 +303,9 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 */
 	connect(itemId: string): void {
 		this.assertNotDisposed()
-		this.store.planHasManyConnection(
-			this.entityType,
-			this.entityId,
-			this.fieldName,
-			itemId,
-			this.alias,
+		this.dispatcher.dispatch(
+			connectToList(this.entityType, this.entityId, this.fieldName, itemId, this.alias),
 		)
-
 		// Register parent-child so that changes to the connected entity propagate to the parent
 		this.store.registerParentChild(this.entityType, this.entityId, this.itemType, itemId)
 	}
@@ -318,13 +317,8 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 */
 	disconnect(itemId: string): void {
 		this.assertNotDisposed()
-		this.store.removeFromHasMany(
-			this.entityType,
-			this.entityId,
-			this.fieldName,
-			itemId,
-			'disconnect',
-			this.alias,
+		this.dispatcher.dispatch(
+			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, 'disconnect', this.alias),
 		)
 	}
 
@@ -335,13 +329,8 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 */
 	delete(itemId: string): void {
 		this.assertNotDisposed()
-		this.store.removeFromHasMany(
-			this.entityType,
-			this.entityId,
-			this.fieldName,
-			itemId,
-			'delete',
-			this.alias,
+		this.dispatcher.dispatch(
+			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, 'delete', this.alias),
 		)
 	}
 
@@ -353,16 +342,12 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	add(data?: Partial<TEntity>): string {
 		this.assertNotDisposed()
 
-		// Create new entity with temp ID
+		// Pre-create entity so we can return tempId
 		const tempId = this.store.createEntity(this.itemType, data as Record<string, unknown>)
 
-		// Add to has-many relation
-		this.store.addToHasMany(
-			this.entityType,
-			this.entityId,
-			this.fieldName,
-			tempId,
-			this.alias,
+		// Add to has-many relation through dispatcher (enables events/interceptors)
+		this.dispatcher.dispatch(
+			addToList(this.entityType, this.entityId, this.fieldName, this.itemType, tempId, this.alias),
 		)
 
 		// Register parent-child so that changes to the new entity propagate to the parent
@@ -382,14 +367,8 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 */
 	remove(itemId: string): void {
 		this.assertNotDisposed()
-
-		this.store.removeFromHasMany(
-			this.entityType,
-			this.entityId,
-			this.fieldName,
-			itemId,
-			this.resolveRemovalType(),
-			this.alias,
+		this.dispatcher.dispatch(
+			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, this.resolveRemovalType(), this.alias),
 		)
 	}
 
@@ -419,14 +398,8 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 */
 	move(fromIndex: number, toIndex: number): void {
 		this.assertNotDisposed()
-
-		this.store.moveInHasMany(
-			this.entityType,
-			this.entityId,
-			this.fieldName,
-			fromIndex,
-			toIndex,
-			this.alias,
+		this.dispatcher.dispatch(
+			moveInList(this.entityType, this.entityId, this.fieldName, fromIndex, toIndex, this.alias),
 		)
 	}
 

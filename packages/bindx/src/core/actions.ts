@@ -118,6 +118,18 @@ export interface SetPlaceholderDataAction {
 // ==================== List Actions ====================
 
 /**
+ * Connects an existing entity to a has-many list
+ */
+export interface ConnectToListAction {
+	readonly type: 'CONNECT_TO_LIST'
+	readonly entityType: string
+	readonly entityId: string
+	readonly fieldName: string
+	readonly itemId: string
+	readonly alias?: string
+}
+
+/**
  * Adds an item to a has-many list
  */
 export interface AddToListAction {
@@ -128,6 +140,7 @@ export interface AddToListAction {
 	readonly targetType: string
 	readonly itemData?: Record<string, unknown>
 	readonly itemId?: string
+	readonly alias?: string
 }
 
 /**
@@ -140,6 +153,7 @@ export interface RemoveFromListAction {
 	readonly fieldName: string
 	readonly itemKey: string
 	readonly removalType: 'disconnect' | 'delete'
+	readonly alias?: string
 }
 
 /**
@@ -152,6 +166,7 @@ export interface MoveInListAction {
 	readonly fieldName: string
 	readonly fromIndex: number
 	readonly toIndex: number
+	readonly alias?: string
 }
 
 // ==================== Load State Actions ====================
@@ -277,6 +292,7 @@ export type Action =
 	| ResetRelationAction
 	| CommitRelationAction
 	| SetPlaceholderDataAction
+	| ConnectToListAction
 	| AddToListAction
 	| RemoveFromListAction
 	| MoveInListAction
@@ -489,4 +505,61 @@ export function clearAllErrors(
 	entityId: string,
 ): ClearAllErrorsAction {
 	return { type: 'CLEAR_ALL_ERRORS', entityType, entityId }
+}
+
+// ==================== List Action Creators ====================
+
+/**
+ * Creates a CONNECT_TO_LIST action
+ */
+export function connectToList(
+	entityType: string,
+	entityId: string,
+	fieldName: string,
+	itemId: string,
+	alias?: string,
+): ConnectToListAction {
+	return { type: 'CONNECT_TO_LIST', entityType, entityId, fieldName, itemId, alias }
+}
+
+/**
+ * Creates an ADD_TO_LIST action
+ */
+export function addToList(
+	entityType: string,
+	entityId: string,
+	fieldName: string,
+	targetType: string,
+	itemId: string,
+	alias?: string,
+): AddToListAction {
+	return { type: 'ADD_TO_LIST', entityType, entityId, fieldName, targetType, itemId, alias }
+}
+
+/**
+ * Creates a REMOVE_FROM_LIST action
+ */
+export function removeFromList(
+	entityType: string,
+	entityId: string,
+	fieldName: string,
+	itemKey: string,
+	removalType: 'disconnect' | 'delete',
+	alias?: string,
+): RemoveFromListAction {
+	return { type: 'REMOVE_FROM_LIST', entityType, entityId, fieldName, itemKey, removalType, alias }
+}
+
+/**
+ * Creates a MOVE_IN_LIST action
+ */
+export function moveInList(
+	entityType: string,
+	entityId: string,
+	fieldName: string,
+	fromIndex: number,
+	toIndex: number,
+	alias?: string,
+): MoveInListAction {
+	return { type: 'MOVE_IN_LIST', entityType, entityId, fieldName, fromIndex, toIndex, alias }
 }
