@@ -23,9 +23,15 @@ interface TestAuthor {
 	email?: string
 }
 
+interface TestCategory {
+	id: string
+	label: string
+}
+
 interface TestSchema {
 	Article: TestArticle
 	Author: TestAuthor
+	Category: TestCategory
 	[key: string]: object
 }
 
@@ -35,7 +41,8 @@ const testSchemaDefinition: SchemaDefinition<TestSchema> = {
 			fields: {
 				id: { type: 'scalar' },
 				title: { type: 'scalar' },
-				author: { type: 'hasOne', target: 'Author' },
+				author: { type: 'hasOne', target: 'Author', nullable: true },
+				category: { type: 'hasOne', target: 'Category', nullable: false },
 			},
 		},
 		Author: {
@@ -43,6 +50,12 @@ const testSchemaDefinition: SchemaDefinition<TestSchema> = {
 				id: { type: 'scalar' },
 				name: { type: 'scalar' },
 				email: { type: 'scalar' },
+			},
+		},
+		Category: {
+			fields: {
+				id: { type: 'scalar' },
+				label: { type: 'scalar' },
 			},
 		},
 	},
@@ -331,6 +344,106 @@ describe('HasOneHandle', () => {
 
 			const relation = store.getRelation('Article', 'a-1', 'author')
 			expect(relation?.state).toBe('deleted')
+		})
+	})
+
+	// ==================== Remove (auto-detect) ====================
+
+	describe('Remove (auto-detect)', () => {
+		test('should disconnect when FK is nullable', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: { id: 'auth-1', name: 'John' },
+			}, true)
+			store.setRelation('Article', 'a-1', 'author', {
+				currentId: 'auth-1',
+				state: 'connected',
+			})
+
+			const handle = createHasOneHandle()
+			handle.$remove()
+
+			const relation = store.getRelation('Article', 'a-1', 'author')
+			expect(relation?.currentId).toBeNull()
+			expect(relation?.state).toBe('disconnected')
+		})
+
+		test('should delete when FK is non-nullable', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				category: { id: 'cat-1', label: 'Tech' },
+			}, true)
+			store.setRelation('Article', 'a-1', 'category', {
+				currentId: 'cat-1',
+				state: 'connected',
+			})
+
+			const handle = HasOneHandle.create<TestCategory>(
+				'Article',
+				'a-1',
+				'category',
+				'Category',
+				store,
+				dispatcher,
+				schema,
+			)
+			handle.$remove()
+
+			const relation = store.getRelation('Article', 'a-1', 'category')
+			expect(relation?.state).toBe('deleted')
+		})
+
+		test('should disconnect when nullable is unknown (safe fallback)', () => {
+			const minimalSchema = new SchemaRegistry<TestSchema>({
+				entities: {
+					Article: {
+						fields: {
+							id: { type: 'scalar' },
+							title: { type: 'scalar' },
+							author: { type: 'hasOne', target: 'Author' }, // no nullable
+						},
+					},
+					Author: {
+						fields: {
+							id: { type: 'scalar' },
+							name: { type: 'scalar' },
+						},
+					},
+					Category: {
+						fields: {
+							id: { type: 'scalar' },
+							label: { type: 'scalar' },
+						},
+					},
+				},
+			})
+
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: { id: 'auth-1', name: 'John' },
+			}, true)
+			store.setRelation('Article', 'a-1', 'author', {
+				currentId: 'auth-1',
+				state: 'connected',
+			})
+
+			const handle = HasOneHandle.create<TestAuthor>(
+				'Article',
+				'a-1',
+				'author',
+				'Author',
+				store,
+				dispatcher,
+				minimalSchema,
+			)
+			handle.$remove()
+
+			const relation = store.getRelation('Article', 'a-1', 'author')
+			expect(relation?.currentId).toBeNull()
+			expect(relation?.state).toBe('disconnected')
 		})
 	})
 

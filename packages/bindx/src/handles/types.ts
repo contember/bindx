@@ -230,6 +230,7 @@ export interface HasOneRefInterface<
 	$connect(id: string): void
 	$disconnect(): void
 	$delete(): void
+	$remove(): void
 	$reset(): void
 	readonly $errors: readonly FieldError[]
 	readonly $hasError: boolean

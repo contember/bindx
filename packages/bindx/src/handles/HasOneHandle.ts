@@ -358,6 +358,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 
 	/**
 	 * Disconnects the relation.
+	 * Sets the FK to null — only works when the FK column is nullable.
 	 */
 	disconnect(): void {
 		this.assertNotDisposed()
@@ -367,13 +368,28 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	}
 
 	/**
-	 * Marks the relation for deletion.
+	 * Marks the related entity for deletion.
 	 */
 	delete(): void {
 		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			deleteRelation(this.entityType, this.entityId, this.fieldName),
 		)
+	}
+
+	/**
+	 * Removes the related entity using the appropriate strategy based on schema metadata.
+	 * - nullable FK → disconnect (sets FK to null, related entity stays)
+	 * - non-nullable FK → delete (related entity can't exist without parent)
+	 * - unknown → disconnect (safe fallback)
+	 */
+	remove(): void {
+		const nullable = this.schema.getRelationNullable(this.entityType, this.fieldName)
+		if (nullable === false) {
+			this.delete()
+		} else {
+			this.disconnect()
+		}
 	}
 
 	/**

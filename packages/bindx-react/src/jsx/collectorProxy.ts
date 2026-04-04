@@ -216,6 +216,7 @@ function createCollectorFieldRef(
 			return createCollectorProxy<unknown>(scope, targetEntityName, schemaRegistry)
 		},
 		$delete: () => {},
+		$remove: () => {},
 		$errors: [],
 		$hasError: false,
 		$addError: () => {},
