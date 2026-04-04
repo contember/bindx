@@ -24,9 +24,21 @@ interface TestTag {
 	color?: string
 }
 
+interface TestComment {
+	id: string
+	text: string
+}
+
+interface TestNote {
+	id: string
+	body: string
+}
+
 interface TestSchema {
 	Article: TestArticle
 	Tag: TestTag
+	Comment: TestComment
+	Note: TestNote
 	[key: string]: object
 }
 
@@ -36,7 +48,9 @@ const testSchemaDefinition: SchemaDefinition<TestSchema> = {
 			fields: {
 				id: { type: 'scalar' },
 				title: { type: 'scalar' },
-				tags: { type: 'hasMany', target: 'Tag' },
+				tags: { type: 'hasMany', target: 'Tag', relationKind: 'manyHasMany' },
+				comments: { type: 'hasMany', target: 'Comment', relationKind: 'oneHasMany' },
+				notes: { type: 'hasMany', target: 'Note', relationKind: 'oneHasMany', nullable: true },
 			},
 		},
 		Tag: {
@@ -44,6 +58,18 @@ const testSchemaDefinition: SchemaDefinition<TestSchema> = {
 				id: { type: 'scalar' },
 				name: { type: 'scalar' },
 				color: { type: 'scalar' },
+			},
+		},
+		Comment: {
+			fields: {
+				id: { type: 'scalar' },
+				text: { type: 'scalar' },
+			},
+		},
+		Note: {
+			fields: {
+				id: { type: 'scalar' },
+				body: { type: 'scalar' },
 			},
 		},
 	},
@@ -276,6 +302,9 @@ describe('HasManyListHandle', () => {
 			}, true)
 
 			const handle = createHasManyHandle()
+			// Access items first to initialize hasMany state (as in real usage)
+			expect(handle.items.length).toBe(1)
+
 			handle.disconnect('t-1')
 
 			const plannedRemovals = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')
@@ -334,7 +363,7 @@ describe('HasManyListHandle', () => {
 			expect(state?.plannedConnections.has(tempId)).toBe(false)
 		})
 
-		test('should remove server entity (plan disconnect)', () => {
+		test('should remove server entity — manyHasMany uses disconnect', () => {
 			store.setEntityData('Article', 'a-1', {
 				id: 'a-1',
 				title: 'Test',
@@ -349,6 +378,393 @@ describe('HasManyListHandle', () => {
 
 			const plannedRemovals = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')
 			expect(plannedRemovals?.has('t-1')).toBe(true)
+			expect(plannedRemovals?.get('t-1')).toBe('disconnect')
+		})
+
+		test('should remove server entity — oneHasMany (non-nullable FK) uses delete', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				comments: [{ id: 'c-1', text: 'Hello' }],
+			}, true)
+
+			const handle = HasManyListHandle.create<TestComment>(
+				'Article',
+				'a-1',
+				'comments',
+				'Comment',
+				store,
+				dispatcher,
+				schema,
+			)
+			expect(handle.items.length).toBe(1)
+
+			handle.remove('c-1')
+
+			const plannedRemovals = store.getHasManyPlannedRemovals('Article', 'a-1', 'comments')
+			expect(plannedRemovals?.has('c-1')).toBe(true)
+			expect(plannedRemovals?.get('c-1')).toBe('delete')
+		})
+
+		test('should remove server entity — oneHasMany (nullable FK) uses disconnect', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				notes: [{ id: 'n-1', body: 'A note' }],
+			}, true)
+
+			const handle = HasManyListHandle.create<TestNote>(
+				'Article',
+				'a-1',
+				'notes',
+				'Note',
+				store,
+				dispatcher,
+				schema,
+			)
+			expect(handle.items.length).toBe(1)
+
+			handle.remove('n-1')
+
+			const plannedRemovals = store.getHasManyPlannedRemovals('Article', 'a-1', 'notes')
+			expect(plannedRemovals?.has('n-1')).toBe(true)
+			expect(plannedRemovals?.get('n-1')).toBe('disconnect')
+		})
+	})
+
+	// ==================== Delete ====================
+
+	describe('Delete', () => {
+		test('should delete entity from has-many relation', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [{ id: 't-1', name: 'Tag 1' }],
+			}, true)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
+
+			const handle = createHasManyHandle()
+			handle.delete('t-1')
+
+			const plannedRemovals = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')
+			expect(plannedRemovals?.has('t-1')).toBe(true)
+			expect(plannedRemovals?.get('t-1')).toBe('delete')
+		})
+
+		test('should exclude deleted items from items list', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [
+					{ id: 't-1', name: 'Tag 1' },
+					{ id: 't-2', name: 'Tag 2' },
+				],
+			}, true)
+
+			const handle = createHasManyHandle()
+			expect(handle.items.length).toBe(2)
+
+			handle.delete('t-1')
+
+			expect(handle.items.length).toBe(1)
+			expect(handle.items[0]?.id as string).toBe('t-2')
+		})
+	})
+
+	// ==================== remove() with missing relationKind (fallback) ====================
+
+	describe('remove() fallback when relationKind is unknown', () => {
+		test('should fall back to disconnect when relationKind is not set', () => {
+			// Schema without relationKind
+			const minimalSchema = new SchemaRegistry<TestSchema>({
+				entities: {
+					Article: {
+						fields: {
+							id: { type: 'scalar' },
+							title: { type: 'scalar' },
+							tags: { type: 'hasMany', target: 'Tag' }, // no relationKind
+						},
+					},
+					Tag: {
+						fields: {
+							id: { type: 'scalar' },
+							name: { type: 'scalar' },
+						},
+					},
+					Comment: {
+						fields: {
+							id: { type: 'scalar' },
+							text: { type: 'scalar' },
+						},
+					},
+				},
+			})
+
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [{ id: 't-1', name: 'Tag 1' }],
+			}, true)
+
+			const handle = HasManyListHandle.create<TestTag>(
+				'Article',
+				'a-1',
+				'tags',
+				'Tag',
+				store,
+				dispatcher,
+				minimalSchema,
+			)
+			expect(handle.items.length).toBe(1)
+
+			handle.remove('t-1')
+
+			const plannedRemovals = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')
+			expect(plannedRemovals?.has('t-1')).toBe(true)
+			expect(plannedRemovals?.get('t-1')).toBe('disconnect')
+		})
+	})
+
+	// ==================== remove() on oneHasMany created entity ====================
+
+	describe('remove() on created entities across relation kinds', () => {
+		test('should cancel add for oneHasMany created entity (not plan delete)', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				comments: [],
+			}, true)
+
+			const handle = HasManyListHandle.create<TestComment>(
+				'Article',
+				'a-1',
+				'comments',
+				'Comment',
+				store,
+				dispatcher,
+				schema,
+			)
+
+			const tempId = handle.add({ text: 'New comment' })
+			expect(handle.items.length).toBe(1)
+
+			handle.remove(tempId)
+
+			const state = store.getHasMany('Article', 'a-1', 'comments')
+			expect(state?.createdEntities.has(tempId)).toBe(false)
+			expect(state?.plannedConnections.has(tempId)).toBe(false)
+			// No planned removal — the add was cancelled, not a delete
+			expect(state?.plannedRemovals.has(tempId)).toBe(false)
+		})
+
+		test('should cancel add for manyHasMany created entity (not plan disconnect)', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [],
+			}, true)
+
+			const handle = createHasManyHandle()
+			const tempId = handle.add({ name: 'New Tag' })
+
+			handle.remove(tempId)
+
+			const state = store.getHasMany('Article', 'a-1', 'tags')
+			expect(state?.plannedRemovals.has(tempId)).toBe(false)
+		})
+	})
+
+	// ==================== disconnect/delete on created entities ====================
+
+	describe('disconnect/delete on created entities', () => {
+		test('disconnect() on created entity should cancel the add, not plan disconnect', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [],
+			}, true)
+
+			const handle = createHasManyHandle()
+			const tempId = handle.add({ name: 'New Tag' })
+			expect(handle.items.length).toBe(1)
+
+			handle.disconnect(tempId)
+
+			const state = store.getHasMany('Article', 'a-1', 'tags')
+			expect(state?.plannedRemovals.has(tempId)).toBe(false)
+			expect(state?.plannedConnections.has(tempId)).toBe(false)
+			expect(state?.createdEntities.has(tempId)).toBe(false)
+			expect(handle.items.length).toBe(0)
+		})
+
+		test('delete() on created entity should cancel the add, not plan delete', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [],
+			}, true)
+
+			const handle = createHasManyHandle()
+			const tempId = handle.add({ name: 'New Tag' })
+			expect(handle.items.length).toBe(1)
+
+			handle.delete(tempId)
+
+			const state = store.getHasMany('Article', 'a-1', 'tags')
+			expect(state?.plannedRemovals.has(tempId)).toBe(false)
+			expect(state?.plannedConnections.has(tempId)).toBe(false)
+			expect(state?.createdEntities.has(tempId)).toBe(false)
+			expect(handle.items.length).toBe(0)
+		})
+	})
+
+	// ==================== disconnect() type verification ====================
+
+	describe('disconnect() type verification', () => {
+		test('should always store disconnect type in planned removals', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [{ id: 't-1', name: 'Tag 1' }],
+			}, true)
+
+			const handle = createHasManyHandle()
+			expect(handle.items.length).toBe(1)
+
+			handle.disconnect('t-1')
+
+			const plannedRemovals = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')
+			expect(plannedRemovals?.get('t-1')).toBe('disconnect')
+		})
+
+		test('should exclude disconnected items from items list', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [
+					{ id: 't-1', name: 'Tag 1' },
+					{ id: 't-2', name: 'Tag 2' },
+				],
+			}, true)
+
+			const handle = createHasManyHandle()
+			expect(handle.items.length).toBe(2)
+
+			handle.disconnect('t-1')
+
+			expect(handle.items.length).toBe(1)
+			expect(handle.items[0]?.id as string).toBe('t-2')
+		})
+	})
+
+	// ==================== Reconnect sequences ====================
+
+	describe('Reconnect after removal', () => {
+		test('connect() after disconnect() should cancel the disconnect', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [{ id: 't-1', name: 'Tag 1' }],
+			}, true)
+
+			const handle = createHasManyHandle()
+			expect(handle.items.length).toBe(1)
+
+			handle.disconnect('t-1')
+			expect(handle.items.length).toBe(0)
+
+			handle.connect('t-1')
+
+			const plannedRemovals = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')
+			expect(plannedRemovals?.has('t-1')).toBe(false)
+			expect(handle.items.length).toBe(1)
+		})
+
+		test('connect() after delete() should cancel the delete', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [{ id: 't-1', name: 'Tag 1' }],
+			}, true)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
+
+			const handle = createHasManyHandle()
+			handle.delete('t-1')
+
+			const removalsAfterDelete = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')
+			expect(removalsAfterDelete?.has('t-1')).toBe(true)
+
+			handle.connect('t-1')
+
+			const removalsAfterConnect = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')
+			expect(removalsAfterConnect?.has('t-1')).toBe(false)
+		})
+
+		test('remove() then connect() should re-add the item', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [{ id: 't-1', name: 'Tag 1' }],
+			}, true)
+
+			const handle = createHasManyHandle()
+			expect(handle.items.length).toBe(1)
+
+			handle.remove('t-1')
+			expect(handle.items.length).toBe(0)
+
+			handle.connect('t-1')
+
+			expect(handle.items.length).toBe(1)
+			const plannedRemovals = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')
+			expect(plannedRemovals?.has('t-1')).toBe(false)
+		})
+	})
+
+	// ==================== isDirty with delete ====================
+
+	describe('isDirty with delete-type removals', () => {
+		test('should return true when has delete-type planned removals', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [{ id: 't-1', name: 'Tag 1' }],
+			}, true)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
+
+			const handle = createHasManyHandle()
+			handle.delete('t-1')
+
+			expect(handle.isDirty).toBe(true)
+		})
+	})
+
+	// ==================== Mixed disconnect and delete ====================
+
+	describe('Mixed removal types', () => {
+		test('should track different removal types for different items', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [
+					{ id: 't-1', name: 'Tag 1' },
+					{ id: 't-2', name: 'Tag 2' },
+					{ id: 't-3', name: 'Tag 3' },
+				],
+			}, true)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2', 't-3'])
+
+			const handle = createHasManyHandle()
+			handle.disconnect('t-1')
+			handle.delete('t-2')
+
+			const plannedRemovals = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')
+			expect(plannedRemovals?.get('t-1')).toBe('disconnect')
+			expect(plannedRemovals?.get('t-2')).toBe('delete')
+			expect(plannedRemovals?.has('t-3')).toBe(false)
+
+			expect(handle.items.length).toBe(1)
+			expect(handle.items[0]?.id as string).toBe('t-3')
 		})
 	})
 

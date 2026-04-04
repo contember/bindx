@@ -360,12 +360,44 @@ describe('SnapshotStore', () => {
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				expect(state?.plannedConnections.has('t-1')).toBe(false)
 			})
+
+			test('should clear createdEntities when planning removal', () => {
+				store.getOrCreateHasMany('Article', 'a-1', 'tags')
+				store.addToHasMany('Article', 'a-1', 'tags', 't-new')
+				expect(store.getHasMany('Article', 'a-1', 'tags')?.createdEntities.has('t-new')).toBe(true)
+
+				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-new', 'delete')
+
+				const state = store.getHasMany('Article', 'a-1', 'tags')
+				expect(state?.createdEntities.has('t-new')).toBe(false)
+			})
+
+			test('should remove item from orderedIds when planning removal', () => {
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2', 't-3'])
+				// Force orderedIds by doing a move first
+				store.moveInHasMany('Article', 'a-1', 'tags', 0, 2)
+				expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags')).toEqual(['t-2', 't-3', 't-1'])
+
+				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-3', 'delete')
+
+				const orderedIds = store.getHasManyOrderedIds('Article', 'a-1', 'tags')
+				expect(orderedIds).toEqual(['t-2', 't-1'])
+			})
 		})
 
 		describe('cancelHasManyRemoval', () => {
 			test('should cancel planned removal', () => {
 				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
 				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-1', 'disconnect')
+				store.cancelHasManyRemoval('Article', 'a-1', 'tags', 't-1')
+
+				const state = store.getHasMany('Article', 'a-1', 'tags')
+				expect(state?.plannedRemovals.has('t-1')).toBe(false)
+			})
+
+			test('should cancel delete-type planned removal', () => {
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
+				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-1', 'delete')
 				store.cancelHasManyRemoval('Article', 'a-1', 'tags', 't-1')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
@@ -382,13 +414,23 @@ describe('SnapshotStore', () => {
 				expect(state?.plannedConnections.has('t-new')).toBe(true)
 			})
 
-			test('should cancel planned removal when planning connection', () => {
+			test('should cancel planned disconnect when planning connection', () => {
 				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
 				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-1', 'disconnect')
 				store.planHasManyConnection('Article', 'a-1', 'tags', 't-1')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				expect(state?.plannedRemovals.has('t-1')).toBe(false)
+			})
+
+			test('should cancel planned delete when planning connection', () => {
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
+				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-1', 'delete')
+				store.planHasManyConnection('Article', 'a-1', 'tags', 't-1')
+
+				const state = store.getHasMany('Article', 'a-1', 'tags')
+				expect(state?.plannedRemovals.has('t-1')).toBe(false)
+				expect(state?.plannedConnections.has('t-1')).toBe(true)
 			})
 		})
 
@@ -422,7 +464,7 @@ describe('SnapshotStore', () => {
 			test('should cancel connection for created entity', () => {
 				store.getOrCreateHasMany('Article', 'a-1', 'tags')
 				store.addToHasMany('Article', 'a-1', 'tags', 't-new')
-				store.removeFromHasMany('Article', 'a-1', 'tags', 't-new')
+				store.removeFromHasMany('Article', 'a-1', 'tags', 't-new', 'disconnect')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				expect(state?.plannedConnections.has('t-new')).toBe(false)
@@ -431,10 +473,30 @@ describe('SnapshotStore', () => {
 
 			test('should plan disconnect for server entity', () => {
 				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
-				store.removeFromHasMany('Article', 'a-1', 'tags', 't-1')
+				store.removeFromHasMany('Article', 'a-1', 'tags', 't-1', 'disconnect')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				expect(state?.plannedRemovals.get('t-1')).toBe('disconnect')
+			})
+
+			test('should plan delete for server entity when removalType is delete', () => {
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
+				store.removeFromHasMany('Article', 'a-1', 'tags', 't-1', 'delete')
+
+				const state = store.getHasMany('Article', 'a-1', 'tags')
+				expect(state?.plannedRemovals.get('t-1')).toBe('delete')
+			})
+
+			test('should cancel connection for created entity even with delete removalType', () => {
+				store.getOrCreateHasMany('Article', 'a-1', 'tags')
+				store.addToHasMany('Article', 'a-1', 'tags', 't-new')
+				store.removeFromHasMany('Article', 'a-1', 'tags', 't-new', 'delete')
+
+				const state = store.getHasMany('Article', 'a-1', 'tags')
+				// Created entities should be cancelled, not planned for deletion
+				expect(state?.plannedConnections.has('t-new')).toBe(false)
+				expect(state?.createdEntities.has('t-new')).toBe(false)
+				expect(state?.plannedRemovals.has('t-new')).toBe(false)
 			})
 		})
 
@@ -500,6 +562,23 @@ describe('SnapshotStore', () => {
 
 				const orderedIds = store.getHasManyOrderedIds('Article', 'a-1', 'tags')
 				expect(orderedIds).toEqual(['t-2', 't-3'])
+			})
+
+			test('should exclude delete-type removals from ordered IDs', () => {
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2', 't-3'])
+				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-2', 'delete')
+
+				const orderedIds = store.getHasManyOrderedIds('Article', 'a-1', 'tags')
+				expect(orderedIds).toEqual(['t-1', 't-3'])
+			})
+
+			test('should exclude mixed disconnect and delete removals', () => {
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2', 't-3'])
+				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-1', 'disconnect')
+				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-3', 'delete')
+
+				const orderedIds = store.getHasManyOrderedIds('Article', 'a-1', 'tags')
+				expect(orderedIds).toEqual(['t-2'])
 			})
 		})
 

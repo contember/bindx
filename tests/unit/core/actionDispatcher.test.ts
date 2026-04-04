@@ -250,10 +250,30 @@ describe('ActionDispatcher', () => {
 					entityId: 'a-1',
 					fieldName: 'tags',
 					itemKey: 't-1',
+					removalType: 'disconnect',
 				})
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				expect(state?.plannedRemovals.has('t-1')).toBe(true)
+				expect(state?.plannedRemovals.get('t-1')).toBe('disconnect')
+			})
+
+			test('REMOVE_FROM_LIST with delete removalType should plan delete', () => {
+				store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
+
+				dispatcher.dispatch({
+					type: 'REMOVE_FROM_LIST',
+					entityType: 'Article',
+					entityId: 'a-1',
+					fieldName: 'tags',
+					itemKey: 't-1',
+					removalType: 'delete',
+				})
+
+				const state = store.getHasMany('Article', 'a-1', 'tags')
+				expect(state?.plannedRemovals.has('t-1')).toBe(true)
+				expect(state?.plannedRemovals.get('t-1')).toBe('delete')
 			})
 
 			test('MOVE_IN_LIST should move item in has-many', () => {
