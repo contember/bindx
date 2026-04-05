@@ -108,8 +108,8 @@ export interface BindxSchemaEntityNames {
 	readonly fields: {
 		readonly [fieldName: string]:
 			| { readonly type: 'column'; readonly columnType?: string; readonly enumName?: string }
-			| { readonly type: 'one'; readonly entity: string }
-			| { readonly type: 'many'; readonly entity: string }
+			| { readonly type: 'one'; readonly entity: string; readonly nullable?: boolean }
+			| { readonly type: 'many'; readonly entity: string; readonly relationKind?: 'oneHasMany' | 'manyHasMany'; readonly nullable?: boolean }
 	}
 }
 
