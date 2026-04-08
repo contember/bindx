@@ -1,4 +1,4 @@
-import { usePersist } from '@contember/bindx-react'
+import { usePersistWithFeedback } from '@contember/bindx-react'
 import { type ComponentProps, type ReactNode, useCallback } from 'react'
 import { Button } from '../ui/button.js'
 import { LoaderIcon } from '../ui/loader.js'
@@ -12,16 +12,16 @@ export interface PersistButtonProps extends ComponentProps<typeof Button> {
 }
 
 export function PersistButton({ label, className, onSuccess, onError, ...buttonProps }: PersistButtonProps): ReactNode {
-	const { persistAll, isPersisting, isDirty } = usePersist()
+	const { persistAllWithFeedback, isPersisting, isDirty } = usePersistWithFeedback()
 
 	const handleClick = useCallback(async (): Promise<void> => {
-		const result = await persistAll()
+		const result = await persistAllWithFeedback()
 		if (result.success) {
 			onSuccess?.()
 		} else {
 			onError?.()
 		}
-	}, [persistAll, onSuccess, onError])
+	}, [persistAllWithFeedback, onSuccess, onError])
 
 	return (
 		<Button

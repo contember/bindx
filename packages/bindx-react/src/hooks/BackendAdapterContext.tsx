@@ -6,6 +6,7 @@ import { BatchPersister } from '@contember/bindx'
 import { MutationCollector } from '@contember/bindx'
 import { SchemaRegistry } from '@contember/bindx'
 import { UndoManager } from '@contember/bindx'
+import { NotificationStore } from '@contember/bindx'
 import { QueryBatcher } from '../batching/QueryBatcher.js'
 
 /**
@@ -36,6 +37,8 @@ export interface BindxContextValue {
 	undoManager: UndoManager | null
 	/** GraphQL client (available when using ContemberBindxProvider) */
 	graphQlClient: BindxGraphQlClient | null
+	/** Notification store for user-facing feedback (toasts) */
+	notificationStore: NotificationStore
 	/** Whether debug logging is enabled */
 	debug: boolean
 }
@@ -133,6 +136,7 @@ export function BindxProvider({
 			schema: schemaRegistry,
 			undoManager,
 			graphQlClient: null,
+			notificationStore: new NotificationStore(),
 			debug,
 		}
 	}, [adapter, customStore, schemaDefinition, customMutationCollector, enableUndo, undoConfig, defaultUpdateMode, debug])
@@ -222,4 +226,16 @@ export function useQueryBatcher(): QueryBatcher {
 		throw new Error('useQueryBatcher must be used within a BindxProvider')
 	}
 	return context.batcher
+}
+
+/**
+ * Hook to access the notification store.
+ * Must be used within a BindxProvider.
+ */
+export function useNotificationStore(): NotificationStore {
+	const context = useContext(BindxContext)
+	if (!context) {
+		throw new Error('useNotificationStore must be used within a BindxProvider')
+	}
+	return context.notificationStore
 }

@@ -1,7 +1,7 @@
 import { memo, useMemo, type ReactNode } from 'react'
 import { GraphQlClient } from '@contember/graphql-client'
 import { ContentClient } from '@contember/bindx-client'
-import { ContemberAdapter, SnapshotStore, ActionDispatcher, BatchPersister, MutationCollector, ContemberSchemaMutationAdapter, UndoManager, SchemaRegistry, type SchemaDefinition, type SchemaNames, type FieldDef, type UndoManagerConfig, type UpdateMode } from '@contember/bindx'
+import { ContemberAdapter, SnapshotStore, ActionDispatcher, BatchPersister, MutationCollector, ContemberSchemaMutationAdapter, UndoManager, SchemaRegistry, NotificationStore, type SchemaDefinition, type SchemaNames, type FieldDef, type UndoManagerConfig, type UpdateMode } from '@contember/bindx'
 import { BindxContext, type BindxContextValue } from './BackendAdapterContext.js'
 import { QueryBatcher } from '../batching/QueryBatcher.js'
 
@@ -121,6 +121,7 @@ export const ContemberBindxProvider = memo(function ContemberBindxProvider({
 			schema: schemaRegistry,
 			undoManager,
 			graphQlClient,
+			notificationStore: new NotificationStore(),
 			debug,
 		}
 	}, [schema, customStore, undoManagerProp, undoConfig, defaultUpdateMode, debug])

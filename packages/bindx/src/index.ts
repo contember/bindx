@@ -292,6 +292,16 @@ export type {
 
 export { EventEmitter } from './events/index.js'
 
+// Notifications
+export { NotificationStore } from './notifications/index.js'
+export type {
+	Notification,
+	NotificationDetail,
+	NotificationInput,
+	NotificationType,
+	NotificationSource,
+} from './notifications/index.js'
+
 // Error types
 export type {
 	ExecutionErrorType,
