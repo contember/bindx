@@ -38,7 +38,7 @@ export class SchemaRegistry<TModels extends Record<string, object> = Record<stri
 
 			for (const [fieldName, field] of entity.fields) {
 				if (field.__typename === '_Column') {
-					fields[fieldName] = { type: 'scalar' }
+					fields[fieldName] = { type: 'scalar', columnType: field.type }
 				} else if (field.__typename === '_Relation') {
 					const inverse = field.side === 'owning' ? field.inversedBy ?? undefined : field.ownedBy
 					const isMany = field.type === 'OneHasMany' || field.type === 'ManyHasMany'
@@ -281,6 +281,8 @@ interface RawContemberFieldDef {
 	readonly entity?: string
 	readonly target?: string
 	readonly inverse?: string
+	readonly columnType?: string
+	readonly enumName?: string
 }
 
 /**
@@ -295,7 +297,7 @@ function normalizeEntityDef(entityDef: EntitySchemaDef): EntitySchemaDef {
 		const raw = fieldDef as RawContemberFieldDef
 
 		if (raw.type === 'column') {
-			fields[fieldName] = { type: 'scalar' }
+			fields[fieldName] = { type: 'scalar', columnType: raw.columnType }
 			needsNormalization = true
 		} else if (raw.type === 'one') {
 			fields[fieldName] = {
