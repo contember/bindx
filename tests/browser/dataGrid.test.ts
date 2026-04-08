@@ -6,7 +6,7 @@ const scope = tid('datagrid-example')
 browserTest('DataGrid', () => {
 	describe('styled rendering', () => {
 		test('table structure renders', () => {
-			waitFor(() => el('datagrid-example').exists)
+			waitFor(() => el(`${scope} ${tid('datagrid-table')}`).exists)
 			expect(el(`${scope} ${tid('datagrid-table')}`).exists).toBe(true)
 			expect(el(`${scope} ${tid('datagrid-header')}`).exists).toBe(true)
 			expect(el(`${scope} ${tid('datagrid-body')}`).exists).toBe(true)

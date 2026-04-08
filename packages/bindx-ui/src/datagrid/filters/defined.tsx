@@ -7,15 +7,15 @@ import {
 	type DataViewIsDefinedFilterProps,
 	DataViewNullFilterTrigger,
 } from '@contember/bindx-dataview'
-import { useDefaultFieldLabel } from '../labels.js'
+import { useDefaultFieldLabel } from '#bindx-ui/datagrid/labels'
 import { CheckIcon, XIcon } from 'lucide-react'
-import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover.js'
-import { Button } from '../../ui/button.js'
+import { Popover, PopoverContent, PopoverTrigger } from '#bindx-ui/ui/popover'
+import { Button } from '#bindx-ui/ui/button'
 import {
 	DataGridFilterSelectTriggerUI,
 	DataGridSingleFilterUI,
-} from '../ui.js'
-import { DataGridFilterMobileHiding } from './mobile.js'
+} from '#bindx-ui/datagrid/ui'
+import { DataGridFilterMobileHiding } from '#bindx-ui/datagrid/filters/mobile'
 import { dict } from '../../dict.js'
 
 export type DataGridIsDefinedFilterUIProps<T> =

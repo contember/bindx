@@ -1,6 +1,6 @@
 import { Loader2Icon } from 'lucide-react'
 import { uic } from '../utils/uic.js'
-import { Overlay, type OverlayProps } from './overlay.js'
+import { Overlay, type OverlayProps } from '#bindx-ui/ui/overlay'
 
 export interface LoaderProps extends Omit<OverlayProps, 'children'> {
 	size?: 'sm' | 'md' | 'lg'

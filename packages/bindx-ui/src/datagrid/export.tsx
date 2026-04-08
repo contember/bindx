@@ -4,7 +4,7 @@
 import type { ReactElement } from 'react'
 import { DataViewExportTrigger } from '@contember/bindx-dataview'
 import { DownloadIcon } from 'lucide-react'
-import { Button } from '../ui/button.js'
+import { Button } from '#bindx-ui/ui/button'
 import { dict } from '../dict.js'
 
 export const DataGridAutoExport = (): ReactElement => {

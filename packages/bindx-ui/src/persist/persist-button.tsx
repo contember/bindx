@@ -1,7 +1,7 @@
 import { usePersist } from '@contember/bindx-react'
 import { type ComponentProps, type ReactNode, useCallback } from 'react'
-import { Button } from '../ui/button.js'
-import { LoaderIcon } from '../ui/loader.js'
+import { Button } from '#bindx-ui/ui/button'
+import { LoaderIcon } from '#bindx-ui/ui/loader'
 import { cn } from '../utils/cn.js'
 import { dict } from '../dict.js'
 

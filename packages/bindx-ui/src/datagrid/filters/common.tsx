@@ -3,7 +3,7 @@
  */
 import { type ReactElement, useCallback } from 'react'
 import { useDataViewFilterName, useDataViewNullFilter } from '@contember/bindx-dataview'
-import { DataGridFilterSelectItemUI } from '../ui.js'
+import { DataGridFilterSelectItemUI } from '#bindx-ui/datagrid/ui'
 import { dict } from '../../dict.js'
 
 export const DataGridNullFilter = ({ name }: { name?: string }): ReactElement => {

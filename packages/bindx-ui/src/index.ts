@@ -13,22 +13,25 @@ export {
 	Input,
 	InputLike,
 	InputBare,
-	CheckboxInput,
-	RadioInput,
 	inputConfig,
-} from './ui/input.js'
-export { Label } from './ui/label.js'
-export { Textarea, TextareaAutosize } from './ui/textarea.js'
-export { Button, AnchorButton, buttonConfig } from './ui/button.js'
-export { Overlay, type OverlayProps } from './ui/overlay.js'
-export { Loader, LoaderIcon, type LoaderProps } from './ui/loader.js'
-export { Progress } from './ui/progress.js'
-export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor } from './ui/popover.js'
-export { Tooltip, type TooltipProps } from './ui/tooltip.js'
+} from '#bindx-ui/ui/input'
+export { CheckboxInput } from '#bindx-ui/ui/checkbox-input'
+export { RadioInput } from '#bindx-ui/ui/radio-input'
+export { Label } from '#bindx-ui/ui/label'
+export { Textarea, TextareaAutosize } from '#bindx-ui/ui/textarea'
+export { Button, AnchorButton, buttonConfig } from '#bindx-ui/ui/button'
+export { Overlay, type OverlayProps } from '#bindx-ui/ui/overlay'
+export { Loader, LoaderIcon, type LoaderProps } from '#bindx-ui/ui/loader'
+export { Progress } from '#bindx-ui/ui/progress'
+export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor } from '#bindx-ui/ui/popover'
+export { Tooltip, type TooltipProps } from '#bindx-ui/ui/tooltip'
 export {
-	Sheet, SheetPortal, SheetOverlay, SheetTrigger, SheetClose,
-	SheetContent, SheetHeader, SheetBody, SheetFooter, SheetTitle, SheetDescription,
-} from './ui/sheet.js'
+	Sheet, SheetTrigger, SheetClose, SheetContent,
+} from '#bindx-ui/ui/sheet'
+export {
+	SheetPortal, SheetOverlay,
+	SheetHeader, SheetBody, SheetFooter, SheetTitle, SheetDescription,
+} from '#bindx-ui/ui/sheet-layout'
 
 // Form Components
 export {
@@ -51,7 +54,7 @@ export {
 	FormLabelWrapperUI,
 	FormLabelUI,
 	FormContainerUI,
-} from './form/index.js'
+} from '#bindx-ui/form/index'
 
 // Labels
 export {
@@ -63,25 +66,25 @@ export {
 	EnumOptionsFormatterProvider,
 	type EnumOptionsFormatter,
 	type EnumOptionsFormatterProviderProps,
-} from './labels/index.js'
+} from '#bindx-ui/labels/index'
 
 // Errors
-export { useErrorFormatter } from './errors/index.js'
+export { useErrorFormatter } from '#bindx-ui/errors/index'
 
 // Upload
-export * from './upload/index.js'
+export * from '#bindx-ui/upload/index'
 
 // DataGrid
-export * from './datagrid/index.js'
+export * from '#bindx-ui/datagrid/index'
 
 // Select
-export * from './select/index.js'
+export * from '#bindx-ui/select/index'
 
 // Repeater
-export * from './repeater/index.js'
+export * from '#bindx-ui/repeater/index'
 
 // Persist
-export * from './persist/index.js'
+export * from '#bindx-ui/persist/index'
 
 // Dict
 export { dict, dictFormat } from './dict.js'

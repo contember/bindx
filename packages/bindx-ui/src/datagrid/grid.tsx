@@ -3,11 +3,11 @@
  */
 
 // Re-export all styled primitives
-export { DefaultDataGrid, type DefaultDataGridProps, DefaultHasManyDataGrid, type DefaultHasManyDataGridProps } from './default-grid.js'
-export { DefaultDataGridLayout, type DefaultDataGridLayoutProps } from './default-layout.js'
-export { DataGridToolbarUI, type DataGridToolbarUIProps } from './toolbar.js'
-export { DataGridPaginationUI, type DataGridPaginationUIProps, DataGridPerPageSelector } from './pagination.js'
-export { DataGridColumnHeaderUI, type DataGridColumnHeaderUIProps } from './column-header.js'
+export { DataGrid, type DataGridProps, HasManyDataGrid, type HasManyDataGridProps } from '#bindx-ui/datagrid/datagrid'
+export { DataGridLayout, type DataGridLayoutProps } from '#bindx-ui/datagrid/layout'
+export { DataGridToolbarUI, type DataGridToolbarUIProps } from '#bindx-ui/datagrid/toolbar'
+export { DataGridPaginationUI, type DataGridPaginationUIProps, DataGridPerPageSelector } from '#bindx-ui/datagrid/pagination'
+export { DataGridColumnHeaderUI, type DataGridColumnHeaderUIProps } from '#bindx-ui/datagrid/column-header'
 export {
 	DataGridContainer,
 	DataGridTableWrapper,
@@ -19,13 +19,13 @@ export {
 	DataGridHeaderCell,
 	DataGridCell,
 	DataGridEmptyState,
-} from './table.js'
-export { DataGridAutoTable, type DataGridAutoTableProps } from './auto-table.js'
-export { DataGridLoader, type DataGridLoaderProps } from './loader.js'
-export { DataGridLayoutSwitcher } from './layout-switcher.js'
-export { DataGridNoResults } from './empty.js'
-export { DataGridAutoExport } from './export.js'
-export { DataGridToolbarVisibleElements, type DataGridToolbarVisibleElementsProps } from './elements.js'
+} from '#bindx-ui/datagrid/table'
+export { DataGridAutoTable, type DataGridAutoTableProps } from '#bindx-ui/datagrid/auto-table'
+export { DataGridLoader, type DataGridLoaderProps } from '#bindx-ui/datagrid/loader'
+export { DataGridLayoutSwitcher } from '#bindx-ui/datagrid/layout-switcher'
+export { DataGridNoResults } from '#bindx-ui/datagrid/empty'
+export { DataGridAutoExport } from '#bindx-ui/datagrid/export'
+export { DataGridToolbarVisibleElements, type DataGridToolbarVisibleElementsProps } from '#bindx-ui/datagrid/elements'
 export {
 	DataGridToolbarWrapperUI,
 	DataGridTooltipLabel,
@@ -36,7 +36,7 @@ export {
 	DataGridFilterSelectTriggerUI,
 	DataGridFilterSelectItemUI,
 	type DataGridFilterSelectItemProps,
-} from './ui.js'
+} from '#bindx-ui/datagrid/ui'
 
 // Labels
 export {
@@ -44,19 +44,19 @@ export {
 	DataViewHasOneLabel,
 	DataViewHasManyLabel,
 	useDefaultFieldLabel,
-} from './labels.js'
+} from '#bindx-ui/datagrid/labels'
 
 // Cells
 export {
-	DataGridEnumCell,
-	type DataGridEnumCellProps,
-	DataGridEnumListCell,
-	type DataGridEnumListCellProps,
-	DataGridHasOneCell,
-	type DataGridHasOneCellProps,
-	DataGridHasManyCell,
-	type DataGridHasManyCellProps,
-} from './cells.js'
+	EnumCell,
+	type EnumCellProps,
+	EnumListCell,
+	type EnumListCellProps,
+	HasOneCell,
+	type HasOneCellProps,
+	HasManyCell,
+	type HasManyCellProps,
+} from '#bindx-ui/datagrid/cells/index'
 
 // Tooltips
 export {
@@ -66,7 +66,7 @@ export {
 	type DataGridHasOneTooltipProps,
 	DataGridHasManyTooltip,
 	type DataGridHasManyTooltipProps,
-} from './tooltips.js'
+} from '#bindx-ui/datagrid/tooltips'
 
 // Filters
 export {
@@ -106,21 +106,21 @@ export {
 	DataGridRelationFilteredItemsList,
 	type DataGridRelationFilteredItemsListProps,
 	type RelationFilterItem,
-} from './filters/index.js'
+} from '#bindx-ui/datagrid/filters/index'
 
 // Styled columns (with inline filter UI)
 export {
-	DataGridTextColumn,
-	DataGridNumberColumn,
-	DataGridDateColumn,
-	DataGridDateTimeColumn,
-	DataGridBooleanColumn,
-	DataGridEnumColumn,
-	DataGridEnumListColumn,
-	DataGridUuidColumn,
-	DataGridIsDefinedColumn,
-	DataGridHasOneColumn,
-	DataGridHasManyColumn,
+	TextColumn,
+	NumberColumn,
+	DateColumn,
+	DateTimeColumn,
+	BooleanColumn,
+	EnumColumn,
+	EnumListColumn,
+	UuidColumn,
+	IsDefinedColumn,
+	HasOneColumn,
+	HasManyColumn,
 	DataGridActionColumn,
 	DataGridColumn,
 	type DataGridTextColumnProps,
@@ -136,4 +136,4 @@ export {
 	type DataGridHasManyColumnProps,
 	type DataGridActionColumnProps,
 	type DataGridColumnProps,
-} from './columns.js'
+} from '#bindx-ui/datagrid/columns/index'

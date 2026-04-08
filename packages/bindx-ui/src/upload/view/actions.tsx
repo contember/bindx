@@ -1,7 +1,7 @@
 import { type ReactNode, type MouseEvent } from 'react'
 import { EditIcon, InfoIcon, TrashIcon } from 'lucide-react'
-import { Button } from '../../ui/button.js'
-import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover.js'
+import { Button } from '#bindx-ui/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '#bindx-ui/ui/popover'
 
 export interface FileActionsProps {
 	metadata?: ReactNode

@@ -1,9 +1,9 @@
 import type { ReactElement, ReactNode } from 'react'
 import { DataGridToolbarContent } from '@contember/bindx-dataview'
 import {
-	DefaultHasManyDataGrid,
-	DataGridTextColumn,
-	DataGridDateColumn,
+	HasManyDataGrid,
+	TextColumn,
+	DateColumn,
 	DataGridTextFilter,
 	FieldLabelFormatterProvider,
 } from '@contember/bindx-ui'
@@ -26,7 +26,7 @@ function labelFormatter(entityName: string, fieldName: string): ReactNode | null
  * DataGrid for a has-many relation (Author → Articles).
  *
  * Demonstrates:
- * - Entity JSX wrapping a DefaultHasManyDataGrid
+ * - Entity JSX wrapping a HasManyDataGrid
  * - Nested relation data grid
  */
 export function HasManyDataGridPage({ id }: { id: string }): ReactElement {
@@ -38,23 +38,23 @@ export function HasManyDataGridPage({ id }: { id: string }): ReactElement {
 						Author: <Field field={author.name} />
 					</p>
 					<FieldLabelFormatterProvider formatter={labelFormatter}>
-						<DefaultHasManyDataGrid
+						<HasManyDataGrid
 							field={author.articles}
 							itemsPerPage={5}
 							initialSorting={{ title: 'asc' }}
 						>
 							{it => (
 								<>
-									<DataGridTextColumn field={it.title} sortable filter />
-									<DataGridTextColumn field={it.content} />
-									<DataGridDateColumn field={it.publishedAt} sortable />
+									<TextColumn field={it.title} sortable filter />
+									<TextColumn field={it.content} />
+									<DateColumn field={it.publishedAt} sortable />
 
 									<DataGridToolbarContent>
 										<DataGridTextFilter field={it.title} />
 									</DataGridToolbarContent>
 								</>
 							)}
-						</DefaultHasManyDataGrid>
+						</HasManyDataGrid>
 					</FieldLabelFormatterProvider>
 				</div>
 			)}

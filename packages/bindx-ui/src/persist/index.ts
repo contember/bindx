@@ -1,1 +1,1 @@
-export { PersistButton, type PersistButtonProps } from './persist-button.js'
+export { PersistButton, type PersistButtonProps } from '#bindx-ui/persist/persist-button'

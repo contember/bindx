@@ -508,7 +508,7 @@ describe('BlockRepeater', () => {
 	})
 
 	test('selection collection includes discrimination field', async () => {
-		const { BlockRepeaterWithMeta } = await import('@contember/bindx-repeater')
+		const { BlockRepeater: BlockRepeaterWithMeta } = await import('@contember/bindx-repeater')
 		const { SelectionScope } = await import('@contember/bindx')
 		const { createCollectorProxy } = await import('@contember/bindx-react')
 
@@ -557,5 +557,62 @@ describe('BlockRepeater', () => {
 		// Content field should also be in the selection
 		const contentField = blocksField!.nested!.fields.get('content')
 		expect(contentField).toBeDefined()
+	})
+
+	test('selection collection discovers render/form functions on blocks', async () => {
+		const { BlockRepeater: BR } = await import('@contember/bindx-repeater')
+		const { SelectionScope } = await import('@contember/bindx')
+		const { createCollectorProxy, collectSelection } = await import('@contember/bindx-react')
+
+		const scope = new SelectionScope()
+		const proxy = createCollectorProxy<Page>(scope)
+
+		const getSelection = (BR as any).getSelection as (
+			props: any,
+			collectNested: (children: any) => any,
+		) => any
+
+		const result = getSelection(
+			{
+				field: proxy.blocks,
+				discriminationField: 'type',
+				blocks: {
+					text: {
+						label: 'Text',
+						render: (entity: any) => {
+							void entity.content
+							return null
+						},
+					},
+					image: {
+						label: 'Image',
+						render: (entity: any) => {
+							void entity.imageUrl
+							return null
+						},
+						form: (entity: any) => {
+							void entity.imageCaption
+							return null
+						},
+					},
+				},
+				// No children — blocks have render/form functions
+			},
+			(jsx: any) => collectSelection(jsx),
+		)
+
+		expect(result).toBeNull()
+
+		const selection = scope.toSelectionMeta()
+		const blocksField = selection.fields.get('blocks')
+		expect(blocksField).toBeDefined()
+
+		// Fields from render functions should be collected
+		expect(blocksField!.nested!.fields.has('content')).toBe(true)
+		expect(blocksField!.nested!.fields.has('imageUrl')).toBe(true)
+		expect(blocksField!.nested!.fields.has('imageCaption')).toBe(true)
+
+		// Discrimination field should be added
+		expect(blocksField!.nested!.fields.has('type')).toBe(true)
 	})
 })

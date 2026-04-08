@@ -1,1 +1,1 @@
-export { useErrorFormatter } from './useErrorFormatter.js'
+export { useErrorFormatter } from '#bindx-ui/errors/useErrorFormatter'

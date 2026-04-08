@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react'
-import { FileActions, type FileActionsProps } from './actions.js'
-import { AudioMetadata, type AudioMetadataProps } from './metadata.js'
+import { FileActions, type FileActionsProps } from '#bindx-ui/upload/view/actions'
+import { AudioMetadata, type AudioMetadataProps } from '#bindx-ui/upload/view/metadata'
 
 export interface UploadedAudioViewProps extends Omit<FileActionsProps, 'metadata'> {
 	url: string

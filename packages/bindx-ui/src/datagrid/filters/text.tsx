@@ -17,15 +17,15 @@ import {
 	type DataViewUnionTextFilterProps,
 	QUERY_FILTER_NAME,
 } from '@contember/bindx-dataview'
-import { useDefaultFieldLabel } from '../labels.js'
+import { useDefaultFieldLabel } from '#bindx-ui/datagrid/labels'
 import { XIcon, MoreHorizontalIcon } from 'lucide-react'
-import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover.js'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../ui/dropdown.js'
-import { Button } from '../../ui/button.js'
-import { InputBare, InputLike } from '../../ui/input.js'
-import { DataGridActiveFilterUI } from '../ui.js'
-import { DataGridNullFilter } from './common.js'
-import { DataGridFilterMobileHiding } from './mobile.js'
+import { Popover, PopoverContent, PopoverTrigger } from '#bindx-ui/ui/popover'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '#bindx-ui/ui/dropdown'
+import { Button } from '#bindx-ui/ui/button'
+import { InputBare, InputLike } from '#bindx-ui/ui/input'
+import { DataGridActiveFilterUI } from '#bindx-ui/datagrid/ui'
+import { DataGridNullFilter } from '#bindx-ui/datagrid/filters/common'
+import { DataGridFilterMobileHiding } from '#bindx-ui/datagrid/filters/mobile'
 import { dict } from '../../dict.js'
 
 export type DataGridTextFilterProps<T> =

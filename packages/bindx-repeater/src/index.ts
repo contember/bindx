@@ -33,5 +33,5 @@ export {
 } from './utils/index.js'
 
 // Components
-export { Repeater, RepeaterWithMeta } from './components/index.js'
-export { BlockRepeater, BlockRepeaterWithMeta } from './components/index.js'
+export { Repeater } from './components/index.js'
+export { BlockRepeater } from './components/index.js'

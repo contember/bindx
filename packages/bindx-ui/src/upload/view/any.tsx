@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
 import { FileIcon } from 'lucide-react'
-import { FileActions, type FileActionsProps } from './actions.js'
-import { Metadata, type MetadataProps } from './metadata.js'
+import { FileActions, type FileActionsProps } from '#bindx-ui/upload/view/actions'
+import { Metadata, type MetadataProps } from '#bindx-ui/upload/view/metadata'
 
 export interface UploadedAnyViewProps extends Omit<FileActionsProps, 'metadata'> {
 	url: string

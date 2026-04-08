@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Input } from '../ui/input.js'
+import { Input } from '#bindx-ui/ui/input'
 import {
 	DataViewHasFilterType,
 	DataViewTextFilterInput,

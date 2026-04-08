@@ -3,7 +3,7 @@
  */
 import type { ReactElement, ReactNode } from 'react'
 import { DataViewLoaderState } from '@contember/bindx-dataview'
-import { Loader } from '../ui/loader.js'
+import { Loader } from '#bindx-ui/ui/loader'
 
 export interface DataGridLoaderProps {
 	children: ReactNode

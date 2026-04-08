@@ -1,11 +1,11 @@
 import type { ReactElement, ReactNode } from 'react'
 import { DataGridToolbarContent, DataGridLayout } from '@contember/bindx-dataview'
 import {
-	DefaultDataGrid,
-	DataGridTextColumn,
-	DataGridDateColumn,
-	DataGridHasOneColumn,
-	DataGridHasManyColumn,
+	DataGrid,
+	TextColumn,
+	DateColumn,
+	HasOneColumn,
+	HasManyColumn,
 	DataGridTextFilter,
 	DataGridDateFilterUI,
 	FieldLabelFormatterProvider,
@@ -39,7 +39,7 @@ function labelFormatter(entityName: string, fieldName: string): ReactNode | null
  * DataGrid with filtering, sorting, pagination, and multiple layouts.
  *
  * Demonstrates:
- * - DefaultDataGrid with marker-based columns
+ * - DataGrid with marker-based columns
  * - Table layout (auto-rendered from column metadata)
  * - Grid and rows custom layouts via DataGridLayout marker
  * - Toolbar content with filters
@@ -48,22 +48,22 @@ export function DataGridPage(): ReactElement {
 	return (
 		<div data-testid="datagrid-example">
 			<FieldLabelFormatterProvider formatter={labelFormatter}>
-				<DefaultDataGrid
+				<DataGrid
 					entity={schema.Article}
 					itemsPerPage={5}
 					initialSorting={{ title: 'asc' }}
 				>
 					{it => (
 						<>
-							<DataGridTextColumn field={it.title} sortable filter />
-							<DataGridTextColumn field={it.content} />
-							<DataGridDateColumn field={it.publishedAt} sortable filter />
-							<DataGridHasOneColumn field={it.author}>
+							<TextColumn field={it.title} sortable filter />
+							<TextColumn field={it.content} />
+							<DateColumn field={it.publishedAt} sortable filter />
+							<HasOneColumn field={it.author}>
 								{author => author.name.value ?? '\u2014'}
-							</DataGridHasOneColumn>
-							<DataGridHasManyColumn field={it.tags}>
+							</HasOneColumn>
+							<HasManyColumn field={it.tags}>
 								{tag => tag.name.value ?? ''}
-							</DataGridHasManyColumn>
+							</HasManyColumn>
 
 							<DataGridLayout name="grid" label="Grid" item={it}>
 								{item => (
@@ -105,7 +105,7 @@ export function DataGridPage(): ReactElement {
 							</DataGridToolbarContent>
 						</>
 					)}
-				</DefaultDataGrid>
+				</DataGrid>
 			</FieldLabelFormatterProvider>
 		</div>
 	)

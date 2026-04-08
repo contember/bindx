@@ -71,7 +71,7 @@ export function BlockRepeater<
 	sortableBy,
 	blocks,
 	children,
-}: BlockRepeaterProps<TEntity, TSelected, TBrand, TEntityName, TSchema, TBlockNames>): ReactElement {
+}: BlockRepeaterProps<TEntity, TSelected, TBrand, TEntityName, TSchema, TBlockNames>): ReactElement | null {
 	const fieldAccessor = useHasMany(field)
 	const sortedItems = useSortedItems(fieldAccessor, sortableBy)
 
@@ -198,6 +198,9 @@ export function BlockRepeater<
 		}
 	}, [field, sortableBy, blocks, discriminationField])
 
+	if (!children) {
+		return null
+	}
 	return <>{children(items, methods)}</>
 }
 
@@ -219,44 +222,88 @@ function createBlockRepeaterWithSelection() {
 		: null
 
 	const scope = new SelectionScope()
-	const collectorEntity = createCollectorProxy<unknown>(scope)
+	const collectorEntity = createCollectorProxy<object>(scope)
 
-	const mockItems: BlockRepeaterItems<unknown> = {
-		map: (fn) => {
-			fn(collectorEntity, {
-				index: 0,
-				isFirst: true,
-				isLast: true,
-				remove: () => {},
-				moveUp: () => {},
-				moveDown: () => {},
-				blockType: null,
-				block: undefined,
-			})
-			return []
-		},
-		length: 0,
+	const blockNames = Object.keys(props.blocks) as string[]
+	const blocksRecord = props.blocks as Record<string, BlockDefinition>
+
+	// Path 1: collect field deps from block renderers
+	// Calls staticRender if present, or any other callable properties (render, form)
+	// that accept (entity, info) and return ReactNode.
+	for (const blockName of blockNames) {
+		const block = blocksRecord[blockName]
+		if (!block) continue
+
+		const mockInfo: BlockRepeaterItemInfo = {
+			index: 0,
+			isFirst: true,
+			isLast: true,
+			remove: () => {},
+			moveUp: () => {},
+			moveDown: () => {},
+			blockType: blockName,
+			block: { name: blockName, label: block.label },
+		}
+
+		const renderers = block.staticRender
+			? [block.staticRender]
+			: collectBlockRenderers(block)
+
+		for (const renderer of renderers) {
+			const jsx = renderer(collectorEntity, mockInfo)
+			if (jsx) {
+				collectNested(jsx)
+			}
+		}
 	}
 
-	const mockMethods: BlockRepeaterMethods<string> = {
-		addItem: () => {},
-		isEmpty: true,
-		blockList: [],
+	// Path 2: children callback — for headless use or when blocks lack staticRender
+	let jsxSelection: SelectionMeta | undefined
+	if (props.children) {
+		const mockItems: BlockRepeaterItems<unknown> = {
+			map: (fn) => {
+				for (const blockName of blockNames) {
+					fn(collectorEntity, {
+						index: 0,
+						isFirst: true,
+						isLast: true,
+						remove: () => {},
+						moveUp: () => {},
+						moveDown: () => {},
+						blockType: blockName,
+						block: { name: blockName, label: blocksRecord[blockName]?.label },
+					})
+				}
+				// Also call with null blockType for any fallback/default rendering paths
+				fn(collectorEntity, {
+					index: 0,
+					isFirst: true,
+					isLast: true,
+					remove: () => {},
+					moveUp: () => {},
+					moveDown: () => {},
+					blockType: null,
+					block: undefined,
+				})
+				return []
+			},
+			length: 0,
+		}
+
+		const mockMethods: BlockRepeaterMethods<string> = {
+			addItem: () => {},
+			isEmpty: true,
+			blockList: [],
+		}
+
+		const syntheticChildren = props.children(mockItems, mockMethods)
+		jsxSelection = collectNested(syntheticChildren)
 	}
-
-	const syntheticChildren = props.children(mockItems, mockMethods)
-
-	// Call block render/form functions so the collector proxy records field accesses
-	const blockJsx: ReactNode[] = []
-	for (const blockDef of Object.values(props.blocks) as BlockDefinition[]) {
-		if (blockDef.render) blockJsx.push(blockDef.render(collectorEntity as EntityAccessor<object>))
-		if (blockDef.form) blockJsx.push(blockDef.form(collectorEntity as EntityAccessor<object>))
-	}
-
-	const jsxSelection = collectNested([syntheticChildren, ...blockJsx])
 
 	const nestedSelection = scope.toSelectionMeta()
-	mergeSelections(nestedSelection, jsxSelection)
+	if (jsxSelection) {
+		mergeSelections(nestedSelection, jsxSelection)
+	}
 
 	// Add discrimination field to selection
 	nestedSelection.fields.set(props.discriminationField, {
@@ -301,3 +348,19 @@ function createBlockRepeaterWithSelection() {
 }
 
 export const BlockRepeaterWithMeta = createBlockRepeaterWithSelection()
+
+type BlockRenderer = (entity: EntityAccessor<object>, info: BlockRepeaterItemInfo) => ReactNode
+
+/**
+ * Discovers callable renderer functions on a block definition (e.g., render, form).
+ * Used during selection collection to call all renderers with a collector proxy.
+ */
+function collectBlockRenderers(block: BlockDefinition): BlockRenderer[] {
+	const renderers: BlockRenderer[] = []
+	for (const value of Object.values(block)) {
+		if (typeof value === 'function') {
+			renderers.push(value as BlockRenderer)
+		}
+	}
+	return renderers
+}

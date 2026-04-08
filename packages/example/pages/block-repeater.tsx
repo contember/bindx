@@ -4,7 +4,7 @@ import { BlockRepeater } from '@contember/bindx-repeater'
 import { Uploader, createImageFileType } from '@contember/bindx-uploader'
 import {
 	InputField,
-	DefaultBlockRepeater,
+	BlockRepeater as StyledBlockRepeater,
 	UploaderDropzone,
 	UploaderProgress,
 	UploadedImageView,
@@ -28,7 +28,7 @@ export function HeadlessBlockRepeaterPage({ id }: { id: string }): ReactNode {
 			notFound={<p>Article not found</p>}
 		>
 			{article => (
-				<div>
+				<div data-testid="headless-block-repeater">
 					<h3 className="font-medium mb-2">Headless BlockRepeater</h3>
 					<BlockRepeater
 						field={article.blocks}
@@ -46,7 +46,7 @@ export function HeadlessBlockRepeaterPage({ id }: { id: string }): ReactNode {
 								)}
 
 								{items.map((block, info) => (
-									<div key={block.id} className="border rounded p-3 relative group">
+									<div key={block.id} className="border rounded p-3 relative group" data-testid={`block-item-${info.blockType}`}>
 										<div className="flex items-center gap-2 mb-2">
 											<span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded">
 												{info.blockType}
@@ -57,15 +57,18 @@ export function HeadlessBlockRepeaterPage({ id }: { id: string }): ReactNode {
 													className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-30"
 													disabled={info.isFirst}
 													onClick={info.moveUp}
+												data-testid="move-up"
 												>Up</button>
 												<button
 													className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-30"
 													disabled={info.isLast}
 													onClick={info.moveDown}
+												data-testid="move-down"
 												>Down</button>
 												<button
 													className="text-xs text-red-400 hover:text-red-600"
 													onClick={info.remove}
+												data-testid="remove-block"
 												>Remove</button>
 											</div>
 										</div>
@@ -85,6 +88,7 @@ export function HeadlessBlockRepeaterPage({ id }: { id: string }): ReactNode {
 											key={b.name}
 											className="text-sm px-3 py-1 border rounded hover:bg-gray-50"
 											onClick={() => methods.addItem(b.name)}
+										data-testid={`add-block-${b.name}`}
 										>
 											+ {b.label?.toString() ?? b.name}
 										</button>
@@ -100,7 +104,7 @@ export function HeadlessBlockRepeaterPage({ id }: { id: string }): ReactNode {
 }
 
 /**
- * Styled DefaultBlockRepeater — inline mode (DnD enabled).
+ * Styled BlockRepeater — inline mode (DnD enabled).
  * Uses Entity JSX for data binding.
  */
 export function StyledBlockRepeaterPage({ id }: { id: string }): ReactNode {
@@ -114,7 +118,7 @@ export function StyledBlockRepeaterPage({ id }: { id: string }): ReactNode {
 			{article => (
 				<div>
 					<h3 className="font-medium mb-2">Inline mode (DnD + inline editing)</h3>
-					<DefaultBlockRepeater
+					<StyledBlockRepeater
 						field={article.blocks}
 						discriminationField="blockType"
 						sortableBy="order"
@@ -148,7 +152,7 @@ export function StyledBlockRepeaterPage({ id }: { id: string }): ReactNode {
 }
 
 /**
- * Styled DefaultBlockRepeater — dual mode (preview + sheet edit).
+ * Styled BlockRepeater — dual mode (preview + sheet edit).
  * Uses Entity JSX for data binding.
  */
 export function DualModeBlockRepeaterPage({ id }: { id: string }): ReactNode {
@@ -163,7 +167,7 @@ export function DualModeBlockRepeaterPage({ id }: { id: string }): ReactNode {
 				<div>
 					<h3 className="font-medium mb-2">Dual mode (preview + sheet edit)</h3>
 					<p className="text-sm text-gray-500 mb-2">Click a block to edit in a side sheet. Drag the handle to reorder.</p>
-					<DefaultBlockRepeater
+					<StyledBlockRepeater
 						field={article.blocks}
 						discriminationField="blockType"
 						sortableBy="order"

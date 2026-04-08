@@ -1,8 +1,8 @@
 import { type ReactNode, type MouseEvent } from 'react'
 import { TrashIcon, InfoIcon } from 'lucide-react'
-import { Button } from '../../ui/button.js'
-import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover.js'
-import { ImageMetadata, type ImageMetadataProps } from './metadata.js'
+import { Button } from '#bindx-ui/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '#bindx-ui/ui/popover'
+import { ImageMetadata, type ImageMetadataProps } from '#bindx-ui/upload/view/metadata'
 
 export interface UploadedImageViewProps {
 	url: string

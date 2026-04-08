@@ -9,7 +9,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { FIELD_REF_META, type FieldRefMeta } from '@contember/bindx'
 import { useDataViewContext } from '@contember/bindx-dataview'
 import { useBindxContext } from '@contember/bindx-react'
-import { useFieldLabelFormatter } from '../labels/index.js'
+import { useFieldLabelFormatter } from '#bindx-ui/labels/index'
 
 /** Any ref that carries FIELD_REF_META (FieldRef, HasOneRef, HasManyRef) */
 interface RefWithMeta {

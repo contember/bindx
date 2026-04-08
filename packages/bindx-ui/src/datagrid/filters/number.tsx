@@ -11,17 +11,17 @@ import {
 	useDataViewFilter,
 	useDataViewFilterName,
 } from '@contember/bindx-dataview'
-import { useDefaultFieldLabel } from '../labels.js'
+import { useDefaultFieldLabel } from '#bindx-ui/datagrid/labels'
 import type { NumberRangeFilterArtifact } from '@contember/bindx'
-import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover.js'
-import { Input } from '../../ui/input.js'
+import { Popover, PopoverContent, PopoverTrigger } from '#bindx-ui/ui/popover'
+import { Input } from '#bindx-ui/ui/input'
 import {
 	DataGridActiveFilterUI,
 	DataGridFilterSelectTriggerUI,
 	DataGridSingleFilterUI,
-} from '../ui.js'
-import { DataGridNullFilter } from './common.js'
-import { DataGridFilterMobileHiding } from './mobile.js'
+} from '#bindx-ui/datagrid/ui'
+import { DataGridNullFilter } from '#bindx-ui/datagrid/filters/common'
+import { DataGridFilterMobileHiding } from '#bindx-ui/datagrid/filters/mobile'
 import { dict } from '../../dict.js'
 
 export type DataGridNumberFilterUIProps<T> =

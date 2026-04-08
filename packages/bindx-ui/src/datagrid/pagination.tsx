@@ -8,7 +8,7 @@ import {
 	DataViewSetItemsPerPageTrigger,
 } from '@contember/bindx-dataview'
 import { ChevronsLeftIcon, ChevronLeftIcon, ChevronRightIcon, ChevronsRightIcon } from 'lucide-react'
-import { Button } from '../ui/button.js'
+import { Button } from '#bindx-ui/ui/button'
 import { dict, dictFormat } from '../dict.js'
 import { uic } from '../utils/uic.js'
 

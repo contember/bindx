@@ -1,2 +1,2 @@
-export { useFieldLabelFormatter, FieldLabelFormatterProvider, type FieldLabelFormatter, type FieldLabelFormatterProviderProps } from './fieldLabels.js'
-export { useEnumOptionsFormatter, EnumOptionsFormatterProvider, type EnumOptionsFormatter, type EnumOptionsFormatterProviderProps } from './enumLabels.js'
+export { useFieldLabelFormatter, FieldLabelFormatterProvider, type FieldLabelFormatter, type FieldLabelFormatterProviderProps } from '#bindx-ui/labels/fieldLabels'
+export { useEnumOptionsFormatter, EnumOptionsFormatterProvider, type EnumOptionsFormatter, type EnumOptionsFormatterProviderProps } from '#bindx-ui/labels/enumLabels'

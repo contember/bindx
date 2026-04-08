@@ -10,8 +10,8 @@ import {
 	DataViewHasManyFilter,
 	DataViewRelationFilterTrigger,
 } from '@contember/bindx-dataview'
-import { Tooltip } from '../ui/tooltip.js'
-import { DataGridExcludeActionButtonUI, DataGridFilterActionButtonUI } from './ui.js'
+import { Tooltip } from '#bindx-ui/ui/tooltip'
+import { DataGridExcludeActionButtonUI, DataGridFilterActionButtonUI } from '#bindx-ui/datagrid/ui'
 
 // ============================================================================
 // Enum Field Tooltip

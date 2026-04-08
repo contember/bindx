@@ -1,1 +1,1 @@
-export * from './grid.js'
+export * from '#bindx-ui/datagrid/grid'

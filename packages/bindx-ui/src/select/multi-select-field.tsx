@@ -25,21 +25,23 @@ import type { FieldRef } from '@contember/bindx'
 import { HasMany, withCollector } from '@contember/bindx-react'
 import { MultiSelect, SelectEachValue, SelectPlaceholder } from '@contember/bindx-dataview'
 import { FormHasManyRelationScope } from '@contember/bindx-form'
-import { FormContainer } from '../form/container.js'
-import { Popover, PopoverTrigger } from '../ui/popover.js'
+import { FormContainer } from '#bindx-ui/form/container'
+import { Popover, PopoverTrigger } from '#bindx-ui/ui/popover'
 import { ChevronDownIcon } from 'lucide-react'
-import { DefaultSelectDataView } from './list.js'
+import { SelectDataView } from '#bindx-ui/select/list'
+import {
+	SelectDefaultPlaceholderUI,
+	SelectInputActionsUI,
+	SelectInputUI,
+	SelectInputWrapperUI,
+} from '#bindx-ui/select/input-ui'
 import {
 	MultiSelectItemContentUI,
 	MultiSelectItemRemoveButtonUI,
 	MultiSelectItemUI,
 	MultiSelectItemWrapperUI,
-	SelectDefaultPlaceholderUI,
-	SelectInputActionsUI,
-	SelectInputUI,
-	SelectInputWrapperUI,
-	SelectPopoverContent,
-} from './ui.js'
+} from '#bindx-ui/select/multi-select-ui'
+import { SelectPopoverContent } from '#bindx-ui/select/popover-ui'
 
 /** Extract the target entity type from a HasManyRef */
 type HasManyTarget<F> = F extends HasManyRef<infer TEntity> ? TEntity : object
@@ -128,13 +130,13 @@ export const MultiSelectField = withCollector(function MultiSelectField<F extend
 								</PopoverTrigger>
 							</SelectInputWrapperUI>
 							<SelectPopoverContent>
-								<DefaultSelectDataView
+								<SelectDataView
 									queryField={queryField}
 									initialSorting={initialSorting}
 									filter={filter}
 								>
 									{children as (it: EntityRef<object>) => ReactNode}
-								</DefaultSelectDataView>
+								</SelectDataView>
 							</SelectPopoverContent>
 						</Popover>
 					</div>

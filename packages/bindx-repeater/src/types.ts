@@ -133,10 +133,15 @@ export interface RepeaterProps<
  */
 export interface BlockDefinition<TEntity extends object = object, TSelected = TEntity> {
 	label?: ReactNode
-	/** Render function for block preview. Used for selection collection. */
-	render?: (entity: EntityAccessor<TEntity, TSelected>) => ReactNode
-	/** Form function for block editing. Used for selection collection. */
-	form?: (entity: EntityAccessor<TEntity, TSelected>) => ReactNode
+	/**
+	 * Called during selection collection to discover field dependencies for this block type.
+	 * Receives a collector proxy entity and block info.
+	 * Return JSX that accesses all fields this block type needs.
+	 *
+	 * When present, core getSelection calls this directly per block type
+	 * instead of relying on the children callback for field discovery.
+	 */
+	staticRender?: (entity: EntityAccessor<object>, info: BlockRepeaterItemInfo) => ReactNode
 }
 
 /**
@@ -223,5 +228,5 @@ export interface BlockRepeaterProps<
 	blocks: Record<TBlockNames, BlockDefinition>
 
 	/** Render function that receives items collection and methods */
-	children: BlockRepeaterRenderFn<TEntity, TSelected, TBrand, TEntityName, TSchema, TBlockNames>
+	children?: BlockRepeaterRenderFn<TEntity, TSelected, TBrand, TEntityName, TSchema, TBlockNames>
 }

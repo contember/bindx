@@ -5,13 +5,13 @@ import {
 	UploaderDropzoneArea,
 	useUploaderStateFiles,
 } from '@contember/bindx-uploader'
-import { Button } from '../ui/button.js'
+import { Button } from '#bindx-ui/ui/button'
 import { dict } from '../dict.js'
 import {
 	UploaderDropzoneAreaUI,
 	UploaderDropzoneWrapperUI,
 	UploaderInactiveDropzoneUI,
-} from './ui.js'
+} from '#bindx-ui/upload/ui'
 
 export interface UploaderDropzoneProps {
 	inactiveOnUpload?: boolean
