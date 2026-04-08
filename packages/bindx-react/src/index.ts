@@ -207,6 +207,8 @@ export type {
 	PersistApi,
 	EntityPersistApi,
 	AnyRefWithMeta,
+	// Notification hook types
+	PersistWithFeedbackApi,
 } from './hooks/index.js'
 
 // Persistence types from @contember/bindx
@@ -301,6 +303,12 @@ export {
 	useField,
 	useHasMany,
 	useHasOne,
+	// Notifications
+	useNotificationStore,
+	useNotifications,
+	useShowNotification,
+	useDismissNotification,
+	usePersistWithFeedback,
 	// Contember
 	ContemberBindxProvider,
 	schemaNamesToDef,

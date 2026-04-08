@@ -66,7 +66,10 @@ export {
 } from './labels/index.js'
 
 // Errors
-export { useErrorFormatter } from './errors/index.js'
+export { useErrorFormatter, ErrorOverlay, type ErrorOverlayProps, BindxErrorBoundary, type BindxErrorBoundaryProps } from './errors/index.js'
+
+// Toast
+export { ToastContainer, ToastItem, type ToastContainerProps, type ToastItemProps } from './toast/index.js'
 
 // Upload
 export * from './upload/index.js'

@@ -37,6 +37,16 @@ export const dict = {
 	persist: {
 		save: 'Save',
 	},
+	toast: {
+		persistSuccess: 'Changes saved successfully',
+		persistError: 'Failed to save changes',
+		persistValidationError: 'Please fix validation errors before saving',
+		loadError: 'Failed to load data',
+		networkError: 'A network error occurred',
+		dismiss: 'Dismiss',
+		showDetails: 'Show details',
+		hideDetails: 'Hide details',
+	},
 	select: {
 		placeholder: 'Select…',
 		search: 'Search…',

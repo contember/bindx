@@ -6,6 +6,7 @@ export {
 	useBatchPersister,
 	useBindxContext,
 	useSchemaRegistry,
+	useNotificationStore,
 	type BindxProviderProps,
 	type BindxContextValue,
 	type BindxGraphQlClient,
@@ -65,3 +66,14 @@ export {
 	useEntityErrors,
 	type EntityErrorsState,
 } from './useErrors.js'
+
+export {
+	useNotifications,
+	useShowNotification,
+	useDismissNotification,
+} from './useNotifications.js'
+
+export {
+	usePersistWithFeedback,
+	type PersistWithFeedbackApi,
+} from './usePersistWithFeedback.js'
