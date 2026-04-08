@@ -54,8 +54,8 @@ export class NameSchemaGenerator {
 						visitColumn: ctx => {
 							scalars.push(ctx.column.name)
 							fields[ctx.column.name] = ctx.column.type === Model.ColumnType.Enum
-								? { type: 'column', columnType: ctx.column.columnType, enumName: ctx.column.columnType }
-								: { type: 'column', columnType: ctx.column.columnType }
+								? { type: 'column', columnType: ctx.column.type, enumName: ctx.column.columnType }
+								: { type: 'column', columnType: ctx.column.type }
 						},
 					})
 

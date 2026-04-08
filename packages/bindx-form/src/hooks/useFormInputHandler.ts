@@ -148,25 +148,9 @@ const defaultTypeHandlers: Partial<Record<ColumnType, HandlerFactory>> = {
 	Enum: createStringHandler,
 }
 
-/**
- * Maps Contember DB column types (lowercase) to ColumnType (PascalCase).
- * Handles both formats so the handler works with schema-provided types.
- */
-const columnTypeAliases: Record<string, ColumnType> = {
-	text: 'String',
-	integer: 'Integer',
-	double: 'Double',
-	date: 'Date',
-	timestamptz: 'DateTime',
-	time: 'Time',
-	bool: 'Bool',
-	uuid: 'Uuid',
-	jsonb: 'Json',
-}
-
 function resolveColumnType(columnType: string | undefined): ColumnType | undefined {
 	if (!columnType) return undefined
-	return (columnTypeAliases[columnType] ?? columnType) as ColumnType
+	return columnType as ColumnType
 }
 
 /**
