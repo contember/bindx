@@ -98,7 +98,7 @@ describe('createRelationColumn — hasOne', () => {
 	test('produces leaf with correct metadata', () => {
 		const proxy = createProjectProxy()
 		const jsx = (
-			<HeadlessHasOneColumn field={proxy.organization} header="Org">
+			<HeadlessHasOneColumn field={proxy.organization!} header="Org">
 				{(org: any) => org.name.value}
 			</HeadlessHasOneColumn>
 		)
@@ -120,7 +120,7 @@ describe('createRelationColumn — hasOne', () => {
 	test('filter is enabled by default', () => {
 		const proxy = createProjectProxy()
 		const jsx = (
-			<HeadlessHasOneColumn field={proxy.organization}>
+			<HeadlessHasOneColumn field={proxy.organization!}>
 				{(org: any) => org.name.value}
 			</HeadlessHasOneColumn>
 		)
@@ -132,7 +132,7 @@ describe('createRelationColumn — hasOne', () => {
 	test('filter can be disabled', () => {
 		const proxy = createProjectProxy()
 		const jsx = (
-			<HeadlessHasOneColumn field={proxy.organization} filter={false}>
+			<HeadlessHasOneColumn field={proxy.organization!} filter={false}>
 				{(org: any) => org.name.value}
 			</HeadlessHasOneColumn>
 		)
@@ -144,7 +144,7 @@ describe('createRelationColumn — hasOne', () => {
 	test('headless column has no renderFilter', () => {
 		const proxy = createProjectProxy()
 		const jsx = (
-			<HeadlessHasOneColumn field={proxy.organization}>
+			<HeadlessHasOneColumn field={proxy.organization!}>
 				{(org: any) => org.name.value}
 			</HeadlessHasOneColumn>
 		)
@@ -159,7 +159,7 @@ describe('createRelationColumn — hasOne', () => {
 		})
 		const proxy = createProjectProxy()
 		const jsx = (
-			<StyledHasOneColumn field={proxy.organization}>
+			<StyledHasOneColumn field={proxy.organization!}>
 				{(org: any) => org.name.value}
 			</StyledHasOneColumn>
 		)
@@ -174,7 +174,7 @@ describe('createRelationColumn — hasOne', () => {
 		})
 		const proxy = createProjectProxy()
 		const jsx = (
-			<StyledHasOneColumn field={proxy.organization}>
+			<StyledHasOneColumn field={proxy.organization!}>
 				{(org: any) => org.name.value}
 			</StyledHasOneColumn>
 		)
@@ -190,7 +190,7 @@ describe('createRelationColumn — hasOne', () => {
 		})
 		const proxy = createProjectProxy()
 		const jsx = (
-			<StyledHasOneColumn field={proxy.organization} renderCellWrapper={userWrapper}>
+			<StyledHasOneColumn field={proxy.organization!} renderCellWrapper={userWrapper}>
 				{(org: any) => org.name.value}
 			</StyledHasOneColumn>
 		)
@@ -201,7 +201,7 @@ describe('createRelationColumn — hasOne', () => {
 	test('relatedSelection captures fields from children', () => {
 		const proxy = createProjectProxy()
 		const jsx = (
-			<HeadlessHasOneColumn field={proxy.organization}>
+			<HeadlessHasOneColumn field={proxy.organization!}>
 				{(org: any) => org.name.value}
 			</HeadlessHasOneColumn>
 		)

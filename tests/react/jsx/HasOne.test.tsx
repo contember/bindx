@@ -120,7 +120,7 @@ describe('HasOne component', () => {
 
 				return (
 					<div>
-						<HasOne field={article.author}>
+						<HasOne field={article.author!}>
 							{author => <AuthorNameEmail author={author} />}
 						</HasOne>
 					</div>
@@ -160,7 +160,7 @@ describe('HasOne component', () => {
 				// Use $id and $fields.$name.value for proper access
 				return (
 					<div>
-						<span data-testid="author-id">{article.author.$id ?? 'placeholder'}</span>
+						<span data-testid="author-id">{article.author!.$id ?? 'placeholder'}</span>
 						<span data-testid="title">{article.title.value}</span>
 					</div>
 				)
@@ -202,7 +202,7 @@ describe('HasOne component', () => {
 
 				return (
 					<div>
-						<HasOne field={article.author}>
+						<HasOne field={article.author!}>
 							{author => <AuthorInfo author={author} />}
 						</HasOne>
 					</div>
@@ -237,7 +237,7 @@ describe('HasOne component', () => {
 
 				return (
 					<div>
-						<HasOne field={article.author}>
+						<HasOne field={article.author!}>
 							{author => <AuthorNameWithUpdate author={author} testIdName="author-name" testIdBtn="update-btn" newName="Jane Doe" />}
 						</HasOne>
 					</div>
@@ -279,7 +279,7 @@ describe('HasOne component', () => {
 
 				return (
 					<div>
-						<HasOne field={article.author}>
+						<HasOne field={article.author!}>
 							{author => (
 								<div data-testid="author-id">{author.id}</div>
 							)}
@@ -322,7 +322,7 @@ describe('HasOne component', () => {
 
 				return (
 					<div>
-						<HasOne field={article.location}>
+						<HasOne field={article.location!}>
 							{location => <LocationInfo location={location} />}
 						</HasOne>
 					</div>
@@ -363,7 +363,7 @@ describe('HasOne component', () => {
 
 				return (
 					<div>
-						<HasOne field={article.author}>
+						<HasOne field={article.author!}>
 							{author => <AuthorCard author={author} />}
 						</HasOne>
 					</div>
@@ -407,7 +407,7 @@ describe('HasOne component', () => {
 
 				return (
 					<div>
-						<HasOne field={article.author}>
+						<HasOne field={article.author!}>
 							{author => <AuthorNameWithUpdate author={author} testIdName="author-name" testIdBtn="update-btn" newName="Updated Name" />}
 						</HasOne>
 					</div>
@@ -453,8 +453,8 @@ describe('HasOne component', () => {
 
 				return (
 					<div>
-						<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
-						<HasOne field={article.author}>
+						<span data-testid="author-id">{article.author!.$id ?? 'null'}</span>
+						<HasOne field={article.author!}>
 							{author => <AuthorName author={author} testId="author-name" />}
 						</HasOne>
 					</div>

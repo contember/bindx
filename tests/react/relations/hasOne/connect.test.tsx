@@ -5,7 +5,6 @@ import React from 'react'
 import {
 	BindxProvider,
 	MockAdapter,
-	isPlaceholderId,
 	isPersistedId,
 	useEntity,
 	useEntityList,
@@ -32,14 +31,16 @@ describe('HasOne Relations - Connect Operations', () => {
 				return <div data-testid="loading">Loading...</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
-					<span data-testid="author-name">{article.author.$entity.$fields.name.value ?? 'N/A'}</span>
-					<span data-testid="is-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
+					<span data-testid="author-name">{article.author?.$entity.$fields.name.value ?? 'N/A'}</span>
+					<span data-testid="is-dirty">{authorHandle.$isDirty ? 'dirty' : 'clean'}</span>
 					<button
 						data-testid="connect-author-2"
-						onClick={() => article.author.$connect('author-2')}
+						onClick={() => authorHandle.$connect('author-2')}
 					>
 						Connect author-2
 					</button>
@@ -87,18 +88,20 @@ describe('HasOne Relations - Connect Operations', () => {
 				return <div data-testid="loading">Loading...</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
 					<button
 						data-testid="connect-author-2"
-						onClick={() => article.author.$connect('author-2')}
+						onClick={() => authorHandle.$connect('author-2')}
 					>
 						Connect
 					</button>
 					<button
 						data-testid="disconnect"
-						onClick={() => article.author.$disconnect()}
+						onClick={() => authorHandle.$disconnect()}
 					>
 						Disconnect
 					</button>
@@ -128,7 +131,8 @@ describe('HasOne Relations - Connect Operations', () => {
 			;(getByTestId(container, 'disconnect') as HTMLButtonElement).click()
 		})
 
-		expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
+		// Nullable has-one returns null when disconnected
+		expect(getByTestId(container, 'author-id').textContent).toBe('null')
 	})
 
 	test('4. Disconnect + Connect different - new entity should be connected', async () => {
@@ -146,18 +150,20 @@ describe('HasOne Relations - Connect Operations', () => {
 				return <div data-testid="loading">Loading...</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
 					<button
 						data-testid="disconnect"
-						onClick={() => article.author.$disconnect()}
+						onClick={() => authorHandle.$disconnect()}
 					>
 						Disconnect
 					</button>
 					<button
 						data-testid="connect-author-2"
-						onClick={() => article.author.$connect('author-2')}
+						onClick={() => authorHandle.$connect('author-2')}
 					>
 						Connect author-2
 					</button>
@@ -183,7 +189,8 @@ describe('HasOne Relations - Connect Operations', () => {
 			;(getByTestId(container, 'disconnect') as HTMLButtonElement).click()
 		})
 
-		expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
+		// Nullable has-one returns null when disconnected
+		expect(getByTestId(container, 'author-id').textContent).toBe('null')
 
 		// Connect to author-2
 		act(() => {
@@ -208,18 +215,20 @@ describe('HasOne Relations - Connect Operations', () => {
 				return <div data-testid="loading">Loading...</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
 					<button
 						data-testid="connect-author-1"
-						onClick={() => article.author.$connect('author-1')}
+						onClick={() => authorHandle.$connect('author-1')}
 					>
 						Connect author-1
 					</button>
 					<button
 						data-testid="connect-author-2"
-						onClick={() => article.author.$connect('author-2')}
+						onClick={() => authorHandle.$connect('author-2')}
 					>
 						Connect author-2
 					</button>
@@ -271,16 +280,18 @@ describe('HasOne Relations - Connect Operations', () => {
 				return <div>Error</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
-					<span data-testid="author-name">{article.author.$entity.$fields.name.value ?? 'N/A'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
+					<span data-testid="author-name">{article.author?.$entity.$fields.name.value ?? 'N/A'}</span>
 					<select
 						data-testid="author-select"
-						value={article.author.$id ?? ''}
+						value={article.author?.$id ?? ''}
 						onChange={e => {
 							if (e.target.value) {
-								article.author.$connect(e.target.value)
+								authorHandle.$connect(e.target.value)
 							}
 						}}
 					>
@@ -338,10 +349,10 @@ describe('HasOne Relations - Connect Operations', () => {
 				return <div>Error</div>
 			}
 
-			// Pattern from ArticleWithAuthorSelectExample
-			const currentAuthorId = article.author.$id
-			const isConnected = isPersistedId(currentAuthorId)
-			const authorEntity = article.author.$entity
+			const authorHandle = article.$hasOne('author')
+			const author = article.author
+			const currentAuthorId = author?.$id
+			const isConnected = currentAuthorId !== undefined && isPersistedId(currentAuthorId)
 
 			return (
 				<div>
@@ -350,9 +361,9 @@ describe('HasOne Relations - Connect Operations', () => {
 						value={isConnected ? currentAuthorId : ''}
 						onChange={e => {
 							if (e.target.value === '') {
-								article.author.$disconnect()
+								authorHandle.$disconnect()
 							} else {
-								article.author.$connect(e.target.value)
+								authorHandle.$connect(e.target.value)
 							}
 						}}
 					>
@@ -363,9 +374,9 @@ describe('HasOne Relations - Connect Operations', () => {
 							</option>
 						))}
 					</select>
-					<span data-testid="author-id">{currentAuthorId}</span>
+					<span data-testid="author-id">{currentAuthorId ?? 'null'}</span>
 					<span data-testid="author-name">
-						{isConnected ? authorEntity.$fields.name.value : 'N/A'}
+						{isConnected ? author?.$entity.$fields.name.value : 'N/A'}
 					</span>
 				</div>
 			)
@@ -400,7 +411,8 @@ describe('HasOne Relations - Connect Operations', () => {
 			select.value = ''
 			select.dispatchEvent(new Event('change', { bubbles: true }))
 		})
-		expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
+		// Nullable has-one returns null when disconnected
+		expect(getByTestId(container, 'author-id').textContent).toBe('null')
 		expect(getByTestId(container, 'author-name').textContent).toBe('N/A')
 
 		// Reconnect to author-1

@@ -5,7 +5,6 @@ import React from 'react'
 import {
 	BindxProvider,
 	MockAdapter,
-	isPlaceholderId,
 	useEntity,
 	useEntityList,
 } from '@contember/bindx-react'
@@ -32,14 +31,16 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 				return <div>Error</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
-					<span data-testid="relation-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
+					<span data-testid="relation-dirty">{authorHandle.$isDirty ? 'dirty' : 'clean'}</span>
 					<span data-testid="entity-dirty">{article.$isDirty ? 'dirty' : 'clean'}</span>
 					<button
 						data-testid="connect-author-2"
-						onClick={() => article.author.$connect('author-2')}
+						onClick={() => authorHandle.$connect('author-2')}
 					>
 						Connect Author 2
 					</button>
@@ -88,14 +89,16 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 				return <div data-testid="loading">Loading...</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
-					<span data-testid="relation-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
+					<span data-testid="relation-dirty">{authorHandle.$isDirty ? 'dirty' : 'clean'}</span>
 					<span data-testid="entity-dirty">{article.$isDirty ? 'dirty' : 'clean'}</span>
 					<button
 						data-testid="disconnect"
-						onClick={() => article.author.$disconnect()}
+						onClick={() => authorHandle.$disconnect()}
 					>
 						Disconnect
 					</button>
@@ -123,8 +126,8 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 			;(getByTestId(container, 'disconnect') as HTMLButtonElement).click()
 		})
 
-		// Should be dirty
-		expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
+		// Nullable has-one returns null when disconnected
+		expect(getByTestId(container, 'author-id').textContent).toBe('null')
 		expect(getByTestId(container, 'relation-dirty').textContent).toBe('dirty')
 		expect(getByTestId(container, 'entity-dirty').textContent).toBe('dirty')
 	})
@@ -145,19 +148,21 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 				return <div>Error</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
-					<span data-testid="relation-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
+					<span data-testid="relation-dirty">{authorHandle.$isDirty ? 'dirty' : 'clean'}</span>
 					<button
 						data-testid="connect-author-2"
-						onClick={() => article.author.$connect('author-2')}
+						onClick={() => authorHandle.$connect('author-2')}
 					>
 						Connect Author 2
 					</button>
 					<button
 						data-testid="connect-author-1"
-						onClick={() => article.author.$connect('author-1')}
+						onClick={() => authorHandle.$connect('author-1')}
 					>
 						Connect Author 1
 					</button>
@@ -207,14 +212,16 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 				return <div>Error</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
-					<span data-testid="relation-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
+					<span data-testid="relation-dirty">{authorHandle.$isDirty ? 'dirty' : 'clean'}</span>
 					<span data-testid="entity-dirty">{article.$isDirty ? 'dirty' : 'clean'}</span>
 					<button
 						data-testid="connect-author-2"
-						onClick={() => article.author.$connect('author-2')}
+						onClick={() => authorHandle.$connect('author-2')}
 					>
 						Connect Author 2
 					</button>
@@ -274,19 +281,21 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 				return <div>Error</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
-					<span data-testid="relation-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
+					<span data-testid="relation-dirty">{authorHandle.$isDirty ? 'dirty' : 'clean'}</span>
 					<button
 						data-testid="disconnect"
-						onClick={() => article.author.$disconnect()}
+						onClick={() => authorHandle.$disconnect()}
 					>
 						Disconnect
 					</button>
 					<button
 						data-testid="connect-author-1"
-						onClick={() => article.author.$connect('author-1')}
+						onClick={() => authorHandle.$connect('author-1')}
 					>
 						Connect Author 1
 					</button>
@@ -312,7 +321,8 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 		act(() => {
 			;(getByTestId(container, 'disconnect') as HTMLButtonElement).click()
 		})
-		expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
+		// Nullable has-one returns null when disconnected
+		expect(getByTestId(container, 'author-id').textContent).toBe('null')
 		expect(getByTestId(container, 'relation-dirty').textContent).toBe('dirty')
 
 		// Connect back to original - should be clean
@@ -338,15 +348,17 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 				return <div>Error</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-name">{article.author.$fields.name.value}</span>
-					<span data-testid="author-field-dirty">{article.author.$fields.name.isDirty ? 'dirty' : 'clean'}</span>
-					<span data-testid="relation-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
+					<span data-testid="author-name">{article.author?.$fields.name.value}</span>
+					<span data-testid="author-field-dirty">{article.author?.$fields.name.isDirty ? 'dirty' : 'clean'}</span>
+					<span data-testid="relation-dirty">{authorHandle.$isDirty ? 'dirty' : 'clean'}</span>
 					<span data-testid="entity-dirty">{article.$isDirty ? 'dirty' : 'clean'}</span>
 					<button
 						data-testid="change-name"
-						onClick={() => article.author.$fields.name.setValue('Updated Name')}
+						onClick={() => authorHandle.$entity.$fields.name.setValue('Updated Name')}
 					>
 						Change Name
 					</button>
@@ -399,18 +411,20 @@ describe('HasOne Relations - Dirty State Tracking', () => {
 				return <div>Error</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
 					<span data-testid="entity-dirty">{article.$isDirty ? 'dirty' : 'clean'}</span>
 					<button
 						data-testid="connect-author-2"
-						onClick={() => article.author.$connect('author-2')}
+						onClick={() => authorHandle.$connect('author-2')}
 					>
 						Connect Author 2
 					</button>
 					<button
 						data-testid="connect-author-1"
-						onClick={() => article.author.$connect('author-1')}
+						onClick={() => authorHandle.$connect('author-1')}
 					>
 						Connect Author 1
 					</button>

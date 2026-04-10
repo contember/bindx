@@ -5,7 +5,6 @@ import React from 'react'
 import {
 	BindxProvider,
 	MockAdapter,
-	isPlaceholderId,
 	useEntity,
 } from '@contember/bindx-react'
 import { getByTestId, queryByTestId, createMockData, entityDefs, schema } from './setup'
@@ -30,17 +29,19 @@ describe('HasOne Relations - Reset Operations', () => {
 				return <div data-testid="loading">Loading...</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
-					<span data-testid="is-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
+					<span data-testid="is-dirty">{authorHandle.$isDirty ? 'dirty' : 'clean'}</span>
 					<button
 						data-testid="connect-author-2"
-						onClick={() => article.author.$connect('author-2')}
+						onClick={() => authorHandle.$connect('author-2')}
 					>
 						Connect
 					</button>
-					<button data-testid="reset" onClick={() => article.author.$reset()}>
+					<button data-testid="reset" onClick={() => authorHandle.$reset()}>
 						Reset
 					</button>
 				</div>
@@ -90,17 +91,19 @@ describe('HasOne Relations - Reset Operations', () => {
 				return <div data-testid="loading">Loading...</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
-					<span data-testid="is-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
+					<span data-testid="is-dirty">{authorHandle.$isDirty ? 'dirty' : 'clean'}</span>
 					<button
 						data-testid="disconnect"
-						onClick={() => article.author.$disconnect()}
+						onClick={() => authorHandle.$disconnect()}
 					>
 						Disconnect
 					</button>
-					<button data-testid="reset" onClick={() => article.author.$reset()}>
+					<button data-testid="reset" onClick={() => authorHandle.$reset()}>
 						Reset
 					</button>
 				</div>
@@ -122,7 +125,8 @@ describe('HasOne Relations - Reset Operations', () => {
 			;(getByTestId(container, 'disconnect') as HTMLButtonElement).click()
 		})
 
-		expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
+		// Nullable has-one returns null when disconnected
+		expect(getByTestId(container, 'author-id').textContent).toBe('null')
 		expect(getByTestId(container, 'is-dirty').textContent).toBe('dirty')
 
 		// Reset

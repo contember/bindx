@@ -177,7 +177,7 @@ describe('DataGrid', () => {
 						{it => (
 							<>
 								<DataGridTextColumn field={it.title} header="Title" />
-								<DataGridHasOneColumn field={it.author} header="Author">
+								<DataGridHasOneColumn field={it.author!} header="Author">
 									{(author: any) => author.name}
 								</DataGridHasOneColumn>
 								<TestTable />

@@ -137,7 +137,7 @@ describe('Select', () => {
 			}
 
 			return (
-				<Select relation={article.category} options={entities.Category}>
+				<Select relation={article.category!} options={entities.Category}>
 					<div>
 						<SelectPlaceholder>
 							<span data-testid="placeholder">Select category</span>
@@ -180,7 +180,7 @@ describe('Select', () => {
 			}
 
 			return (
-				<Select relation={article.category} options={entities.Category}>
+				<Select relation={article.category!} options={entities.Category}>
 					<div>
 						<SelectPlaceholder>
 							<span data-testid="placeholder">Select category</span>
@@ -221,19 +221,19 @@ describe('Select', () => {
 			}
 
 			return (
-				<Select relation={article.category} options={entities.Category}>
+				<Select relation={article.category!} options={entities.Category}>
 					<div>
-						<span data-testid="state">{article.category.$state}</span>
-						<span data-testid="cat-id">{article.category.$state === 'connected' ? article.category.$id : 'none'}</span>
+						<span data-testid="state">{article.category!.$state}</span>
+						<span data-testid="cat-id">{article.category!.$state === 'connected' ? article.category!.$id : 'none'}</span>
 						<button
 							data-testid="connect-cat-2"
-							onClick={() => article.category.$connect('cat-2')}
+							onClick={() => article.category!.$connect('cat-2')}
 						>
 							Connect
 						</button>
 						<button
 							data-testid="disconnect"
-							onClick={() => article.category.$disconnect()}
+							onClick={() => article.category!.$disconnect()}
 						>
 							Disconnect
 						</button>
@@ -285,7 +285,7 @@ describe('Select', () => {
 			}
 
 			return (
-				<Select relation={article.category} options={entities.Category}>
+				<Select relation={article.category!} options={entities.Category}>
 					<SelectDataView selection={it => <span>{(it as unknown as { name: { value: string } }).name.value}</span>}>
 						<DataViewLoaderState loaded>
 							<DataViewEachRow>

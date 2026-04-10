@@ -490,8 +490,12 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 				}
 
 				if (fieldDef.type === 'hasOne') {
-					// Has-one relation - return HasOneHandle
-					return this.hasOne(fieldName, nestedSelection)
+					// Has-one relation - return HasOneHandle or null for nullable disconnected
+					const handle = this.hasOne(fieldName, nestedSelection)
+					if (fieldDef.nullable && handle.$state === 'disconnected') {
+						return null
+					}
+					return handle
 				}
 
 				if (fieldDef.type === 'hasMany') {

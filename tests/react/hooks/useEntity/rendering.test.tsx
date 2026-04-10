@@ -253,7 +253,7 @@ describe('useEntity hook - data rendering', () => {
 			return (
 				<div data-testid="editor">
 					<span data-testid="editor-title">{article.title.value}</span>
-					<span data-testid="editor-author">{article.author.name.value}</span>
+					<span data-testid="editor-author">{article.author!.name.value}</span>
 					<span data-testid="editor-location">{article.$data!.location?.label ?? 'N/A'}</span>
 					<span data-testid="editor-tags">{article.$data!.tags?.length ?? 0}</span>
 				</div>

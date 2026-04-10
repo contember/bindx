@@ -501,7 +501,7 @@ describe('DataGrid layout via DataGridLayout marker', () => {
 									<div>
 										<span data-testid="tile-title"><Field field={item.title} /></span>
 										<span data-testid="tile-author">
-											<HasOne field={item.author}>
+											<HasOne field={item.author!}>
 												{(author: any) => <Field field={author.name} />}
 											</HasOne>
 										</span>

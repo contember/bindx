@@ -5,7 +5,6 @@ import React from 'react'
 import {
 	BindxProvider,
 	MockAdapter,
-	isPlaceholderId,
 	useEntity,
 } from '@contember/bindx-react'
 import { getByTestId, queryByTestId, createMockData, entityDefs, schema } from './setup'
@@ -15,7 +14,7 @@ afterEach(() => {
 })
 
 describe('HasOne Relations - Disconnect Operations', () => {
-	test('2. Disconnect - entity should become null/placeholder, isDirty=true', async () => {
+	test('2. Disconnect - entity should become null, isDirty=true', async () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent(): React.ReactElement {
@@ -30,13 +29,15 @@ describe('HasOne Relations - Disconnect Operations', () => {
 				return <div data-testid="loading">Loading...</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
-					<span data-testid="is-dirty">{article.author.$isDirty ? 'dirty' : 'clean'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
+					<span data-testid="is-dirty">{authorHandle.$isDirty ? 'dirty' : 'clean'}</span>
 					<button
 						data-testid="disconnect"
-						onClick={() => article.author.$disconnect()}
+						onClick={() => authorHandle.$disconnect()}
 					>
 						Disconnect
 					</button>
@@ -63,12 +64,12 @@ describe('HasOne Relations - Disconnect Operations', () => {
 			;(getByTestId(container, 'disconnect') as HTMLButtonElement).click()
 		})
 
-		// Should now be null
-		expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
+		// Nullable has-one returns null when disconnected
+		expect(getByTestId(container, 'author-id').textContent).toBe('null')
 		expect(getByTestId(container, 'is-dirty').textContent).toBe('dirty')
 	})
 
-	test('8. Placeholder fields - can write to placeholder fields when disconnected', async () => {
+	test('8. Placeholder fields - can write to placeholder fields via $hasOne when disconnected', async () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
 		function TestComponent(): React.ReactElement {
@@ -83,15 +84,19 @@ describe('HasOne Relations - Disconnect Operations', () => {
 				return <div data-testid="loading">Loading...</div>
 			}
 
+			// Nullable has-one returns null when disconnected
+			// Use $hasOne to access placeholder entity for writes
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+					<span data-testid="author-null">{article.author === null ? 'yes' : 'no'}</span>
 					<span data-testid="placeholder-name">
-						{article.author.$entity.$fields.name.value ?? 'empty'}
+						{authorHandle.$entity.$fields.name.value ?? 'empty'}
 					</span>
 					<button
 						data-testid="set-name"
-						onClick={() => article.author.$entity.$fields.name.setValue('New Author')}
+						onClick={() => authorHandle.$entity.$fields.name.setValue('New Author')}
 					>
 						Set Name
 					</button>
@@ -106,14 +111,14 @@ describe('HasOne Relations - Disconnect Operations', () => {
 		)
 
 		await waitFor(() => {
-			expect(queryByTestId(container, 'author-id')).not.toBeNull()
+			expect(queryByTestId(container, 'author-null')).not.toBeNull()
 		})
 
-		// No author initially
-		expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
+		// No author initially — nullable has-one returns null
+		expect(getByTestId(container, 'author-null').textContent).toBe('yes')
 		expect(getByTestId(container, 'placeholder-name').textContent).toBe('empty')
 
-		// Set placeholder name
+		// Set placeholder name via $hasOne handle
 		act(() => {
 			;(getByTestId(container, 'set-name') as HTMLButtonElement).click()
 		})
@@ -139,11 +144,11 @@ describe('HasOne Relations - Disconnect Operations', () => {
 
 			return (
 				<div>
-					<span data-testid="author-name">{article.author.$entity.$fields.name.value ?? 'N/A'}</span>
-					<span data-testid="author-email">{article.author.$entity.$fields.email.value ?? 'N/A'}</span>
+					<span data-testid="author-name">{article.author?.$entity.$fields.name.value ?? 'N/A'}</span>
+					<span data-testid="author-email">{article.author?.$entity.$fields.email.value ?? 'N/A'}</span>
 					<button
 						data-testid="set-name"
-						onClick={() => article.author.$entity.$fields.name.setValue('Jane Updated')}
+						onClick={() => article.$hasOne('author').$entity.$fields.name.setValue('Jane Updated')}
 					>
 						Set Name
 					</button>
@@ -188,15 +193,17 @@ describe('HasOne Relations - Disconnect Operations', () => {
 				return <div data-testid="loading">Loading...</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-name">{article.author.$entity.$fields.name.value ?? 'N/A'}</span>
-					<span data-testid="author-email">{article.author.$entity.$fields.email.value ?? 'N/A'}</span>
+					<span data-testid="author-name">{article.author?.$entity.$fields.name.value ?? 'N/A'}</span>
+					<span data-testid="author-email">{article.author?.$entity.$fields.email.value ?? 'N/A'}</span>
 					<button
 						data-testid="set-both"
 						onClick={() => {
-							article.author.$entity.$fields.name.setValue('New Name')
-							article.author.$entity.$fields.email.setValue('new@email.com')
+							authorHandle.$entity.$fields.name.setValue('New Name')
+							authorHandle.$entity.$fields.email.setValue('new@email.com')
 						}}
 					>
 						Set Both

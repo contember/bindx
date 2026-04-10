@@ -35,7 +35,7 @@ export const schema = defineSchema<TestSchema>({
 			fields: {
 				id: scalar(),
 				title: scalar(),
-				author: hasOne('Author'),
+				author: hasOne('Author', { nullable: true }),
 			},
 		},
 		Author: {

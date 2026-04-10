@@ -5,7 +5,6 @@ import React from 'react'
 import {
 	BindxProvider,
 	MockAdapter,
-	isPlaceholderId,
 	useEntity,
 	useEntityList,
 } from '@contember/bindx-react'
@@ -32,14 +31,16 @@ describe('HasOne Relations - Persistence', () => {
 				return <div>Error</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
 					<span data-testid="is-dirty">{article.$isDirty ? 'dirty' : 'clean'}</span>
 					<span data-testid="is-persisting">idle</span>
 					<button
 						data-testid="connect-author-2"
-						onClick={() => article.author.$connect('author-2')}
+						onClick={() => authorHandle.$connect('author-2')}
 					>
 						Connect Author 2
 					</button>
@@ -101,11 +102,13 @@ describe('HasOne Relations - Persistence', () => {
 				return <div data-testid="loading">Loading...</div>
 			}
 
+			const authorHandle = article.$hasOne('author')
+
 			return (
 				<div>
-					<span data-testid="author-id">{article.author.$id ?? 'null'}</span>
+					<span data-testid="author-id">{article.author?.$id ?? 'null'}</span>
 					<span data-testid="is-dirty">{article.$isDirty ? 'dirty' : 'clean'}</span>
-					<button data-testid="disconnect" onClick={() => article.author.$disconnect()}>
+					<button data-testid="disconnect" onClick={() => authorHandle.$disconnect()}>
 						Disconnect
 					</button>
 					<button data-testid="persist" onClick={() => article.$persist()}>
@@ -132,7 +135,8 @@ describe('HasOne Relations - Persistence', () => {
 		act(() => {
 			;(getByTestId(container, 'disconnect') as HTMLButtonElement).click()
 		})
-		expect(isPlaceholderId(getByTestId(container, 'author-id').textContent!)).toBe(true)
+		// Nullable has-one returns null when disconnected
+		expect(getByTestId(container, 'author-id').textContent).toBe('null')
 		expect(getByTestId(container, 'is-dirty').textContent).toBe('dirty')
 
 		// Persist changes

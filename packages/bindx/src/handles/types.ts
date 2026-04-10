@@ -78,6 +78,8 @@ export type HasOneKeys<T> = {
 			: never
 }[keyof T]
 
+type NullableHasOne<T, TAccessor> = null extends T ? TAccessor | null : TAccessor
+
 // ============================================================================
 // Symbols
 // ============================================================================
@@ -341,7 +343,21 @@ export type EntityAccessor<
 > = EntityRef<TEntity, TSelected, TBrand, TEntityName, TSchema, TRoleMap> & {
 	readonly $fields: EntityFieldsAccessor<TEntity, TSelected, TSchema>
 	readonly $data: TSelected | null
-} & EntityFieldsAccessor<TEntity, TSelected, TSchema>
+} & EntityFieldsAccessor<TEntity, TSelected, TSchema> & EntityHasOneMethods<TEntity, TSchema>
+
+/**
+ * Provides $hasOne(fieldName) method that always returns HasOneAccessor (never null).
+ * Used for mutation access (connect/disconnect) on nullable has-one relations.
+ */
+type EntityHasOneMethods<TEntity, TSchema extends Record<string, object>> = {
+	$hasOne<K extends HasOneKeys<TEntity> & keyof TEntity & string>(fieldName: K): HasOneAccessor<
+		NonNullable<TEntity[K]>,
+		NonNullable<TEntity[K]>,
+		AnyBrand,
+		EntityNameFromType<TSchema, NonNullable<TEntity[K]>>,
+		TSchema
+	>
+}
 
 // ============================================================================
 // ENTITY FIELDS MAPPING TYPES
@@ -359,7 +375,7 @@ export type EntityFields<T> = {
 			: never
 		: never
 } & {
-	[K in HasOneKeys<T>]: HasOneAccessor<NonNullable<T[K]>>
+	[K in HasOneKeys<T>]: NullableHasOne<T[K], HasOneAccessor<NonNullable<T[K]>>>
 }
 
 /**
@@ -372,13 +388,13 @@ type FieldRefType<TEntity, TSelected, TSchema extends Record<string, object>, K 
 			? HasManyRef<U, ExtractNestedSelection<TSelected, K> extends (infer S)[] ? S : U, AnyBrand, EntityNameFromType<TSchema, U>, TSchema>
 			: never
 		: never) :
-	K extends HasOneKeys<TEntity> ? HasOneRef<
+	K extends HasOneKeys<TEntity> ? NullableHasOne<TEntity[K], HasOneRef<
 		NonNullable<TEntity[K]>,
 		ExtractNestedSelection<TSelected, K> extends object ? ExtractNestedSelection<TSelected, K> : NonNullable<TEntity[K]>,
 		AnyBrand,
 		EntityNameFromType<TSchema, NonNullable<TEntity[K]>>,
 		TSchema
-	> :
+	>> :
 	never
 
 /**
@@ -391,13 +407,13 @@ type FieldAccessorType<TEntity, TSelected, TSchema extends Record<string, object
 			? HasManyAccessor<U, ExtractNestedSelection<TSelected, K> extends (infer S)[] ? S : U, AnyBrand, EntityNameFromType<TSchema, U>, TSchema>
 			: never
 		: never) :
-	K extends HasOneKeys<TEntity> ? HasOneAccessor<
+	K extends HasOneKeys<TEntity> ? NullableHasOne<TEntity[K], HasOneAccessor<
 		NonNullable<TEntity[K]>,
 		ExtractNestedSelection<TSelected, K> extends object ? ExtractNestedSelection<TSelected, K> : NonNullable<TEntity[K]>,
 		AnyBrand,
 		EntityNameFromType<TSchema, NonNullable<TEntity[K]>>,
 		TSchema
-	> :
+	>> :
 	never
 
 /**

@@ -36,8 +36,8 @@ describe('useEntity hook - relation field handles', () => {
 			return (
 				<div>
 					<h1 data-testid="title">{article.title.value}</h1>
-					<p data-testid="author-name-field">{article.author.name.value}</p>
-					<p data-testid="author-email-field">{article.author.email.value}</p>
+					<p data-testid="author-name-field">{article.author!.name.value}</p>
+					<p data-testid="author-email-field">{article.author!.email.value}</p>
 				</div>
 			)
 		}

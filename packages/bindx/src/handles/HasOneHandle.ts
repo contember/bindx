@@ -203,6 +203,19 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	}
 
 	/**
+	 * Gets a has-one handle for a nested relation on the related entity.
+	 * Delegates to the underlying EntityHandle.
+	 * Enables entity.author.$hasOne('avatar') pattern.
+	 */
+	hasOne<TRelated extends object>(fieldName: string, nestedSelection?: SelectionMeta): HasOneAccessor<TRelated> {
+		const raw = this.entityRaw
+		if (raw instanceof EntityHandle) {
+			return raw.hasOne<TRelated>(fieldName, nestedSelection)
+		}
+		throw new Error(`Cannot access has-one relation "${fieldName}" on a disconnected placeholder entity`)
+	}
+
+	/**
 	 * Gets the raw (unproxied) related entity handle.
 	 * Returns raw EntityHandle or raw PlaceholderHandle.
 	 * Used internally to avoid going through the proxy layer.
