@@ -219,6 +219,7 @@ export interface HasOneRefInterface<
 	readonly id: string
 	readonly $id: string
 	readonly $isDirty: boolean
+	readonly $isConnected: boolean
 	readonly $isNew: boolean
 	readonly $isPersisting: boolean
 	readonly $persistedId: string | null

@@ -61,7 +61,7 @@ const localSchema = defineSchema<TestSchema>({
 				published: scalar(),
 				views: scalar(),
 				publishedAt: scalar(),
-				author: hasOne('Author'),
+				author: hasOne('Author', { nullable: true }),
 			},
 		},
 		Author: {

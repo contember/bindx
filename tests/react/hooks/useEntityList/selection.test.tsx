@@ -51,7 +51,7 @@ const schema = defineSchema<TestSchema>({
 				id: scalar(),
 				title: scalar(),
 				content: scalar(),
-				author: hasOne('Author'),
+				author: hasOne('Author', { nullable: true }),
 			},
 		},
 	},

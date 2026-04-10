@@ -59,7 +59,7 @@ const localSchema = defineSchema<TestSchema>({
 				content: scalar(),
 				status: scalar(),
 				publishedAt: scalar(),
-				author: hasOne('Author'),
+				author: hasOne('Author', { nullable: true }),
 				tags: hasMany('Tag'),
 			},
 		},

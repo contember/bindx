@@ -78,8 +78,8 @@ export const testSchema = defineSchema<TestSchema>({
 				rating: scalar(),
 				publishedAt: scalar(),
 				createdAt: scalar(),
-				author: hasOne('Author'),
-				location: hasOne('Location'),
+				author: hasOne('Author', { nullable: true }),
+				location: hasOne('Location', { nullable: true }),
 				tags: hasMany('Tag'),
 			},
 		},
@@ -146,7 +146,7 @@ export const minimalSchema = defineSchema<MinimalSchema>({
 			fields: {
 				id: scalar(),
 				title: scalar(),
-				author: hasOne('Author'),
+				author: hasOne('Author', { nullable: true }),
 			},
 		},
 		Author: {

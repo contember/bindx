@@ -223,6 +223,7 @@ function createCollectorFieldRef(
 		$clearErrors: () => {},
 		$connect: () => {},
 		$disconnect: () => {},
+		$isConnected: false,
 		$reset: () => {},
 		$onConnect: noop,
 		$onDisconnect: noop,

@@ -329,6 +329,13 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	}
 
 	/**
+	 * Checks if the relation is connected to a persisted entity.
+	 */
+	get isConnected(): boolean {
+		return this.state === 'connected'
+	}
+
+	/**
 	 * Checks if the relation is dirty.
 	 */
 	get isDirty(): boolean {
