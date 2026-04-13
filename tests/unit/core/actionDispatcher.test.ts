@@ -103,7 +103,7 @@ describe('ActionDispatcher', () => {
 			test('should connect relation in store', () => {
 				store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
 
-				dispatcher.dispatch(connectRelation('Article', 'a-1', 'author', 'auth-1'))
+				dispatcher.dispatch(connectRelation('Article', 'a-1', 'author', 'auth-1', 'Author'))
 
 				const relation = store.getRelation('Article', 'a-1', 'author')
 				expect(relation?.currentId).toBe('auth-1')
@@ -233,6 +233,7 @@ describe('ActionDispatcher', () => {
 					entityId: 'a-1',
 					fieldName: 'tags',
 					itemId: 't-1',
+					targetType: 'Tag',
 				})
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
@@ -355,7 +356,7 @@ describe('ActionDispatcher', () => {
 
 			eventEmitter.intercept('relation:connecting', () => ({ action: 'cancel' as const }))
 
-			dispatcher.dispatch(connectRelation('Article', 'a-1', 'author', 'auth-1'))
+			dispatcher.dispatch(connectRelation('Article', 'a-1', 'author', 'auth-1', 'Author'))
 
 			const relation = store.getRelation('Article', 'a-1', 'author')
 			expect(relation).toBeUndefined()
@@ -482,7 +483,7 @@ describe('ActionDispatcher', () => {
 				event: { ...event, targetId: 'modified-auth-id' },
 			}))
 
-			await dispatcher.dispatchAsync(connectRelation('Article', 'a-1', 'author', 'original-auth-id'))
+			await dispatcher.dispatchAsync(connectRelation('Article', 'a-1', 'author', 'original-auth-id', 'Author'))
 
 			const relation = store.getRelation('Article', 'a-1', 'author')
 			expect(relation?.currentId).toBe('modified-auth-id')
@@ -633,6 +634,91 @@ describe('ActionDispatcher', () => {
 				const relation = store.getRelation('Article', 'a-1', 'author')
 				expect(relation?.serverId).toBe('auth-2')
 			})
+		})
+	})
+
+	// ==================== Parent-Child Registration ====================
+
+	describe('Parent-Child Registration', () => {
+		test('ADD_TO_LIST registers parent-child for change propagation', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags')
+			store.setEntityData('Tag', 't-1', { id: 't-1', name: 'JS' }, true)
+
+			const parentCallback = mock(() => {})
+			store.subscribeToEntity('Article', 'a-1', parentCallback)
+			parentCallback.mockClear()
+
+			dispatcher.dispatch({
+				type: 'ADD_TO_LIST',
+				entityType: 'Article',
+				entityId: 'a-1',
+				fieldName: 'tags',
+				targetType: 'Tag',
+				itemId: 't-1',
+			})
+			parentCallback.mockClear()
+
+			// Modifying the child should propagate to parent
+			store.setFieldValue('Tag', 't-1', ['name'], 'TypeScript')
+			expect(parentCallback).toHaveBeenCalled()
+		})
+
+		test('CONNECT_TO_LIST registers parent-child for change propagation', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags')
+			store.setEntityData('Tag', 't-1', { id: 't-1', name: 'JS' }, true)
+
+			const parentCallback = mock(() => {})
+			store.subscribeToEntity('Article', 'a-1', parentCallback)
+			parentCallback.mockClear()
+
+			dispatcher.dispatch({
+				type: 'CONNECT_TO_LIST',
+				entityType: 'Article',
+				entityId: 'a-1',
+				fieldName: 'tags',
+				itemId: 't-1',
+				targetType: 'Tag',
+			})
+			parentCallback.mockClear()
+
+			// Modifying the child should propagate to parent
+			store.setFieldValue('Tag', 't-1', ['name'], 'TypeScript')
+			expect(parentCallback).toHaveBeenCalled()
+		})
+
+		test('CONNECT_RELATION registers parent-child for change propagation', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
+			store.setEntityData('Author', 'auth-1', { id: 'auth-1', name: 'John' }, true)
+
+			const parentCallback = mock(() => {})
+			store.subscribeToEntity('Article', 'a-1', parentCallback)
+			parentCallback.mockClear()
+
+			dispatcher.dispatch(connectRelation('Article', 'a-1', 'author', 'auth-1', 'Author'))
+			parentCallback.mockClear()
+
+			// Modifying the connected entity should propagate to parent
+			store.setFieldValue('Author', 'auth-1', ['name'], 'Jane')
+			expect(parentCallback).toHaveBeenCalled()
+		})
+
+		test('store.addToHasMany alone does NOT register parent-child', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags')
+			store.setEntityData('Tag', 't-1', { id: 't-1', name: 'JS' }, true)
+
+			// Use low-level store API directly (no dispatcher)
+			store.addToHasMany('Article', 'a-1', 'tags', 't-1')
+
+			const parentCallback = mock(() => {})
+			store.subscribeToEntity('Article', 'a-1', parentCallback)
+			parentCallback.mockClear()
+
+			// Modifying the child should NOT propagate — no parent-child registered
+			store.setFieldValue('Tag', 't-1', ['name'], 'TypeScript')
+			expect(parentCallback).not.toHaveBeenCalled()
 		})
 	})
 })

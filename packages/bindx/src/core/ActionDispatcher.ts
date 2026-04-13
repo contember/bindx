@@ -218,6 +218,7 @@ export class ActionDispatcher {
 						state: 'connected',
 					},
 				)
+				this.store.registerParentChild(action.entityType, action.entityId, action.targetType, action.targetId)
 				break
 
 			case 'DISCONNECT_RELATION':
@@ -293,6 +294,7 @@ export class ActionDispatcher {
 					action.itemId,
 					action.alias,
 				)
+				this.store.registerParentChild(action.entityType, action.entityId, action.targetType, action.itemId)
 				break
 
 			case 'ADD_TO_LIST': {
@@ -306,6 +308,7 @@ export class ActionDispatcher {
 					itemId,
 					action.alias,
 				)
+				this.store.registerParentChild(action.entityType, action.entityId, action.targetType, itemId)
 				break
 			}
 

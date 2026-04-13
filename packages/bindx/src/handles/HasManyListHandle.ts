@@ -304,10 +304,8 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	connect(itemId: string): void {
 		this.assertNotDisposed()
 		this.dispatcher.dispatch(
-			connectToList(this.entityType, this.entityId, this.fieldName, itemId, this.alias),
+			connectToList(this.entityType, this.entityId, this.fieldName, itemId, this.itemType, this.alias),
 		)
-		// Register parent-child so that changes to the connected entity propagate to the parent
-		this.store.registerParentChild(this.entityType, this.entityId, this.itemType, itemId)
 	}
 
 	/**
@@ -349,9 +347,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		this.dispatcher.dispatch(
 			addToList(this.entityType, this.entityId, this.fieldName, this.itemType, tempId, this.alias),
 		)
-
-		// Register parent-child so that changes to the new entity propagate to the parent
-		this.store.registerParentChild(this.entityType, this.entityId, this.itemType, tempId)
 
 		return tempId
 	}

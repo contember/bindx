@@ -266,6 +266,7 @@ describe('UndoManager', () => {
 				entityId: '1',
 				fieldName: 'author',
 				targetId: 'a1',
+				targetType: 'Author',
 			})
 
 			const relationBefore = store.getRelation('Article', '1', 'author')

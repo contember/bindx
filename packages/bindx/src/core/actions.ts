@@ -61,6 +61,7 @@ export interface ConnectRelationAction {
 	readonly entityId: string
 	readonly fieldName: string
 	readonly targetId: string
+	readonly targetType: string
 }
 
 /**
@@ -126,6 +127,7 @@ export interface ConnectToListAction {
 	readonly entityId: string
 	readonly fieldName: string
 	readonly itemId: string
+	readonly targetType: string
 	readonly alias?: string
 }
 
@@ -355,8 +357,9 @@ export function connectRelation(
 	entityId: string,
 	fieldName: string,
 	targetId: string,
+	targetType: string,
 ): ConnectRelationAction {
-	return { type: 'CONNECT_RELATION', entityType, entityId, fieldName, targetId }
+	return { type: 'CONNECT_RELATION', entityType, entityId, fieldName, targetId, targetType }
 }
 
 /**
@@ -517,9 +520,10 @@ export function connectToList(
 	entityId: string,
 	fieldName: string,
 	itemId: string,
+	targetType: string,
 	alias?: string,
 ): ConnectToListAction {
-	return { type: 'CONNECT_TO_LIST', entityType, entityId, fieldName, itemId, alias }
+	return { type: 'CONNECT_TO_LIST', entityType, entityId, fieldName, itemId, targetType, alias }
 }
 
 /**
