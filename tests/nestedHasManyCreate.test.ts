@@ -473,6 +473,117 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 		expect(persistedId).toMatch(/^server-id-/)
 	})
 
+	/**
+	 * When the adapter does NOT support persistTransaction (sequential fallback path),
+	 * the BatchPersister extracts nested IDs from the adapter's node response data
+	 * and builds nestedResults automatically.
+	 */
+	test('sequential fallback extracts nested IDs from node response data', async () => {
+		let serverIdCounter = 0
+
+		// Adapter without persistTransaction — uses sequential fallback
+		const adapter: BackendAdapter = {
+			query: mock(() => Promise.resolve([])),
+			delete: mock(() => Promise.resolve({ ok: true })),
+			persist: mock((entityType: string, id: string, changes: Record<string, unknown>) => {
+				// Simulate Contember response: return node data with server-assigned IDs for nested creates
+				const nodeData = buildMockNodeResponse(changes)
+				return Promise.resolve({ ok: true, data: nodeData })
+			}),
+			create: mock((entityType: string, data: Record<string, unknown>) => {
+				const nodeData = buildMockNodeResponse(data)
+				return Promise.resolve({ ok: true, data: nodeData })
+			}),
+		}
+
+		// Simulate what Contember returns: walk mutation data, assign UUIDs to creates
+		function buildMockNodeResponse(data: Record<string, unknown>): Record<string, unknown> {
+			const node: Record<string, unknown> = { id: `server-${++serverIdCounter}` }
+
+			for (const [key, value] of Object.entries(data)) {
+				if (value === null || value === undefined) continue
+				if (Array.isArray(value)) {
+					// HasMany: process creates
+					const items: Record<string, unknown>[] = []
+					for (const item of value) {
+						if (typeof item !== 'object' || item === null) continue
+						const op = item as Record<string, unknown>
+						if ('create' in op) {
+							items.push(buildMockNodeResponse(op['create'] as Record<string, unknown>))
+						}
+					}
+					if (items.length > 0) node[key] = items
+				} else if (typeof value === 'object') {
+					const op = value as Record<string, unknown>
+					if ('create' in op) {
+						node[key] = buildMockNodeResponse(op['create'] as Record<string, unknown>)
+					}
+				}
+			}
+			return node
+		}
+
+		const dispatcher = new ActionDispatcher(store)
+		const schemaAdapter = new ContemberSchemaMutationAdapter(nestedSchema)
+		const mutationCollector = new MutationCollector(store, schemaAdapter)
+		const persister = new BatchPersister(adapter, store, dispatcher, {
+			mutationCollector,
+			schema: schemaAdapter as never,
+		})
+
+		// Setup
+		store.setEntityData('Program', 'prog-1', {
+			id: 'prog-1',
+			name: 'Test Program',
+			approval: null,
+		}, true)
+		store.setExistsOnServer('Program', 'prog-1', true)
+		store.setEntityData('Guarantor', 'g-expert', { id: 'g-expert', name: 'Expert' }, true)
+		store.setExistsOnServer('Guarantor', 'g-expert', true)
+
+		const approvalId = store.createEntity('Approval', { status: 'pending', rounds: [] })
+		store.getOrCreateRelation('Program', 'prog-1', 'approval', {
+			currentId: approvalId,
+			serverId: null,
+			state: 'connected',
+			serverState: 'disconnected',
+			placeholderData: {},
+		})
+
+		const roundId = store.createEntity('Round', {
+			roundNumber: 1,
+			status: 'pending',
+			reviews: [
+				{ reviewType: 'expert', status: 'pending', guarantor: { id: 'g-expert' } },
+			],
+		})
+		store.getOrCreateHasMany('Approval', approvalId, 'rounds', [])
+		store.addToHasMany('Approval', approvalId, 'rounds', roundId)
+
+		const result = await persister.persistAll()
+		expect(result.success).toBe(true)
+
+		// The approval should have been mapped to a server ID
+		const approvalPersistedId = store.getPersistedId('Approval', approvalId)
+		expect(approvalPersistedId).not.toBeNull()
+		expect(approvalPersistedId).toMatch(/^server-/)
+
+		// The round should have been mapped
+		const roundPersistedId = store.getPersistedId('Round', roundId)
+		expect(roundPersistedId).not.toBeNull()
+		expect(roundPersistedId).toMatch(/^server-/)
+
+		// The materialized review should also be mapped
+		const reviewsState = store.getHasMany('Round', roundId, 'reviews')
+		expect(reviewsState).not.toBeUndefined()
+		expect(reviewsState!.serverIds.size).toBe(1)
+
+		const reviewTempId = [...reviewsState!.serverIds][0]!
+		const reviewPersistedId = store.getPersistedId('Review', reviewTempId)
+		expect(reviewPersistedId).not.toBeNull()
+		expect(reviewPersistedId).toMatch(/^server-/)
+	})
+
 	test('standalone collectCreateData for round includes reviews from store', () => {
 		const roundId = store.createEntity('Round', {
 			roundNumber: 1,

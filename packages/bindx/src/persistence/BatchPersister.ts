@@ -604,11 +604,15 @@ export class BatchPersister {
 					if (this.adapter.create && mutation.data) {
 						const result = await this.adapter.create(mutation.entityType, mutation.data)
 						const persistedId = result.data?.['id'] as string | undefined
+						const nestedResults = result.ok && result.data && mutation.data
+							? this.extractNestedResultsFromNode(mutation.data, result.data, mutation.entityType, mutation.entityId)
+							: undefined
 						results.push({
 							entityType: mutation.entityType,
 							entityId: mutation.entityId,
 							ok: result.ok,
 							persistedId,
+							nestedResults,
 							errorMessage: result.errorMessage,
 							mutationResult: result.mutationResult,
 						})
@@ -622,10 +626,14 @@ export class BatchPersister {
 							mutation.entityId,
 							mutation.data,
 						)
+						const nestedResults = result.ok && result.data && mutation.data
+							? this.extractNestedResultsFromNode(mutation.data, result.data, mutation.entityType, mutation.entityId)
+							: undefined
 						results.push({
 							entityType: mutation.entityType,
 							entityId: mutation.entityId,
 							ok: result.ok,
+							nestedResults,
 							errorMessage: result.errorMessage,
 							mutationResult: result.mutationResult,
 						})
@@ -1008,6 +1016,137 @@ export class BatchPersister {
 			this.store.commitAllRelations(entityType, tempId)
 			this.store.setExistsOnServer(entityType, tempId, true)
 		}
+	}
+
+	/**
+	 * Extracts nested entity results from a mutation's node response data.
+	 * Walks the mutation data structure to find inline create operations,
+	 * then matches them against the node response to extract server-assigned IDs.
+	 *
+	 * For hasOne creates: looks up the temp ID from the store's relation state
+	 * for the parent entity, then gets the server ID from the response node field.
+	 * For hasMany creates: filters new IDs from the response array by excluding
+	 * known pre-existing IDs, matching to temp IDs (aliases) by position.
+	 */
+	private extractNestedResultsFromNode(
+		mutationData: Record<string, unknown>,
+		nodeData: Record<string, unknown>,
+		parentEntityType: string,
+		parentEntityId: string,
+	): TransactionMutationResult[] {
+		const results: TransactionMutationResult[] = []
+		const nestedTypes = this.mutationCollector instanceof MutationCollector
+			? this.mutationCollector.getNestedEntityTypes()
+			: null
+
+		for (const [fieldName, fieldValue] of Object.entries(mutationData)) {
+			if (fieldValue === null || fieldValue === undefined) continue
+
+			if (Array.isArray(fieldValue)) {
+				// HasMany operations
+				const nodeItems = nodeData[fieldName]
+				if (!Array.isArray(nodeItems)) continue
+
+				// Collect all known (non-created) IDs from mutation operations
+				const knownIds = new Set<string>()
+				const createOps: Array<{ alias: string; createData: Record<string, unknown> }> = []
+
+				for (const op of fieldValue) {
+					if (typeof op !== 'object' || op === null) continue
+					const opObj = op as Record<string, unknown>
+
+					if ('connect' in opObj) {
+						const connectBy = opObj['connect'] as Record<string, unknown>
+						if (connectBy['id']) knownIds.add(connectBy['id'] as string)
+					} else if ('update' in opObj) {
+						const updateBy = opObj['update'] as Record<string, unknown>
+						const by = updateBy['by'] as Record<string, unknown> | undefined
+						if (by?.['id']) knownIds.add(by['id'] as string)
+					} else if ('create' in opObj && opObj['alias']) {
+						createOps.push({
+							alias: opObj['alias'] as string,
+							createData: opObj['create'] as Record<string, unknown>,
+						})
+					}
+				}
+
+				// Also include pre-existing server IDs in known IDs
+				const hasManyState = this.store.getHasMany(parentEntityType, parentEntityId, fieldName)
+				if (hasManyState) {
+					for (const serverId of hasManyState.serverIds) {
+						knownIds.add(serverId)
+					}
+				}
+
+				// Find new IDs in the response (not in known IDs)
+				const newItems: Array<Record<string, unknown>> = []
+				for (const item of nodeItems) {
+					if (typeof item !== 'object' || item === null) continue
+					const itemObj = item as Record<string, unknown>
+					const itemId = itemObj['id'] as string | undefined
+					if (itemId && !knownIds.has(itemId)) {
+						newItems.push(itemObj)
+					}
+				}
+
+				// Match new items to create operations by position
+				for (let i = 0; i < Math.min(createOps.length, newItems.length); i++) {
+					const createOp = createOps[i]!
+					const newItem = newItems[i]!
+					const serverId = newItem['id'] as string
+					const entityType = nestedTypes?.get(createOp.alias) ?? 'Unknown'
+
+					// Recurse into nested creates
+					const childResults = this.extractNestedResultsFromNode(
+						createOp.createData, newItem,
+						entityType, createOp.alias,
+					)
+
+					results.push({
+						entityType,
+						entityId: createOp.alias,
+						ok: true,
+						persistedId: serverId,
+						nestedResults: childResults.length > 0 ? childResults : undefined,
+					})
+				}
+			} else if (typeof fieldValue === 'object') {
+				// HasOne operation
+				const opObj = fieldValue as Record<string, unknown>
+				const nodeField = nodeData[fieldName]
+
+				if ('create' in opObj && typeof nodeField === 'object' && nodeField !== null) {
+					const nodeFieldObj = nodeField as Record<string, unknown>
+					const serverId = nodeFieldObj['id'] as string | undefined
+					if (!serverId) continue
+
+					const createData = opObj['create'] as Record<string, unknown>
+
+					// Look up the temp ID from the store's relation state for this field
+					const relationState = this.store.getRelation(parentEntityType, parentEntityId, fieldName)
+					const tempId = relationState?.currentId
+					if (!tempId) continue
+
+					const entityType = nestedTypes?.get(tempId) ?? 'Unknown'
+
+					// Recurse into nested creates
+					const childResults = this.extractNestedResultsFromNode(
+						createData, nodeFieldObj,
+						entityType, tempId,
+					)
+
+					results.push({
+						entityType,
+						entityId: tempId,
+						ok: true,
+						persistedId: serverId,
+						nestedResults: childResults.length > 0 ? childResults : undefined,
+					})
+				}
+			}
+		}
+
+		return results
 	}
 
 	/**

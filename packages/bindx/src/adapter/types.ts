@@ -80,6 +80,8 @@ export type QueryResult = GetQueryResult | ListQueryResult
 export interface PersistResult {
 	readonly ok: boolean
 	readonly errorMessage?: string
+	/** The entity node data after mutation (when ok is true). Contains nested entity IDs for inline creates. */
+	readonly data?: Record<string, unknown>
 	/** Detailed mutation result for error mapping (Contember-specific) */
 	readonly mutationResult?: ContemberMutationResult
 }
@@ -128,6 +130,8 @@ export interface TransactionMutationResult {
 	readonly persistedId?: string
 	readonly errorMessage?: string
 	readonly mutationResult?: ContemberMutationResult
+	/** Results for entities created inline within this mutation's data. */
+	readonly nestedResults?: readonly TransactionMutationResult[]
 }
 
 /**

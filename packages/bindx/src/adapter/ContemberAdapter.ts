@@ -11,6 +11,7 @@ import {
 	buildUpdateArgs,
 	buildDeleteArgs,
 	buildMutationSelection,
+	buildNodeSelectionFromMutationData,
 	mutationFragments,
 	unwrapPaginateResult,
 } from '@contember/bindx-client'
@@ -119,19 +120,24 @@ export class ContemberAdapter implements BackendAdapter {
 		changes: Record<string, unknown>,
 	): Promise<PersistResult> {
 		const args = buildUpdateArgs(entityType, { by: { id }, data: changes })
-		const selectionSet = buildMutationSelection('update')
+		const nodeSelection = buildNodeSelectionFromMutationData(changes)
+		const selectionSet = buildMutationSelection('update', nodeSelection)
 
 		const mutation = new ContentOperation(
 			'mutation',
 			`update${entityType}`,
 			args,
 			selectionSet,
-			value => value as { ok: boolean; errorMessage: string | null; errors: unknown[]; validation: unknown },
+			value => value as { ok: boolean; errorMessage: string | null; errors: unknown[]; validation: unknown; node: unknown },
 		)
 
 		try {
 			const result = await this.contentClient.mutate(mutation)
-			return { ok: true }
+			const typedResult = result as { node: Record<string, unknown> | null }
+			return {
+				ok: true,
+				data: typedResult.node as Record<string, unknown> | undefined,
+			}
 		} catch (e) {
 			if (e instanceof Error && 'result' in e) {
 				const mutResult = (e as { result: Record<string, unknown> }).result
@@ -150,8 +156,8 @@ export class ContemberAdapter implements BackendAdapter {
 		data: Record<string, unknown>,
 	): Promise<CreateResult> {
 		const args = buildCreateArgs(entityType, { data })
-		// Select id on created node
-		const nodeSelection = [new GraphQlField(null, 'id')]
+		// Select id on created node + nested created entity IDs
+		const nodeSelection = buildNodeSelectionFromMutationData(data)
 		const selectionSet = buildMutationSelection('create', nodeSelection)
 
 		const mutation = new ContentOperation(
