@@ -1039,15 +1039,32 @@ export class BatchPersister {
 			? this.mutationCollector.getNestedEntityTypes()
 			: null
 
+		const makeResult = (
+			tempId: string,
+			createData: Record<string, unknown>,
+			nodeItem: Record<string, unknown>,
+		): TransactionMutationResult => {
+			const childResults = this.extractNestedResultsFromNode(
+				createData, nodeItem,
+				nestedTypes?.get(tempId) ?? 'Unknown', tempId,
+			)
+			return {
+				entityType: nestedTypes?.get(tempId) ?? 'Unknown',
+				entityId: tempId,
+				ok: true,
+				persistedId: nodeItem['id'] as string,
+				nestedResults: childResults.length > 0 ? childResults : undefined,
+			}
+		}
+
 		for (const [fieldName, fieldValue] of Object.entries(mutationData)) {
 			if (fieldValue === null || fieldValue === undefined) continue
 
 			if (Array.isArray(fieldValue)) {
-				// HasMany operations
 				const nodeItems = nodeData[fieldName]
 				if (!Array.isArray(nodeItems)) continue
 
-				// Collect all known (non-created) IDs from mutation operations
+				// Separate create ops from known IDs (connect/update)
 				const knownIds = new Set<string>()
 				const createOps: Array<{ alias: string; createData: Record<string, unknown> }> = []
 
@@ -1059,8 +1076,7 @@ export class BatchPersister {
 						const connectBy = opObj['connect'] as Record<string, unknown>
 						if (connectBy['id']) knownIds.add(connectBy['id'] as string)
 					} else if ('update' in opObj) {
-						const updateBy = opObj['update'] as Record<string, unknown>
-						const by = updateBy['by'] as Record<string, unknown> | undefined
+						const by = (opObj['update'] as Record<string, unknown>)['by'] as Record<string, unknown> | undefined
 						if (by?.['id']) knownIds.add(by['id'] as string)
 					} else if ('create' in opObj && opObj['alias']) {
 						createOps.push({
@@ -1070,88 +1086,40 @@ export class BatchPersister {
 					}
 				}
 
-				// Also include pre-existing server IDs in known IDs
+				// Include pre-existing server IDs
 				const hasManyState = this.store.getHasMany(parentEntityType, parentEntityId, fieldName)
 				if (hasManyState) {
-					for (const serverId of hasManyState.serverIds) {
-						knownIds.add(serverId)
-					}
+					for (const id of hasManyState.serverIds) knownIds.add(id)
 				}
 
-				// Find new IDs in the response (not in known IDs)
-				const newItems: Array<Record<string, unknown>> = []
-				for (const item of nodeItems) {
-					if (typeof item !== 'object' || item === null) continue
-					const itemObj = item as Record<string, unknown>
-					const itemId = itemObj['id'] as string | undefined
-					if (itemId && !knownIds.has(itemId)) {
-						newItems.push(itemObj)
-					}
-				}
-
-				// Match new items to create operations by content comparison.
-				// The Contember API does not guarantee hasMany item ordering in the node
-				// response, so we match by comparing scalar field values from the create
-				// data against the response. This follows the same approach as the legacy
-				// binding's TreeAugmenter.isEntityMatching / tryAssignIdToMatching.
+				// Filter response to new items only, then content-match to create ops.
+				// Contember API does not guarantee hasMany ordering in node response,
+				// so we match by scalar field values instead of position.
 				// Unmatched creates keep their temp IDs until the next fetch.
-				const unmatchedItems = [...newItems]
+				const unmatchedItems = (nodeItems as Record<string, unknown>[])
+					.filter(it => typeof it === 'object' && it !== null && !knownIds.has(it['id'] as string))
+
 				for (const createOp of createOps) {
-					const matchIndex = unmatchedItems.findIndex(
-						item => this.isCreateDataMatchingNode(createOp.createData, item),
-					)
-
-					if (matchIndex < 0) continue
-
-					const matchedItem = unmatchedItems.splice(matchIndex, 1)[0]!
-					const serverId = matchedItem['id'] as string
-					const entityType = nestedTypes?.get(createOp.alias) ?? 'Unknown'
-
-					const childResults = this.extractNestedResultsFromNode(
-						createOp.createData, matchedItem,
-						entityType, createOp.alias,
-					)
-
-					results.push({
-						entityType,
-						entityId: createOp.alias,
-						ok: true,
-						persistedId: serverId,
-						nestedResults: childResults.length > 0 ? childResults : undefined,
-					})
+					const idx = unmatchedItems.findIndex(it => this.isCreateDataMatchingNode(createOp.createData, it))
+					if (idx < 0) continue
+					results.push(makeResult(createOp.alias, createOp.createData, unmatchedItems.splice(idx, 1)[0]!))
 				}
 			} else if (typeof fieldValue === 'object') {
-				// HasOne operation
 				const opObj = fieldValue as Record<string, unknown>
 				const nodeField = nodeData[fieldName]
 
 				if ('create' in opObj && typeof nodeField === 'object' && nodeField !== null) {
-					const nodeFieldObj = nodeField as Record<string, unknown>
-					const serverId = nodeFieldObj['id'] as string | undefined
+					const serverId = (nodeField as Record<string, unknown>)['id'] as string | undefined
 					if (!serverId) continue
 
-					const createData = opObj['create'] as Record<string, unknown>
-
-					// Look up the temp ID from the store's relation state for this field
 					const relationState = this.store.getRelation(parentEntityType, parentEntityId, fieldName)
-					const tempId = relationState?.currentId
-					if (!tempId) continue
+					if (!relationState?.currentId) continue
 
-					const entityType = nestedTypes?.get(tempId) ?? 'Unknown'
-
-					// Recurse into nested creates
-					const childResults = this.extractNestedResultsFromNode(
-						createData, nodeFieldObj,
-						entityType, tempId,
-					)
-
-					results.push({
-						entityType,
-						entityId: tempId,
-						ok: true,
-						persistedId: serverId,
-						nestedResults: childResults.length > 0 ? childResults : undefined,
-					})
+					results.push(makeResult(
+						relationState.currentId,
+						opObj['create'] as Record<string, unknown>,
+						nodeField as Record<string, unknown>,
+					))
 				}
 			}
 		}
@@ -1160,10 +1128,9 @@ export class BatchPersister {
 	}
 
 	/**
-	 * Checks whether a create operation's data matches a server response node.
-	 * Compares scalar field values and hasOne relation IDs (for connect operations).
-	 * Used for content-based matching of nested entities after persist, following
-	 * the same approach as the legacy binding's TreeAugmenter.isEntityMatching.
+	 * Content-based matching: checks whether create data matches a response node
+	 * by comparing scalars and hasOne relation IDs. Same approach as the legacy
+	 * binding's TreeAugmenter.isEntityMatching.
 	 */
 	private isCreateDataMatchingNode(
 		createData: Record<string, unknown>,
@@ -1173,31 +1140,16 @@ export class BatchPersister {
 			if (value === null || value === undefined) continue
 
 			if (typeof value !== 'object') {
-				// Scalar field: direct comparison
 				if (nodeItem[key] !== value) return false
-			} else if (Array.isArray(value)) {
-				// HasMany operations: skip — too complex for matching, scalars are enough
-				// to disambiguate in practice
-			} else {
-				// HasOne relation operation
+			} else if (!Array.isArray(value)) {
 				const op = value as Record<string, unknown>
 				const nodeField = nodeItem[key]
+				if (!nodeField || typeof nodeField !== 'object') continue
 
 				if ('connect' in op) {
-					// Connect: compare connected ID with response relation ID
-					const connectBy = op['connect'] as Record<string, unknown>
-					if (nodeField && typeof nodeField === 'object') {
-						const nodeFieldObj = nodeField as Record<string, unknown>
-						if (connectBy['id'] !== nodeFieldObj['id']) return false
-					}
+					if ((op['connect'] as Record<string, unknown>)['id'] !== (nodeField as Record<string, unknown>)['id']) return false
 				} else if ('create' in op) {
-					// Nested create: recurse into the created entity
-					if (nodeField && typeof nodeField === 'object') {
-						if (!this.isCreateDataMatchingNode(
-							op['create'] as Record<string, unknown>,
-							nodeField as Record<string, unknown>,
-						)) return false
-					}
+					if (!this.isCreateDataMatchingNode(op['create'] as Record<string, unknown>, nodeField as Record<string, unknown>)) return false
 				}
 			}
 		}
