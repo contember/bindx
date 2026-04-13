@@ -437,20 +437,12 @@ export class MutationCollector implements MutationDataCollector {
 			}
 		}
 
-		// Created entities -> create (using entity snapshot data)
+		// Created entities -> create (using collectCreateData for full recursive collection)
 		if (targetType) {
 			for (const tempId of hasManyState.createdEntities) {
 				this._nestedEntityIds.add(tempId)
-				const itemSnapshot = this.store.getEntitySnapshot(targetType, tempId)
-				if (itemSnapshot) {
-					const createData = { ...itemSnapshot.data as Record<string, unknown> }
-					delete createData['id']
-					if (Object.keys(createData).length > 0) {
-						operations.push({ create: this.processNestedData(createData), alias: tempId })
-					} else {
-						operations.push({ create: {}, alias: tempId })
-					}
-				}
+				const createData = this.collectCreateData(targetType, tempId)
+				operations.push({ create: createData ?? {}, alias: tempId })
 			}
 		}
 
