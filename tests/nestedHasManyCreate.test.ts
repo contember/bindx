@@ -496,7 +496,8 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 			}),
 		}
 
-		// Simulate what Contember returns: walk mutation data, assign UUIDs to creates
+		// Simulate what Contember returns: walk mutation data, assign UUIDs to creates,
+		// and include scalar fields (just like the real API returns requested fields)
 		function buildMockNodeResponse(data: Record<string, unknown>): Record<string, unknown> {
 			const node: Record<string, unknown> = { id: `server-${++serverIdCounter}` }
 
@@ -517,7 +518,13 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 					const op = value as Record<string, unknown>
 					if ('create' in op) {
 						node[key] = buildMockNodeResponse(op['create'] as Record<string, unknown>)
+					} else if ('connect' in op) {
+						const connectBy = op['connect'] as Record<string, unknown>
+						node[key] = { id: connectBy['id'] }
 					}
+				} else {
+					// Scalar field: echo back the value
+					node[key] = value
 				}
 			}
 			return node
@@ -632,7 +639,12 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 					const op = value as Record<string, unknown>
 					if ('create' in op) {
 						node[key] = buildMockNodeResponse(op['create'] as Record<string, unknown>)
+					} else if ('connect' in op) {
+						const connectBy = op['connect'] as Record<string, unknown>
+						node[key] = { id: connectBy['id'] }
 					}
+				} else {
+					node[key] = value
 				}
 			}
 			return node
@@ -682,7 +694,7 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 		const result = await persister.persistAll()
 		expect(result.success).toBe(true)
 
-		// Reviews should be committed (existsOnServer = true) even without ID mapping
+		// Both reviews should be committed (existsOnServer = true)
 		const reviewsState = store.getHasMany('Round', roundId, 'reviews')
 		expect(reviewsState).not.toBeUndefined()
 		expect(reviewsState!.serverIds.size).toBe(2)
@@ -692,12 +704,148 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 			expect(store.existsOnServer('Review', tempId)).toBe(true)
 		}
 
-		// Neither review should have a persisted ID mapping — matching was skipped
-		// because response had 1 new item but 2 create ops
+		// Content matching maps the one review present in the response.
+		// The other review (missing from response due to ACL) keeps its temp ID.
+		let mappedCount = 0
+		let unmappedCount = 0
 		for (const tempId of reviewTempIds) {
 			const persistedId = store.getPersistedId('Review', tempId)
-			expect(persistedId).toBeNull()
+			if (persistedId) {
+				mappedCount++
+			} else {
+				unmappedCount++
+			}
 		}
+		expect(mappedCount).toBe(1)
+		expect(unmappedCount).toBe(1)
+	})
+
+	/**
+	 * Verifies content-based matching works when the server returns items in a
+	 * different order than the create operations. Position-based matching would
+	 * produce wrong temp→persisted ID mappings here.
+	 */
+	test('content matching: reversed server response order maps IDs correctly', async () => {
+		let serverIdCounter = 0
+
+		const adapter: BackendAdapter = {
+			query: mock(() => Promise.resolve([])),
+			delete: mock(() => Promise.resolve({ ok: true })),
+			persist: mock((_entityType: string, _id: string, changes: Record<string, unknown>) => {
+				const nodeData = buildMockNodeResponse(changes)
+				return Promise.resolve({ ok: true, data: nodeData })
+			}),
+			create: mock((_entityType: string, data: Record<string, unknown>) => {
+				const nodeData = buildMockNodeResponse(data)
+				return Promise.resolve({ ok: true, data: nodeData })
+			}),
+		}
+
+		// Return hasMany items in REVERSE order to test content matching
+		function buildMockNodeResponse(data: Record<string, unknown>): Record<string, unknown> {
+			const node: Record<string, unknown> = { id: `server-${++serverIdCounter}` }
+
+			for (const [key, value] of Object.entries(data)) {
+				if (value === null || value === undefined) continue
+				if (Array.isArray(value)) {
+					const items: Record<string, unknown>[] = []
+					for (const item of value) {
+						if (typeof item !== 'object' || item === null) continue
+						const op = item as Record<string, unknown>
+						if ('create' in op) {
+							items.push(buildMockNodeResponse(op['create'] as Record<string, unknown>))
+						}
+					}
+					// Reverse the order to simulate non-deterministic DB ordering
+					if (items.length > 0) node[key] = items.reverse()
+				} else if (typeof value === 'object') {
+					const op = value as Record<string, unknown>
+					if ('create' in op) {
+						node[key] = buildMockNodeResponse(op['create'] as Record<string, unknown>)
+					} else if ('connect' in op) {
+						const connectBy = op['connect'] as Record<string, unknown>
+						node[key] = { id: connectBy['id'] }
+					}
+				} else {
+					node[key] = value
+				}
+			}
+			return node
+		}
+
+		const dispatcher = new ActionDispatcher(store)
+		const schemaAdapter = new ContemberSchemaMutationAdapter(nestedSchema)
+		const mutationCollector = new MutationCollector(store, schemaAdapter)
+		const persister = new BatchPersister(adapter, store, dispatcher, {
+			mutationCollector,
+			schema: schemaAdapter as never,
+		})
+
+		store.setEntityData('Program', 'prog-1', {
+			id: 'prog-1',
+			name: 'Test Program',
+			approval: null,
+		}, true)
+		store.setExistsOnServer('Program', 'prog-1', true)
+		store.setEntityData('Guarantor', 'g-expert', { id: 'g-expert', name: 'Expert' }, true)
+		store.setExistsOnServer('Guarantor', 'g-expert', true)
+		store.setEntityData('Guarantor', 'g-main', { id: 'g-main', name: 'Main Boss' }, true)
+		store.setExistsOnServer('Guarantor', 'g-main', true)
+
+		// Two reviews with DIFFERENT data — content matching can distinguish them
+		const approvalId = store.createEntity('Approval', { status: 'pending', rounds: [] })
+		store.getOrCreateRelation('Program', 'prog-1', 'approval', {
+			currentId: approvalId,
+			serverId: null,
+			state: 'connected',
+			serverState: 'disconnected',
+			placeholderData: {},
+		})
+
+		const roundId = store.createEntity('Round', {
+			roundNumber: 1,
+			status: 'pending',
+			reviews: [
+				{ reviewType: 'expert', status: 'pending', guarantor: { id: 'g-expert' } },
+				{ reviewType: 'main', status: 'pending', guarantor: { id: 'g-main' } },
+			],
+		})
+		store.getOrCreateHasMany('Approval', approvalId, 'rounds', [])
+		store.addToHasMany('Approval', approvalId, 'rounds', roundId)
+
+		const result = await persister.persistAll()
+		expect(result.success).toBe(true)
+
+		// Both reviews should be committed and mapped despite reversed order
+		const reviewsState = store.getHasMany('Round', roundId, 'reviews')
+		expect(reviewsState).not.toBeUndefined()
+		expect(reviewsState!.serverIds.size).toBe(2)
+
+		const reviewTempIds = [...reviewsState!.serverIds]
+		for (const tempId of reviewTempIds) {
+			expect(store.existsOnServer('Review', tempId)).toBe(true)
+			const persistedId = store.getPersistedId('Review', tempId)
+			expect(persistedId).not.toBeNull()
+			expect(persistedId).toMatch(/^server-/)
+		}
+
+		// Verify that the mapping is CORRECT — the "expert" review should map to the
+		// response item that has reviewType: 'expert', not the one with 'main'
+		const expertTempId = reviewTempIds.find(id => {
+			const snap = store.getEntitySnapshot('Review', id)
+			return (snap?.data as Record<string, unknown>)?.['reviewType'] === 'expert'
+		})
+		const mainTempId = reviewTempIds.find(id => {
+			const snap = store.getEntitySnapshot('Review', id)
+			return (snap?.data as Record<string, unknown>)?.['reviewType'] === 'main'
+		})
+		expect(expertTempId).toBeDefined()
+		expect(mainTempId).toBeDefined()
+
+		// The two reviews should have DIFFERENT server IDs
+		const expertServerId = store.getPersistedId('Review', expertTempId!)
+		const mainServerId = store.getPersistedId('Review', mainTempId!)
+		expect(expertServerId).not.toBe(mainServerId)
 	})
 
 	test('standalone collectCreateData for round includes reviews from store', () => {

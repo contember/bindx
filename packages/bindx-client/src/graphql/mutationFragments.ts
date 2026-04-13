@@ -95,6 +95,9 @@ export function buildNodeSelectionFromMutationData(
 			if (nestedSelection) {
 				fields.push(new GraphQlField(null, fieldName, {}, nestedSelection))
 			}
+		} else {
+			// Scalar field — request in node selection for content-based matching
+			fields.push(new GraphQlField(null, fieldName))
 		}
 	}
 
@@ -126,7 +129,8 @@ function buildSelectionFromHasManyOps(
 ): import('@contember/graphql-builder').GraphQlSelectionSet | undefined {
 	let hasNested = false
 
-	// Collect all nested field names from create/update operations
+	// Collect field names from create/update operations, split by type
+	const scalarFields = new Set<string>()
 	const nestedFields = new Map<string, Record<string, unknown>>()
 
 	for (const item of ops) {
@@ -148,6 +152,8 @@ function buildSelectionFromHasManyOps(
 				if (value === null || value === undefined) continue
 				if (typeof value === 'object') {
 					nestedFields.set(key, value as Record<string, unknown>)
+				} else {
+					scalarFields.add(key)
 				}
 			}
 		}
@@ -155,10 +161,14 @@ function buildSelectionFromHasManyOps(
 
 	if (!hasNested) return undefined
 
-	// Build selection with id + any nested relation fields
+	// Build selection with id + scalar fields + nested relation fields
 	const fields: import('@contember/graphql-builder').GraphQlSelectionSet = [
 		new GraphQlField(null, 'id'),
 	]
+
+	for (const fieldName of scalarFields) {
+		fields.push(new GraphQlField(null, fieldName))
+	}
 
 	for (const [fieldName, value] of nestedFields) {
 		if (Array.isArray(value)) {

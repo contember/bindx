@@ -1089,35 +1089,36 @@ export class BatchPersister {
 					}
 				}
 
-				// Match new items to create operations by position.
-				// This relies on the Contember API returning hasMany items in insertion order,
-				// which holds in practice (PostgreSQL heap order for freshly inserted rows)
-				// but is not formally guaranteed by the API.
-				// When counts disagree (e.g. partial server failure, ACL filtering, or reordering),
-				// we skip matching entirely — wrong ID mapping is worse than no mapping.
-				// Unmatched entities are still committed via commitUnresolvedNestedEntities,
-				// they just keep their temp IDs until the next fetch.
-				if (createOps.length === newItems.length) {
-					for (let i = 0; i < createOps.length; i++) {
-						const createOp = createOps[i]!
-						const newItem = newItems[i]!
-						const serverId = newItem['id'] as string
-						const entityType = nestedTypes?.get(createOp.alias) ?? 'Unknown'
+				// Match new items to create operations by content comparison.
+				// The Contember API does not guarantee hasMany item ordering in the node
+				// response, so we match by comparing scalar field values from the create
+				// data against the response. This follows the same approach as the legacy
+				// binding's TreeAugmenter.isEntityMatching / tryAssignIdToMatching.
+				// Unmatched creates keep their temp IDs until the next fetch.
+				const unmatchedItems = [...newItems]
+				for (const createOp of createOps) {
+					const matchIndex = unmatchedItems.findIndex(
+						item => this.isCreateDataMatchingNode(createOp.createData, item),
+					)
 
-						// Recurse into nested creates
-						const childResults = this.extractNestedResultsFromNode(
-							createOp.createData, newItem,
-							entityType, createOp.alias,
-						)
+					if (matchIndex < 0) continue
 
-						results.push({
-							entityType,
-							entityId: createOp.alias,
-							ok: true,
-							persistedId: serverId,
-							nestedResults: childResults.length > 0 ? childResults : undefined,
-						})
-					}
+					const matchedItem = unmatchedItems.splice(matchIndex, 1)[0]!
+					const serverId = matchedItem['id'] as string
+					const entityType = nestedTypes?.get(createOp.alias) ?? 'Unknown'
+
+					const childResults = this.extractNestedResultsFromNode(
+						createOp.createData, matchedItem,
+						entityType, createOp.alias,
+					)
+
+					results.push({
+						entityType,
+						entityId: createOp.alias,
+						ok: true,
+						persistedId: serverId,
+						nestedResults: childResults.length > 0 ? childResults : undefined,
+					})
 				}
 			} else if (typeof fieldValue === 'object') {
 				// HasOne operation
@@ -1156,6 +1157,51 @@ export class BatchPersister {
 		}
 
 		return results
+	}
+
+	/**
+	 * Checks whether a create operation's data matches a server response node.
+	 * Compares scalar field values and hasOne relation IDs (for connect operations).
+	 * Used for content-based matching of nested entities after persist, following
+	 * the same approach as the legacy binding's TreeAugmenter.isEntityMatching.
+	 */
+	private isCreateDataMatchingNode(
+		createData: Record<string, unknown>,
+		nodeItem: Record<string, unknown>,
+	): boolean {
+		for (const [key, value] of Object.entries(createData)) {
+			if (value === null || value === undefined) continue
+
+			if (typeof value !== 'object') {
+				// Scalar field: direct comparison
+				if (nodeItem[key] !== value) return false
+			} else if (Array.isArray(value)) {
+				// HasMany operations: skip — too complex for matching, scalars are enough
+				// to disambiguate in practice
+			} else {
+				// HasOne relation operation
+				const op = value as Record<string, unknown>
+				const nodeField = nodeItem[key]
+
+				if ('connect' in op) {
+					// Connect: compare connected ID with response relation ID
+					const connectBy = op['connect'] as Record<string, unknown>
+					if (nodeField && typeof nodeField === 'object') {
+						const nodeFieldObj = nodeField as Record<string, unknown>
+						if (connectBy['id'] !== nodeFieldObj['id']) return false
+					}
+				} else if ('create' in op) {
+					// Nested create: recurse into the created entity
+					if (nodeField && typeof nodeField === 'object') {
+						if (!this.isCreateDataMatchingNode(
+							op['create'] as Record<string, unknown>,
+							nodeField as Record<string, unknown>,
+						)) return false
+					}
+				}
+			}
+		}
+		return true
 	}
 
 	/**
