@@ -228,6 +228,7 @@ export interface HasOneRefInterface<
 	readonly __entityType: TEntity
 	readonly __selected?: TSelected
 	readonly __brands?: Set<symbol>
+	$create(data?: Partial<TEntity>): string
 	$connect(id: string): void
 	$disconnect(): void
 	$delete(): void

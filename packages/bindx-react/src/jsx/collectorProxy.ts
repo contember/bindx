@@ -221,6 +221,7 @@ function createCollectorFieldRef(
 		$hasError: false,
 		$addError: () => {},
 		$clearErrors: () => {},
+		$create: () => '',
 		$connect: () => {},
 		$disconnect: () => {},
 		$isConnected: false,

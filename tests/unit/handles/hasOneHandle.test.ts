@@ -532,6 +532,7 @@ describe('HasOneHandle', () => {
 				entityId: 'a-1',
 				fieldName: 'author',
 				targetId: 'auth-1',
+				targetType: 'Author',
 			})
 
 			expect(listener).toHaveBeenCalledTimes(1)
@@ -561,6 +562,107 @@ describe('HasOneHandle', () => {
 			})
 
 			expect(listener).toHaveBeenCalledTimes(1)
+		})
+	})
+
+	// ==================== $create ====================
+
+	describe('$create', () => {
+		test('should create entity and connect relation', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
+			const handle = createHasOneHandle()
+
+			const tempId = handle.$create({ name: 'New Author' })
+
+			// Should return a temp ID
+			expect(tempId).toMatch(/^__temp_/)
+
+			// Relation should be connected to the new entity
+			const relation = store.getRelation('Article', 'a-1', 'author')
+			expect(relation?.currentId).toBe(tempId)
+			expect(relation?.state).toBe('connected')
+
+			// Entity should exist in the store
+			const snapshot = store.getEntitySnapshot('Author', tempId)
+			expect(snapshot).not.toBeUndefined()
+			expect((snapshot!.data as Record<string, unknown>)['name']).toBe('New Author')
+		})
+
+		test('should create entity without initial data', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
+			const handle = createHasOneHandle()
+
+			const tempId = handle.$create()
+
+			expect(tempId).toMatch(/^__temp_/)
+
+			const relation = store.getRelation('Article', 'a-1', 'author')
+			expect(relation?.currentId).toBe(tempId)
+			expect(relation?.state).toBe('connected')
+
+			const snapshot = store.getEntitySnapshot('Author', tempId)
+			expect(snapshot).not.toBeUndefined()
+		})
+
+		test('created entity data should be accessible via the hasOne handle', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
+			const handle = createHasOneHandle()
+
+			handle.$create({ name: 'Jane Doe', email: 'jane@example.com' })
+
+			// Access via $entity
+			expect(handle.$entity.$data).not.toBeNull()
+			expect((handle.$entity.$data as TestAuthor).name).toBe('Jane Doe')
+		})
+
+		test('should replace existing connection when called on already-connected relation', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: { id: 'auth-1', name: 'Old Author' },
+			}, true)
+			store.setEntityData('Author', 'auth-1', { id: 'auth-1', name: 'Old Author' }, true)
+			store.setRelation('Article', 'a-1', 'author', {
+				currentId: 'auth-1',
+				state: 'connected',
+			})
+
+			const handle = createHasOneHandle()
+			const tempId = handle.$create({ name: 'New Author' })
+
+			// Relation should now point to the new entity
+			const relation = store.getRelation('Article', 'a-1', 'author')
+			expect(relation?.currentId).toBe(tempId)
+			expect(relation?.currentId).not.toBe('auth-1')
+		})
+
+		test('should register parent-child relationship for change propagation', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
+			const handle = createHasOneHandle()
+
+			const callback = mock(() => {})
+			store.subscribeToEntity('Article', 'a-1', callback)
+			callback.mockClear()
+
+			const tempId = handle.$create({ name: 'Author' })
+
+			// Clear calls from $create
+			callback.mockClear()
+
+			// Modifying the child should propagate to parent subscriber
+			store.setFieldValue('Author', tempId, ['name'], 'Updated')
+
+			expect(callback).toHaveBeenCalled()
+		})
+
+		test('should mark created entity as new (not exists on server)', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
+			const handle = createHasOneHandle()
+
+			const tempId = handle.$create({ name: 'Author' })
+
+			expect(store.existsOnServer('Author', tempId)).toBe(false)
+			expect(store.isNewEntity('Author', tempId)).toBe(true)
 		})
 	})
 

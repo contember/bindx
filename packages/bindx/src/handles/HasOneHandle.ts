@@ -354,12 +354,26 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	}
 
 	/**
+	 * Creates a new entity of the target type and connects it to this relation.
+	 * Returns the temp ID of the created entity.
+	 * Accessible via proxy as `$create()`.
+	 */
+	create(data?: Partial<TEntity>): string {
+		this.assertNotDisposed()
+		const tempId = this.store.createEntity(this.targetType, data as Record<string, unknown>)
+		this.dispatcher.dispatch(
+			connectRelation(this.entityType, this.entityId, this.fieldName, tempId, this.targetType),
+		)
+		return tempId
+	}
+
+	/**
 	 * Connects the relation to an entity.
 	 */
 	connect(targetId: string): void {
 		this.assertNotDisposed()
 		this.dispatcher.dispatch(
-			connectRelation(this.entityType, this.entityId, this.fieldName, targetId),
+			connectRelation(this.entityType, this.entityId, this.fieldName, targetId, this.targetType),
 		)
 	}
 
