@@ -655,13 +655,15 @@ describe('MutationCollector', () => {
 
 			const createData = collector.collectCreateData('Article', '__temp_1')
 
-			expect(createData).toEqual({
-				title: 'New Article',
-				tags: [
-					{ create: { name: 'NewTag1' }, alias: undefined },
-					{ create: { name: 'NewTag2' }, alias: '__temp_tag' },
-				],
-			})
+			expect(createData).not.toBeNull()
+			expect(createData!['title']).toBe('New Article')
+
+			const tags = createData!['tags'] as Array<{ create: Record<string, unknown>; alias: string }>
+			expect(tags).toHaveLength(2)
+			expect(tags[0]!.create).toEqual({ name: 'NewTag1' })
+			expect(tags[0]!.alias).toMatch(/^__temp_/)
+			expect(tags[1]!.create).toEqual({ name: 'NewTag2' })
+			expect(tags[1]!.alias).toMatch(/^__temp_/)
 		})
 
 		test('should return null for non-existent entity', () => {

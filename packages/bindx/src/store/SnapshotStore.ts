@@ -372,6 +372,17 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		this.notifyRelationSubscribers(key)
 	}
 
+	connectExistingToHasMany(
+		parentType: string,
+		parentId: string,
+		fieldName: string,
+		itemId: string,
+	): void {
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		this.relations.connectExistingToHasMany(key, itemId)
+		this.notifyRelationSubscribers(key)
+	}
+
 	removeFromHasMany(
 		parentType: string,
 		parentId: string,

@@ -150,6 +150,12 @@ export interface TransactionMutationResult {
 	readonly persistedId?: string
 	readonly errorMessage?: string
 	readonly mutationResult?: ContemberMutationResult
+	/**
+	 * Results for entities created inline within this mutation's data.
+	 * Each entry maps a nested entity's temp ID (used as alias in the mutation)
+	 * to its server-assigned ID. Recursive for deeply nested creates.
+	 */
+	readonly nestedResults?: readonly TransactionMutationResult[]
 }
 
 /**

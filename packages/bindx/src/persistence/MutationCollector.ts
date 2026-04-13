@@ -32,6 +32,8 @@ export interface EntityMutationResult {
 export class MutationCollector implements MutationDataCollector {
 	private excludedEntityIds: ReadonlySet<string> = new Set()
 	private readonly _nestedEntityIds: Set<string> = new Set()
+	/** Maps nested entity temp IDs to their entity types for post-persist processing */
+	private readonly _nestedEntityTypes: Map<string, string> = new Map()
 
 	constructor(
 		private readonly store: SnapshotStore,
@@ -46,6 +48,7 @@ export class MutationCollector implements MutationDataCollector {
 	setExcludedEntities(ids: ReadonlySet<string>): void {
 		this.excludedEntityIds = ids
 		this._nestedEntityIds.clear()
+		this._nestedEntityTypes.clear()
 	}
 
 	/**
@@ -55,6 +58,14 @@ export class MutationCollector implements MutationDataCollector {
 	 */
 	getNestedEntityIds(): ReadonlySet<string> {
 		return this._nestedEntityIds
+	}
+
+	/**
+	 * Returns a map of nested entity temp IDs to their entity types.
+	 * Used by BatchPersister to commit and map IDs for nested entities after persist.
+	 */
+	getNestedEntityTypes(): ReadonlyMap<string, string> {
+		return this._nestedEntityTypes
 	}
 
 	// ==================== Main Collection Methods ====================
@@ -175,23 +186,22 @@ export class MutationCollector implements MutationDataCollector {
 			}
 		}
 
-		// Collect relation values
+		// Materialize embedded relation data into store entities,
+		// then collect from store for consistent tracking and post-persist ID mapping
+		this.materializeEntityRelations(entityType, entityId)
+
+		// Collect relation values from store
 		const relationFields = this.schemaProvider.getRelationFields(entityType)
 		for (const fieldName of relationFields) {
-			const value = data[fieldName]
 			const relationType = this.schemaProvider.getRelationType(entityType, fieldName)
 
 			if (relationType === 'hasOne') {
-				// Check embedded data first, then fall back to RelationStore
-				const relationOp = this.collectCreateOneRelation(value)
-					?? this.collectHasOneOperation(entityType, entityId, fieldName)
+				const relationOp = this.collectHasOneOperation(entityType, entityId, fieldName)
 				if (relationOp !== null) {
 					createData[fieldName] = relationOp
 				}
 			} else if (relationType === 'hasMany') {
-				// Try embedded data first, then fall back to RelationStore
-				const relationOps = this.collectCreateManyRelation(value)
-					?? this.collectHasManyOperations(entityType, entityId, fieldName)
+				const relationOps = this.collectHasManyOperations(entityType, entityId, fieldName)
 				if (relationOps !== null && relationOps.length > 0) {
 					createData[fieldName] = relationOps
 				}
@@ -332,6 +342,7 @@ export class MutationCollector implements MutationDataCollector {
 						this._nestedEntityIds.add(currentId)
 						const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
 						if (targetType) {
+							this._nestedEntityTypes.set(currentId, targetType)
 							const createData = this.collectCreateData(targetType, currentId)
 							return { create: createData ?? {} }
 						}
@@ -441,6 +452,7 @@ export class MutationCollector implements MutationDataCollector {
 		if (targetType) {
 			for (const tempId of hasManyState.createdEntities) {
 				this._nestedEntityIds.add(tempId)
+				this._nestedEntityTypes.set(tempId, targetType)
 				const createData = this.collectCreateData(targetType, tempId)
 				operations.push({ create: createData ?? {}, alias: tempId })
 			}
@@ -578,5 +590,149 @@ export class MutationCollector implements MutationDataCollector {
 	 */
 	private isExistingEntity(id: string): boolean {
 		return isPersistedId(id)
+	}
+
+	// ==================== Embedded Data Materialization ====================
+
+	/**
+	 * Materializes embedded relation data in an entity's snapshot into proper
+	 * store entities and relations. This normalizes inline objects (e.g.
+	 * `reviews: [{ reviewType: 'expert' }]`) into tracked entities with temp IDs,
+	 * enabling proper post-persist ID mapping and commit.
+	 */
+	private materializeEntityRelations(entityType: string, entityId: string): void {
+		if (!this.schemaProvider.hasEntity(entityType)) return
+
+		const snapshot = this.store.getEntitySnapshot(entityType, entityId)
+		if (!snapshot) return
+
+		const data = snapshot.data as Record<string, unknown>
+		const relationFields = this.schemaProvider.getRelationFields(entityType)
+
+		for (const fieldName of relationFields) {
+			const value = data[fieldName]
+			if (value === null || value === undefined) continue
+
+			const relationType = this.schemaProvider.getRelationType(entityType, fieldName)
+
+			if (relationType === 'hasOne' && typeof value === 'object' && !Array.isArray(value)) {
+				this.materializeEmbeddedHasOne(entityType, entityId, fieldName, value as Record<string, unknown>)
+			} else if (relationType === 'hasMany' && Array.isArray(value) && value.length > 0) {
+				this.materializeEmbeddedHasMany(entityType, entityId, fieldName, value)
+			}
+		}
+	}
+
+	/**
+	 * Materializes an embedded hasMany array into store entities.
+	 * Skips if the hasMany state already has store-managed entities.
+	 */
+	private materializeEmbeddedHasMany(
+		entityType: string,
+		entityId: string,
+		fieldName: string,
+		items: unknown[],
+	): void {
+		const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
+		if (!targetType) return
+
+		// Skip if store already has managed entities for this relation
+		const existing = this.store.getHasMany(entityType, entityId, fieldName)
+		if (existing && (existing.createdEntities.size > 0 || existing.plannedConnections.size > 0)) {
+			return
+		}
+
+		this.store.getOrCreateHasMany(entityType, entityId, fieldName, [])
+
+		for (const item of items) {
+			if (typeof item !== 'object' || item === null) continue
+			const obj = item as Record<string, unknown>
+			const id = obj['id'] as string | undefined
+
+			if (id && !isTempId(id) && isPersistedId(id)) {
+				// Existing entity — add as a planned connection (not created)
+				this.store.connectExistingToHasMany(entityType, entityId, fieldName, id)
+				continue
+			}
+
+			// Create store entity from embedded data
+			const entityData = { ...obj }
+			delete entityData['id']
+			const tempId = this.store.createEntity(targetType, entityData)
+			this.store.addToHasMany(entityType, entityId, fieldName, tempId)
+
+			// Recursively materialize nested relations in the new entity
+			this.materializeEntityRelations(targetType, tempId)
+		}
+
+		// Clear embedded array from parent snapshot
+		this.clearEmbeddedField(entityType, entityId, fieldName, [])
+	}
+
+	/**
+	 * Materializes an embedded hasOne object into a store entity and relation.
+	 * Skips if a relation already exists in the store for this field.
+	 */
+	private materializeEmbeddedHasOne(
+		entityType: string,
+		entityId: string,
+		fieldName: string,
+		obj: Record<string, unknown>,
+	): void {
+		// Skip if relation already exists in store
+		const existingRelation = this.store.getRelation(entityType, entityId, fieldName)
+		if (existingRelation) return
+
+		const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
+		if (!targetType) return
+
+		const id = obj['id'] as string | undefined
+
+		if (id && !isTempId(id) && isPersistedId(id)) {
+			// Existing entity — create a connect relation
+			this.store.getOrCreateRelation(entityType, entityId, fieldName, {
+				currentId: id,
+				serverId: null,
+				state: 'connected',
+				serverState: 'disconnected',
+				placeholderData: {},
+			})
+		} else {
+			// New entity — create store entity and connect
+			const entityData = { ...obj }
+			delete entityData['id']
+			const tempId = this.store.createEntity(targetType, entityData)
+
+			this.store.getOrCreateRelation(entityType, entityId, fieldName, {
+				currentId: tempId,
+				serverId: null,
+				state: 'connected',
+				serverState: 'disconnected',
+				placeholderData: {},
+			})
+
+			// Recursively materialize nested relations
+			this.materializeEntityRelations(targetType, tempId)
+		}
+
+		// Clear embedded data from parent snapshot
+		this.clearEmbeddedField(entityType, entityId, fieldName, null)
+	}
+
+	/**
+	 * Clears an embedded field value from an entity's snapshot data.
+	 */
+	private clearEmbeddedField(
+		entityType: string,
+		entityId: string,
+		fieldName: string,
+		emptyValue: unknown,
+	): void {
+		const snapshot = this.store.getEntitySnapshot(entityType, entityId)
+		if (!snapshot) return
+
+		const data = { ...(snapshot.data as Record<string, unknown>) }
+		data[fieldName] = emptyValue
+		this.store.setEntityData(entityType, entityId, data, false)
 	}
 }

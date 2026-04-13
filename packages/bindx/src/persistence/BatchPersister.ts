@@ -12,6 +12,7 @@ import type {
 	PersistenceResult,
 	PersistScope,
 	TransactionMutation,
+	TransactionMutationResult,
 	TransactionResult,
 	UpdateMode,
 } from './types.js'
@@ -700,6 +701,11 @@ export class BatchPersister {
 						)
 					}
 
+					// Process nested results (inline-created entities within this mutation)
+					if (mutationResult.nestedResults) {
+						this.commitNestedResults(mutationResult.nestedResults)
+					}
+
 					results.push({
 						entityType: entity.entityType,
 						entityId: entity.entityId,
@@ -710,6 +716,11 @@ export class BatchPersister {
 					successCount++
 				}
 			}
+
+			// Commit nested entities that don't have explicit results from the adapter.
+			// These entities were nested inside a parent mutation's data and exist on the server,
+			// but the adapter may not provide individual results for them.
+			this.commitUnresolvedNestedEntities(entities)
 		} else {
 			// Transaction failed - map errors and optionally rollback
 			// For pessimistic mode, entities are already at server state, no rollback needed
@@ -916,6 +927,86 @@ export class BatchPersister {
 					addEntityError(entityType, entityId, createServerError(error.message.text, undefined, 'VALIDATION_ERROR')),
 				)
 			}
+		}
+	}
+
+	/**
+	 * Recursively commits nested entity results and maps their server IDs.
+	 * Called when the adapter provides nestedResults in the transaction response.
+	 * Uses the MutationCollector's nestedEntityTypes map to resolve entity types,
+	 * since the adapter may not know the correct entity type for nested entities.
+	 */
+	private commitNestedResults(nestedResults: readonly TransactionMutationResult[]): void {
+		const nestedTypes = this.mutationCollector instanceof MutationCollector
+			? this.mutationCollector.getNestedEntityTypes()
+			: null
+
+		for (const nested of nestedResults) {
+			if (!nested.ok) continue
+
+			// Resolve entity type from collector's tracking (adapter may report 'Unknown')
+			const entityType = nestedTypes?.get(nested.entityId) ?? nested.entityType
+			const snapshot = this.store.getEntitySnapshot(entityType, nested.entityId)
+			if (!snapshot) continue
+
+			// Commit the nested entity
+			this.dispatcher.dispatch(commitEntity(entityType, nested.entityId))
+			this.store.commitAllRelations(entityType, nested.entityId)
+			this.store.setExistsOnServer(entityType, nested.entityId, true)
+
+			// Map temp ID to server-assigned ID
+			if (nested.persistedId) {
+				this.store.mapTempIdToPersistedId(
+					entityType,
+					nested.entityId,
+					nested.persistedId,
+				)
+			}
+
+			// Recurse for deeper nesting
+			if (nested.nestedResults) {
+				this.commitNestedResults(nested.nestedResults)
+			}
+		}
+	}
+
+	/**
+	 * Commits nested entities that were part of the transaction but don't have
+	 * explicit results from the adapter. These entities were created inline
+	 * inside a parent mutation and exist on the server after a successful persist.
+	 */
+	private commitUnresolvedNestedEntities(entities: DirtyEntity[]): void {
+		if (!(this.mutationCollector instanceof MutationCollector)) return
+
+		const nestedTypes = this.mutationCollector.getNestedEntityTypes()
+		if (nestedTypes.size === 0) return
+
+		// Find nested entities that are in the entities list but weren't committed
+		// by the main result processing (they had no matching result from the adapter)
+		for (const entity of entities) {
+			if (entity.changeType !== 'create') continue
+			if (!nestedTypes.has(entity.entityId)) continue
+
+			// Check if this entity was already committed (has server data)
+			if (this.store.existsOnServer(entity.entityType, entity.entityId)) continue
+
+			// Commit it — the parent mutation succeeded, so this entity exists on the server
+			this.dispatcher.dispatch(commitEntity(entity.entityType, entity.entityId))
+			this.store.commitAllRelations(entity.entityType, entity.entityId)
+			this.store.setExistsOnServer(entity.entityType, entity.entityId, true)
+		}
+
+		// Also commit materialized entities that may not be in the entities list
+		// (they were created during mutation building by materializeEmbeddedHasMany/HasOne)
+		for (const [tempId, entityType] of nestedTypes) {
+			if (this.store.existsOnServer(entityType, tempId)) continue
+
+			const snapshot = this.store.getEntitySnapshot(entityType, tempId)
+			if (!snapshot) continue
+
+			this.dispatcher.dispatch(commitEntity(entityType, tempId))
+			this.store.commitAllRelations(entityType, tempId)
+			this.store.setExistsOnServer(entityType, tempId, true)
 		}
 	}
 

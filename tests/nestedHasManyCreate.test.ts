@@ -6,7 +6,6 @@ import {
 	ActionDispatcher,
 	BatchPersister,
 	type BackendAdapter,
-	type TransactionResult,
 	type TransactionMutation,
 	type SchemaNames,
 } from '@contember/bindx'
@@ -268,41 +267,28 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 	 * is nested inside another entity's create via collectHasManyOperations.
 	 */
 	/**
-	 * BUG 2: After persistAll(), inline-created entities (from embedded data like
-	 * `reviews: [{ reviewType: 'expert', ... }]`) are NOT hydrated into the store.
+	 * After persistAll(), embedded relation data (like `reviews: [{ reviewType: 'expert' }]`)
+	 * should be materialized into store entities during mutation building, and those
+	 * entities should be committed after the parent mutation succeeds.
 	 *
-	 * The server creates them and returns IDs, but BatchPersister only maps
-	 * top-level entity temp IDs. The inline-created entities have no snapshots
-	 * in the store, so HasManyListHandle.items returns [] for them.
-	 *
-	 * Expected: After persist, the store should contain snapshots for all entities
-	 * created inline, with their server-assigned IDs. The parent entity's embedded
-	 * data should be updated with the real IDs so that items getter works.
+	 * This verifies:
+	 * 1. Embedded data is materialized into proper store entities with temp IDs
+	 * 2. Materialized entities are committed after successful persist
+	 * 3. Entities are accessible via the hasMany store state
 	 */
-	test('after persistAll, inline-created nested entities should have store snapshots', async () => {
-		// Create adapter that returns realistic IDs for created entities
-		let createCallIndex = 0
-		const createdIds = ['server-approval-1', 'server-round-1', 'server-review-1', 'server-review-2']
-		const transactionMutations: TransactionMutation[] = []
-
+	test('after persistAll, materialized embedded entities should be committed in store', async () => {
 		const adapter: BackendAdapter = {
 			query: mock(() => Promise.resolve([])),
 			persist: mock(() => Promise.resolve({ ok: true })),
-			create: mock((entityType: string, data: Record<string, unknown>) => {
-				const id = createdIds[createCallIndex++] ?? `server-${createCallIndex}`
-				return Promise.resolve({ ok: true, data: { id, ...data } })
-			}),
 			delete: mock(() => Promise.resolve({ ok: true })),
 			persistTransaction: mock((mutations: readonly TransactionMutation[]) => {
-				transactionMutations.push(...mutations)
-				// Simulate server response — each mutation succeeds with a generated ID
 				return Promise.resolve({
 					ok: true,
-					results: mutations.map((m, i) => ({
+					results: mutations.map(m => ({
 						entityType: m.entityType,
 						entityId: m.entityId,
 						ok: true,
-						persistedId: m.operation === 'create' ? createdIds[i] : undefined,
+						persistedId: undefined,
 					})),
 				})
 			}),
@@ -310,9 +296,10 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 
 		const dispatcher = new ActionDispatcher(store)
 		const schemaAdapter = new ContemberSchemaMutationAdapter(nestedSchema)
+		const mutationCollector = new MutationCollector(store, schemaAdapter)
 		const persister = new BatchPersister(adapter, store, dispatcher, {
-			mutationCollector: new MutationCollector(store, schemaAdapter),
-			schema: schemaAdapter,
+			mutationCollector,
+			schema: schemaAdapter as never, // ContemberSchemaMutationAdapter satisfies MutationSchemaProvider
 		})
 
 		// Setup: existing program
@@ -327,9 +314,8 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 		store.setEntityData('Guarantor', 'g-expert', { id: 'g-expert', name: 'Expert' }, true)
 		store.setExistsOnServer('Guarantor', 'g-expert', true)
 
-		// Create approval with round containing embedded reviews
+		// Create approval with round containing EMBEDDED reviews
 		const approvalId = store.createEntity('Approval', { status: 'pending', rounds: [] })
-
 		store.getOrCreateRelation('Program', 'prog-1', 'approval', {
 			currentId: approvalId,
 			serverId: null,
@@ -345,7 +331,6 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 				{ reviewType: 'expert', status: 'pending', guarantor: { id: 'g-expert' } },
 			],
 		})
-
 		store.getOrCreateHasMany('Approval', approvalId, 'rounds', [])
 		store.addToHasMany('Approval', approvalId, 'rounds', roundId)
 
@@ -353,19 +338,139 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 		const result = await persister.persistAll()
 		expect(result.success).toBe(true)
 
-		// After persist, the round's embedded reviews data should be updated
-		// with server-assigned IDs so that items getter can find them
-		const roundSnapshot = store.getEntitySnapshot('Round', roundId)
-		const roundData = roundSnapshot?.data as Record<string, unknown> | undefined
-		const reviewsData = roundData?.reviews as Array<Record<string, unknown>> | undefined
+		// After persist + commit, the embedded review should have been materialized
+		// into a store entity. commitAllRelations moves createdEntities → serverIds.
+		const reviewsState = store.getHasMany('Round', roundId, 'reviews')
+		expect(reviewsState).not.toBeUndefined()
+		expect(reviewsState!.serverIds.size).toBe(1)
 
-		// The reviews in the round's data should now have server-assigned IDs
-		expect(reviewsData).toBeDefined()
-		expect(reviewsData!.length).toBeGreaterThan(0)
+		// The review entity should exist in the store and be committed (existsOnServer)
+		const reviewTempId = [...reviewsState!.serverIds][0]!
+		const reviewSnapshot = store.getEntitySnapshot('Review', reviewTempId)
+		expect(reviewSnapshot).not.toBeUndefined()
+		expect(store.existsOnServer('Review', reviewTempId)).toBe(true)
 
-		// Each review should have an 'id' field (server-assigned, not temp)
-		const hasServerIds = reviewsData!.every(r => typeof r.id === 'string' && !r.id.startsWith('__temp_'))
-		expect(hasServerIds).toBe(true)
+		// The review should have the correct data
+		const reviewData = reviewSnapshot!.data as Record<string, unknown>
+		expect(reviewData['reviewType']).toBe('expert')
+		expect(reviewData['status']).toBe('pending')
+
+		// The review's guarantor should have been materialized as a relation
+		const guarantorRelation = store.getRelation('Review', reviewTempId, 'guarantor')
+		expect(guarantorRelation).not.toBeUndefined()
+		expect(guarantorRelation!.currentId).toBe('g-expert')
+	})
+
+	/**
+	 * When the adapter provides nestedResults, the nested entity temp IDs
+	 * should be mapped to server-assigned IDs.
+	 */
+	test('nestedResults from adapter maps server IDs for materialized entities', async () => {
+		let capturedMutations: readonly TransactionMutation[] = []
+
+		const adapter: BackendAdapter = {
+			query: mock(() => Promise.resolve([])),
+			persist: mock(() => Promise.resolve({ ok: true })),
+			delete: mock(() => Promise.resolve({ ok: true })),
+			persistTransaction: mock((mutations: readonly TransactionMutation[]) => {
+				capturedMutations = mutations
+				return Promise.resolve({
+					ok: true,
+					results: mutations.map(m => ({
+						entityType: m.entityType,
+						entityId: m.entityId,
+						ok: true,
+						// Provide nestedResults for inline-created entities
+						nestedResults: buildNestedResults(m),
+					})),
+				})
+			}),
+		}
+
+		// Build nested results by walking the mutation data and assigning server IDs
+		let serverIdCounter = 0
+		function buildNestedResults(mutation: TransactionMutation): Array<{ entityType: string; entityId: string; ok: boolean; persistedId: string }> {
+			const results: Array<{ entityType: string; entityId: string; ok: boolean; persistedId: string }> = []
+			if (!mutation.data) return results
+			walkMutationData(mutation.data, results)
+			return results
+		}
+		function walkMutationData(data: Record<string, unknown>, results: Array<{ entityType: string; entityId: string; ok: boolean; persistedId: string }>): void {
+			for (const value of Object.values(data)) {
+				if (value === null || value === undefined) continue
+				if (Array.isArray(value)) {
+					for (const item of value) {
+						processCreateOp(item, results)
+					}
+				} else {
+					processCreateOp(value, results)
+				}
+			}
+		}
+		function processCreateOp(value: unknown, results: Array<{ entityType: string; entityId: string; ok: boolean; persistedId: string }>): void {
+			if (typeof value !== 'object' || value === null) return
+			const obj = value as Record<string, unknown>
+			if (!('create' in obj)) return
+			const createData = obj['create'] as Record<string, unknown>
+			if (obj['alias'] && typeof obj['alias'] === 'string') {
+				results.push({ entityType: 'Unknown', entityId: obj['alias'], ok: true, persistedId: `server-id-${++serverIdCounter}` })
+			}
+			// Always recurse into create data (even hasOne creates without alias)
+			walkMutationData(createData, results)
+		}
+
+		const dispatcher = new ActionDispatcher(store)
+		const schemaAdapter = new ContemberSchemaMutationAdapter(nestedSchema)
+		const mutationCollector = new MutationCollector(store, schemaAdapter)
+		const persister = new BatchPersister(adapter, store, dispatcher, {
+			mutationCollector,
+			schema: schemaAdapter as never,
+		})
+
+		store.setEntityData('Program', 'prog-1', {
+			id: 'prog-1',
+			name: 'Test Program',
+			approval: null,
+		}, true)
+		store.setExistsOnServer('Program', 'prog-1', true)
+		store.setEntityData('Guarantor', 'g-expert', { id: 'g-expert', name: 'Expert' }, true)
+		store.setExistsOnServer('Guarantor', 'g-expert', true)
+
+		const approvalId = store.createEntity('Approval', { status: 'pending', rounds: [] })
+		store.getOrCreateRelation('Program', 'prog-1', 'approval', {
+			currentId: approvalId,
+			serverId: null,
+			state: 'connected',
+			serverState: 'disconnected',
+			placeholderData: {},
+		})
+
+		const roundId = store.createEntity('Round', {
+			roundNumber: 1,
+			status: 'pending',
+			reviews: [
+				{ reviewType: 'expert', status: 'pending', guarantor: { id: 'g-expert' } },
+			],
+		})
+		store.getOrCreateHasMany('Approval', approvalId, 'rounds', [])
+		store.addToHasMany('Approval', approvalId, 'rounds', roundId)
+
+		const result = await persister.persistAll()
+		expect(result.success).toBe(true)
+
+		// The adapter should have received mutations
+		expect(capturedMutations.length).toBeGreaterThan(0)
+
+		// After commit, createdEntities are moved to serverIds
+		const reviewsState = store.getHasMany('Round', roundId, 'reviews')
+		expect(reviewsState).not.toBeUndefined()
+		const reviewTempId = [...reviewsState!.serverIds][0]!
+		expect(reviewTempId).toBeDefined()
+
+		// The adapter provided nestedResults, so the temp ID should be mapped to a server ID
+		const persistedId = store.getPersistedId('Review', reviewTempId)
+		expect(persistedId).not.toBeNull()
+		expect(persistedId).toMatch(/^server-id-/)
 	})
 
 	test('standalone collectCreateData for round includes reviews from store', () => {

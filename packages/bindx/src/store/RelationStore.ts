@@ -366,6 +366,37 @@ export class RelationStore {
 	}
 
 	/**
+	 * Connects an existing (persisted) entity to a has-many relation.
+	 * Unlike addToHasMany, does NOT add to createdEntities — used for
+	 * materializing embedded connect references to existing entities.
+	 */
+	connectExistingToHasMany(key: string, itemId: string): void {
+		const existing = this.hasManyStates.get(key)
+
+		if (!existing) {
+			this.hasManyStates.set(key, {
+				serverIds: new Set(),
+				orderedIds: [itemId],
+				plannedRemovals: new Map(),
+				plannedConnections: new Set([itemId]),
+				createdEntities: new Set(),
+				version: 0,
+			})
+		} else {
+			const newPlannedConnections = new Set(existing.plannedConnections)
+			newPlannedConnections.add(itemId)
+			const currentOrderedIds = existing.orderedIds ?? computeDefaultOrderedIds(existing)
+			const newOrderedIds = [...currentOrderedIds, itemId]
+			this.hasManyStates.set(key, {
+				...existing,
+				orderedIds: newOrderedIds,
+				plannedConnections: newPlannedConnections,
+				version: existing.version + 1,
+			})
+		}
+	}
+
+	/**
 	 * Removes an entity from a has-many relation.
 	 * For newly created entities (via add()), cancels the connection.
 	 * For existing server entities, plans the specified removal type.
