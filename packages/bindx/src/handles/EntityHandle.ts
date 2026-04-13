@@ -126,10 +126,20 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	}
 
 	/**
-	 * Gets the entity ID.
+	 * Gets the entity ID (stable — always the original ID used to create the handle).
+	 * For new entities this is the temp ID; for loaded entities it's the server ID.
+	 * Use `$persistedId` to get the server-assigned ID after persist, or `$resolvedId` for best-known ID.
 	 */
 	get id(): string {
 		return this.entityId
+	}
+
+	/**
+	 * Gets the best-known ID: the persisted (server-assigned) ID if available,
+	 * otherwise the original ID (which may be a temp ID for new entities).
+	 */
+	get resolvedId(): string {
+		return this.store.getPersistedId(this.entityType, this.entityId) ?? this.entityId
 	}
 
 	/**

@@ -222,6 +222,7 @@ export interface HasOneRefInterface<
 	readonly $isNew: boolean
 	readonly $isPersisting: boolean
 	readonly $persistedId: string | null
+	readonly $resolvedId: string
 	readonly __entityName: TEntityName
 	readonly __schema?: TSchema & any
 	readonly __entityType: TEntity
@@ -295,6 +296,7 @@ export interface EntityRefInterface<
 	readonly $isDirty: boolean
 	readonly $isPersisting: boolean
 	readonly $persistedId: string | null
+	readonly $resolvedId: string
 	readonly $isNew: boolean
 	readonly __entityType: TEntity
 	readonly __selected?: TSelected

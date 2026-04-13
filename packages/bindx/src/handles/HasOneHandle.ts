@@ -524,6 +524,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	/** Server-assigned ID after persistence - delegates to entityRaw */
 	get persistedId(): string | null { return this.entityRaw.persistedId }
 
+	/** Best-known ID: persisted if available, otherwise original - delegates to entityRaw */
+	get resolvedId(): string { return this.entityRaw.resolvedId }
+
 	/** Type brand for entity name */
 	get __entityName(): string { return this.targetType }
 

@@ -52,6 +52,7 @@ export function createCollectorProxy<T>(
 		$isDirty: false,
 		$isPersisting: false,
 		$persistedId: null,
+		$resolvedId: '__collector__',
 		$isNew: true,
 		__entityType: undefined as unknown as T,
 		__entityName: '__collector__',
@@ -235,6 +236,7 @@ function createCollectorFieldRef(
 		$isPersisting: false,
 		$isNew: false,
 		$persistedId: null,
+		$resolvedId: placeholderId,
 		__entityName: targetEntityName ?? '',
 
 		__schema: {} as Record<string, object>,

@@ -95,6 +95,31 @@ describe('EntityHandle', () => {
 			expect(handle.id as string).toBe('a-1')
 		})
 
+		test('should return stable temp ID even after persisted ID mapping', () => {
+			const tempId = store.createEntity('Article', { title: 'New' })
+			store.mapTempIdToPersistedId('Article', tempId, 'real-id-456')
+
+			const handle = EntityHandle.create<TestArticle>(tempId, 'Article', store, dispatcher, schema)
+
+			// id is always the stable original ID (temp ID in this case)
+			expect(handle.id as string).toBe(tempId)
+		})
+
+		test('should return persisted ID via $resolvedId after temp ID mapping', () => {
+			const tempId = store.createEntity('Article', { title: 'New' })
+			store.mapTempIdToPersistedId('Article', tempId, 'real-id-456')
+
+			const handle = EntityHandle.create<TestArticle>(tempId, 'Article', store, dispatcher, schema)
+
+			expect(handle.$resolvedId as string).toBe('real-id-456')
+		})
+
+		test('should return original ID via $resolvedId when no persisted mapping', () => {
+			const handle = createEntityHandle('a-1')
+
+			expect(handle.$resolvedId as string).toBe('a-1')
+		})
+
 		test('should return entity type', () => {
 			const handle = createEntityHandleRaw('a-1')
 			expect(handle.__entityName).toBe('Article')

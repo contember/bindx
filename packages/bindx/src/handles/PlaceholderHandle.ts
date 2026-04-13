@@ -129,6 +129,13 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	}
 
 	/**
+	 * Placeholder entities have no persisted ID — returns placeholder ID.
+	 */
+	get resolvedId(): string {
+		return this.placeholderId
+	}
+
+	/**
 	 * Placeholder entities are always new.
 	 */
 	get isNew(): boolean {
