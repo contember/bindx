@@ -46,6 +46,14 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	private readonly touched = new TouchedStore()
 	private readonly dirtyTracker: DirtyTracker
 
+	/**
+	 * Tracks the last embedded data reference propagated from parent to child.
+	 * Used to detect whether the parent was re-fetched (new reference) vs. stale
+	 * embedded data that should not overwrite committed child state.
+	 * Keyed by "parentType:parentId:fieldName".
+	 */
+	private readonly lastPropagatedData = new Map<string, unknown>()
+
 	constructor() {
 		this.dirtyTracker = new DirtyTracker(this.entitySnapshots, this.meta, this.relations)
 	}
@@ -95,6 +103,49 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		if (parts.length >= 2) {
 			const entityKey = `${parts[0]}:${parts[1]}`
 			this.subscriptions.notifyRelationSubscribers(relationKey, entityKey, this)
+		}
+	}
+
+	// ==================== Embedded Data Propagation Tracking ====================
+
+	/**
+	 * Returns true if the embedded data reference differs from what was last propagated.
+	 * Uses reference identity — a new reference means the parent was re-fetched.
+	 */
+	hasEmbeddedDataChanged(parentType: string, parentId: string, fieldName: string, currentData: unknown): boolean {
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		return this.lastPropagatedData.get(key) !== currentData
+	}
+
+	/**
+	 * Records the embedded data reference that was propagated to the child.
+	 */
+	markEmbeddedDataPropagated(parentType: string, parentId: string, fieldName: string, data: unknown): void {
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		this.lastPropagatedData.set(key, data)
+	}
+
+	/**
+	 * Removes all propagation tracking entries for a given parent entity.
+	 */
+	clearPropagatedDataForEntity(parentType: string, parentId: string): void {
+		const prefix = `${parentType}:${this.resolveId(parentType, parentId)}:`
+		for (const key of this.lastPropagatedData.keys()) {
+			if (key.startsWith(prefix)) {
+				this.lastPropagatedData.delete(key)
+			}
+		}
+	}
+
+	/**
+	 * Rekeys propagation tracking entries when a temp ID is replaced by a persisted ID.
+	 */
+	private rekeyPropagatedData(oldPrefix: string, newPrefix: string): void {
+		for (const [key, value] of this.lastPropagatedData) {
+			if (key.startsWith(oldPrefix)) {
+				this.lastPropagatedData.delete(key)
+				this.lastPropagatedData.set(newPrefix + key.slice(oldPrefix.length), value)
+			}
 		}
 	}
 
@@ -172,6 +223,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		const key = this.getEntityKey(entityType, id)
 		this.entitySnapshots.remove(key)
 		this.meta.clearLoadState(key)
+		this.clearPropagatedDataForEntity(entityType, id)
 		this.notifyEntitySubscribers(key)
 	}
 
@@ -261,9 +313,10 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		// Replace tempId with persistedId in all relation/hasMany VALUE references
 		this.relations.replaceEntityId(tempId, persistedId)
 
-		// Rekey errors and touched state
+		// Rekey errors, touched state, and propagation tracking
 		this.errors.rekey(oldKey, newKey, oldKeyPrefix, newKeyPrefix)
 		this.touched.rekey(oldKeyPrefix, newKeyPrefix)
+		this.rekeyPropagatedData(oldKeyPrefix, newKeyPrefix)
 
 		// Notify on the NEW key so React picks up the change
 		this.notifyEntitySubscribers(newKey)
@@ -817,6 +870,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		this.relations.clear()
 		this.errors.clear()
 		this.touched.clear()
+		this.lastPropagatedData.clear()
 
 		this.subscriptions.notify()
 	}

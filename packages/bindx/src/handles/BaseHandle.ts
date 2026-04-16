@@ -98,3 +98,19 @@ export abstract class EntityRelatedHandle extends BaseHandle {
 		return snapshot?.serverData as Record<string, unknown> | undefined
 	}
 }
+
+/**
+ * Shallow comparison of embedded data keys against existing snapshot data.
+ * Returns true if all keys in embedded data match the snapshot.
+ */
+export function embeddedDataMatchesSnapshot(
+	embedded: Record<string, unknown>,
+	snapshot: Record<string, unknown>,
+): boolean {
+	for (const key of Object.keys(embedded)) {
+		if (embedded[key] !== snapshot[key]) {
+			return false
+		}
+	}
+	return true
+}

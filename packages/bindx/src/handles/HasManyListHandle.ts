@@ -1,4 +1,4 @@
-import { EntityRelatedHandle } from './BaseHandle.js'
+import { EntityRelatedHandle, embeddedDataMatchesSnapshot } from './BaseHandle.js'
 import { EntityHandle } from './EntityHandle.js'
 import type { ActionDispatcher } from '../core/ActionDispatcher.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
@@ -124,23 +124,36 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		const listData = this.extractItems(rawData)
 		if (!listData) return []
 
-		// Ensure snapshots exist for embedded items
-		this.ensureItemSnapshots(listData)
+		const fieldKey = this.alias ?? this.fieldName
 
-		// Extract server IDs from embedded data
-		const serverIds = listData
-			.map((item) => item['id'] as string | undefined)
-			.filter((id): id is string => id !== undefined)
+		// Only propagate embedded data when the parent's reference changed (re-fetch).
+		// Same reference means the embedded data is stale and must not overwrite
+		// child state that may have been updated by a local commit.
+		if (this.store.hasEmbeddedDataChanged(this.entityType, this.entityId, fieldKey, rawData)) {
+			this.ensureItemSnapshots(listData)
 
-		// Ensure has-many state exists with proper server IDs
-		// This is needed so that connect/disconnect operations work correctly
-		this.store.getOrCreateHasMany(
-			this.entityType,
-			this.entityId,
-			this.fieldName,
-			serverIds,
-			this.alias,
-		)
+			const serverIds = listData
+				.map((item) => item['id'] as string | undefined)
+				.filter((id): id is string => id !== undefined)
+
+			this.store.getOrCreateHasMany(
+				this.entityType,
+				this.entityId,
+				this.fieldName,
+				serverIds,
+				this.alias,
+			)
+			this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, fieldKey, rawData)
+		} else {
+			// Ensure has-many state exists (without updating serverIds)
+			this.store.getOrCreateHasMany(
+				this.entityType,
+				this.entityId,
+				this.fieldName,
+				undefined,
+				this.alias,
+			)
+		}
 
 		// Use ordered IDs from store (handles removals, connections, and ordering)
 		const orderedIds = this.store.getHasManyOrderedIds(
@@ -155,6 +168,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 
 	/**
 	 * Ensures snapshots exist for embedded has-many items.
+	 * Only called when parent's embedded data has changed (re-fetch detected).
 	 */
 	private ensureItemSnapshots(listData: Array<Record<string, unknown>>): void {
 		for (const itemData of listData) {
@@ -165,12 +179,13 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			// This needs to happen even if the snapshot already exists
 			this.store.registerParentChild(this.entityType, this.entityId, this.itemType, itemId)
 
-			// Skip if snapshot already exists
-			if (this.store.hasEntity(this.itemType, itemId)) {
+			// Optimization: skip if item data matches existing snapshot
+			const existing = this.store.getEntitySnapshot(this.itemType, itemId)
+			if (existing?.serverData && embeddedDataMatchesSnapshot(itemData, existing.serverData as Record<string, unknown>)) {
 				continue
 			}
 
-			// Create snapshot from embedded data
+			// Create or update snapshot from embedded data
 			// Skip notification to avoid triggering React state updates during render
 			this.store.setEntityData(
 				this.itemType,

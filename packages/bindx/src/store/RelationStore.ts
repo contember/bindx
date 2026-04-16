@@ -1,6 +1,14 @@
 import type { HasOneRelationState } from '../handles/types.js'
 import type { EntitySnapshot } from './snapshots.js'
 
+function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
+	if (a.size !== b.size) return false
+	for (const item of a) {
+		if (!b.has(item)) return false
+	}
+	return true
+}
+
 /**
  * Removal type for has-many items
  */
@@ -150,7 +158,8 @@ export class RelationStore {
 	 * Gets or creates has-many list state.
 	 */
 	getOrCreateHasMany(key: string, serverIds?: string[]): StoredHasManyState {
-		if (!this.hasManyStates.has(key)) {
+		const existing = this.hasManyStates.get(key)
+		if (!existing) {
 			this.hasManyStates.set(key, {
 				serverIds: new Set(serverIds ?? []),
 				orderedIds: null,
@@ -159,6 +168,16 @@ export class RelationStore {
 				createdEntities: new Set(),
 				version: 0,
 			})
+		} else if (serverIds !== undefined) {
+			const newServerIds = new Set(serverIds)
+			if (!setsEqual(existing.serverIds, newServerIds)) {
+				this.hasManyStates.set(key, {
+					...existing,
+					serverIds: newServerIds,
+					orderedIds: null,
+					version: existing.version + 1,
+				})
+			}
 		}
 
 		return this.hasManyStates.get(key)!

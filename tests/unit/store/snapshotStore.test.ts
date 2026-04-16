@@ -309,11 +309,18 @@ describe('SnapshotStore', () => {
 				expect(state.plannedConnections.size).toBe(0)
 			})
 
-			test('should return existing state', () => {
-				const state1 = store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
+			test('should update serverIds when called with new values', () => {
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
 				const state2 = store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-2'])
 
-				expect(state1.serverIds).toEqual(state2.serverIds)
+				expect(state2.serverIds).toEqual(new Set(['t-2']))
+			})
+
+			test('should preserve existing state when called without serverIds', () => {
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
+				const state2 = store.getOrCreateHasMany('Article', 'a-1', 'tags')
+
+				expect(state2.serverIds).toEqual(new Set(['t-1']))
 			})
 		})
 

@@ -1,4 +1,4 @@
-import { EntityRelatedHandle } from './BaseHandle.js'
+import { EntityRelatedHandle, embeddedDataMatchesSnapshot } from './BaseHandle.js'
 import type { ActionDispatcher } from '../core/ActionDispatcher.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
@@ -283,11 +283,6 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		// This needs to happen even if the snapshot already exists
 		this.store.registerParentChild(this.entityType, this.entityId, this.targetType, id)
 
-		// Check if snapshot already exists
-		if (this.store.hasEntity(this.targetType, id)) {
-			return
-		}
-
 		// Get embedded data from parent entity
 		const parentSnapshot = this.store.getEntitySnapshot(this.entityType, this.entityId)
 		if (!parentSnapshot?.data) {
@@ -308,7 +303,24 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			return
 		}
 
-		// Create snapshot from embedded data
+		// Skip if parent's embedded data reference hasn't changed since last propagation.
+		// A new reference means the parent was re-fetched from the server.
+		// Same reference means the embedded data is stale and must not overwrite
+		// child state that may have been updated by a local commit.
+		if (!this.store.hasEmbeddedDataChanged(this.entityType, this.entityId, this.fieldName, embeddedData)) {
+			return
+		}
+
+		// Skip if embedded data values match existing serverData — avoids overwriting
+		// unpersisted local mutations when a re-fetch returns the same server data
+		// (e.g. polling). A new reference with identical values means no actual change.
+		const existing = this.store.getEntitySnapshot(this.targetType, id)
+		if (existing?.serverData && embeddedDataMatchesSnapshot(embeddedData as Record<string, unknown>, existing.serverData as Record<string, unknown>)) {
+			this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, this.fieldName, embeddedData)
+			return
+		}
+
+		// Create or update snapshot from embedded data
 		// Skip notification to avoid triggering React state updates during render
 		this.store.setEntityData(
 			this.targetType,
@@ -317,6 +329,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			true, // isServerData
 			true, // skipNotify - called during render, data already exists embedded in parent
 		)
+		this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, this.fieldName, embeddedData)
 	}
 
 	/**
