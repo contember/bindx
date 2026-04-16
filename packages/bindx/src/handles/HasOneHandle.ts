@@ -1,4 +1,4 @@
-import { EntityRelatedHandle, embeddedDataMatchesSnapshot } from './BaseHandle.js'
+import { EntityRelatedHandle } from './BaseHandle.js'
 import type { ActionDispatcher } from '../core/ActionDispatcher.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
@@ -303,11 +303,11 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			return
 		}
 
-		// Skip if snapshot already exists and server data hasn't changed.
-		// Compare against serverData (not data) because data may include local
-		// mutations — overwriting those would discard the user's changes.
-		const existing = this.store.getEntitySnapshot(this.targetType, id)
-		if (existing?.serverData && embeddedDataMatchesSnapshot(embeddedData as Record<string, unknown>, existing.serverData as Record<string, unknown>)) {
+		// Skip if parent's embedded data reference hasn't changed since last propagation.
+		// A new reference means the parent was re-fetched from the server.
+		// Same reference means the embedded data is stale and must not overwrite
+		// child state that may have been updated by a local commit.
+		if (!this.store.hasEmbeddedDataChanged(this.entityType, this.entityId, this.fieldName, embeddedData)) {
 			return
 		}
 
@@ -320,6 +320,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			true, // isServerData
 			true, // skipNotify - called during render, data already exists embedded in parent
 		)
+		this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, this.fieldName, embeddedData)
 	}
 
 	/**

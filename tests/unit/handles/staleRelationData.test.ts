@@ -26,10 +26,16 @@ import { createTestDispatcher } from '../shared/unitTestHelpers.js'
 
 // ==================== Test Schema ====================
 
+interface TestGuarantor {
+	id: string
+	name: string
+}
+
 interface TestProgram {
 	id: string
 	name: string
 	approval?: { id: string; status: string; rounds?: Array<{ id: string; roundNumber: number; status: string }> } | null
+	expertGuarantors?: Array<{ id: string; name: string }>
 }
 
 interface TestApproval {
@@ -48,6 +54,7 @@ interface TestSchema {
 	Program: TestProgram
 	Approval: TestApproval
 	Round: TestRound
+	Guarantor: TestGuarantor
 	[key: string]: object
 }
 
@@ -58,6 +65,13 @@ const testSchemaDefinition: SchemaDefinition<TestSchema> = {
 				id: { type: 'scalar' },
 				name: { type: 'scalar' },
 				approval: { type: 'hasOne', target: 'Approval', nullable: true },
+				expertGuarantors: { type: 'hasMany', target: 'Guarantor', relationKind: 'manyHasMany' },
+			},
+		},
+		Guarantor: {
+			fields: {
+				id: { type: 'scalar' },
+				name: { type: 'scalar' },
 			},
 		},
 		Approval: {
@@ -281,6 +295,101 @@ describe('Stale relation data after re-fetch', () => {
 			// but ensureItemSnapshots skips because Round:round-1 already exists
 			const roundSnap2 = store.getEntitySnapshot('Round', 'round-1')
 			expect((roundSnap2!.data as Record<string, unknown>)['status']).toBe('approved')
+		})
+	})
+
+	// ------------------------------------------------------------------
+	// Persist regression: committed state must not be overwritten
+	// ------------------------------------------------------------------
+
+	describe('Persist regression — committed has-many must survive re-render', () => {
+		test('has-many serverIds from commit must not be overwritten by stale parent embedded data', () => {
+			// T0: Program with no expert guarantors (initial server fetch)
+			store.setEntityData('Program', 'prog-1', {
+				id: 'prog-1',
+				name: 'Test Program',
+				expertGuarantors: [],
+			}, true)
+
+			const list1 = HasManyListHandle.create<{ id: string; name: string }>(
+				'Program', 'prog-1', 'expertGuarantors', 'Guarantor',
+				store, dispatcher, schema,
+			)
+
+			// Access items — initializes has-many state with serverIds = []
+			expect(list1.items.length).toBe(0)
+
+			// T1: User connects a guarantor (simulates UI action)
+			store.setEntityData('Guarantor', 'g-1', { id: 'g-1', name: 'Garant' }, true)
+			store.planHasManyConnection('Program', 'prog-1', 'expertGuarantors', 'g-1')
+
+			// Should now see 1 item (planned connection)
+			const list2 = HasManyListHandle.create<{ id: string; name: string }>(
+				'Program', 'prog-1', 'expertGuarantors', 'Guarantor',
+				store, dispatcher, schema,
+			)
+			expect(list2.items.length).toBe(1)
+
+			// T2: Persist succeeds — commit has-many with new serverIds
+			store.commitHasMany('Program', 'prog-1', 'expertGuarantors', ['g-1'])
+
+			// Verify committed state via store directly (not through items getter,
+			// which would trigger the bug)
+			const orderedIds = store.getHasManyOrderedIds('Program', 'prog-1', 'expertGuarantors')
+			expect(orderedIds).toContain('g-1')
+
+			// T3: Re-render after persist — items getter reads stale parent embedded data
+			// Parent snapshot STILL has expertGuarantors: [] (old data from server)
+			// The fix must NOT overwrite committed serverIds ['g-1'] with stale []
+			const list3 = HasManyListHandle.create<{ id: string; name: string }>(
+				'Program', 'prog-1', 'expertGuarantors', 'Guarantor',
+				store, dispatcher, schema,
+			)
+
+			// BUG: This fails because getOrCreateHasMany overwrites serverIds
+			// from stale parent embedded data (empty array) over committed ['g-1']
+			expect(list3.items.length).toBe(1)
+		})
+
+		test('has-one child snapshot from commit must not be overwritten by stale parent embedded data', () => {
+			// T0: Program with approval status 'pending' (initial server fetch)
+			store.setEntityData('Program', 'prog-1', {
+				id: 'prog-1',
+				name: 'Test Program',
+				approval: { id: 'appr-1', status: 'pending' },
+			}, true)
+
+			const handle1 = HasOneHandle.createRaw<TestApproval>(
+				'Program', 'prog-1', 'approval', 'Approval',
+				store, dispatcher, schema,
+			)
+
+			// Access entity to create child snapshot from embedded data
+			expect(handle1.isConnected).toBe(true)
+			expect(handle1.entityRaw.id).toBe('appr-1')
+
+			// T1: User changes approval status locally
+			store.setFieldValue('Approval', 'appr-1', ['status'], 'approved')
+
+			// T2: Persist succeeds — commit entity (serverData = data)
+			store.commitEntity('Approval', 'appr-1')
+
+			// Verify: approval entity has status 'approved' in both data and serverData
+			const snapAfterCommit = store.getEntitySnapshot('Approval', 'appr-1')
+			expect((snapAfterCommit!.data as Record<string, unknown>)['status']).toBe('approved')
+			expect((snapAfterCommit!.serverData as Record<string, unknown>)['status']).toBe('approved')
+
+			// T3: Re-render — HasOneHandle reads stale parent embedded data
+			// Parent snapshot STILL has approval: { id: 'appr-1', status: 'pending' }
+			// The fix must NOT overwrite committed 'approved' with stale 'pending'
+			const handle2 = HasOneHandle.createRaw<TestApproval>(
+				'Program', 'prog-1', 'approval', 'Approval',
+				store, dispatcher, schema,
+			)
+			handle2.entityRaw // triggers ensureRelatedEntitySnapshot
+
+			const snapAfterRerender = store.getEntitySnapshot('Approval', 'appr-1')
+			expect((snapAfterRerender!.data as Record<string, unknown>)['status']).toBe('approved')
 		})
 	})
 
