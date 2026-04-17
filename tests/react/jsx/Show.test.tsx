@@ -68,6 +68,85 @@ describe('Show component', () => {
 			expect(getByTestId(container, 'title').textContent).toBe('Hello World')
 		})
 
+		test('renders plain ReactNode children when field has value', async () => {
+			const adapter = new MockAdapter(createMockData(), { delay: 0 })
+
+			function TestComponent(): React.ReactElement {
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().title())
+
+				if (article.$isLoading) {
+					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.$isError || article.$isNotFound) {
+					return <div data-testid="error">Error</div>
+				}
+
+				return (
+					<div>
+						<Show field={article.title}>
+							<span data-testid="badge">Has title</span>
+						</Show>
+					</div>
+				)
+			}
+
+			const { container } = render(
+				<BindxProvider adapter={adapter} schema={testSchema}>
+					<TestComponent />
+				</BindxProvider>,
+			)
+
+			await waitFor(() => {
+				expect(queryByTestId(container, 'loading')).toBeNull()
+			})
+
+			expect(queryByTestId(container, 'badge')).not.toBeNull()
+			expect(getByTestId(container, 'badge').textContent).toBe('Has title')
+		})
+
+		test('plain children are hidden when field is null', async () => {
+			const adapter = new MockAdapter({
+				...createMockData(),
+				Article: {
+					'article-1': {
+						...createMockData().Article['article-1'],
+						publishedAt: null,
+					},
+				},
+			}, { delay: 0 })
+
+			function TestComponent(): React.ReactElement {
+				const article = useEntity(schema.Article, { by: { id: 'article-1' } }, a => a.id().publishedAt())
+
+				if (article.$isLoading) {
+					return <div data-testid="loading">Loading...</div>
+				}
+				if (article.$isError || article.$isNotFound) {
+					return <div data-testid="error">Error</div>
+				}
+
+				return (
+					<div data-testid="wrapper">
+						<Show field={article.publishedAt}>
+							<span data-testid="badge">Published</span>
+						</Show>
+					</div>
+				)
+			}
+
+			const { container } = render(
+				<BindxProvider adapter={adapter} schema={testSchema}>
+					<TestComponent />
+				</BindxProvider>,
+			)
+
+			await waitFor(() => {
+				expect(queryByTestId(container, 'loading')).toBeNull()
+			})
+
+			expect(queryByTestId(container, 'badge')).toBeNull()
+		})
+
 		test('renders nothing when field is null and no fallback', async () => {
 			const adapter = new MockAdapter({
 				...createMockData(),
