@@ -149,6 +149,12 @@ export class MutationCollector implements MutationDataCollector {
 		// Collect scalar field changes
 		this.collectScalarChanges(entityType, snapshot, mutation)
 
+		// Materialize placeholder-backed creating-state hasOne relations before
+		// collecting, so the collection phase can remain a pure read over the
+		// store. Embedded data is not materialized here — for existing
+		// (server-side) parents, hasMany state is already authoritative.
+		this.materializePlaceholderRelations(entityType, entityId)
+
 		// Collect relation changes
 		this.collectRelationChanges(entityType, entityId, mutation)
 
@@ -378,7 +384,6 @@ export class MutationCollector implements MutationDataCollector {
 				return { delete: true }
 
 			case 'creating':
-				// Create new entity with placeholder data
 				if (Object.keys(placeholderData).length > 0) {
 					const createData = this.processNestedData(placeholderData)
 					return { create: createData }
@@ -599,6 +604,10 @@ export class MutationCollector implements MutationDataCollector {
 	 * store entities and relations. This normalizes inline objects (e.g.
 	 * `reviews: [{ reviewType: 'expert' }]`) into tracked entities with temp IDs,
 	 * enabling proper post-persist ID mapping and commit.
+	 *
+	 * Also materializes placeholder-backed hasOne relations in the 'creating'
+	 * state, so a PlaceholderHandle-driven create form produces a trackable
+	 * entity whose server-assigned ID can be mapped back after persist.
 	 */
 	private materializeEntityRelations(entityType: string, entityId: string): void {
 		if (!this.schemaProvider.hasEntity(entityType)) return
@@ -610,17 +619,72 @@ export class MutationCollector implements MutationDataCollector {
 		const relationFields = this.schemaProvider.getRelationFields(entityType)
 
 		for (const fieldName of relationFields) {
-			const value = data[fieldName]
-			if (value === null || value === undefined) continue
-
 			const relationType = this.schemaProvider.getRelationType(entityType, fieldName)
 
-			if (relationType === 'hasOne' && typeof value === 'object' && !Array.isArray(value)) {
-				this.materializeEmbeddedHasOne(entityType, entityId, fieldName, value as Record<string, unknown>)
-			} else if (relationType === 'hasMany' && Array.isArray(value) && value.length > 0) {
-				this.materializeEmbeddedHasMany(entityType, entityId, fieldName, value)
+			if (relationType === 'hasOne') {
+				if (this.materializePlaceholderHasOne(entityType, entityId, fieldName)) {
+					continue
+				}
+
+				const value = data[fieldName]
+				if (value !== null && value !== undefined && typeof value === 'object' && !Array.isArray(value)) {
+					this.materializeEmbeddedHasOne(entityType, entityId, fieldName, value as Record<string, unknown>)
+				}
+			} else if (relationType === 'hasMany') {
+				const value = data[fieldName]
+				if (Array.isArray(value) && value.length > 0) {
+					this.materializeEmbeddedHasMany(entityType, entityId, fieldName, value)
+				}
 			}
 		}
+	}
+
+	/**
+	 * Walks an entity's hasOne relations and materializes any placeholder-backed
+	 * 'creating' relations. Safe to call on existing (server-side) entities —
+	 * never touches hasMany state or embedded snapshot data.
+	 */
+	private materializePlaceholderRelations(entityType: string, entityId: string): void {
+		if (!this.schemaProvider.hasEntity(entityType)) return
+
+		const relationFields = this.schemaProvider.getRelationFields(entityType)
+		for (const fieldName of relationFields) {
+			if (this.schemaProvider.getRelationType(entityType, fieldName) !== 'hasOne') continue
+			this.materializePlaceholderHasOne(entityType, entityId, fieldName)
+		}
+	}
+
+	/**
+	 * Materializes a hasOne relation that is in the 'creating' state with
+	 * non-empty placeholderData (PlaceholderHandle pattern). Creates a real
+	 * store entity from the placeholder data and flips the relation to
+	 * 'connected' with a temp ID, so subsequent collection goes through the
+	 * standard tempId-inline-create branch and post-persist ID mapping works.
+	 *
+	 * Returns true if materialization happened (caller should skip embedded
+	 * processing for this field).
+	 */
+	private materializePlaceholderHasOne(
+		entityType: string,
+		entityId: string,
+		fieldName: string,
+	): boolean {
+		const relation = this.store.getRelation(entityType, entityId, fieldName)
+		if (!relation || relation.state !== 'creating') return false
+		if (Object.keys(relation.placeholderData).length === 0) return false
+
+		const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
+		if (!targetType) return false
+
+		const tempId = this.store.createEntity(targetType, relation.placeholderData)
+		this.store.setRelation(entityType, entityId, fieldName, {
+			currentId: tempId,
+			state: 'connected',
+			placeholderData: {},
+		})
+
+		this.materializeEntityRelations(targetType, tempId)
+		return true
 	}
 
 	/**
