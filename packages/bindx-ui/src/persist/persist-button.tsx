@@ -11,7 +11,7 @@ export interface PersistButtonProps extends ComponentProps<typeof Button> {
 	readonly onError?: () => void
 }
 
-export function PersistButton({ label, className, onSuccess, onError, ...buttonProps }: PersistButtonProps): ReactNode {
+export function PersistButton({ label, className, onSuccess, onError, disabled, ...buttonProps }: PersistButtonProps): ReactNode {
 	const { persistAllWithFeedback, isPersisting, isDirty } = usePersistWithFeedback()
 
 	const handleClick = useCallback(async (): Promise<void> => {
@@ -26,7 +26,7 @@ export function PersistButton({ label, className, onSuccess, onError, ...buttonP
 	return (
 		<Button
 			className={cn('relative', className)}
-			disabled={isPersisting || !isDirty}
+			disabled={disabled || isPersisting || !isDirty}
 			onClick={handleClick}
 			{...buttonProps}
 		>
