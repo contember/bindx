@@ -153,7 +153,7 @@ export class MutationCollector implements MutationDataCollector {
 		// collecting, so the collection phase can remain a pure read over the
 		// store. Embedded data is not materialized here — for existing
 		// (server-side) parents, hasMany state is already authoritative.
-		this.materializePlaceholderRelations(entityType, entityId)
+		this.materializeForUpdate(entityType, entityId)
 
 		// Collect relation changes
 		this.collectRelationChanges(entityType, entityId, mutation)
@@ -194,7 +194,7 @@ export class MutationCollector implements MutationDataCollector {
 
 		// Materialize embedded relation data into store entities,
 		// then collect from store for consistent tracking and post-persist ID mapping
-		this.materializeEntityRelations(entityType, entityId)
+		this.materializeForCreate(entityType, entityId)
 
 		// Collect relation values from store
 		const relationFields = this.schemaProvider.getRelationFields(entityType)
@@ -384,11 +384,21 @@ export class MutationCollector implements MutationDataCollector {
 				return { delete: true }
 
 			case 'creating':
-				if (Object.keys(placeholderData).length > 0) {
-					const createData = this.processNestedData(placeholderData)
-					return { create: createData }
+				// Empty placeholderData is a legitimate no-op (user opened a create
+				// form but typed nothing). Non-empty placeholderData reaching this
+				// branch is an invariant violation — the materialization pass
+				// (materializeForCreate / materializeForUpdate) must run before
+				// collection and flip the relation to 'connected' with a tempId.
+				// Reaching here means a caller skipped materialization, which
+				// would produce a mutation the server accepts but whose returned
+				// ID we can't map back (see issue #23).
+				if (Object.keys(placeholderData).length === 0) {
+					return null
 				}
-				return null
+				throw new Error(
+					`Invariant: hasOne relation ${entityType}.${fieldName} in 'creating' state ` +
+					`with non-empty placeholderData must be materialized before collection`,
+				)
 
 			default:
 				return null
@@ -597,19 +607,19 @@ export class MutationCollector implements MutationDataCollector {
 		return isPersistedId(id)
 	}
 
-	// ==================== Embedded Data Materialization ====================
+	// ==================== Materialization ====================
 
 	/**
-	 * Materializes embedded relation data in an entity's snapshot into proper
-	 * store entities and relations. This normalizes inline objects (e.g.
-	 * `reviews: [{ reviewType: 'expert' }]`) into tracked entities with temp IDs,
-	 * enabling proper post-persist ID mapping and commit.
+	 * Materializes all relation state into trackable store entities on the
+	 * create path: placeholder-backed 'creating' hasOne relations AND embedded
+	 * inline objects/arrays in the snapshot data. After this pass, the
+	 * collection phase is a pure read over the store.
 	 *
-	 * Also materializes placeholder-backed hasOne relations in the 'creating'
-	 * state, so a PlaceholderHandle-driven create form produces a trackable
-	 * entity whose server-assigned ID can be mapped back after persist.
+	 * Called recursively for every newly materialized temp entity (both from
+	 * placeholder and embedded paths), since a newly-created entity can itself
+	 * carry further embedded or placeholder data.
 	 */
-	private materializeEntityRelations(entityType: string, entityId: string): void {
+	private materializeForCreate(entityType: string, entityId: string): void {
 		if (!this.schemaProvider.hasEntity(entityType)) return
 
 		const snapshot = this.store.getEntitySnapshot(entityType, entityId)
@@ -622,9 +632,7 @@ export class MutationCollector implements MutationDataCollector {
 			const relationType = this.schemaProvider.getRelationType(entityType, fieldName)
 
 			if (relationType === 'hasOne') {
-				if (this.materializePlaceholderHasOne(entityType, entityId, fieldName)) {
-					continue
-				}
+				if (this.materializePlaceholderHasOne(entityType, entityId, fieldName)) continue
 
 				const value = data[fieldName]
 				if (value !== null && value !== undefined && typeof value === 'object' && !Array.isArray(value)) {
@@ -640,26 +648,29 @@ export class MutationCollector implements MutationDataCollector {
 	}
 
 	/**
-	 * Walks an entity's hasOne relations and materializes any placeholder-backed
-	 * 'creating' relations. Safe to call on existing (server-side) entities —
-	 * never touches hasMany state or embedded snapshot data.
+	 * Materializes placeholder-backed 'creating' hasOne relations only. Safe
+	 * to call on existing (server-side) entities — never touches hasMany state
+	 * or embedded snapshot data, because for an already-persisted parent the
+	 * store-level hasMany/connected state is already authoritative.
+	 *
+	 * Newly created temp entities below still go through the full create-path
+	 * materialization, since they have no server state yet.
 	 */
-	private materializePlaceholderRelations(entityType: string, entityId: string): void {
+	private materializeForUpdate(entityType: string, entityId: string): void {
 		if (!this.schemaProvider.hasEntity(entityType)) return
 
-		const relationFields = this.schemaProvider.getRelationFields(entityType)
-		for (const fieldName of relationFields) {
+		for (const fieldName of this.schemaProvider.getRelationFields(entityType)) {
 			if (this.schemaProvider.getRelationType(entityType, fieldName) !== 'hasOne') continue
 			this.materializePlaceholderHasOne(entityType, entityId, fieldName)
 		}
 	}
 
 	/**
-	 * Materializes a hasOne relation that is in the 'creating' state with
-	 * non-empty placeholderData (PlaceholderHandle pattern). Creates a real
-	 * store entity from the placeholder data and flips the relation to
-	 * 'connected' with a temp ID, so subsequent collection goes through the
-	 * standard tempId-inline-create branch and post-persist ID mapping works.
+	 * Materializes a hasOne relation in the 'creating' state with non-empty
+	 * placeholderData (PlaceholderHandle pattern). Creates a real store entity
+	 * from the placeholder data and flips the relation to 'connected' with a
+	 * temp ID, so subsequent collection goes through the standard
+	 * tempId-inline-create branch and post-persist ID mapping works.
 	 *
 	 * Returns true if materialization happened (caller should skip embedded
 	 * processing for this field).
@@ -683,7 +694,8 @@ export class MutationCollector implements MutationDataCollector {
 			placeholderData: {},
 		})
 
-		this.materializeEntityRelations(targetType, tempId)
+		// Newly created temp entity — walk its embedded/placeholder data too.
+		this.materializeForCreate(targetType, tempId)
 		return true
 	}
 
@@ -726,7 +738,7 @@ export class MutationCollector implements MutationDataCollector {
 			this.store.addToHasMany(entityType, entityId, fieldName, tempId)
 
 			// Recursively materialize nested relations in the new entity
-			this.materializeEntityRelations(targetType, tempId)
+			this.materializeForCreate(targetType, tempId)
 		}
 
 		// Clear embedded array from parent snapshot
@@ -776,7 +788,7 @@ export class MutationCollector implements MutationDataCollector {
 			})
 
 			// Recursively materialize nested relations
-			this.materializeEntityRelations(targetType, tempId)
+			this.materializeForCreate(targetType, tempId)
 		}
 
 		// Clear embedded data from parent snapshot
