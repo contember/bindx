@@ -22,6 +22,7 @@ const testSchema: SchemaNames = {
 				id: { type: 'column' },
 				name: { type: 'column' },
 				email: { type: 'column' },
+				articles: { type: 'many', entity: 'Article' },
 			},
 		},
 		Tag: {
@@ -728,17 +729,20 @@ describe('MutationCollector', () => {
 
 			const mutation = collector.collectUpdateData('Article', 'a-1')
 
-			expect(mutation).toEqual({
-				author: {
-					create: {
-						name: 'New Author',
-						articles: [
-							{ connect: { id: 'existing-article' } },
-							{ create: { title: 'New Article' } },
-						],
-					},
-				},
-			})
+			expect(mutation).not.toBeNull()
+			const authorOp = mutation!['author'] as { create: Record<string, unknown> }
+			expect(authorOp.create['name']).toBe('New Author')
+
+			const articlesOps = authorOp.create['articles'] as Array<Record<string, unknown>>
+			expect(articlesOps).toHaveLength(2)
+			expect(articlesOps).toContainEqual(expect.objectContaining({
+				connect: { id: 'existing-article' },
+				alias: 'existing-article',
+			}))
+			expect(articlesOps).toContainEqual(expect.objectContaining({
+				create: { title: 'New Article' },
+				alias: expect.stringContaining('__temp_'),
+			}))
 		})
 
 		test('should handle nested update for existing has-one relation', () => {
