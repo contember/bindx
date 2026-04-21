@@ -40,6 +40,7 @@ export {
 // createColumn factory (Layer 2: UI wrapping)
 export {
 	createColumn,
+	createColumnStaticRender,
 	type ColumnRenderProps,
 	type FilterRenderProps,
 	type CreateColumnConfig,

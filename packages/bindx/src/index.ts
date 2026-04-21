@@ -126,7 +126,7 @@ export type {
 // ============================================================================
 
 // Schema utilities
-export { scalar, hasOne, hasMany, defineSchema, entityDef, roleEntityDef, SchemaRegistry, ContemberSchema, SchemaLoader } from './schema/index.js'
+export { scalar, enumScalar, hasOne, hasMany, defineSchema, entityDef, roleEntityDef, SchemaRegistry, ContemberSchema, SchemaLoader } from './schema/index.js'
 
 // Role types
 export type {

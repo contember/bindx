@@ -13,7 +13,7 @@ import React, { ReactNode } from 'react'
 import type { FieldRef, HasOneRef, HasManyRef, FilterHandler, FilterArtifact, EntityAccessor, EnumFilterArtifact, EnumListFilterArtifact, SelectionMeta } from '@contember/bindx'
 import { SelectionScope } from '@contember/bindx'
 import { FIELD_REF_META, createCollectorProxy } from '@contember/bindx-react'
-import { createColumn, type ColumnRenderProps } from './createColumn.js'
+import { createColumn, createColumnStaticRender, type ColumnRenderProps } from './createColumn.js'
 import { accessField } from './columnTypes.js'
 import { createRelationColumn, hasOneCellConfig, hasManyCellConfig, type RelationColumnProps } from './createRelationColumn.jsx'
 import {
@@ -104,9 +104,19 @@ function renderDateTimeDefault({ value }: ColumnRenderProps<string | null>): Rea
 	return date.toLocaleString()
 }
 
-function renderEnumListDefault({ value }: ColumnRenderProps<readonly string[] | null>): React.ReactNode {
+function renderEnumDefault({ value, enumOptions }: ColumnRenderProps<string | null>): React.ReactNode {
+	if (value == null) return ''
+	return enumOptions?.[value] ?? value
+}
+
+function renderEnumListDefault({ value, enumOptions }: ColumnRenderProps<readonly string[] | null>): React.ReactNode {
 	if (!Array.isArray(value)) return ''
-	return value.join(', ')
+	return value.map((v, i) => (
+		<React.Fragment key={i}>
+			{i > 0 ? ', ' : null}
+			{enumOptions?.[v] ?? v}
+		</React.Fragment>
+	))
 }
 
 // ============================================================================
@@ -164,13 +174,15 @@ export const DataGridBooleanColumn = createColumn(booleanColumnDef, {
 	renderCell: renderBooleanDefault,
 })
 
-export const DataGridEnumColumn = createColumn<string | null, EnumFilterArtifact, EnumExtraProps<string>>(enumColumnDef, {
-	renderCell: renderScalarDefault,
-}) as <TValue extends string>(props: DataGridEnumColumnProps<TValue>) => ReactNode
+export const DataGridEnumColumn = Object.assign(
+	<TValue extends string>(_props: DataGridEnumColumnProps<TValue>): null => null,
+	{ staticRender: createColumnStaticRender(enumColumnDef, { renderCell: renderEnumDefault }) },
+)
 
-export const DataGridEnumListColumn = createColumn<readonly string[] | null, EnumListFilterArtifact, EnumExtraProps<string>>(enumListColumnDef, {
-	renderCell: renderEnumListDefault,
-}) as <TValue extends string>(props: DataGridEnumListColumnProps<TValue>) => ReactNode
+export const DataGridEnumListColumn = Object.assign(
+	<TValue extends string>(_props: DataGridEnumListColumnProps<TValue>): null => null,
+	{ staticRender: createColumnStaticRender(enumListColumnDef, { renderCell: renderEnumListDefault }) },
+)
 
 export const DataGridUuidColumn = createColumn(uuidColumnDef, {
 	renderCell: renderScalarDefault,

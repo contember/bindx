@@ -310,8 +310,8 @@ describe('DataGrid column types', () => {
 			expect(queryByTestId(container, 'datagrid-loading')).toBeNull()
 		})
 
-		expect(getByTestId(container, 'datagrid-row-0-col-status').textContent).toBe('published')
-		expect(getByTestId(container, 'datagrid-row-1-col-status').textContent).toBe('draft')
+		expect(getByTestId(container, 'datagrid-row-0-col-status').textContent).toBe('Published')
+		expect(getByTestId(container, 'datagrid-row-1-col-status').textContent).toBe('Draft')
 	})
 
 	test('custom cell renderer works on number column', async () => {

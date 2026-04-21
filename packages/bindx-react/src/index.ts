@@ -140,6 +140,7 @@ export type {
 export {
 	// Schema utilities
 	scalar,
+	enumScalar,
 	hasOne,
 	hasMany,
 	defineSchema,
