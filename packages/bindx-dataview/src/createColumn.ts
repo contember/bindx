@@ -21,6 +21,8 @@ export interface ColumnRenderProps<TValue> {
 	readonly accessor: EntityAccessor<object>
 	readonly fieldRef: FieldRef<unknown> | null
 	readonly fieldName: string | null
+	readonly enumOptions: Readonly<Record<string, React.ReactNode>> | undefined
+	readonly enumName: string | undefined
 }
 
 export interface FilterRenderProps<TFilterArtifact> {
@@ -58,15 +60,18 @@ export interface ColumnComponent<TExtraProps = object> {
 	staticRender: (props: Record<string, unknown>) => React.ReactNode
 }
 
-export function createColumn<TValue, TFilterArtifact extends FilterArtifact, TExtraProps = object>(
+/**
+ * Build the static-render function for a column type definition. Used both by
+ * {@link createColumn} and by column components that need a narrower generic
+ * signature than `ColumnComponent` can express (e.g. enum columns constrained
+ * to `T extends string`) — those define their own component and attach this
+ * static render via `Object.assign`.
+ */
+export function createColumnStaticRender<TValue, TFilterArtifact extends FilterArtifact>(
 	columnType: ColumnTypeDef<TValue, TFilterArtifact>,
 	config: CreateColumnConfig<TValue, TFilterArtifact>,
-): ColumnComponent<TExtraProps> {
-	function Column(_props: ColumnComponentProps<unknown> & TExtraProps): null {
-		return null
-	}
-
-	Column.staticRender = (props: Record<string, unknown>): React.ReactNode => {
+): (props: Record<string, unknown>) => React.ReactNode {
+	return (props: Record<string, unknown>): React.ReactNode => {
 		const fieldRef = props['field'] as FieldRef<unknown> | undefined
 		const fieldName = fieldRef ? extractFieldName(fieldRef) : null
 		const header = props['header'] as React.ReactNode | undefined
@@ -74,9 +79,9 @@ export function createColumn<TValue, TFilterArtifact extends FilterArtifact, TEx
 		const filterEnabled = (props['filter'] as boolean | undefined) ?? false
 		const children = props['children'] as ((value: TValue | null, accessor: EntityAccessor<object>) => React.ReactNode) | undefined
 		const rawOptions = props['options'] as readonly string[] | Readonly<Record<string, React.ReactNode>> | undefined
-		const enumOptions = Array.isArray(rawOptions)
-			? Object.fromEntries(rawOptions.map(v => [v, v])) as Readonly<Record<string, React.ReactNode>>
-			: rawOptions
+		const enumOptions: Readonly<Record<string, React.ReactNode>> | undefined = Array.isArray(rawOptions)
+			? Object.fromEntries((rawOptions as readonly string[]).map(v => [v, v]))
+			: rawOptions as Readonly<Record<string, React.ReactNode>> | undefined
 		const enumName = extractEnumName(fieldRef)
 
 		const renderCell = children
@@ -95,6 +100,8 @@ export function createColumn<TValue, TFilterArtifact extends FilterArtifact, TEx
 					accessor,
 					fieldRef: fieldRef ?? null,
 					fieldName,
+					enumOptions,
+					enumName,
 				})
 			}
 
@@ -123,6 +130,15 @@ export function createColumn<TValue, TFilterArtifact extends FilterArtifact, TEx
 
 		return React.createElement(ColumnLeaf, leafProps as ColumnLeafProps)
 	}
+}
 
+export function createColumn<TValue, TFilterArtifact extends FilterArtifact, TExtraProps = object>(
+	columnType: ColumnTypeDef<TValue, TFilterArtifact>,
+	config: CreateColumnConfig<TValue, TFilterArtifact>,
+): ColumnComponent<TExtraProps> {
+	function Column(_props: ColumnComponentProps<unknown> & TExtraProps): null {
+		return null
+	}
+	Column.staticRender = createColumnStaticRender(columnType, config)
 	return Column as ColumnComponent<TExtraProps>
 }
