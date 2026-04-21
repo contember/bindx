@@ -41,6 +41,7 @@ const schema: SchemaNames = {
 				qualification: { type: 'column' },
 				status: { type: 'column' },
 				user: { type: 'one', entity: 'User' },
+				students: { type: 'many', entity: 'Student' },
 			},
 		},
 		User: {
@@ -51,6 +52,25 @@ const schema: SchemaNames = {
 				firstName: { type: 'column' },
 				lastName: { type: 'column' },
 				email: { type: 'column' },
+				profile: { type: 'one', entity: 'Profile' },
+			},
+		},
+		Profile: {
+			name: 'Profile',
+			scalars: ['id', 'bio', 'avatar'],
+			fields: {
+				id: { type: 'column' },
+				bio: { type: 'column' },
+				avatar: { type: 'column' },
+			},
+		},
+		Student: {
+			name: 'Student',
+			scalars: ['id', 'enrolledAt'],
+			fields: {
+				id: { type: 'column' },
+				enrolledAt: { type: 'column' },
+				user: { type: 'one', entity: 'User' },
 			},
 		},
 	},
@@ -159,6 +179,153 @@ describe('hasOne creating-state materialization', () => {
 			expect(relation!.state).toBe('connected')
 			expect(isTempId(relation!.currentId!)).toBe(true)
 			expect(collector.getNestedEntityTypes().get(relation!.currentId!)).toBe('User')
+		})
+
+		test('recursively materializes nested placeholder hasOne (creating → creating)', () => {
+			// Lecturer.user placeholder contains its own placeholder for user.profile.
+			// Both levels must become real store entities with temp IDs so each can
+			// receive a server-assigned ID after persist.
+			const lecturerId = store.createEntity('Lecturer', { status: 'active' })
+			store.getOrCreateRelation('Lecturer', lecturerId, 'user', {
+				currentId: null,
+				serverId: null,
+				state: 'creating',
+				serverState: 'disconnected',
+				placeholderData: {
+					firstName: 'Eva',
+					email: 'eva@example.com',
+				},
+			})
+
+			const mutation = collector.collectCreateData('Lecturer', lecturerId)
+
+			// Relation materialized → real store entity with tempId
+			const userRelation = store.getRelation('Lecturer', lecturerId, 'user')
+			expect(userRelation!.state).toBe('connected')
+			const userTempId = userRelation!.currentId!
+			expect(isTempId(userTempId)).toBe(true)
+
+			// Now a deeper placeholder is attached on the newly materialized User.
+			// In a real flow SET_PLACEHOLDER_DATA on profile would fire through a
+			// HasOneHandle after the user was already materialized, but we simulate
+			// it post-hoc here and re-collect to exercise the nested walk.
+			store.getOrCreateRelation('User', userTempId, 'profile', {
+				currentId: null,
+				serverId: null,
+				state: 'creating',
+				serverState: 'disconnected',
+				placeholderData: { bio: 'Photographer' },
+			})
+
+			// Re-run collection: User tempId is already tracked, so collecting
+			// its create-data triggers materializeForCreate on it and recursively
+			// handles the profile placeholder.
+			const mutation2 = collector.collectCreateData('Lecturer', lecturerId)
+
+			// Outer mutation carries the full nested chain
+			expect(mutation2).toMatchObject({
+				status: 'active',
+				user: {
+					create: {
+						firstName: 'Eva',
+						email: 'eva@example.com',
+						profile: {
+							create: { bio: 'Photographer' },
+						},
+					},
+				},
+			})
+
+			// Profile relation materialized, and its tempId is tracked for ID mapping
+			const profileRelation = store.getRelation('User', userTempId, 'profile')
+			expect(profileRelation!.state).toBe('connected')
+			const profileTempId = profileRelation!.currentId!
+			expect(isTempId(profileTempId)).toBe(true)
+			expect(collector.getNestedEntityTypes().get(profileTempId)).toBe('Profile')
+
+			// First-pass mutation already returns the flat (profile-less) form,
+			// verifying the collector is idempotent on later passes adding depth.
+			expect(mutation).toMatchObject({
+				user: { create: { firstName: 'Eva' } },
+			})
+		})
+
+		test('materializes placeholder hasOne carried on a hasMany-created item', () => {
+			// Lecturer has a hasMany `students` with a freshly-created Student
+			// whose own `user` hasOne is placeholder-backed. The whole chain must
+			// materialize so both the Student and its nested User get temp IDs.
+			const lecturerId = store.createEntity('Lecturer', { status: 'active' })
+
+			const studentTempId = store.createEntity('Student', { enrolledAt: '2026-04-01' })
+			store.getOrCreateHasMany('Lecturer', lecturerId, 'students', [])
+			store.addToHasMany('Lecturer', lecturerId, 'students', studentTempId)
+
+			store.getOrCreateRelation('Student', studentTempId, 'user', {
+				currentId: null,
+				serverId: null,
+				state: 'creating',
+				serverState: 'disconnected',
+				placeholderData: {
+					firstName: 'Pavel',
+					email: 'pavel@example.com',
+				},
+			})
+
+			const mutation = collector.collectCreateData('Lecturer', lecturerId)
+
+			expect(mutation).toMatchObject({
+				status: 'active',
+				students: [
+					expect.objectContaining({
+						create: expect.objectContaining({
+							enrolledAt: '2026-04-01',
+							user: {
+								create: {
+									firstName: 'Pavel',
+									email: 'pavel@example.com',
+								},
+							},
+						}),
+						alias: studentTempId,
+					}),
+				],
+			})
+
+			// Nested user relation must be materialized and tracked
+			const userRelation = store.getRelation('Student', studentTempId, 'user')
+			expect(userRelation!.state).toBe('connected')
+			const userTempId = userRelation!.currentId!
+			expect(isTempId(userTempId)).toBe(true)
+			expect(collector.getNestedEntityTypes().get(userTempId)).toBe('User')
+			expect(collector.getNestedEntityTypes().get(studentTempId)).toBe('Student')
+		})
+
+		test('invariant throws if creating hasOne with data survives collection (materialization bypassed)', () => {
+			// Simulate a code path that would reach collectHasOneOperation without
+			// prior materialization — we do it by using a schema provider that
+			// can't resolve the relation target, which is how materializeFor*
+			// bails out silently. The invariant guard in the 'creating' branch
+			// must then catch it loudly instead of producing a ghost mutation.
+			const brokenProvider = {
+				getScalarFields: () => ['id', 'status'] as const,
+				getRelationFields: () => ['user'] as const,
+				getRelationType: () => 'hasOne' as const,
+				getRelationTarget: () => undefined, // <- this is the breakage
+				hasEntity: () => true,
+			}
+			const brokenCollector = new MutationCollector(store, brokenProvider)
+			const lecturerId = store.createEntity('Lecturer', { status: 'active' })
+			store.getOrCreateRelation('Lecturer', lecturerId, 'user', {
+				currentId: null,
+				serverId: null,
+				state: 'creating',
+				serverState: 'disconnected',
+				placeholderData: { firstName: 'Ghost' },
+			})
+
+			expect(() => brokenCollector.collectCreateData('Lecturer', lecturerId)).toThrow(
+				/must be materialized before collection/,
+			)
 		})
 
 		test('returns null for empty placeholderData without mutating the store', () => {
