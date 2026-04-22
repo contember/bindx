@@ -41,8 +41,8 @@ import {
 	SelectPopoverContent,
 } from './ui.js'
 
-/** Extract the target entity type from a HasManyRef */
-type HasManyTarget<F> = F extends HasManyRef<infer TEntity> ? TEntity : object
+// `infer _S` (not `any`) is load-bearing — see relationTargetInference.test.ts.
+type HasManyTarget<F> = F extends HasManyRef<infer TEntity, infer _S> ? TEntity : object
 
 /** Scalar field keys of an entity (for filter/sorting) */
 type ScalarKeys<T> = { [K in keyof T]: T[K] extends (object | object[] | null) ? never : K }[keyof T] & string
