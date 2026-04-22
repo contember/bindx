@@ -251,6 +251,11 @@ export interface HasOneRefInterface<
 
 /**
  * HasOneRef = interface props + proxy field access returning Ref variants.
+ *
+ * Inference caveat: `T extends HasOneRef<infer E, any>` does NOT reliably
+ * infer `E` when `T`'s `TSelected` is a narrow subset of `TEntity` — the
+ * mapped-type half of the intersection poisons inference. Use
+ * `ExtractHasOneEntity<T>` (or `infer _S` instead of `any`) instead.
  */
 export type HasOneRef<
 	TEntity,
@@ -316,6 +321,10 @@ export interface EntityRefInterface<
 
 /**
  * EntityRef = interface props + proxy field access returning Ref variants.
+ *
+ * Inference caveat: `T extends EntityRef<infer E, any>` does NOT reliably
+ * infer `E` when `T`'s `TSelected` is a narrow subset of `TEntity`. Use
+ * `ExtractEntityRefEntity<T>` (or `infer _S` instead of `any`) instead.
  */
 export type EntityRef<
 	TEntity,
@@ -446,3 +455,16 @@ export type ExtractHasManyEntityName<T> =
 		: T extends HasManyRef<any, any, any, infer TEntityName, any>
 			? TEntityName
 			: never
+
+// Inference-safe target-entity extractors. Prefer these over hand-rolled
+// `T extends HasOneRef<infer E, any> ? E : ...` — see relationTargetInference.test.ts
+// for why putting `any` in the TSelected slot poisons inference for these aliases.
+
+export type ExtractHasOneEntity<T> =
+	T extends HasOneRefInterface<infer TEntity, any, any, any, any> ? TEntity : never
+
+export type ExtractHasManyEntity<T> =
+	T extends HasManyRef<infer TEntity, any, any, any, any> ? TEntity : never
+
+export type ExtractEntityRefEntity<T> =
+	T extends EntityRefInterface<infer TEntity, any, any, any, any> ? TEntity : never

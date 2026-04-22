@@ -70,6 +70,9 @@ export type {
 	// Type extraction helpers
 	ExtractHasOneEntityName,
 	ExtractHasManyEntityName,
+	ExtractHasOneEntity,
+	ExtractHasManyEntity,
+	ExtractEntityRefEntity,
 	ExtractRoleMap,
 } from './handles/index.js'
 
