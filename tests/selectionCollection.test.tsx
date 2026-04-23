@@ -1,6 +1,6 @@
 import './setup'
 import { describe, test, expect } from 'bun:test'
-import React from 'react'
+import React, { type ReactNode } from 'react'
 import {
 	createComponent,
 	entityDef,
@@ -561,5 +561,124 @@ describe('Selection Collection with Schema', () => {
 		expect(ffsField).toBeDefined()
 		expect(ffsField!.isRelation).toBe(true)
 		expect(ffsField!.nested!.fields.has('name')).toBe(true)
+	})
+
+	test('createComponent children via `children` prop contribute to selection', () => {
+		const { SelectionScope } = require('@contember/bindx')
+		const { createCollectorProxy, collectSelection, mergeSelections } = require('@contember/bindx-react')
+
+		const VoucherLabel = createComponent()
+			.entity('entity', schema.Voucher, e => e.label())
+			.render(({ entity }: any) => <span>{entity.label.value}</span>)
+		;(VoucherLabel as any).$entity
+
+		const VoucherShell = createComponent()
+			.entity('entity', schema.Voucher, e => e.code())
+			.props<{ children: ReactNode }>()
+			.render(({ entity, children }: any) => (
+				<section>
+					<span>{entity.code.value}</span>
+					{children}
+				</section>
+			))
+		;(VoucherShell as any).$entity
+
+		const registry = new SchemaRegistry(schemaDef)
+		const scope = new SelectionScope()
+		const collector = createCollectorProxy(scope, 'Voucher', registry)
+
+		const jsx = (
+			<VoucherShell entity={collector}>
+				<VoucherLabel entity={collector} />
+			</VoucherShell>
+		)
+
+		const jsxSel = collectSelection(jsx)
+		const selection = scope.toSelectionMeta()
+		mergeSelections(selection, jsxSel)
+
+		expect(selection.fields.has('code')).toBe(true)
+		expect(selection.fields.has('label')).toBe(true)
+	})
+
+	test('createComponent custom slot contributes to selection when listed via .slots()', () => {
+		const { SelectionScope } = require('@contember/bindx')
+		const { createCollectorProxy, collectSelection, mergeSelections } = require('@contember/bindx-react')
+
+		const VoucherCode = createComponent()
+			.entity('entity', schema.Voucher, e => e.code())
+			.render(({ entity }: any) => <span>{entity.code.value}</span>)
+		;(VoucherCode as any).$entity
+
+		const VoucherShell = createComponent()
+			.entity('entity', schema.Voucher, e => e.label())
+			.props<{ header: ReactNode; footer: ReactNode }>()
+			.slots(['header', 'footer'])
+			.render(({ entity, header, footer }: any) => (
+				<section>
+					<header>{header}</header>
+					<span>{entity.label.value}</span>
+					<footer>{footer}</footer>
+				</section>
+			))
+		;(VoucherShell as any).$entity
+
+		const registry = new SchemaRegistry(schemaDef)
+		const scope = new SelectionScope()
+		const collector = createCollectorProxy(scope, 'Voucher', registry)
+
+		const jsx = (
+			<VoucherShell
+				entity={collector}
+				header={<VoucherCode entity={collector} />}
+				footer={null}
+			/>
+		)
+
+		const jsxSel = collectSelection(jsx)
+		const selection = scope.toSelectionMeta()
+		mergeSelections(selection, jsxSel)
+
+		expect(selection.fields.has('label')).toBe(true)
+		expect(selection.fields.has('code')).toBe(true)
+	})
+
+	test('createComponent opts out of slot analysis via .slots([])', () => {
+		const { SelectionScope } = require('@contember/bindx')
+		const { createCollectorProxy, collectSelection, mergeSelections } = require('@contember/bindx-react')
+
+		const VoucherLabel = createComponent()
+			.entity('entity', schema.Voucher, e => e.label())
+			.render(({ entity }: any) => <span>{entity.label.value}</span>)
+		;(VoucherLabel as any).$entity
+
+		const OpaqueShell = createComponent()
+			.entity('entity', schema.Voucher, e => e.code())
+			.props<{ children: ReactNode }>()
+			.slots([])
+			.render(({ entity, children }: any) => (
+				<section>
+					<span>{entity.code.value}</span>
+					{children}
+				</section>
+			))
+		;(OpaqueShell as any).$entity
+
+		const registry = new SchemaRegistry(schemaDef)
+		const scope = new SelectionScope()
+		const collector = createCollectorProxy(scope, 'Voucher', registry)
+
+		const jsx = (
+			<OpaqueShell entity={collector}>
+				<VoucherLabel entity={collector} />
+			</OpaqueShell>
+		)
+
+		const jsxSel = collectSelection(jsx)
+		const selection = scope.toSelectionMeta()
+		mergeSelections(selection, jsxSel)
+
+		expect(selection.fields.has('code')).toBe(true)
+		expect(selection.fields.has('label')).toBe(false)
 	})
 })
