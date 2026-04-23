@@ -48,6 +48,7 @@ export class ComponentBuilderImpl<
 		private readonly roles: readonly string[],
 		private readonly hasInterfacesMode: boolean = false,
 		private readonly conditionFn: ((props: Record<string, unknown>) => Condition) | null = null,
+		private readonly slotNames: readonly string[] = ['children'],
 	) {}
 
 	entity(
@@ -65,6 +66,7 @@ export class ComponentBuilderImpl<
 			this.roles,
 			this.hasInterfacesMode,
 			this.conditionFn,
+			this.slotNames,
 		)
 	}
 
@@ -93,6 +95,7 @@ export class ComponentBuilderImpl<
 			this.roles,
 			true, // Enable interfaces mode for discovery of implicit interface props
 			this.conditionFn,
+			this.slotNames,
 		)
 	}
 
@@ -104,6 +107,7 @@ export class ComponentBuilderImpl<
 			this.roles,
 			this.hasInterfacesMode,
 			this.conditionFn,
+			this.slotNames,
 		)
 	}
 
@@ -114,6 +118,18 @@ export class ComponentBuilderImpl<
 			this.roles,
 			this.hasInterfacesMode,
 			conditionFn,
+			this.slotNames,
+		)
+	}
+
+	slots(names: readonly string[]): ComponentBuilderImpl<TState> {
+		return new ComponentBuilderImpl(
+			this.schemaRegistry,
+			this.entityConfigs,
+			this.roles,
+			this.hasInterfacesMode,
+			this.conditionFn,
+			names,
 		)
 	}
 
@@ -125,6 +141,7 @@ export class ComponentBuilderImpl<
 			this.hasInterfacesMode,
 			this.schemaRegistry,
 			this.conditionFn,
+			this.slotNames,
 		)
 	}
 }

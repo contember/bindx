@@ -100,6 +100,7 @@ export function buildComponent<TProps extends object>(
 	hasInterfacesMode: boolean,
 	schemaRegistry: SchemaRegistry<Record<string, object>> | null,
 	conditionFn: ((props: TProps) => Condition) | null,
+	slotNames: readonly string[],
 ): unknown {
 	const selectionsMap = new Map<string, SelectionPropMeta>()
 
@@ -178,7 +179,7 @@ export function buildComponent<TProps extends object>(
 		collectNested,
 	): SelectionFieldMeta | SelectionFieldMeta[] | null => {
 		ensureImplicitCollected()
-		return createGetSelection(selectionsMap)(props, collectNested)
+		return createGetSelection(selectionsMap, slotNames)(props, collectNested)
 	}
 
 	// 6. Attach fragment properties ($propName) for explicit entities
@@ -393,10 +394,11 @@ function createFragment(
  */
 function createGetSelection(
 	selectionsMap: Map<string, SelectionPropMeta>,
+	slotNames: readonly string[],
 ): SelectionProvider['getSelection'] {
 	return (
 		props: Record<string, unknown>,
-		_collectNested,
+		collectNested,
 	): SelectionFieldMeta[] | null => {
 		const fields: SelectionFieldMeta[] = []
 
@@ -434,6 +436,19 @@ function createGetSelection(
 						fields.push({ ...field })
 					}
 				}
+			}
+		}
+
+		// Walk configured slot props so nested bindx components inside children
+		// (or any other slot) contribute their selection to the fetch plan.
+		for (const slotName of slotNames) {
+			const slotValue = props[slotName]
+			if (slotValue === undefined || slotValue === null) {
+				continue
+			}
+			const nested = collectNested(slotValue as ReactNode)
+			for (const field of nested.fields.values()) {
+				fields.push({ ...field })
 			}
 		}
 

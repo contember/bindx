@@ -447,6 +447,32 @@ export interface ComponentBuilder<
 	if(conditionFn: (props: BuildEntityProps<TState['__entityProps'], TState['__roles']>) => Condition): ComponentBuilder<TState>
 
 	/**
+	 * Declare which ReactNode-shaped props should be walked by selection analysis.
+	 * Components inside these slots contribute their selections to the fetch plan.
+	 *
+	 * Default: `['children']`. Call with `[]` to opt out.
+	 *
+	 * @param names - Prop names to analyze. Must be keys of the props declared via `.props<>()`.
+	 *
+	 * @example
+	 * ```typescript
+	 * createComponent()
+	 *   .entity('entity', schema.Article)
+	 *   .props<{ header: ReactNode; children: ReactNode }>()
+	 *   .slots(['children', 'header'])
+	 *   .render(({ entity, header, children }) => (
+	 *     <article>
+	 *       <header>{header}</header>
+	 *       {children}
+	 *     </article>
+	 *   ))
+	 * ```
+	 */
+	slots<TNames extends readonly (keyof TState['__scalarProps'] & string)[]>(
+		names: TNames,
+	): ComponentBuilder<TState>
+
+	/**
 	 * Build the component with the render function.
 	 *
 	 * @param renderFn - React render function receiving typed props
