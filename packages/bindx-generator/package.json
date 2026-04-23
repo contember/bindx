@@ -1,6 +1,6 @@
 {
 	"name": "@contember/bindx-generator",
-	"version": "0.1.36",
+	"version": "0.1.37",
 	"description": "Schema generator for @contember/bindx with role-based ACL support",
 	"type": "module",
 	"main": "./src/index.ts",

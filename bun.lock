@@ -21,7 +21,7 @@
     },
     "packages/bindx": {
       "name": "@contember/bindx",
-      "version": "0.1.36",
+      "version": "0.1.37",
       "dependencies": {
         "@contember/bindx-client": "workspace:*",
         "@contember/graphql-builder": "^2.1.0-beta.1",
@@ -30,7 +30,7 @@
     },
     "packages/bindx-client": {
       "name": "@contember/bindx-client",
-      "version": "0.1.36",
+      "version": "0.1.37",
       "dependencies": {
         "@contember/graphql-builder": "^2.1.0-beta.1",
         "@contember/graphql-client": "^2.1.0-beta.1",
@@ -39,7 +39,7 @@
     },
     "packages/bindx-dataview": {
       "name": "@contember/bindx-dataview",
-      "version": "0.1.36",
+      "version": "0.1.37",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-react": "workspace:*",
@@ -52,7 +52,7 @@
     },
     "packages/bindx-editor": {
       "name": "@contember/bindx-editor",
-      "version": "0.1.36",
+      "version": "0.1.37",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-react": "workspace:*",
@@ -68,7 +68,7 @@
     },
     "packages/bindx-form": {
       "name": "@contember/bindx-form",
-      "version": "0.1.36",
+      "version": "0.1.37",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@radix-ui/react-slot": "^1.2.4",
@@ -79,7 +79,7 @@
     },
     "packages/bindx-generator": {
       "name": "@contember/bindx-generator",
-      "version": "0.1.36",
+      "version": "0.1.37",
       "dependencies": {
         "@contember/schema": "^2.1.0-beta.1",
         "@contember/schema-utils": "^2.1.0-beta.1",
@@ -90,7 +90,7 @@
     },
     "packages/bindx-react": {
       "name": "@contember/bindx-react",
-      "version": "0.1.36",
+      "version": "0.1.37",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-client": "workspace:*",
@@ -104,7 +104,7 @@
     },
     "packages/bindx-repeater": {
       "name": "@contember/bindx-repeater",
-      "version": "0.1.36",
+      "version": "0.1.37",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-react": "workspace:*",
@@ -115,7 +115,7 @@
     },
     "packages/bindx-ui": {
       "name": "@contember/bindx-ui",
-      "version": "0.1.36",
+      "version": "0.1.37",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-dataview": "workspace:*",
@@ -148,7 +148,7 @@
     },
     "packages/bindx-uploader": {
       "name": "@contember/bindx-uploader",
-      "version": "0.1.36",
+      "version": "0.1.37",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-react": "workspace:*",
@@ -162,7 +162,7 @@
     },
     "packages/example": {
       "name": "@contember/bindx-example",
-      "version": "0.1.36",
+      "version": "0.1.37",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-dataview": "workspace:*",
@@ -531,7 +531,7 @@
 
     "attr-accept": ["attr-accept@2.2.5", "", {}, "sha512-0bDNnY/u6pPwHDMoF0FieU354oBi0a8rD9FcsLwzcGWbc8KS8KPIi7y+s13OlVY+gMWc/9xEMUgNE6Qm8ZllYQ=="],
 
-    "baseline-browser-mapping": ["baseline-browser-mapping@2.10.20", "", { "bin": { "baseline-browser-mapping": "dist/cli.cjs" } }, "sha512-1AaXxEPfXT+GvTBJFuy4yXVHWJBXa4OdbIebGN/wX5DlsIkU0+wzGnd2lOzokSk51d5LUmqjgBLRLlypLUqInQ=="],
+    "baseline-browser-mapping": ["baseline-browser-mapping@2.10.21", "", { "bin": { "baseline-browser-mapping": "dist/cli.cjs" } }, "sha512-Q+rUQ7Uz8AHM7DEaNdwvfFCTq7a43lNTzuS94eiWqwyxfV/wJv+oUivef51T91mmRY4d4A1u9rcSvkeufCVXlA=="],
 
     "browserslist": ["browserslist@4.28.2", "", { "dependencies": { "baseline-browser-mapping": "^2.10.12", "caniuse-lite": "^1.0.30001782", "electron-to-chromium": "^1.5.328", "node-releases": "^2.0.36", "update-browserslist-db": "^1.2.3" }, "bin": { "browserslist": "cli.js" } }, "sha512-48xSriZYYg+8qXna9kwqjIVzuQxi+KYWp2+5nCYnYKPTr0LvD89Jqk2Or5ogxz0NUMfIjhh2lIUX/LyX9B4oIg=="],
 
@@ -561,7 +561,7 @@
 
     "dom-accessibility-api": ["dom-accessibility-api@0.5.16", "", {}, "sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg=="],
 
-    "electron-to-chromium": ["electron-to-chromium@1.5.343", "", {}, "sha512-YHnQ3MXI08icvL9ZKnEBy05F2EQ8ob01UaMOuMbM8l+4UcAq6MPPbBTJBbsBUg3H8JeZNt+O4fjsoWth3p6IFg=="],
+    "electron-to-chromium": ["electron-to-chromium@1.5.344", "", {}, "sha512-4MxfbmNDm+KPh066EZy+eUnkcDPcZ35wNmOWzFuh/ijvHsve6kbLTLURy88uCNK5FbpN+yk2nQY6BYh1GEt+wg=="],
 
     "enhanced-resolve": ["enhanced-resolve@5.20.1", "", { "dependencies": { "graceful-fs": "^4.2.4", "tapable": "^2.3.0" } }, "sha512-Qohcme7V1inbAfvjItgw0EaxVX5q2rdVEZHRBrEQdRZTssLDGsL8Lwrznl8oQ/6kuTJONLaDcGjkNP247XEhcA=="],
 
