@@ -1,6 +1,6 @@
 import './setup'
 import { describe, test, expect } from 'bun:test'
-import React from 'react'
+import React, { type ReactNode } from 'react'
 import {
 	createComponent,
 	entityDef,
@@ -561,5 +561,54 @@ describe('Selection Collection with Schema', () => {
 		expect(ffsField).toBeDefined()
 		expect(ffsField!.isRelation).toBe(true)
 		expect(ffsField!.nested!.fields.has('name')).toBe(true)
+	})
+
+	// When a createComponent wraps other bindx components via `children`, analyzeJsx
+	// currently does not descend into those children — it calls getSelection and
+	// returns. createGetSelection in componentFactory receives a `collectNested`
+	// callback (named `_collectNested`) but never invokes it. The practical effect
+	// is that a child's own createComponent selection is missing from the fetch
+	// plan, which surfaces at runtime as UnfetchedFieldError.
+	test('createComponent children via `children` prop contribute to selection', () => {
+		const { SelectionScope } = require('@contember/bindx')
+		const { createCollectorProxy, collectSelection, mergeSelections } = require('@contember/bindx-react')
+
+		const VoucherLabel = createComponent()
+			.entity('entity', schema.Voucher, e => e.label())
+			.render(({ entity }: any) => <span>{entity.label.value}</span>)
+		;(VoucherLabel as any).$entity
+
+		const VoucherShell = createComponent()
+			.entity('entity', schema.Voucher, e => e.code())
+			.props<{ children: ReactNode }>()
+			.render(({ entity, children }: any) => (
+				<section>
+					<span>{entity.code.value}</span>
+					{children}
+				</section>
+			))
+		;(VoucherShell as any).$entity
+
+		const registry = new SchemaRegistry(schemaDef)
+		const scope = new SelectionScope()
+		const collector = createCollectorProxy(scope, 'Voucher', registry)
+
+		const jsx = (
+			<VoucherShell entity={collector}>
+				<VoucherLabel entity={collector} />
+			</VoucherShell>
+		)
+
+		const jsxSel = collectSelection(jsx)
+		const selection = scope.toSelectionMeta()
+		mergeSelections(selection, jsxSel)
+
+		// Wrapper's own selection is collected today.
+		expect(selection.fields.has('code')).toBe(true)
+
+		// Child's selection SHOULD also be merged. It is not, because
+		// createGetSelection ignores collectNested and analyzeJsx stops at a
+		// component that exposes getSelection.
+		expect(selection.fields.has('label')).toBe(true)
 	})
 })
