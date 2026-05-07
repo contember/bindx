@@ -9,9 +9,10 @@
 		"./_internal/*": "./src/*"
 	},
 	"scripts": {
-		"build": "vite build",
+		"build": "bun build src/cli/cli.ts --target=node --outdir=dist/cli && chmod +x dist/cli/cli.js && tsc --build",
 		"typecheck": "tsc --noEmit"
 	},
+	"files": ["dist", "src"],
 	"dependencies": {
 		"@contember/bindx": "workspace:*",
 		"@contember/bindx-react": "workspace:*",
