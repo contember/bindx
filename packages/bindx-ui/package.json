@@ -57,6 +57,7 @@
 		"bindx-ui": "./dist/cli/cli.js"
 	},
 	"imports": {
-		"#bindx-ui/*": "./src/*"
+		"#bindx-ui/*/index": "./src/*/index.ts",
+		"#bindx-ui/*": "./src/*.tsx"
 	}
 }
