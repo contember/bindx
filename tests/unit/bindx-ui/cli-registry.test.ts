@@ -45,6 +45,8 @@ describe('CLI Registry', () => {
 
 		expect(paths).toContain('ui/button')
 		expect(paths).toContain('form/container')
+		expect(paths).toContain('form/input-field')
+		expect(paths).toContain('datagrid/columns/text-column')
 		expect(paths).toContain('select/select-field')
 	})
 
