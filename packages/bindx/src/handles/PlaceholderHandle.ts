@@ -149,6 +149,9 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	/**
 	 * Creates a field handle for placeholder data.
 	 * For has-many relations, returns an empty has-many-like handle with items/map/length.
+	 * For has-one relations, returns a nested placeholder has-one handle so chains like
+	 * `<HasOne field={parentPlaceholder.profile}>` materialize an inner placeholder
+	 * rather than handing `undefined` to the children callback.
 	 */
 	private createPlaceholderFieldHandle(fieldName: string): unknown {
 		// For has-many relations, return an empty has-many-like handle
@@ -164,6 +167,14 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 				[Symbol.iterator]: () => emptyItems[Symbol.iterator](),
 			}
 			return emptyHasMany
+		}
+
+		// For has-one relations, return a placeholder-of-placeholder has-one handle
+		if (this.schema?.isHasOne(this.targetType, fieldName)) {
+			const innerTargetType = this.schema.getRelationTarget(this.targetType, fieldName)
+			if (innerTargetType) {
+				return this.createPlaceholderHasOneFieldHandle(fieldName, innerTargetType)
+			}
 		}
 
 		const self = this
@@ -257,6 +268,88 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 				// Placeholder fields don't have errors to clear
 			},
 		}
+	}
+
+	/**
+	 * Creates a nested placeholder has-one handle.
+	 *
+	 * Used when a placeholder entity (the outer placeholder) is asked for one of its
+	 * has-one relations — there is no real parent row, so the inner relation is also
+	 * a placeholder. The returned handle exposes the HasOne-shaped surface that
+	 * `<HasOne>` JSX relies on (FIELD_REF_META, $entity, $state) plus field-access
+	 * proxying so chains like `parentPlaceholder.profile.bio.value` resolve to `null`
+	 * instead of throwing.
+	 *
+	 * Mutations (`$connect`, `$create`) are not supported on nested placeholders —
+	 * materialize the outer placeholder first (e.g. by writing to a scalar field or
+	 * connecting the outer relation).
+	 */
+	private createPlaceholderHasOneFieldHandle(fieldName: string, innerTargetType: string): unknown {
+		const self = this
+		const nestedPlaceholderRaw = PlaceholderHandle.createRaw(
+			this.targetType,
+			this.placeholderId,
+			fieldName,
+			innerTargetType,
+			this.store,
+			this.dispatcher,
+			this.schema,
+			this.__brands,
+		)
+		const nestedPlaceholderProxy = PlaceholderHandle.wrapProxy(nestedPlaceholderRaw)
+		const fieldRefMeta: FieldRefMeta = {
+			entityType: self.targetType,
+			entityId: self.placeholderId,
+			path: [fieldName],
+			fieldName,
+			isArray: false,
+			isRelation: true,
+			targetType: innerTargetType,
+		}
+		const noopUnsubscribe: Unsubscribe = () => {}
+
+		const handleLike = {
+			get [FIELD_REF_META](): FieldRefMeta { return fieldRefMeta },
+			get id(): string { return nestedPlaceholderRaw.id },
+			get state(): 'disconnected' { return 'disconnected' },
+			get isConnected(): boolean { return false },
+			get isNew(): boolean { return true },
+			get isPersisting(): boolean { return false },
+			get isDirty(): boolean { return false },
+			get persistedId(): null { return null },
+			get data(): null { return null },
+			get entity(): EntityAccessor<object> { return nestedPlaceholderProxy },
+			get fields() { return nestedPlaceholderRaw.fields },
+			get errors(): readonly FieldError[] { return [] },
+			get hasError(): boolean { return false },
+			get __entityName(): string { return innerTargetType },
+			get __entityType(): unknown { return undefined },
+			get __brands(): Set<symbol> | undefined { return self.__brands },
+			create(): string {
+				throw new Error(`Cannot $create on nested placeholder has-one "${fieldName}" — materialize the outer placeholder first`)
+			},
+			connect(): void {
+				throw new Error(`Cannot $connect on nested placeholder has-one "${fieldName}" — materialize the outer placeholder first`)
+			},
+			disconnect(): void {},
+			delete(): void {},
+			remove(): void {},
+			reset(): void {},
+			addError(_error: ErrorInput): void {},
+			clearErrors(): void {},
+			clearAllErrors(): void {},
+			onConnect(_listener: EventListener<EventTypeMap['relation:connected']>): Unsubscribe { return noopUnsubscribe },
+			onDisconnect(_listener: EventListener<EventTypeMap['relation:disconnected']>): Unsubscribe { return noopUnsubscribe },
+			interceptConnect(_interceptor: Interceptor<EventTypeMap['relation:connecting']>): Unsubscribe { return noopUnsubscribe },
+			interceptDisconnect(_interceptor: Interceptor<EventTypeMap['relation:disconnecting']>): Unsubscribe { return noopUnsubscribe },
+			on<E extends AfterEventTypes>(_eventType: E, _listener: EventListener<EventTypeMap[E]>): Unsubscribe { return noopUnsubscribe },
+			intercept<E extends BeforeEventTypes>(_eventType: E, _interceptor: Interceptor<EventTypeMap[E]>): Unsubscribe { return noopUnsubscribe },
+			onPersisted(_listener: EventListener<EntityPersistedEvent>): Unsubscribe { return noopUnsubscribe },
+			interceptPersisting(_interceptor: Interceptor<EntityPersistingEvent>): Unsubscribe { return noopUnsubscribe },
+			subscribe(_callback: () => void): Unsubscribe { return noopUnsubscribe },
+		}
+
+		return createHandleProxy(handleLike, target => target.fields)
 	}
 
 	/**
