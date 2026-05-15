@@ -1,8 +1,8 @@
-export { UploadedImageView, type UploadedImageViewProps } from './image.js'
-export { UploadedAudioView, type UploadedAudioViewProps } from './audio.js'
-export { UploadedVideoView, type UploadedVideoViewProps } from './video.js'
-export { UploadedAnyView, type UploadedAnyViewProps } from './any.js'
-export { FileActions, type FileActionsProps } from './actions.js'
+export { UploadedImageView, type UploadedImageViewProps } from '#bindx-ui/upload/view/image'
+export { UploadedAudioView, type UploadedAudioViewProps } from '#bindx-ui/upload/view/audio'
+export { UploadedVideoView, type UploadedVideoViewProps } from '#bindx-ui/upload/view/video'
+export { UploadedAnyView, type UploadedAnyViewProps } from '#bindx-ui/upload/view/any'
+export { FileActions, type FileActionsProps } from '#bindx-ui/upload/view/actions'
 export {
 	Metadata,
 	ImageMetadata,
@@ -16,5 +16,5 @@ export {
 	type VideoMetadataProps,
 	type DimensionsMetaProps,
 	type DurationMetaProps,
-} from './metadata.js'
-export { formatBytes, formatDuration, formatDate, truncateUrl } from './utils.js'
+} from '#bindx-ui/upload/view/metadata'
+export { formatBytes, formatDuration, formatDate, truncateUrl } from '#bindx-ui/upload/view/utils'

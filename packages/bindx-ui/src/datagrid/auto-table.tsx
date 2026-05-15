@@ -19,7 +19,7 @@ import {
 	type DataViewItem,
 	type ColumnLeafProps,
 } from '@contember/bindx-dataview'
-import { useFieldLabelFormatter } from '../labels/index.js'
+import { useFieldLabelFormatter } from '#bindx-ui/labels/index'
 import {
 	DataGridTableWrapper,
 	DataGridTable,
@@ -30,8 +30,8 @@ import {
 	DataGridHeaderCell,
 	DataGridCell,
 	DataGridEmptyState,
-} from './table.js'
-import { DataGridColumnHeaderUI } from './column-header.js'
+} from '#bindx-ui/datagrid/table'
+import { DataGridColumnHeaderUI } from '#bindx-ui/datagrid/column-header'
 
 function ColumnFilterRenderer({ filterName, renderFilter }: {
 	filterName: string

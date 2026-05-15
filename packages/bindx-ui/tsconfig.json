@@ -3,7 +3,10 @@
 	"compilerOptions": {
 		"outDir": "./dist/types",
 		"rootDir": "./src",
-		"composite": true
+		"composite": true,
+		"paths": {
+			"#bindx-ui/*": ["./src/*"]
+		}
 	},
 	"include": ["src/**/*"],
 	"references": [

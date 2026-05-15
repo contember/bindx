@@ -7,7 +7,7 @@ import React, { type ReactNode } from 'react'
 import type { EntityAccessor, OrderDirection } from '@contember/bindx'
 import type { FieldRef } from '@contember/bindx'
 import {
-	SelectDataView,
+	SelectDataView as SelectDataViewCore,
 	SelectOption,
 	SelectItemTrigger,
 	DataViewInfiniteLoadProvider,
@@ -19,11 +19,11 @@ import {
 	DataViewHighlightRow,
 	useSelectHandleSelect,
 } from '@contember/bindx-dataview'
-import { Loader } from '../ui/loader.js'
-import { Button } from '../ui/button.js'
+import { Loader } from '#bindx-ui/ui/loader'
+import { Button } from '#bindx-ui/ui/button'
 import { ArrowBigDownDash } from 'lucide-react'
-import { SelectDefaultFilter } from './filter.js'
-import { SelectListItemUI } from './ui.js'
+import { SelectDefaultFilter } from '#bindx-ui/select/filter'
+import { SelectListItemUI } from '#bindx-ui/select/ui'
 
 export interface DefaultSelectDataViewProps {
 	/** Per-item render function */
@@ -43,7 +43,7 @@ export function DefaultSelectDataView({
 	filter,
 }: DefaultSelectDataViewProps): ReactNode {
 	return (
-		<SelectDataView
+		<SelectDataViewCore
 			queryField={queryField}
 			initialSorting={initialSorting}
 			filter={filter}
@@ -52,7 +52,7 @@ export function DefaultSelectDataView({
 			<SelectListInner>
 				{children}
 			</SelectListInner>
-		</SelectDataView>
+		</SelectDataViewCore>
 	)
 }
 

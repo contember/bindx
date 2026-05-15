@@ -1,1 +1,1 @@
-export { ToastContainer, ToastItem, type ToastContainerProps, type ToastItemProps } from './toast.js'
+export { ToastContainer, ToastItem, type ToastContainerProps, type ToastItemProps } from '#bindx-ui/toast/toast'

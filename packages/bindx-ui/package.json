@@ -3,12 +3,16 @@
 	"version": "0.1.37",
 	"type": "module",
 	"exports": {
-		".": "./src/index.ts"
+		".": "./src/index.ts",
+		"./vite-plugin": "./src/vite-plugin.ts",
+		"./utils": "./src/utils/index.ts",
+		"./_internal/*": "./src/*"
 	},
 	"scripts": {
-		"build": "vite build",
+		"build": "bun build src/cli/cli.ts --target=node --outdir=dist/cli && chmod +x dist/cli/cli.js && tsc --build",
 		"typecheck": "tsc --noEmit"
 	},
+	"files": ["dist", "src"],
 	"dependencies": {
 		"@contember/bindx": "workspace:*",
 		"@contember/bindx-react": "workspace:*",
@@ -31,7 +35,13 @@
 		"tailwind-merge": "^3.3.1"
 	},
 	"peerDependencies": {
-		"react": ">=18.0.0"
+		"react": ">=18.0.0",
+		"vite": ">=5.0.0"
+	},
+	"peerDependenciesMeta": {
+		"vite": {
+			"optional": true
+		}
 	},
 	"devDependencies": {
 		"@types/react": "^19.1.8",
@@ -43,5 +53,12 @@
 		"url": "https://github.com/contember/bindx.git",
 		"directory": "packages/bindx-ui"
 	},
-	"license": "MIT"
+	"license": "MIT",
+	"bin": {
+		"bindx-ui": "./dist/cli/cli.js"
+	},
+	"imports": {
+		"#bindx-ui/*/index": "./src/*/index.ts",
+		"#bindx-ui/*": "./src/*.tsx"
+	}
 }

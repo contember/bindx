@@ -25,21 +25,23 @@ import type { FieldRef } from '@contember/bindx'
 import { HasMany, withCollector } from '@contember/bindx-react'
 import { MultiSelect, SelectEachValue, SelectPlaceholder } from '@contember/bindx-dataview'
 import { FormHasManyRelationScope } from '@contember/bindx-form'
-import { FormContainer } from '../form/container.js'
-import { Popover, PopoverTrigger } from '../ui/popover.js'
+import { FormContainer } from '#bindx-ui/form/container'
+import { Popover, PopoverTrigger } from '#bindx-ui/ui/popover'
 import { ChevronDownIcon } from 'lucide-react'
-import { DefaultSelectDataView } from './list.js'
+import { DefaultSelectDataView } from '#bindx-ui/select/list'
+import {
+	SelectDefaultPlaceholderUI,
+	SelectInputActionsUI,
+	SelectInputUI,
+	SelectInputWrapperUI,
+} from '#bindx-ui/select/input-ui'
 import {
 	MultiSelectItemContentUI,
 	MultiSelectItemRemoveButtonUI,
 	MultiSelectItemUI,
 	MultiSelectItemWrapperUI,
-	SelectDefaultPlaceholderUI,
-	SelectInputActionsUI,
-	SelectInputUI,
-	SelectInputWrapperUI,
-	SelectPopoverContent,
-} from './ui.js'
+} from '#bindx-ui/select/multi-select-ui'
+import { SelectPopoverContent } from '#bindx-ui/select/popover-ui'
 
 // `infer _S` (not `any`) is load-bearing — see relationTargetInference.test.ts.
 type HasManyTarget<F> = F extends HasManyRef<infer TEntity, infer _S> ? TEntity : object

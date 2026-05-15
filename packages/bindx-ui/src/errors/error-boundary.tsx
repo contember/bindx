@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
-import { Overlay } from '../ui/overlay.js'
-import { Button } from '../ui/button.js'
+import { Overlay } from '#bindx-ui/ui/overlay'
+import { Button } from '#bindx-ui/ui/button'
 
 export interface BindxErrorBoundaryProps {
 	readonly children: ReactNode

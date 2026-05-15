@@ -1,5 +1,5 @@
 import { useFormFieldState } from '@contember/bindx-form'
-import { useFieldLabelFormatter } from '../labels/fieldLabels.js'
+import { useFieldLabelFormatter } from '#bindx-ui/labels/fieldLabels'
 import type { ReactNode } from 'react'
 
 export const FormFieldLabel = (): ReactNode => {

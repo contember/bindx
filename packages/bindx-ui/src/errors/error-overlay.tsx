@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import type { FieldError } from '@contember/bindx'
-import { Overlay } from '../ui/overlay.js'
-import { Button } from '../ui/button.js'
-import { dict } from '../dict.js'
+import { Overlay } from '#bindx-ui/ui/overlay'
+import { Button } from '#bindx-ui/ui/button'
+import { dict } from '#bindx-ui/dict'
 
 export interface ErrorOverlayProps {
 	readonly error: FieldError

@@ -11,8 +11,8 @@ import {
 	type UseDataViewRelationFilterResult,
 } from '@contember/bindx-dataview'
 import type { FieldRef } from '@contember/bindx'
-import { useDefaultFieldLabel } from '../labels.js'
-import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover.js'
+import { useDefaultFieldLabel } from '#bindx-ui/datagrid/labels'
+import { Popover, PopoverContent, PopoverTrigger } from '#bindx-ui/ui/popover'
 import {
 	DataGridActiveFilterUI,
 	DataGridExcludeActionButtonUI,
@@ -20,9 +20,9 @@ import {
 	DataGridFilterSelectItemUI,
 	DataGridFilterSelectTriggerUI,
 	DataGridSingleFilterUI,
-} from '../ui.js'
-import { DataGridNullFilter } from './common.js'
-import { DataGridFilterMobileHiding } from './mobile.js'
+} from '#bindx-ui/datagrid/ui'
+import { DataGridNullFilter } from '#bindx-ui/datagrid/filters/common'
+import { DataGridFilterMobileHiding } from '#bindx-ui/datagrid/filters/mobile'
 import { dict } from '../../dict.js'
 
 // ============================================================================
