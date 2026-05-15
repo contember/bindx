@@ -145,7 +145,8 @@ export function backport(componentPath: string, targetDir: string, options: Back
 		return
 	}
 
-	console.error(`  ✗ ${componentPath} — merge failed, use --agent for AI-assisted merge`)
+	const reason = result.errorMessage ? `\n    ${result.errorMessage}` : ''
+	console.error(`  ✗ ${componentPath} — merge failed, use --agent for AI-assisted merge${reason}`)
 }
 
 export function backportAll(targetDir: string, options: BackportOptions): void {

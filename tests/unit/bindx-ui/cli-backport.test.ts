@@ -4,7 +4,12 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { threeWayMerge } from '../../../packages/bindx-ui/src/cli/merge.js'
 import { generateAgentPrompt } from '../../../packages/bindx-ui/src/cli/agent-prompt.js'
-import { loadMetadata, saveMetadata, type EjectedEntry } from '../../../packages/bindx-ui/src/cli/metadata.js'
+import {
+	assertSafeComponentPath,
+	loadMetadata,
+	saveMetadata,
+	type EjectedEntry,
+} from '../../../packages/bindx-ui/src/cli/metadata.js'
 import { getGitRef, getGitPath } from '../../../packages/bindx-ui/src/cli/git.js'
 
 describe('Three-Way Merge', () => {
@@ -139,4 +144,62 @@ describe('Metadata with git fields', () => {
 		expect(loaded.ejected['ui/button']?.gitPath).toBeUndefined()
 		expect(loaded.ejected['ui/button']?.path).toBe('ui/button')
 	})
+
+	test('rejects tampered metadata with path traversal in key', () => {
+		const tamperedJson = JSON.stringify({
+			ejected: {
+				'../../etc/passwd': {
+					path: '../../etc/passwd',
+					version: '0.1.0',
+					originalHash: 'abc123',
+				},
+			},
+		})
+		writeFileSync(join(targetDir, '.bindx-ui.json'), tamperedJson, 'utf-8')
+
+		expect(() => loadMetadata(targetDir)).toThrow(/Invalid component path/)
+	})
+
+	test('rejects absolute path in metadata', () => {
+		const tamperedJson = JSON.stringify({
+			ejected: {
+				'/etc/passwd': {
+					path: '/etc/passwd',
+					version: '0.1.0',
+					originalHash: 'abc123',
+				},
+			},
+		})
+		writeFileSync(join(targetDir, '.bindx-ui.json'), tamperedJson, 'utf-8')
+
+		expect(() => loadMetadata(targetDir)).toThrow(/Invalid component path/)
+	})
 })
+
+describe('assertSafeComponentPath', () => {
+	test('accepts normal component paths', () => {
+		expect(() => assertSafeComponentPath('ui/button')).not.toThrow()
+		expect(() => assertSafeComponentPath('form/input-field')).not.toThrow()
+		expect(() => assertSafeComponentPath('datagrid/columns/text-column')).not.toThrow()
+		expect(() => assertSafeComponentPath('single-word')).not.toThrow()
+	})
+
+	test('rejects path traversal', () => {
+		expect(() => assertSafeComponentPath('../etc/passwd')).toThrow(/Invalid component path/)
+		expect(() => assertSafeComponentPath('foo/../bar')).toThrow(/Invalid component path/)
+		expect(() => assertSafeComponentPath('..')).toThrow(/Invalid component path/)
+	})
+
+	test('rejects absolute paths', () => {
+		expect(() => assertSafeComponentPath('/etc/passwd')).toThrow(/Invalid component path/)
+	})
+
+	test('rejects backslashes (Windows-style)', () => {
+		expect(() => assertSafeComponentPath('foo\\bar')).toThrow(/Invalid component path/)
+	})
+
+	test('rejects empty path', () => {
+		expect(() => assertSafeComponentPath('')).toThrow(/Invalid component path/)
+	})
+})
+

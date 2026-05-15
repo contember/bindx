@@ -8,6 +8,7 @@ export interface MergeResult {
 	status: 'clean' | 'conflict' | 'error'
 	content: string
 	conflictCount: number
+	errorMessage?: string
 }
 
 export function threeWayMerge(local: string, base: string, upstream: string): MergeResult {
@@ -32,10 +33,36 @@ export function threeWayMerge(local: string, base: string, upstream: string): Me
 			return { status: 'conflict', content: error.stdout, conflictCount }
 		}
 
-		return { status: 'error', content: '', conflictCount: 0 }
+		if (isMissingBinaryError(error)) {
+			return {
+				status: 'error',
+				content: '',
+				conflictCount: 0,
+				errorMessage:
+					'`diff3` binary not found on PATH. Install GNU diffutils '
+					+ '(macOS: `brew install diffutils`, Debian/Ubuntu: `apt install diffutils`, '
+					+ 'Alpine: `apk add diffutils`) or use `--agent` for AI-assisted merge.',
+			}
+		}
+
+		return {
+			status: 'error',
+			content: '',
+			conflictCount: 0,
+			errorMessage: error instanceof Error ? error.message : String(error),
+		}
 	} finally {
 		rmSync(tempDir, { recursive: true, force: true })
 	}
+}
+
+function isMissingBinaryError(error: unknown): boolean {
+	return (
+		typeof error === 'object'
+		&& error !== null
+		&& 'code' in error
+		&& (error as { code: unknown }).code === 'ENOENT'
+	)
 }
 
 function countConflictMarkers(content: string): number {
