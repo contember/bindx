@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, useCallback } from 'react'
+import { useRef, useEffect, useMemo, useCallback, useState } from 'react'
 import type {
 	EntityDef,
 	EntityUniqueWhere,
@@ -63,6 +63,7 @@ interface UseEntityResultBase {
 export type LoadingEntityResult = UseEntityResultBase & {
 	readonly $status: 'loading'
 	readonly $isLoading: true
+	readonly $isRefetching: false
 	readonly $isError: false
 	readonly $isNotFound: false
 	readonly $error: null
@@ -72,6 +73,7 @@ export type LoadingEntityResult = UseEntityResultBase & {
 export type ErrorEntityResult = UseEntityResultBase & {
 	readonly $status: 'error'
 	readonly $isLoading: false
+	readonly $isRefetching: false
 	readonly $isError: true
 	readonly $isNotFound: false
 	readonly $error: FieldError
@@ -81,6 +83,7 @@ export type ErrorEntityResult = UseEntityResultBase & {
 export type NotFoundEntityResult = UseEntityResultBase & {
 	readonly $status: 'not_found'
 	readonly $isLoading: false
+	readonly $isRefetching: false
 	readonly $isError: false
 	readonly $isNotFound: true
 	readonly $error: null
@@ -89,11 +92,18 @@ export type NotFoundEntityResult = UseEntityResultBase & {
 
 /**
  * Ready state — full EntityAccessor with status metadata.
+ *
+ * `$isRefetching` is `true` while a background re-fetch is in flight
+ * (triggered by a `queryKey` change while ready data is already present).
+ * The accessor identity and field values remain stable until the new data
+ * arrives, so the subtree does not unmount — useful for stale-while-revalidate
+ * indicators (subtle spinner, "stale" badge, etc.).
  */
 export type ReadyEntityResult<TEntity extends object, TSelected extends object = TEntity> =
 	UseEntityResultBase & EntityAccessor<TEntity, TSelected> & {
 		readonly $status: 'ready'
 		readonly $isLoading: false
+		readonly $isRefetching: boolean
 		readonly $isError: false
 		readonly $isNotFound: false
 		readonly $error: null
@@ -236,6 +246,7 @@ export function useEntity(
 
 	// --- Data loading ---
 	const fetchingRef = useRef<string | null>(null)
+	const [isRefetching, setIsRefetching] = useState(false)
 
 	useEffect(() => {
 		// Check cache first
@@ -253,7 +264,17 @@ export function useEntity(
 
 		const abortController = new AbortController()
 
-		dispatcher.dispatch(setLoadState(entityType, id, 'loading'))
+		// Stale-while-revalidate: if we already have ready data for this entity,
+		// keep the ready state visible (no flicker) and only flag a background refetch.
+		// Otherwise, fall back to the explicit loading state.
+		const existing = store.getLoadState(entityType, id)
+		const haveReadyData = existing?.status === 'success' && store.hasEntity(entityType, id)
+
+		if (haveReadyData) {
+			setIsRefetching(true)
+		} else {
+			dispatcher.dispatch(setLoadState(entityType, id, 'loading'))
+		}
 
 		const fetchData = async (): Promise<void> => {
 			try {
@@ -282,6 +303,10 @@ export function useEntity(
 				dispatcher.dispatch(
 					setLoadState(entityType, id, 'error', createLoadError(normalizedError)),
 				)
+			} finally {
+				if (!abortController.signal.aborted) {
+					setIsRefetching(false)
+				}
 			}
 		}
 
@@ -324,20 +349,20 @@ export function useEntity(
 	// --- Build result ---
 	const result = useMemo((): UseEntityResult<object, object> => {
 		if (!loadState || loadState.status === 'loading' || (!snapshot && loadState.status === 'success')) {
-			return { $status: 'loading', $isLoading: true, $isError: false, $isNotFound: false, $error: null, id, $persist: persist, $reset: reset }
+			return { $status: 'loading', $isLoading: true, $isRefetching: false, $isError: false, $isNotFound: false, $error: null, id, $persist: persist, $reset: reset }
 		}
 
 		if (loadState.status === 'error') {
-			return { $status: 'error', $isLoading: false, $isError: true, $isNotFound: false, $error: loadState.error!, id, $persist: persist, $reset: reset }
+			return { $status: 'error', $isLoading: false, $isRefetching: false, $isError: true, $isNotFound: false, $error: loadState.error!, id, $persist: persist, $reset: reset }
 		}
 
 		if (loadState.status === 'not_found') {
-			return { $status: 'not_found', $isLoading: false, $isError: false, $isNotFound: true, $error: null, id, $persist: persist, $reset: reset }
+			return { $status: 'not_found', $isLoading: false, $isRefetching: false, $isError: false, $isNotFound: true, $error: null, id, $persist: persist, $reset: reset }
 		}
 
 		// Ready — layer status metadata on top of EntityHandle proxy
-		return createReadyResult(handle, persist, reset)
-	}, [snapshot, loadState, isPersisting, id, handle, persist, reset])
+		return createReadyResult(handle, persist, reset, isRefetching)
+	}, [snapshot, loadState, isPersisting, id, handle, persist, reset, isRefetching])
 
 	// Proxy-based result satisfies the full UseEntityResult<T> at runtime via field access delegation
 	return result as UseEntityResult<any, any>
@@ -351,10 +376,12 @@ function createReadyResult(
 	handle: EntityAccessor<object, object>,
 	persist: () => Promise<void>,
 	reset: () => void,
+	isRefetching: boolean,
 ): UseEntityResult<object, object> {
 	const meta: Record<string, unknown> = {
 		$status: 'ready' as const,
 		$isLoading: false as const,
+		$isRefetching: isRefetching,
 		$isError: false as const,
 		$isNotFound: false as const,
 		$error: null,

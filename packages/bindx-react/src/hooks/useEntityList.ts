@@ -43,6 +43,7 @@ interface EntityListResultBase {
 export type LoadingEntityListResult = EntityListResultBase & {
 	readonly $status: 'loading'
 	readonly $isLoading: true
+	readonly $isRefetching: false
 	readonly $isError: false
 	readonly $error: null
 }
@@ -50,13 +51,21 @@ export type LoadingEntityListResult = EntityListResultBase & {
 export type ErrorEntityListResult = EntityListResultBase & {
 	readonly $status: 'error'
 	readonly $isLoading: false
+	readonly $isRefetching: false
 	readonly $isError: true
 	readonly $error: FieldError
 }
 
+/**
+ * `$isRefetching` is `true` while a background re-fetch is in flight
+ * (triggered by a `queryKey` change while ready data is already present).
+ * The accessor identity stays stable so the subtree does not unmount —
+ * stale-while-revalidate semantics.
+ */
 export type ReadyEntityListResult<T extends object> = EntityListResultBase & {
 	readonly $status: 'ready'
 	readonly $isLoading: false
+	readonly $isRefetching: boolean
 	readonly $isError: false
 	readonly $error: null
 	readonly $isDirty: boolean
@@ -77,6 +86,7 @@ function createLoadingListResult(): LoadingEntityListResult {
 	return {
 		$status: 'loading',
 		$isLoading: true,
+		$isRefetching: false,
 		$isError: false,
 		$error: null,
 		$add() { throw new Error('Cannot add items while loading') },
@@ -89,6 +99,7 @@ function createErrorListResult(error: FieldError): ErrorEntityListResult {
 	return {
 		$status: 'error',
 		$isLoading: false,
+		$isRefetching: false,
 		$isError: true,
 		$error: error,
 		$add() { throw new Error('Cannot add items after error') },
@@ -199,9 +210,11 @@ export function useEntityList(
 		status: 'loading' | 'error' | 'ready'
 		items: Array<{ id: string; data: object }>
 		error?: FieldError
+		isRefetching: boolean
 	}>({
 		status: 'loading',
 		items: [],
+		isRefetching: false,
 	})
 
 	const versionRef = useRef(0)
@@ -210,6 +223,7 @@ export function useEntityList(
 		version: number
 		storeVersion: number
 		status: string
+		isRefetching: boolean
 		result: UseEntityListResult<any>
 	} | null>(null)
 
@@ -276,7 +290,13 @@ export function useEntityList(
 		const storeVersion = store.getVersion()
 
 		const cache = listCacheRef.current
-		if (cache && cache.version === version && cache.storeVersion === storeVersion && cache.status === state.status) {
+		if (
+			cache &&
+			cache.version === version &&
+			cache.storeVersion === storeVersion &&
+			cache.status === state.status &&
+			cache.isRefetching === state.isRefetching
+		) {
 			return cache.result
 		}
 
@@ -300,6 +320,7 @@ export function useEntityList(
 			result = {
 				$status: 'ready',
 				$isLoading: false,
+				$isRefetching: state.isRefetching,
 				$isError: false,
 				$error: null,
 				$isDirty: false,
@@ -315,6 +336,7 @@ export function useEntityList(
 			version,
 			storeVersion,
 			status: state.status,
+			isRefetching: state.isRefetching,
 			result,
 		}
 
@@ -338,8 +360,16 @@ export function useEntityList(
 	useEffect(() => {
 		const abortController = new AbortController()
 
-		listStateRef.current = { status: 'loading', items: [] }
+		// Stale-while-revalidate: if we already have ready items, keep them visible
+		// and only flag a background refetch. Otherwise, show explicit loading.
+		const prev = listStateRef.current
+		if (prev.status === 'ready') {
+			listStateRef.current = { ...prev, isRefetching: true }
+		} else {
+			listStateRef.current = { status: 'loading', items: [], isRefetching: false }
+		}
 		versionRef.current++
+		store.notify()
 
 		const fetchData = async (): Promise<void> => {
 			try {
@@ -377,7 +407,7 @@ export function useEntityList(
 					return { id, data: data as object }
 				})
 
-				listStateRef.current = { status: 'ready', items }
+				listStateRef.current = { status: 'ready', items, isRefetching: false }
 				versionRef.current++
 				store.notify()
 			} catch (error) {
@@ -388,6 +418,7 @@ export function useEntityList(
 					status: 'error',
 					items: [],
 					error: createLoadError(normalizedError),
+					isRefetching: false,
 				}
 				versionRef.current++
 				store.notify()
