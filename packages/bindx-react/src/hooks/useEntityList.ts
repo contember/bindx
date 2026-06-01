@@ -196,7 +196,9 @@ export function useEntityList(
 	// query content is unchanged, even if the caller passes a fresh selection object.
 	const effectiveQueryKey = useMemo(() => {
 		if (options.queryKey) return options.queryKey
-		return JSON.stringify({ entityType, query: selectionContentKey })
+		// selectionContentKey is already the serialized query; just namespace it
+		// by entity type (avoids double-encoding the JSON string).
+		return `${entityType}:${selectionContentKey}`
 	}, [options.queryKey, selectionContentKey, entityType])
 
 	// --- List state tracking ---
