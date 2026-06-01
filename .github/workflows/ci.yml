@@ -102,7 +102,7 @@ jobs:
             -e CONTEMBER_PROJECT_NAME=example \
             -v ${{ github.workspace }}:/src \
             -w /src/packages/example \
-            contember/cli:2.1.0-beta.1 \
+            contember/cli:2.1.0-beta.2 \
             migrations:execute --yes
           CONTEMBER_API_URL=http://localhost:1581 CONTEMBER_API_TOKEN=0000000000000000000000000000000000000000 bun run packages/example/seed.ts
 
