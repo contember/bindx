@@ -1,22 +1,21 @@
-// Regression test for <issue-url — filled in after Step 7>
+// Regression guard for fulltext query filters over HasOne nested text fields.
 //
 // `<DataGridQueryFilter />` only renders the toolbar search input when at
 // least one column registers `isTextSearchable: true` AND a `fieldName`.
-// `DataGridTextColumn` is the only built-in that sets `isTextSearchable`,
-// and it extracts `fieldName` from the FieldRef's `FIELD_REF_META.fieldName`
-// — which is just the last accessed segment (`"name"`), not a dotted path
-// (`"author.name"`).
+// `DataGridTextColumn` is the only built-in that sets `isTextSearchable`, and
+// it extracts the field path from the FieldRef's `FIELD_REF_META`.
 //
-// As a result, when the grid's entity has NO direct scalar text fields and
-// the searchable text data lives only inside HasOne relations, there is no
-// public API to register a `"author.name"`-style path into the auto-built
-// `createFullTextFilterHandler(textFieldPaths)`. The query filter handler
-// is not created → toolbar search input never appears.
+// Previously that path was just the last accessed segment (`"name"`), not the
+// dotted chain (`"author.name"`): a text column bound to a HasOne field like
+// `it.author.name` registered the wrong path (`Article.name`), so the auto-built
+// `createFullTextFilterHandler(textFieldPaths)` produced a where clause against
+// a non-existent field. Now the collector proxy threads the absolute `fullPath`,
+// so the registered path is the full dotted chain and the where clause nests
+// correctly through the relation.
 //
-// `createFullTextFilterHandler` itself DOES support dotted paths internally
-// (it calls `buildNestedWhere` for each path), so this is a missing
-// composition API in the bindx-ui/bindx-dataview surface, not a fundamental
-// limitation of the filter handler.
+// `createFullTextFilterHandler` already supports dotted paths internally (it
+// calls `buildNestedWhere` for each path); this test guards the composition
+// across the bindx-dataview column surface.
 import '../../setup'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { cleanup, render, waitFor } from '@testing-library/react'
@@ -103,11 +102,11 @@ interface FilterState {
 }
 
 // ============================================================================
-// Failing repro
+// Regression guard
 // ============================================================================
 
 describe('DataGrid fulltext across HasOne nested fields', () => {
-	test('public API cannot register a nested HasOne text path for the toolbar query filter', async () => {
+	test('registers the full nested HasOne text path for the toolbar query filter', async () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 		let captured: FilterState | null = null
 
@@ -127,11 +126,11 @@ describe('DataGrid fulltext across HasOne nested fields', () => {
 				<DataGrid entity={localEntityDefs.Article}>
 					{it => (
 						<>
-							{/* Nested access workaround attempt: pass `it.author.name` to a text
-							 * column. The collector proxy returns a FieldRef whose `fieldName`
-							 * is just `"name"`, so the registered text-searchable path is
-							 * `"name"` — wrong entity. The query filter handler ends up looking
-							 * for `Article.name` which doesn't exist. */}
+							{/* Pass `it.author.name` (a field reached through the HasOne
+							 * relation) to a text column. The collector proxy threads the
+							 * absolute `fullPath`, so the registered text-searchable path is
+							 * the dotted chain `"author.name"` and the query filter handler
+							 * builds a where clause nested under the relation. */}
 							<DataGridTextColumn field={it.author.name} header="Author name" />
 							<DataGridHasOneColumn field={it.author} header="Author">
 								{author => author.name.value}
@@ -147,11 +146,9 @@ describe('DataGrid fulltext across HasOne nested fields', () => {
 			expect(captured).not.toBeNull()
 		})
 
-		// The toolbar query filter IS registered (a text column was found), but it
-		// targets the wrong path — `"name"` on Article, not `"author.name"`.
-		// Demonstrate the gap by asserting that a properly nested path was the
-		// one registered. This assertion is what we'd want to hold once the API
-		// supports it; today it fails.
+		// The toolbar query filter is registered (a text column was found) and
+		// targets the correct nested path `"author.name"` (asserted via the
+		// resulting where clause below).
 		const filters = Array.from(captured!.registered)
 		expect(filters).toContain(QUERY_FILTER_NAME)
 
@@ -190,13 +187,10 @@ describe('DataGrid fulltext across HasOne nested fields', () => {
 			expect(capturedWhere).toBeDefined()
 		})
 
-		// We WANT: { author: { name: { containsCI: 'John' } } } — full-text
-		// search across `author.name`.
-		// We GET: { name: { containsCI: 'John' } } — a where clause on a
-		// non-existent `Article.name` field, because the collector proxy
-		// stripped the parent context off the FieldRef.
-		//
-		// This assertion documents the desired behavior. It fails today.
+		// Expect { author: { name: { containsCI: 'John' } } } — full-text search
+		// nested through `author.name`. The collector proxy preserves the parent
+		// context on the FieldRef via `fullPath`, so the where clause nests under
+		// the relation instead of targeting a non-existent `Article.name` field.
 		expect(capturedWhere).toEqual({
 			author: { name: { containsCI: 'John' } },
 		})
