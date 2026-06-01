@@ -393,16 +393,16 @@ export function createRelationFilterHandler(fieldPath: string): FilterHandler<Re
 export function createIsDefinedFilterHandler(fieldPath: string): FilterHandler<IsDefinedFilterArtifact> {
 	return {
 		defaultArtifact(): IsDefinedFilterArtifact {
-			return { defined: null }
+			return {}
 		},
 
 		isActive(artifact: IsDefinedFilterArtifact): boolean {
-			return artifact.defined !== null
+			return artifact.nullCondition !== undefined
 		},
 
 		toWhere(artifact: IsDefinedFilterArtifact): Record<string, unknown> | undefined {
-			if (artifact.defined === null) return undefined
-			return buildNestedWhere(fieldPath, { isNull: !artifact.defined })
+			if (artifact.nullCondition === undefined) return undefined
+			return buildNestedWhere(fieldPath, { isNull: artifact.nullCondition })
 		},
 	}
 }

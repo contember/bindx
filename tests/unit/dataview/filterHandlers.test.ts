@@ -274,19 +274,19 @@ describe('filter handlers', () => {
 	describe('isDefined filter', () => {
 		const handler = createIsDefinedFilterHandler('publishedAt')
 
-		test('defined = true → isNull: false', () => {
-			const where = handler.toWhere({ defined: true })
+		test('nullCondition = false (is-defined) → isNull: false', () => {
+			const where = handler.toWhere({ nullCondition: false })
 			expect(where).toEqual({ publishedAt: { isNull: false } })
 		})
 
-		test('defined = false → isNull: true', () => {
-			const where = handler.toWhere({ defined: false })
+		test('nullCondition = true (not-defined) → isNull: true', () => {
+			const where = handler.toWhere({ nullCondition: true })
 			expect(where).toEqual({ publishedAt: { isNull: true } })
 		})
 
-		test('defined = null is inactive', () => {
-			expect(handler.isActive({ defined: null })).toBe(false)
-			expect(handler.toWhere({ defined: null })).toBeUndefined()
+		test('nullCondition undefined is inactive', () => {
+			expect(handler.isActive({})).toBe(false)
+			expect(handler.toWhere({})).toBeUndefined()
 		})
 	})
 
@@ -299,7 +299,7 @@ describe('filter handlers', () => {
 
 		test('isDefined filter on nested path', () => {
 			const handler = createIsDefinedFilterHandler('author.email')
-			const where = handler.toWhere({ defined: true })
+			const where = handler.toWhere({ nullCondition: false })
 			expect(where).toEqual({ author: { email: { isNull: false } } })
 		})
 	})
