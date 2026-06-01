@@ -98,6 +98,16 @@ export interface FieldRefMeta<TEntityName extends string = string> {
 	readonly enumName?: string
 	readonly columnType?: string
 	readonly targetType?: string
+	/**
+	 * Absolute dot-path of segments from the root entity to this field.
+	 * For a top-level field this is `[fieldName]`; for a field reached through
+	 * relations (e.g. `it.author.name`) it is the full chain
+	 * (`['author', 'name']`). `fieldName` / `path` remain the *last* segment
+	 * (relative to the field's own scope) so selection/relation metadata is
+	 * unaffected — consumers that need the full dotted path (DataGrid column
+	 * filter/sort/value extraction) read `fullPath`.
+	 */
+	readonly fullPath?: readonly string[]
 }
 
 export interface InputProps<T> {
