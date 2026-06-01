@@ -208,6 +208,14 @@ export class ActionDispatcher {
 				)
 				break
 
+			case 'REFRESH_SERVER_DATA':
+				this.store.refreshServerData(
+					action.entityType,
+					action.entityId,
+					action.data,
+				)
+				break
+
 			case 'CONNECT_RELATION':
 				this.store.setRelation(
 					action.entityType,

@@ -206,4 +206,60 @@ describe('<EntityList> queryKey prop', () => {
 			expect(getByTestId(container, 'item-article-1').textContent).toBe('List Refreshed')
 		})
 	})
+
+	test('queryKey refetch preserves a locally edited item field', async () => {
+		// Same dirty-preservation contract as <Entity>: a list refetch must not
+		// silently clobber a local edit on one of its items.
+		const mockData = createMockData()
+		const adapter = new MockAdapter(mockData, { delay: 20 })
+
+		let setKey: (key: string) => void = () => {}
+
+		function App() {
+			const [key, setLocalKey] = useState('v1')
+			setKey = setLocalKey
+
+			return (
+				<EntityList entity={schema.Article} queryKey={key}>
+					{article => (
+						<div key={article.id}>
+							<div data-testid={`title-${article.id}`}>{article.title.value}</div>
+							<div data-testid={`dirty-${article.id}`}>{String(article.title.isDirty)}</div>
+							{article.id === 'article-1' && (
+								<button
+									data-testid="edit"
+									onClick={() => article.title.setValue('LOCAL DRAFT')}
+								/>
+							)}
+						</div>
+					)}
+				</EntityList>
+			)
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<App />
+			</BindxProvider>,
+		)
+
+		await waitFor(() => expect(queryByTestId(container, 'title-article-1')).not.toBeNull())
+
+		act(() => (getByTestId(container, 'edit') as HTMLButtonElement).click())
+		expect(getByTestId(container, 'title-article-1').textContent).toBe('LOCAL DRAFT')
+
+		// Server changes article-1's title behind bindx's back; article-2 (clean)
+		// changes too and serves as the "refetch landed" signal.
+		mockData.Article['article-1']!.title = 'server changed'
+		mockData.Article['article-2']!.title = 'landed'
+		act(() => setKey('v2'))
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'title-article-2').textContent).toBe('landed')
+		})
+
+		// Local edit on article-1 survived the list refetch
+		expect(getByTestId(container, 'title-article-1').textContent).toBe('LOCAL DRAFT')
+		expect(getByTestId(container, 'dirty-article-1').textContent).toBe('true')
+	})
 })

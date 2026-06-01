@@ -104,6 +104,7 @@ export function getAffectedKeys(action: Action): StoreAffectedKeys {
 	switch (action.type) {
 		case 'SET_FIELD':
 		case 'SET_ENTITY_DATA':
+		case 'REFRESH_SERVER_DATA':
 		case 'RESET_ENTITY':
 		case 'COMMIT_ENTITY':
 			entityKeys.push(createEntityKey(action.entityType, action.entityId))

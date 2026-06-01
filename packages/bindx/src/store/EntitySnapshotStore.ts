@@ -57,6 +57,56 @@ export class EntitySnapshotStore {
 	}
 
 	/**
+	 * Refreshes entity data from a fresh server read (revalidation).
+	 *
+	 * Unlike {@link setData}, this preserves the user's local dirty edits: for
+	 * every incoming field the server baseline (`serverData`) is always advanced
+	 * to the new value, but the working `data` is only updated when the field was
+	 * NOT locally dirty (its working value still equals the previous baseline).
+	 * Edited fields keep their working value, so `isDirty` keeps reporting
+	 * "differs from the new server value" after the refresh.
+	 *
+	 * When no snapshot exists yet this behaves like a plain server load.
+	 */
+	refreshServerData<T extends object>(
+		key: string,
+		id: string,
+		entityType: string,
+		data: T,
+	): EntitySnapshot<T> {
+		const existing = this.snapshots.get(key)
+		if (!existing) {
+			return this.setData(key, id, entityType, data, true)
+		}
+
+		const prevData = existing.data as Record<string, unknown>
+		const prevServer = (existing.serverData ?? existing.data) as Record<string, unknown>
+		const incoming = data as Record<string, unknown>
+
+		const newServerData: Record<string, unknown> = { ...prevServer }
+		const newData: Record<string, unknown> = { ...prevData }
+
+		for (const field of Object.keys(incoming)) {
+			newServerData[field] = incoming[field]
+			const isFieldDirty = !Object.is(prevData[field], prevServer[field])
+			if (!isFieldDirty) {
+				newData[field] = incoming[field]
+			}
+		}
+
+		const newSnapshot = createEntitySnapshot(
+			id,
+			entityType,
+			newData as T,
+			newServerData as T,
+			existing.version + 1,
+		)
+
+		this.snapshots.set(key, newSnapshot)
+		return newSnapshot
+	}
+
+	/**
 	 * Updates specific fields on an existing entity snapshot.
 	 * Returns the new snapshot, or undefined if entity doesn't exist.
 	 */

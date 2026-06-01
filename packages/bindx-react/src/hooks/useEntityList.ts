@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react'
 import type { EntityDef, EntityAccessor, SelectionInput, SelectionMeta, FieldError, SchemaRegistry, CommonEntity, EntityForRoles, RoleNames } from '@contember/bindx'
-import { EntityHandle, isTempId, resolveSelectionMeta, buildQueryFromSelection, setEntityData, createLoadError } from '@contember/bindx'
+import { EntityHandle, isTempId, resolveSelectionMeta, buildQueryFromSelection, refreshServerData, createLoadError } from '@contember/bindx'
 import { useBindxContext, useSchemaRegistry } from './BackendAdapterContext.js'
 import { useStoreSubscription } from './useStoreSubscription.js'
 
@@ -401,8 +401,10 @@ export function useEntityList(
 
 				const items = result.data.map((data: Record<string, unknown>) => {
 					const id = data['id'] as string
+					// Revalidation: advance the server baseline but keep local dirty
+					// edits intact (see EntitySnapshotStore.refreshServerData).
 					dispatcher.dispatch(
-						setEntityData(entityType, id, data, true),
+						refreshServerData(entityType, id, data),
 					)
 					return { id, data: data as object }
 				})

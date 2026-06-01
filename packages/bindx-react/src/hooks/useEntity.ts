@@ -18,7 +18,7 @@ import {
 	EntityHandle,
 	resolveSelectionMeta,
 	buildQueryFromSelection,
-	setEntityData,
+	refreshServerData,
 	setLoadState,
 	createLoadError,
 } from '@contember/bindx'
@@ -290,8 +290,10 @@ export function useEntity(
 				if (result.type === 'get' && result.data === null) {
 					dispatcher.dispatch(setLoadState(entityType, id, 'not_found'))
 				} else if (result.type === 'get' && result.data) {
+					// Revalidation: advance the server baseline but keep local dirty
+					// edits intact (see EntitySnapshotStore.refreshServerData).
 					dispatcher.dispatch(
-						setEntityData(entityType, id, result.data, true),
+						refreshServerData(entityType, id, result.data),
 					)
 					dispatcher.dispatch(setLoadState(entityType, id, 'success'))
 				}
