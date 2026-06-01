@@ -190,11 +190,14 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		entityType: string,
 		id: string,
 		data: T,
+		skipNotify: boolean = false,
 	): EntitySnapshot<T> {
 		const key = this.getEntityKey(entityType, id)
 		const newSnapshot = this.entitySnapshots.refreshServerData(key, id, entityType, data)
 		this.meta.setExistsOnServer(key, true)
-		this.notifyEntitySubscribers(key)
+		if (!skipNotify) {
+			this.notifyEntitySubscribers(key)
+		}
 		return newSnapshot as EntitySnapshot<T>
 	}
 

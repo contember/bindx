@@ -320,13 +320,15 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			return
 		}
 
-		// Create or update snapshot from embedded data
-		// Skip notification to avoid triggering React state updates during render
-		this.store.setEntityData(
+		// Create or update snapshot from embedded data.
+		// Use refreshServerData (not setEntityData) so a re-fetch advances the
+		// child's server baseline without clobbering the user's local dirty edits
+		// on the related entity. Skip notification to avoid triggering React state
+		// updates during render.
+		this.store.refreshServerData(
 			this.targetType,
 			id,
 			embeddedData as Record<string, unknown>,
-			true, // isServerData
 			true, // skipNotify - called during render, data already exists embedded in parent
 		)
 		this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, this.fieldName, embeddedData)

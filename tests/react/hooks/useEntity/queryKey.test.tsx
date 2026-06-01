@@ -314,3 +314,139 @@ describe('useEntity hook - queryKey refetch (stale-while-revalidate)', () => {
 		expect(getByTestId(container, 'dirty').textContent).toBe('false')
 	})
 })
+
+describe('useEntity hook - queryKey refetch with relations', () => {
+	test('refetch updates a has-one relation field to the new server value', async () => {
+		const mockData = createMockData()
+		const adapter = new MockAdapter(mockData, { delay: 20 })
+
+		let setKey: (key: string) => void = () => {}
+
+		function TestComponent() {
+			const [key, setLocalKey] = useState('v1')
+			setKey = setLocalKey
+
+			const article = useEntity(
+				schema.Article,
+				{ by: { id: 'article-1' }, queryKey: key },
+				e => e.title().author(a => a.id().name()),
+			)
+
+			if (article.$status !== 'ready') return null
+			return <div data-testid="author">{article.author.name.value}</div>
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<TestComponent />
+			</BindxProvider>,
+		)
+
+		await waitFor(() => expect(queryByTestId(container, 'author')).not.toBeNull())
+		expect(getByTestId(container, 'author').textContent).toBe('John Doe')
+
+		// Server renames the related author behind bindx's back
+		mockData.Article['article-1']!.author = { id: 'author-1', name: 'Renamed Author', email: 'john@example.com', bio: 'Writer' }
+		act(() => setKey('v2'))
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'author').textContent).toBe('Renamed Author')
+		})
+	})
+
+	test('refetch updates a has-many relation to the new server items', async () => {
+		const mockData = createMockData()
+		const adapter = new MockAdapter(mockData, { delay: 20 })
+
+		let setKey: (key: string) => void = () => {}
+
+		function TestComponent() {
+			const [key, setLocalKey] = useState('v1')
+			setKey = setLocalKey
+
+			const article = useEntity(
+				schema.Article,
+				{ by: { id: 'article-1' }, queryKey: key },
+				e => e.title().tags(t => t.id().name()),
+			)
+
+			if (article.$status !== 'ready') return null
+			return <div data-testid="tags">{article.$data!.tags!.map(t => t.name).join(',')}</div>
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<TestComponent />
+			</BindxProvider>,
+		)
+
+		await waitFor(() => expect(queryByTestId(container, 'tags')).not.toBeNull())
+		expect(getByTestId(container, 'tags').textContent).toBe('JavaScript,React')
+
+		mockData.Article['article-1']!.tags = [{ id: 'tag-3', name: 'TypeScript', color: '#3178c6' }]
+		act(() => setKey('v2'))
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'tags').textContent).toBe('TypeScript')
+		})
+	})
+
+	test('refetch preserves a locally edited has-one relation field while updating a clean parent sibling', async () => {
+		// The dirty-edit contract extends to related entities: editing a related
+		// entity's field locally must survive a parent refetch, even when the
+		// server changes that same related field. (Regression: the embedded-data
+		// propagation used to overwrite the child snapshot wholesale.)
+		const mockData = createMockData()
+		const adapter = new MockAdapter(mockData, { delay: 20 })
+
+		let setKey: (key: string) => void = () => {}
+
+		function TestComponent() {
+			const [key, setLocalKey] = useState('v1')
+			setKey = setLocalKey
+
+			const article = useEntity(
+				schema.Article,
+				{ by: { id: 'article-1' }, queryKey: key },
+				e => e.title().author(a => a.id().name()),
+			)
+
+			if (article.$status !== 'ready') return null
+			return (
+				<div>
+					<div data-testid="title">{article.title.value}</div>
+					<div data-testid="author">{article.author.name.value}</div>
+					<div data-testid="author-dirty">{String(article.author.name.isDirty)}</div>
+					<button data-testid="edit" onClick={() => article.author.name.setValue('LOCAL AUTHOR DRAFT')} />
+				</div>
+			)
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<TestComponent />
+			</BindxProvider>,
+		)
+
+		await waitFor(() => expect(queryByTestId(container, 'author')).not.toBeNull())
+
+		// Edit the related author's name locally -> dirty
+		act(() => (getByTestId(container, 'edit') as HTMLButtonElement).click())
+		expect(getByTestId(container, 'author').textContent).toBe('LOCAL AUTHOR DRAFT')
+		expect(getByTestId(container, 'author-dirty').textContent).toBe('true')
+
+		// Server changes the parent's title (clean -> landed signal) AND the
+		// author's name (same field the user is editing).
+		mockData.Article['article-1']!.title = 'landed'
+		mockData.Article['article-1']!.author = { id: 'author-1', name: 'SERVER AUTHOR', email: 'john@example.com', bio: 'Writer' }
+		act(() => setKey('v2'))
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'title').textContent).toBe('landed')
+		})
+
+		// The local edit on the related author survived and is still dirty
+		expect(getByTestId(container, 'author').textContent).toBe('LOCAL AUTHOR DRAFT')
+		expect(getByTestId(container, 'author-dirty').textContent).toBe('true')
+	})
+})
