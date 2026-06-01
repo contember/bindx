@@ -19,6 +19,12 @@ export interface EntityListProps<TRoleMap extends Record<string, object> = Recor
 	limit?: number
 	/** Optional offset */
 	offset?: number
+	/**
+	 * Cache-invalidation key. Changing this value re-fetches the list without
+	 * unmounting the subtree (stale-while-revalidate). Use this when external
+	 * mutations need the bindx view refreshed but UI state must survive.
+	 */
+	queryKey?: string
 	/** Render function receiving typed entity accessor with direct field access */
 	children: (entity: EntityAccessor<CommonEntity<TRoleMap>>, index: number) => React.ReactNode
 	/** Loading fallback */
@@ -53,6 +59,7 @@ function EntityListComponent<TRoleMap extends Record<string, object>>({
 	orderBy,
 	limit,
 	offset,
+	queryKey: userQueryKey,
 	children,
 	loading,
 	error: errorFallback,
@@ -69,12 +76,17 @@ function EntityListComponent<TRoleMap extends Record<string, object>>({
 	})
 
 	// Phase 1: Collect JSX selection
-	const { selection, queryKey } = useSelectionCollection({
+	const { selection, queryKey: selectionQueryKey } = useSelectionCollection({
 		entityType,
 		depsKey: optionsKey,
 		collect: collector => children(collector as unknown as EntityAccessor<CommonEntity<TRoleMap>>, 0),
 		queryKeyExtra: { filter, orderBy, limit, offset },
 	})
+
+	// Combine internal selection key with user-supplied invalidation key
+	const effectiveQueryKey = userQueryKey !== undefined
+		? `${selectionQueryKey}::${userQueryKey}`
+		: selectionQueryKey
 
 	// Phase 2: Load data using unified hook
 	const result = useEntityList(entity, {
@@ -83,7 +95,7 @@ function EntityListComponent<TRoleMap extends Record<string, object>>({
 		limit,
 		offset,
 		selection,
-		queryKey,
+		queryKey: effectiveQueryKey,
 	})
 
 	// Render based on status

@@ -146,6 +146,53 @@ describe('SnapshotStore', () => {
 			})
 		})
 
+		describe('refreshServerData', () => {
+			test('updates a clean (un-edited) field to the new server value', () => {
+				store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Original' }, true)
+				store.refreshServerData('Article', 'a-1', { id: 'a-1', title: 'Refreshed' })
+
+				const snapshot = store.getEntitySnapshot('Article', 'a-1')
+				expect(snapshot?.data).toHaveProperty('title', 'Refreshed')
+				expect(snapshot?.serverData).toHaveProperty('title', 'Refreshed')
+			})
+
+			test('preserves a locally edited (dirty) field but advances the server baseline', () => {
+				store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Original', content: 'C0' }, true)
+				store.setFieldValue('Article', 'a-1', ['title'], 'Local Edit')
+
+				store.refreshServerData('Article', 'a-1', { id: 'a-1', title: 'Server Edit', content: 'C1' })
+
+				const snapshot = store.getEntitySnapshot('Article', 'a-1')
+				// dirty field keeps the local working value...
+				expect(snapshot?.data).toHaveProperty('title', 'Local Edit')
+				// ...but its server baseline moves to the fresh value
+				expect(snapshot?.serverData).toHaveProperty('title', 'Server Edit')
+				// clean sibling is updated in both slots
+				expect(snapshot?.data).toHaveProperty('content', 'C1')
+				expect(snapshot?.serverData).toHaveProperty('content', 'C1')
+			})
+
+			test('reset after refresh drops the dirty field to the new server baseline', () => {
+				store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Original' }, true)
+				store.setFieldValue('Article', 'a-1', ['title'], 'Local Edit')
+				store.refreshServerData('Article', 'a-1', { id: 'a-1', title: 'Server Edit' })
+
+				store.resetEntity('Article', 'a-1')
+
+				const snapshot = store.getEntitySnapshot('Article', 'a-1')
+				expect(snapshot?.data).toHaveProperty('title', 'Server Edit')
+			})
+
+			test('behaves like a plain server load when no snapshot exists yet', () => {
+				store.refreshServerData('Article', 'a-1', { id: 'a-1', title: 'First' })
+
+				const snapshot = store.getEntitySnapshot('Article', 'a-1')
+				expect(snapshot?.data).toHaveProperty('title', 'First')
+				expect(snapshot?.serverData).toHaveProperty('title', 'First')
+				expect(store.existsOnServer('Article', 'a-1')).toBe(true)
+			})
+		})
+
 		describe('removeEntity', () => {
 			test('should remove entity from store', () => {
 				store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)

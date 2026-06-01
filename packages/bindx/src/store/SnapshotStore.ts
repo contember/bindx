@@ -182,6 +182,25 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		return newSnapshot as EntitySnapshot<T>
 	}
 
+	/**
+	 * Refreshes server data from a revalidation read while preserving the user's
+	 * local dirty edits. See {@link EntitySnapshotStore.refreshServerData}.
+	 */
+	refreshServerData<T extends object>(
+		entityType: string,
+		id: string,
+		data: T,
+		skipNotify: boolean = false,
+	): EntitySnapshot<T> {
+		const key = this.getEntityKey(entityType, id)
+		const newSnapshot = this.entitySnapshots.refreshServerData(key, id, entityType, data)
+		this.meta.setExistsOnServer(key, true)
+		if (!skipNotify) {
+			this.notifyEntitySubscribers(key)
+		}
+		return newSnapshot as EntitySnapshot<T>
+	}
+
 	updateEntityFields<T extends object>(
 		entityType: string,
 		id: string,

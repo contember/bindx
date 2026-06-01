@@ -27,6 +27,13 @@ interface EntityBaseProps<TRoleMap extends Record<string, object>> {
 interface EntityByProps<TRoleMap extends Record<string, object>> extends EntityBaseProps<TRoleMap> {
 	/** Unique field(s) to identify the entity (e.g., { id: '...' } or { slug: '...' }) */
 	by: EntityUniqueWhere
+	/**
+	 * Cache-invalidation key. Changing this value re-fetches the entity from the
+	 * server without unmounting the subtree (stale-while-revalidate). Use this
+	 * instead of `key={...}` when external mutations (e.g. workflow RPC) need
+	 * the bindx view refreshed but UI state (scroll, dialogs, drafts) must survive.
+	 */
+	queryKey?: string
 	create?: never
 	onPersisted?: never
 	/** Loading fallback */
@@ -60,6 +67,7 @@ export type EntityProps<TRoleMap extends Record<string, object> = Record<string,
 interface EntityByModeProps {
 	entityType: string
 	by: EntityUniqueWhere
+	queryKey?: string
 	children: (entity: EntityAccessor<unknown>) => React.ReactNode
 	loading?: React.ReactNode
 	error?: (error: FieldError) => React.ReactNode
@@ -81,6 +89,7 @@ interface EntityCreateModeProps {
 function EntityByMode({
 	entityType,
 	by,
+	queryKey: userQueryKey,
 	children,
 	loading,
 	error: errorFallback,
@@ -93,17 +102,23 @@ function EntityByMode({
 	const byKey = useMemo(() => JSON.stringify(by), [by])
 
 	// Phase 1: Collect JSX selection
-	const { selection, queryKey } = useSelectionCollection({
+	const { selection, queryKey: selectionQueryKey } = useSelectionCollection({
 		entityType,
 		depsKey: byKey,
 		collect: collector => children(collector as EntityAccessor<unknown>),
 	})
 
+	// Combine internal selection key with user-supplied invalidation key so
+	// both selection changes and explicit refreshes trigger a refetch.
+	const effectiveQueryKey = userQueryKey !== undefined
+		? `${selectionQueryKey}::${userQueryKey}`
+		: selectionQueryKey
+
 	// Phase 2: Load data using unified hook
 	const result = useEntity({ $name: entityType } as EntityDef, {
 		by,
 		selection,
-		queryKey,
+		queryKey: effectiveQueryKey,
 	})
 
 	// Render based on status
@@ -347,6 +362,7 @@ function EntityImpl<TRoleMap extends Record<string, object>>(
 		<EntityByMode
 			entityType={byProps.entity.$name}
 			by={byProps.by}
+			queryKey={byProps.queryKey}
 			children={byProps.children as (entity: EntityAccessor<unknown>) => React.ReactNode}
 			loading={byProps.loading}
 			error={byProps.error}

@@ -178,6 +178,7 @@ export { createEntityLoader, resolveSelectionMeta, buildQuery } from './core/ind
 // Actions
 export {
 	setEntityData,
+	refreshServerData,
 	setLoadState,
 	setField,
 	resetEntity,

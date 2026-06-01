@@ -185,13 +185,15 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 				continue
 			}
 
-			// Create or update snapshot from embedded data
-			// Skip notification to avoid triggering React state updates during render
-			this.store.setEntityData(
+			// Create or update snapshot from embedded data.
+			// Use refreshServerData (not setEntityData) so a re-fetch advances the
+			// item's server baseline without clobbering the user's local dirty edits
+			// on the item. Skip notification to avoid triggering React state updates
+			// during render.
+			this.store.refreshServerData(
 				this.itemType,
 				itemId,
 				itemData,
-				true, // isServerData
 				true, // skipNotify - called during render, data already exists embedded in parent
 			)
 		}

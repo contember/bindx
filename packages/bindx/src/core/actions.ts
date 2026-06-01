@@ -50,6 +50,16 @@ export interface SetEntityDataAction {
 	readonly isServerData: boolean
 }
 
+/**
+ * Refreshes entity data from a server revalidation, preserving local dirty edits.
+ */
+export interface RefreshServerDataAction {
+	readonly type: 'REFRESH_SERVER_DATA'
+	readonly entityType: string
+	readonly entityId: string
+	readonly data: Record<string, unknown>
+}
+
 // ==================== Relation Actions ====================
 
 /**
@@ -288,6 +298,7 @@ export type Action =
 	| ResetEntityAction
 	| CommitEntityAction
 	| SetEntityDataAction
+	| RefreshServerDataAction
 	| ConnectRelationAction
 	| DisconnectRelationAction
 	| DeleteRelationAction
@@ -347,6 +358,20 @@ export function setEntityData(
 	isServerData: boolean = false,
 ): SetEntityDataAction {
 	return { type: 'SET_ENTITY_DATA', entityType, entityId, data, isServerData }
+}
+
+/**
+ * Creates a REFRESH_SERVER_DATA action.
+ *
+ * Use for server revalidation (refetch) instead of {@link setEntityData}: the
+ * server baseline is advanced while local dirty edits are preserved.
+ */
+export function refreshServerData(
+	entityType: string,
+	entityId: string,
+	data: Record<string, unknown>,
+): RefreshServerDataAction {
+	return { type: 'REFRESH_SERVER_DATA', entityType, entityId, data }
 }
 
 /**
