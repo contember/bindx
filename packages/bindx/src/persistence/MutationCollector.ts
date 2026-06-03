@@ -184,7 +184,16 @@ export class MutationCollector implements MutationDataCollector {
 		// Collect scalar field values
 		const scalarFields = this.schemaProvider.getScalarFields(entityType)
 		for (const fieldName of scalarFields) {
-			if (fieldName === 'id') continue // ID is auto-generated
+			if (fieldName === 'id') {
+				// Temp ids are server-assigned (and remapped afterwards), so omit them.
+				// A client-generated persisted id (e.g. a reference block's stable UUID)
+				// is sent so the server uses it as the primary key — keeping the
+				// document's referenceId valid across persistence.
+				if (isPersistedId(entityId)) {
+					createData['id'] = entityId
+				}
+				continue
+			}
 
 			const value = data[fieldName]
 			if (value !== undefined && value !== null) {

@@ -117,12 +117,37 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Uses ordered IDs to preserve order including after move() operations.
 	 */
 	get items(): EntityAccessor<TEntity, TSelected>[] {
+		if (!this.materializeEmbeddedItems()) return []
+
+		// Use ordered IDs from store (handles removals, connections, and ordering)
+		const orderedIds = this.store.getHasManyOrderedIds(
+			this.entityType,
+			this.entityId,
+			this.fieldName,
+			this.alias,
+		)
+
+		return orderedIds.map((id) => this.getItemHandle(id))
+	}
+
+	/**
+	 * Propagates the parent's embedded has-many data into per-item snapshots and
+	 * ensures the has-many state exists in the store.
+	 *
+	 * Materialisation must NOT be a side effect of iterating `items` only: the
+	 * block editor (and any consumer) resolves a single child via getById()
+	 * without ever reading `items`, and that path must also see populated data.
+	 * Idempotent within a render — guarded by hasEmbeddedDataChanged.
+	 *
+	 * @returns false when there is no embedded list data to materialise.
+	 */
+	private materializeEmbeddedItems(): boolean {
 		const data = this.getEntityData()
-		if (!data) return []
+		if (!data) return false
 
 		const rawData = data[this.alias] ?? data[this.fieldName]
 		const listData = this.extractItems(rawData)
-		if (!listData) return []
+		if (!listData) return false
 
 		const fieldKey = this.alias ?? this.fieldName
 
@@ -155,15 +180,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			)
 		}
 
-		// Use ordered IDs from store (handles removals, connections, and ordering)
-		const orderedIds = this.store.getHasManyOrderedIds(
-			this.entityType,
-			this.entityId,
-			this.fieldName,
-			this.alias,
-		)
-
-		return orderedIds.map((id) => this.getItemHandle(id))
+		return true
 	}
 
 	/**
@@ -283,6 +300,10 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Returns an EntityAccessor with direct field access.
 	 */
 	getById(id: string): EntityAccessor<TEntity, TSelected> {
+		// Ensure embedded child data is propagated into the item snapshot even when
+		// the caller never iterates `items` (e.g. the block editor resolves each
+		// referenced entity by id). Without this the returned handle reads null.
+		this.materializeEmbeddedItems()
 		return this.getItemHandle(id)
 	}
 

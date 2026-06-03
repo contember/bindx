@@ -297,13 +297,16 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	// ==================== Create Mode (Temp ID Management) ====================
 
 	createEntity(entityType: string, initialData?: Record<string, unknown>): string {
-		const tempId = generateTempId()
-		const data = { id: tempId, ...initialData }
+		// Honour a caller-provided id (e.g. a client-generated UUID used as a stable
+		// primary key). Otherwise mint a temp id that is remapped to the server-assigned
+		// id after persist.
+		const id = (initialData?.['id'] as string | undefined) ?? generateTempId()
+		const data = { ...initialData, id }
 
-		this.setEntityData(entityType, tempId, data, false)
-		this.setExistsOnServer(entityType, tempId, false)
+		this.setEntityData(entityType, id, data, false)
+		this.setExistsOnServer(entityType, id, false)
 
-		return tempId
+		return id
 	}
 
 	mapTempIdToPersistedId(entityType: string, tempId: string, persistedId: string): void {
