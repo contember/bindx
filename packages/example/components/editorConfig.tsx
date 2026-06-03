@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, CSSProperties, SyntheticEvent } from 'react'
 import type { RenderElementProps } from 'slate-react'
 import type { ContentReference } from '../generated/entities.js'
 import type { FieldRef } from '@contember/bindx'
@@ -59,16 +59,18 @@ const AnchorRenderer = (props: RenderElementProps & { element: AnchorElement }):
 	</a>
 )
 
+// Inline styles re-assert list semantics that the example's Tailwind preflight
+// reset strips (list-style / padding), so lists are visually distinguishable.
 const ListItemRenderer = (props: RenderElementProps & { element: ListItemElement }): ReactNode => (
-	<li {...props.attributes}>{props.children}</li>
+	<li {...props.attributes} style={{ display: 'list-item' }}>{props.children}</li>
 )
 
 const UnorderedListRenderer = (props: RenderElementProps & { element: UnorderedListElement }): ReactNode => (
-	<ul {...props.attributes}>{props.children}</ul>
+	<ul {...props.attributes} style={{ listStyleType: 'disc', paddingLeft: '1.5rem', margin: '0.5rem 0' }}>{props.children}</ul>
 )
 
 const OrderedListRenderer = (props: RenderElementProps & { element: OrderedListElement }): ReactNode => (
-	<ol {...props.attributes}>{props.children}</ol>
+	<ol {...props.attributes} style={{ listStyleType: 'decimal', paddingLeft: '1.5rem', margin: '0.5rem 0' }}>{props.children}</ol>
 )
 
 // ============================================================================
@@ -135,6 +137,104 @@ function extractYoutubeId(url: string | null): string {
 	return match?.[1] ?? ''
 }
 
+// ----------------------------------------------------------------------------
+// Editable block fields
+//
+// Reference blocks are Slate void elements (contentEditable=false), so their
+// inner form controls must stop Slate from interpreting pointer/keyboard events
+// — otherwise focus is stolen and Backspace deletes the whole block.
+// ----------------------------------------------------------------------------
+
+const stopSlate = (e: SyntheticEvent): void => e.stopPropagation()
+
+const blockLabelStyle: CSSProperties = {
+	display: 'block',
+	fontSize: '11px',
+	fontWeight: 600,
+	color: '#888',
+	textTransform: 'uppercase',
+	letterSpacing: '0.04em',
+	margin: '8px 0 2px',
+}
+
+const blockFieldStyle: CSSProperties = {
+	display: 'block',
+	width: '100%',
+	border: '1px solid #ddd',
+	borderRadius: '4px',
+	padding: '6px 8px',
+	fontSize: '14px',
+	fontFamily: 'inherit',
+	background: '#fff',
+	boxSizing: 'border-box',
+}
+
+function BlockTextField({ field, label, placeholder, multiline = false }: {
+	field: FieldRef<string | null>
+	label: string
+	placeholder?: string
+	multiline?: boolean
+}): ReactNode {
+	return (
+		<Field field={field}>
+			{f => (
+				<label style={blockLabelStyle}>
+					{label}
+					{multiline ? (
+						<textarea
+							value={f.value ?? ''}
+							onChange={e => f.setValue(e.target.value)}
+							placeholder={placeholder}
+							rows={2}
+							onMouseDown={stopSlate}
+							onKeyDown={stopSlate}
+							onPaste={stopSlate}
+							onDrop={stopSlate}
+							style={{ ...blockFieldStyle, resize: 'vertical' }}
+						/>
+					) : (
+						<input
+							value={f.value ?? ''}
+							onChange={e => f.setValue(e.target.value)}
+							placeholder={placeholder}
+							onMouseDown={stopSlate}
+							onKeyDown={stopSlate}
+							onPaste={stopSlate}
+							onDrop={stopSlate}
+							style={blockFieldStyle}
+						/>
+					)}
+				</label>
+			)}
+		</Field>
+	)
+}
+
+function BlockSelectField({ field, label, options }: {
+	field: FieldRef<string | null>
+	label: string
+	options: ReadonlyArray<{ value: string; label: string }>
+}): ReactNode {
+	return (
+		<Field field={field}>
+			{f => (
+				<label style={blockLabelStyle}>
+					{label}
+					<select
+						value={f.value ?? ''}
+						onChange={e => f.setValue(e.target.value)}
+						onMouseDown={stopSlate}
+						onKeyDown={stopSlate}
+						style={blockFieldStyle}
+					>
+						{options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+					</select>
+				</label>
+			)}
+		</Field>
+	)
+}
+
 export const simpleBlocks: BlockDefinitions<ContentReference> = {
 	image: {
 		isVoid: true,
@@ -165,11 +265,10 @@ export const blocks: BlockDefinitions<ContentReference> = {
 			return (
 				<div {...props.attributes} contentEditable={false} style={{ padding: '12px', background: '#f5f5f5', borderRadius: '8px', margin: '8px 0' }}>
 					<Field field={ref.imageUrl}>
-						{url => <img src={url.value ?? 'https://via.placeholder.com/400x200'} alt="" style={{ maxWidth: '100%', borderRadius: '4px' }} />}
+						{url => <img src={url.value || 'https://via.placeholder.com/400x200'} alt="" style={{ maxWidth: '100%', borderRadius: '4px', display: 'block' }} />}
 					</Field>
-					<Field field={ref.caption}>
-						{caption => <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>{caption.value ?? 'No caption'}</p>}
-					</Field>
+					<BlockTextField field={ref.imageUrl} label="Image URL" placeholder="https://…" />
+					<BlockTextField field={ref.caption} label="Caption" placeholder="Describe the image" />
 					{props.children}
 				</div>
 			)
@@ -183,13 +282,9 @@ export const blocks: BlockDefinitions<ContentReference> = {
 		render: (props, ref) => {
 			if (!ref) return null
 			return (
-				<blockquote {...props.attributes} contentEditable={false} style={{ borderLeft: '4px solid #ccc', padding: '8px 16px', margin: '8px 0', fontStyle: 'italic', background: '#fafafa' }}>
-					<Field field={ref.quoteText}>
-						{text => <p><em>{text.value}</em></p>}
-					</Field>
-					<Field field={ref.quoteAuthor}>
-						{author => <footer style={{ fontSize: '12px', color: '#666' }}>— {author.value}</footer>}
-					</Field>
+				<blockquote {...props.attributes} contentEditable={false} style={{ borderLeft: '4px solid #ccc', padding: '8px 16px', margin: '8px 0', background: '#fafafa' }}>
+					<BlockTextField field={ref.quoteText} label="Quote" placeholder="The quote text" multiline />
+					<BlockTextField field={ref.quoteAuthor} label="Author" placeholder="Who said it" />
 					{props.children}
 				</blockquote>
 			)
@@ -208,13 +303,15 @@ export const blocks: BlockDefinitions<ContentReference> = {
 						{url => (
 							<Field field={ref.embedType}>
 								{type =>
-									type.value === 'youtube'
-										? <iframe src={`https://youtube.com/embed/${extractYoutubeId(url.value)}`} style={{ width: '100%', height: '315px', border: 'none', borderRadius: '4px' }} title="YouTube video" />
-										: <a href={url.value ?? ''} target="_blank" rel="noopener noreferrer" style={{ color: '#1a73e8' }}>{url.value}</a>
+									type.value === 'youtube' && extractYoutubeId(url.value)
+										? <iframe src={`https://youtube.com/embed/${extractYoutubeId(url.value)}`} style={{ width: '100%', height: '240px', border: 'none', borderRadius: '4px' }} title="YouTube video" />
+										: <a href={url.value ?? ''} target="_blank" rel="noopener noreferrer" style={{ color: '#1a73e8' }}>{url.value || 'No URL set'}</a>
 								}
 							</Field>
 						)}
 					</Field>
+					<BlockSelectField field={ref.embedType} label="Type" options={[{ value: 'youtube', label: 'YouTube' }, { value: 'link', label: 'Link' }]} />
+					<BlockTextField field={ref.embedUrl} label="URL" placeholder="https://youtube.com/watch?v=…" />
 					{props.children}
 				</div>
 			)
@@ -232,9 +329,17 @@ export const blocks: BlockDefinitions<ContentReference> = {
 					<Field field={ref.calloutVariant}>
 						{variant => (
 							<div style={{ background: variantColors[variant.value ?? 'info'], padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.1)' }}>
-								<Field field={ref.calloutText}>
-									{text => <p style={{ margin: 0 }}>{text.value}</p>}
-								</Field>
+								<BlockTextField field={ref.calloutText} label="Callout text" placeholder="Your note" multiline />
+								<BlockSelectField
+									field={ref.calloutVariant}
+									label="Variant"
+									options={[
+										{ value: 'info', label: 'Info' },
+										{ value: 'warning', label: 'Warning' },
+										{ value: 'success', label: 'Success' },
+										{ value: 'error', label: 'Error' },
+									]}
+								/>
 							</div>
 						)}
 					</Field>
