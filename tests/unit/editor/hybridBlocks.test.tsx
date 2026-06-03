@@ -110,6 +110,9 @@ const blocks: BlockDefinitions<ContentReference> = {
 	},
 }
 
+// Non-undefined handle (the `blocks` record has an index signature) for the harness override below.
+const baseTestimonial = blocks['testimonial']!
+
 const plugins = [withParagraphs({ render: ParagraphRenderer })]
 
 function createStore(): MockDataStore {
@@ -144,11 +147,11 @@ function Harness(): React.ReactNode {
 						blocks={{
 							...blocks,
 							testimonial: {
-								...blocks.testimonial,
+								...baseTestimonial,
 								render: (props, ref) => (
 									<>
 										<SetDataProbe />
-										{blocks.testimonial.render(props, ref)}
+										{baseTestimonial.render(props, ref)}
 									</>
 								),
 							},
