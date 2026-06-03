@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { Descendant, Editor, Element } from 'slate'
 import type { HasManyAccessor, EntityAccessor, AnyBrand } from '@contember/bindx'
 import type { BlockDefinitions } from '../../types/editorProps.js'
@@ -19,7 +19,6 @@ export interface UseBlockEditorReferencesOptions<
 	discriminationField: keyof TEntity & string
 	blocks: BlockDefinitions<TEntity, TSelected, TBrand, TEntityName, TSchema>
 	editor: Editor
-	onBeforePersist: (callback: () => void) => (() => void)
 }
 
 export interface BlockEditorReferencesResult<
@@ -31,6 +30,8 @@ export interface BlockEditorReferencesResult<
 > {
 	getReferencedEntity: (path: Path, id: string) => EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>
 	insertBlock: (name: string, init?: (ref: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>) => void) => void
+	/** Removes reference entities no longer present in the document. Register on the parent's before-persist. */
+	cleanup: () => void
 }
 
 export function useBlockEditorReferences<
@@ -44,7 +45,6 @@ export function useBlockEditorReferences<
 	discriminationField,
 	blocks,
 	editor,
-	onBeforePersist,
 }: UseBlockEditorReferencesOptions<TEntity, TSelected, TBrand, TEntityName, TSchema>): BlockEditorReferencesResult<TEntity, TSelected, TBrand, TEntityName, TSchema> {
 	type Accessor = EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>
 
@@ -67,9 +67,13 @@ export function useBlockEditorReferences<
 		Editor.withoutNormalizing(editor, () => {
 			const path = prepareElementForInsertion(editor, true)
 
-			// Create reference entity
-			const tempId = references.add()
-			const entityAccessor = references.getById(tempId)
+			// Create the reference entity with a stable client-generated id, then use
+			// the SAME id as the node's referenceId. The id is persisted as the entity's
+			// primary key, so the document keeps resolving to it after a save (a temp id
+			// would be remapped server-side and leave the node dangling).
+			const referenceId = crypto.randomUUID()
+			references.add({ id: referenceId } as unknown as Partial<TEntity>)
+			const entityAccessor = references.getById(referenceId)
 
 			// Set discrimination field via proxy (EntityAccessor proxy resolves string keys to field handles)
 			const fieldRef = (entityAccessor as Record<string, unknown>)[discriminationField]
@@ -79,7 +83,6 @@ export function useBlockEditorReferences<
 
 			init?.(entityAccessor)
 
-			const referenceId = entityAccessor.id
 			const newNode: ElementWithReference = { type: name, children, referenceId }
 			Transforms.insertNodes(editor, newNode, { at: path })
 		})
@@ -114,9 +117,5 @@ export function useBlockEditorReferences<
 		}
 	}, [])
 
-	useEffect(() => {
-		return onBeforePersist(cleanup)
-	}, [onBeforePersist, cleanup])
-
-	return useMemo(() => ({ getReferencedEntity, insertBlock }), [getReferencedEntity, insertBlock])
+	return useMemo(() => ({ getReferencedEntity, insertBlock, cleanup }), [getReferencedEntity, insertBlock, cleanup])
 }

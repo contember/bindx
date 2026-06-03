@@ -21,7 +21,7 @@ import { EditorErrorBoundary } from './EditorErrorBoundary.js'
 import { ReferenceElementWrapper } from '../plugins/references/ReferenceElementWrapper.js'
 import { EditorGetReferencedEntityProvider, useEditorGetReferencedEntity } from '../contexts/EditorReferencesContext.js'
 import { EditorBlockElementProvider } from '../contexts/EditorBlockElementContext.js'
-import { BINDX_COMPONENT, type SelectionFieldMeta, type SelectionProvider, type SelectionMeta, createCollectorProxy, useField, useHasMany } from '@contember/bindx-react'
+import { BINDX_COMPONENT, type SelectionFieldMeta, type SelectionProvider, type SelectionMeta, createCollectorProxy, useField, useHasMany, useEntityBeforePersist } from '@contember/bindx-react'
 import { SelectionScope } from '@contember/bindx'
 
 export type { BlockEditorBaseProps, BlockEditorWithReferencesProps, BlockEditorProps }
@@ -115,7 +115,10 @@ function BlockEditorWithReferences<
 			const blockDef = block as BlockDefinition<TEntity, TSelected, TBrand, TEntityName, TSchema>
 			editor.registerElement({
 				type: name,
-				canContainAnyBlocks: !blockDef.isVoid,
+				// Reference blocks are always registered as block containers (matches the
+				// reference editor). The editor's own isVoid guard already prevents void
+				// elements from acting as containers, so this is safe for void blocks too.
+				canContainAnyBlocks: true,
 				isVoid: blockDef.isVoid,
 				render: renderProps => {
 					return (
@@ -150,21 +153,17 @@ function BlockEditorWithReferences<
 		return result
 	})
 
-	const onBeforePersist = useCallback((callback: () => void): (() => void) => {
-		// HasManyRef doesn't expose parent entity's interceptPersisting directly.
-		// We need to find a way to hook into persistence. For now, use a no-op.
-		// The cleanup will be triggered by the component lifecycle.
-		// TODO: Add proper persist interception via parent entity
-		return () => {}
-	}, [])
-
-	const { getReferencedEntity, insertBlock } = useBlockEditorReferences({
+	const { getReferencedEntity, insertBlock, cleanup } = useBlockEditorReferences({
 		references: fullReferences,
 		discriminationField,
 		blocks,
 		editor,
-		onBeforePersist,
 	})
+
+	// Remove reference entities orphaned by document edits before the parent entity
+	// (the one that owns the references relation) persists.
+	const parentMeta = fullReferences[FIELD_REF_META]
+	useEntityBeforePersist(parentMeta.entityType, parentMeta.entityId, cleanup)
 
 	// Wire insertBlock onto the editor
 	useMemo(() => {

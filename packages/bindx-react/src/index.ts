@@ -302,6 +302,7 @@ export {
 	useIntercept,
 	useInterceptEntity,
 	useInterceptField,
+	useEntityBeforePersist,
 	// Ref → Accessor hooks
 	useAccessor,
 	useField,

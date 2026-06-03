@@ -179,6 +179,18 @@ export const createEditorWithEssentials = ({ defaultElementType }: { defaultElem
 			if (Editor.isEditor(node) && node.children.length === 0) {
 				Transforms.insertNodes(editor, editor.createDefaultElement([{ text: '' }]))
 			}
+			// Guarantee an editable default element after a trailing void block, so a
+			// document ending in a void (image / embed / …) — or consisting only of
+			// void blocks — still has a place to type plain text.
+			if (Editor.isEditor(node) && node.children.length > 0) {
+				const lastChild = node.children[node.children.length - 1]
+				if (SlateElement.isElement(lastChild) && editor.isVoid(lastChild)) {
+					Transforms.insertNodes(editor, editor.createDefaultElement([{ text: '' }]), {
+						at: [node.children.length],
+					})
+					return
+				}
+			}
 			if (!SlateElement.isElement(node)) {
 				normalizeNode([node, path])
 				return
