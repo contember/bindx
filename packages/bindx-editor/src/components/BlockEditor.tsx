@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
-import { Descendant, Editor, Node, Transforms } from 'slate'
+import { Descendant, Editor, Element as SlateElement, Node, Transforms } from 'slate'
 import { Slate, useSlate, useSlateStatic, ReactEditor } from 'slate-react'
 import type { RenderElementProps } from 'slate-react'
 import { createEditor } from '../editor/createEditor.js'
@@ -13,6 +13,7 @@ import type {
 	BlockEditorWithReferencesProps,
 	BlockEditorProps,
 	BlockDefinition,
+	InsertBlockOptions,
 } from '../types/editorProps.js'
 import { useBlockEditorReferences } from '../internal/hooks/useBlockEditorReferences.js'
 import { referenceOverrides } from '../plugins/references/referenceOverrides.js'
@@ -121,8 +122,14 @@ function BlockEditorWithReferences<
 				canContainAnyBlocks: true,
 				isVoid: blockDef.isVoid,
 				render: renderProps => {
+					// `setData` lets a block patch the inline props on its own node (the hybrid path:
+					// keep texts/flags in the JSON, reserve the reference entity for real relations).
+					const setData = (patch: Partial<SlateElement>): void => {
+						const path = ReactEditor.findPath(editor, renderProps.element)
+						Transforms.setNodes(editor, patch, { at: path })
+					}
 					return (
-						<EditorBlockElementProvider value={renderProps}>
+						<EditorBlockElementProvider value={{ ...renderProps, setData }}>
 							<BlockElementRenderer
 								block={blockDef}
 								renderProps={renderProps}
@@ -167,8 +174,8 @@ function BlockEditorWithReferences<
 
 	// Wire insertBlock onto the editor
 	useMemo(() => {
-		editor.insertBlock = (name: string, init?: (ref: unknown) => void) => {
-			insertBlock(name, init as ((ref: Accessor) => void) | undefined)
+		editor.insertBlock = (name: string, options?: { data?: Record<string, unknown>; initReference?: (ref: unknown) => void }) => {
+			insertBlock(name, options as InsertBlockOptions<Accessor> | undefined)
 		}
 	}, [editor, insertBlock])
 
@@ -296,9 +303,13 @@ blockEditorAny.getSelection = (
 			const refScope = new SelectionScope()
 			refScope.addScalar(refProps.discriminationField)
 
-			// Collect fields from each block's staticRender
+			// Collect fields from each block's staticRender. Reference-less blocks (no staticRender)
+			// keep their data inline on the node and contribute nothing to the references selection.
 			for (const block of Object.values(refProps.blocks)) {
 				const blockDef = block as BlockDefinition<object>
+				if (!blockDef.staticRender) {
+					continue
+				}
 				const blockScope = new SelectionScope()
 				const collector = createCollectorProxy<object>(blockScope, null, null)
 

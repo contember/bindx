@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { Descendant, Editor, Element } from 'slate'
 import type { HasManyAccessor, EntityAccessor, AnyBrand } from '@contember/bindx'
-import type { BlockDefinitions } from '../../types/editorProps.js'
+import type { BlockDefinitions, InsertBlockOptions } from '../../types/editorProps.js'
 import { isElementWithReference } from '../../plugins/references/elements/ElementWithReference.js'
 import { prepareElementForInsertion } from '../../plugins/references/utils/prepareElementForInsertion.js'
 import { Transforms } from 'slate'
@@ -29,7 +29,7 @@ export interface BlockEditorReferencesResult<
 	TSchema extends Record<string, object> = Record<string, object>,
 > {
 	getReferencedEntity: (path: Path, id: string) => EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>
-	insertBlock: (name: string, init?: (ref: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>) => void) => void
+	insertBlock: (name: string, options?: InsertBlockOptions<EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>>) => void
 	/** Removes reference entities no longer present in the document. Register on the parent's before-persist. */
 	cleanup: () => void
 }
@@ -52,7 +52,7 @@ export function useBlockEditorReferences<
 		return references.getById(id)
 	}, [references])
 
-	const insertBlock = useCallback((name: string, init?: (ref: Accessor) => void) => {
+	const insertBlock = useCallback((name: string, options?: InsertBlockOptions<Accessor>) => {
 		const targetBlock = blocks[name]
 		if (!targetBlock) {
 			throw new Error(
@@ -60,30 +60,46 @@ export function useBlockEditorReferences<
 			)
 		}
 
+		// A block is reference-backed iff it declares a `staticRender` (the selection it needs from
+		// its reference entity). Reference-less blocks keep all their data inline on the node, so we
+		// skip entity creation entirely — see BlockDefinition.staticRender.
+		const hasReference = !!targetBlock.staticRender
+
 		const children: Descendant[] = targetBlock.isVoid
 			? [{ text: '' }]
 			: [editor.createDefaultElement([{ text: '' }])]
 
 		Editor.withoutNormalizing(editor, () => {
-			const path = prepareElementForInsertion(editor, true)
+			// Void blocks (with or without a reference) are placed as standalone top-level blocks.
+			const path = prepareElementForInsertion(editor, hasReference || targetBlock.isVoid)
 
-			// Create the reference entity with a stable client-generated id, then use
-			// the SAME id as the node's referenceId. The id is persisted as the entity's
-			// primary key, so the document keeps resolving to it after a save (a temp id
-			// would be remapped server-side and leave the node dangling).
-			const referenceId = crypto.randomUUID()
-			references.add({ id: referenceId } as unknown as Partial<TEntity>)
-			const entityAccessor = references.getById(referenceId)
+			let referenceId: string | undefined
+			if (hasReference) {
+				// Create the reference entity with a stable client-generated id, then use
+				// the SAME id as the node's referenceId. The id is persisted as the entity's
+				// primary key, so the document keeps resolving to it after a save (a temp id
+				// would be remapped server-side and leave the node dangling).
+				referenceId = crypto.randomUUID()
+				references.add({ id: referenceId } as unknown as Partial<TEntity>)
+				const entityAccessor = references.getById(referenceId)
 
-			// Set discrimination field via proxy (EntityAccessor proxy resolves string keys to field handles)
-			const fieldRef = (entityAccessor as Record<string, unknown>)[discriminationField]
-			if (fieldRef && typeof fieldRef === 'object' && 'setValue' in fieldRef) {
-				(fieldRef as { setValue: (v: unknown) => void }).setValue(name)
+				// Set discrimination field via proxy (EntityAccessor proxy resolves string keys to field handles)
+				const fieldRef = (entityAccessor as Record<string, unknown>)[discriminationField]
+				if (fieldRef && typeof fieldRef === 'object' && 'setValue' in fieldRef) {
+					(fieldRef as { setValue: (v: unknown) => void }).setValue(name)
+				}
+
+				options?.initReference?.(entityAccessor)
 			}
 
-			init?.(entityAccessor)
-
-			const newNode: ElementWithReference = { type: name, children, referenceId }
+			// Seed inline props onto the node (e.g. a block's text fields kept out of the reference
+			// entity). `referenceId` is omitted entirely for reference-less blocks.
+			const newNode = {
+				type: name,
+				children,
+				...(referenceId !== undefined ? { referenceId } : {}),
+				...(options?.data ?? {}),
+			} as unknown as ElementWithReference
 			Transforms.insertNodes(editor, newNode, { at: path })
 		})
 	}, [blocks, editor, references, discriminationField])

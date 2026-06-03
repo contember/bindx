@@ -44,7 +44,10 @@ export interface WithEssentials {
 	onFocus: (event: ReactFocusEvent<HTMLDivElement>) => void
 	onBlur: (event: ReactFocusEvent<HTMLDivElement>) => void
 
-	insertBlock?: (name: string, init?: (ref: unknown) => void) => void
+	/** Insert a block by its discrimination name. `options.data` seeds inline props directly onto the
+	 *  new node (kept in the JSON field); `options.initReference` initializes the reference entity
+	 *  (ignored for reference-less blocks). Wired by `BlockEditorWithReferences`. */
+	insertBlock?: (name: string, options?: { data?: Record<string, unknown>; initReference?: (ref: unknown) => void }) => void
 }
 
 export type EditorWithEssentials<E extends BaseEditor> = WithEssentials & E

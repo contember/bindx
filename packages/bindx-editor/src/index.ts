@@ -56,6 +56,7 @@ export type {
 	BlockEditorProps,
 	BlockDefinition,
 	BlockDefinitions,
+	InsertBlockOptions,
 } from './types/editorProps.js'
 
 // Element plugins
@@ -94,7 +95,7 @@ export { BlockEditor } from './components/BlockEditor.js'
 
 // Contexts (internal, for advanced use)
 export { EditorGetReferencedEntityProvider, useEditorGetReferencedEntity } from './contexts/EditorReferencesContext.js'
-export { EditorBlockElementProvider, useEditorBlockElement } from './contexts/EditorBlockElementContext.js'
+export { EditorBlockElementProvider, useEditorBlockElement, type EditorBlockElement } from './contexts/EditorBlockElementContext.js'
 
 // Reference system
 export { type ElementWithReference, isElementWithReference } from './plugins/references/elements/ElementWithReference.js'

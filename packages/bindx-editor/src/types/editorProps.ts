@@ -27,8 +27,23 @@ export interface BlockDefinition<
 		ref: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema> | null,
 	) => ReactNode
 	/** Static render for selection collection. Returns JSX with <Field>, <HasOne>, etc.
-	 *  Called during analysis phase with a collector proxy — must be pure (no hooks, no side effects). */
-	staticRender: (ref: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>) => ReactNode
+	 *  Called during analysis phase with a collector proxy — must be pure (no hooks, no side effects).
+	 *
+	 *  OPTIONAL: omit it to make the block **reference-less** — no reference entity is created on
+	 *  insert, the node carries no `referenceId`, `render` receives `ref === null`, and the block is
+	 *  skipped during selection collection. Such a block keeps all its data inline on the Slate node
+	 *  (seed it via `insertBlock(name, { data })`, mutate it via `useEditorBlockElement().setData`).
+	 *  This is the "hybrid" knob: a block *with* `staticRender` can still keep some fields inline on
+	 *  the node and reserve the reference entity for genuine relations (an image asset, a product). */
+	staticRender?: (ref: EntityAccessor<TEntity, TSelected, TBrand, TEntityName, TSchema>) => ReactNode
+}
+
+/** Options for `editor.insertBlock` and the references-hook `insertBlock`. */
+export interface InsertBlockOptions<TRef = unknown> {
+	/** Inline props seeded directly onto the new block's Slate node (persisted in the JSON field). */
+	data?: Record<string, unknown>
+	/** Initialize the reference entity. Ignored for reference-less blocks (those without `staticRender`). */
+	initReference?: (ref: TRef) => void
 }
 
 export type BlockDefinitions<
