@@ -1,37 +1,33 @@
-# Status
+# Status — Round 2
 
-## Critical
+Open issues from the current architecture review. See [issues.md](issues.md) for the index.
 
-- [x] 001 - `not_found` state treated as loading
-- [x] 002 - Memoization bug — `definer` missing from useMemo deps
-- [x] 003 - Temp ID prefix mismatch in JSX proxy
-- [x] 004 - Silent data loss without MutationCollector
-- [x] 005 - `JSON.stringify` vs `deepEqual` inconsistency
+## P0 — Correctness / data integrity
 
-## Important
+- [ ] 025 — Non-atomic persist: partial failure leaves committed entities dirty
+- [ ] 026 — Dirty detection silently drops fields from mutations
+- [ ] 027 — Persist-lifecycle events never fire; async interceptors silently dropped
+- [ ] 028 — MockAdapter diverges from ContemberAdapter
 
-- [x] 006 - Dual persistence managers
-- [x] 007 - Dual source of truth for has-many state
-- [x] 008 - Interceptors unusable with sync dispatch
-- [x] 009 - `inputProps` creates new object on every access
-- [x] 010 - Constructor anti-pattern with Proxy
-- [x] 011 - Static schema cache in SchemaLoader
-- [x] 012 - `JSON.parse(byKey)` roundtrip hack
+## P1 — Reactivity / architecture
 
-## Code Quality
+- [ ] 029 — Global version counter defeats fine-grained reactivity
+- [ ] 030 — "Stable handle" contract broken — handles rebuilt on every change
+- [ ] 031 — EntityHandle subscription omits relation changes → stale `$isDirty`
+- [ ] 032 — Memory leaks — parent-child graph, batcher listeners, timers, item handles
 
-- [x] 013 - Large files exceeding 300-line guideline (SnapshotStore.ts split done, SnapshotStore.ts EntityMetaStore/TouchedStore/entityId split done, SnapshotStore.ts DirtyTracker split done, SnapshotStore.ts EntitySnapshotStore split done, EntityHandle.ts HasManyListHandle/HasOneHandle/PlaceholderHandle split done, proxy.ts split done, componentBuilder.ts split done; remaining files are facades/cohesive classes where further splitting would be over-engineering)
-- [x] 014 - `any` types in componentBuilder
-- [x] 015 - `as` type casts in createBindx
-- [x] 016 - `as any` casts in ContemberAdapter
-- [x] 017 - Hardcoded `__temp_` checks instead of `isTempId()`
-- [x] 018 - Incomplete packages with TODOs
+## P2 — Hygiene / maintainability
 
-## Minor
+- [ ] 033 — Dead / duplicate code
+- [ ] 034 — God objects, large files, too-weak dependency sort
+- [ ] 035 — Type-safety erosion — `as`/`any` reintroduced
+- [ ] 036 — JSX conditional under-selection + HasMany duplicate over-fetch
 
-- [x] 019 - Memory leak — unremoved abort event listeners
-- [x] 020 - Conditional selection limitation
-- [x] 021 - Debug flag via globalThis string key
-- [x] 022 - Inconsistent error systems
-- [x] 023 - Role system complexity
-- [x] 024 - `console.warn` for unknown error types
+## Concurrency / undo
+
+- [ ] 037 — Render-phase store mutations risk tearing under concurrent React
+- [ ] 038 — Undo restores partial state and can desync across persist rekey
+
+---
+
+**Round 1 (1–24):** all resolved during the `createBindx → entityDef` refactor; issue files removed (referenced a deleted file layout). Lineage preserved via **Supersedes** notes in round-2 issues.

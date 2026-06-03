@@ -1,47 +1,39 @@
-# Bindx Issues
+# Bindx Issues — Round 2
 
-Consolidated from four independent code review reports (alpha, beta, gamma, delta) and verified against the codebase.
+Architecture review of the core (`@contember/bindx`) + React (`@contember/bindx-react`) binding layers, reflecting the **current** codebase (post `createBindx → entityDef` refactor and the package split).
 
-## Critical (affect correctness)
+> **Round 1 (issues 1–24)** was a prior review consolidated from four reports. All 24 were resolved during the big refactor and their issue files referenced a file layout that no longer exists (`useEntityImpl.ts`, `createBindx.tsx`, `PersistenceManager.ts`, `useEntityCore.ts`, `roles/`, the 1200-line `proxy.ts`), so they were removed. Where a round-1 issue still has a live residual, the relevant round-2 issue carries a **Supersedes** note.
 
-| # | Issue | File | Reported by |
-|---|-------|------|-------------|
-| [001](issues/001-not-found-as-loading.md) | `not_found` state treated as loading | `useEntityImpl.ts` | gamma, delta |
-| [002](issues/002-definer-missing-from-usememo-deps.md) | Memoization bug — `definer` missing from useMemo deps | `createBindx.tsx` | gamma |
-| [003](issues/003-temp-id-prefix-mismatch.md) | Temp ID prefix mismatch in JSX proxy | `proxy.ts` / `SnapshotStore.ts` | gamma |
-| [004](issues/004-silent-data-loss-without-mutation-collector.md) | Silent data loss without MutationCollector | `BatchPersister.ts` | delta |
-| [005](issues/005-json-stringify-vs-deep-equal.md) | `JSON.stringify` vs `deepEqual` inconsistency | `BatchPersister.ts` | gamma, delta |
+## P0 — Correctness / data integrity
 
-## Important (architectural problems)
+| # | Issue | Area | Supersedes |
+|---|-------|------|-----------|
+| [025](issues/025-non-atomic-persist-partial-failure.md) | Non-atomic persist — partial failure leaves committed entities dirty | persistence | — |
+| [026](issues/026-dirty-detection-gaps.md) | Dirty detection silently drops fields from mutations | store | #005, #007 |
+| [027](issues/027-persist-events-dead-async-interceptors-dropped.md) | Persist-lifecycle events never fire; async interceptors silently dropped | events/dispatch | #008 |
+| [028](issues/028-mock-adapter-divergence.md) | MockAdapter diverges from ContemberAdapter — tests pass against wrong semantics | adapter | — |
 
-| # | Issue | File | Reported by |
-|---|-------|------|-------------|
-| [006](issues/006-dual-persistence-managers.md) | Dual persistence managers | `PersistenceManager.ts` / `BatchPersister.ts` | gamma |
-| [007](issues/007-dual-has-many-state.md) | Dual source of truth for has-many state | `MutationCollector.ts` | delta |
-| [008](issues/008-interceptors-unusable-with-sync-dispatch.md) | Interceptors unusable with sync dispatch | `FieldHandle.ts` | delta |
-| [009](issues/009-input-props-new-object-every-access.md) | `inputProps` creates new object on every access | `FieldHandle.ts` | gamma |
-| [010](issues/010-constructor-proxy-antipattern.md) | Constructor anti-pattern with Proxy | `FieldHandle.ts` / `EntityHandle.ts` | delta |
-| [011](issues/011-static-schema-cache.md) | Static schema cache in SchemaLoader | `SchemaLoader.ts` | delta |
-| [012](issues/012-json-parse-roundtrip-hack.md) | `JSON.parse(byKey)` roundtrip hack | `useEntityCore.ts` | gamma |
+## P1 — Reactivity / architecture
 
-## Code Quality
+| # | Issue | Area | Supersedes |
+|---|-------|------|-----------|
+| [029](issues/029-global-version-defeats-reactivity.md) | Global version counter defeats fine-grained reactivity | store/react | — |
+| [030](issues/030-stable-handle-contract-broken.md) | "Stable handle" contract broken — handles rebuilt on every change | handles/react | — |
+| [031](issues/031-entity-subscription-omits-relations.md) | EntityHandle subscription omits relation changes → stale `$isDirty` | handles | — |
+| [032](issues/032-memory-leaks.md) | Memory leaks — parent-child graph, batcher listeners, timers, item handles | store/react | #019 |
 
-| # | Issue | File | Reported by |
-|---|-------|------|-------------|
-| [013](issues/013-large-files.md) | Large files exceeding 300-line guideline | multiple | all |
-| [014](issues/014-any-types-in-component-builder.md) | `any` types in componentBuilder | `componentBuilder.ts` | alpha, gamma, delta |
-| [015](issues/015-as-casts-in-create-bindx.md) | `as` type casts in createBindx | `createBindx.tsx` | gamma |
-| [016](issues/016-as-any-in-contember-adapter.md) | `as any` casts in ContemberAdapter | `ContemberAdapter.ts` | — |
-| [017](issues/017-hardcoded-temp-id-checks.md) | Hardcoded `__temp_` checks instead of `isTempId()` | multiple | — |
-| [018](issues/018-incomplete-packages.md) | Incomplete packages with TODOs | form, uploader, generator | beta |
+## P2 — Hygiene / maintainability
 
-## Minor
+| # | Issue | Area | Supersedes |
+|---|-------|------|-----------|
+| [033](issues/033-dead-and-duplicate-code.md) | Dead / duplicate code (violates "no deprecated stuff" rule) | multiple | #006, #011 |
+| [034](issues/034-god-objects-and-large-files.md) | God objects, large files, and a too-weak dependency sort | persistence/react | #013 |
+| [035](issues/035-type-safety-erosion.md) | Type-safety erosion — `as`/`any` reintroduced | multiple | #014, #015, #016 |
+| [036](issues/036-jsx-conditional-underselection-and-overfetch.md) | JSX conditional under-selection (silent) + HasMany duplicate over-fetch | jsx | #020 |
 
-| # | Issue | File | Reported by |
-|---|-------|------|-------------|
-| [019](issues/019-memory-leak-abort-listeners.md) | Memory leak — unremoved abort event listeners | `MockAdapter.ts` / uploader | — |
-| [020](issues/020-conditional-selection-limitation.md) | Selection doesn't react to conditional field access | `useEntityCore.ts` | delta |
-| [021](issues/021-debug-flag-globalthis.md) | Debug flag via globalThis string key | — | delta |
-| [022](issues/022-inconsistent-error-systems.md) | Inconsistent error systems | — | delta |
-| [023](issues/023-role-system-complexity.md) | Role system complexity | `roles/` | alpha, beta |
-| [024](issues/024-console-warn-unknown-errors.md) | `console.warn` for unknown error types | `ContemberAdapter.ts` | — |
+## Concurrency / undo
+
+| # | Issue | Area | Supersedes |
+|---|-------|------|-----------|
+| [037](issues/037-render-phase-store-mutations.md) | Render-phase store mutations risk tearing under concurrent React | handles/react | — |
+| [038](issues/038-undo-partial-restore-and-rekey-desync.md) | Undo restores partial state and can desync across persist rekey | store/undo | — |
