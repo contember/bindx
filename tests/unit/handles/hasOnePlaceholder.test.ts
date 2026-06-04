@@ -6,6 +6,7 @@ import {
 	EntityHandle,
 	HasOneHandle,
 	SchemaRegistry,
+	FIELD_REF_META,
 	type SchemaDefinition,
 	type EntityAccessor,
 } from '@contember/bindx'
@@ -144,5 +145,43 @@ describe('Page → blocks → items chain', () => {
 			// fieldItems might be undefined for placeholder — that's OK if we handle it
 			expect(fieldItems === undefined || fieldItems === null || Array.isArray(fieldItems)).toBe(true)
 		}
+	})
+
+	// Regression: a has-many on a *disconnected* (placeholder) parent must carry FIELD_REF_META,
+	// exactly like the connected HasManyListHandle does. The BlockEditor reads
+	// `references[FIELD_REF_META]` unconditionally for its before-persist cleanup hook
+	// (`useEntityBeforePersist(parentMeta.entityType, parentMeta.entityId, …)`), so a missing
+	// symbol crashes on render with "Cannot read properties of undefined (reading 'entityType')"
+	// for any parent that has no connected entity yet (e.g. a Post with no Content row).
+	test('placeholder has-many exposes FIELD_REF_META (BlockEditor parentMeta)', () => {
+		store.setEntityData('Page', 'page-1', { id: 'page-1', title: 'Test' }, true)
+
+		const page = createPageEntity()
+		const blocks = page.blocks
+		expect(blocks.$state).toBe('disconnected')
+
+		const itemsRef = blocks.items as any
+		const meta = itemsRef[FIELD_REF_META]
+
+		// The exact dereference BlockEditor.tsx does — must not be undefined.
+		expect(meta).toBeDefined()
+		expect(meta.entityType).toBe('BlockList') // the placeholder entity that owns `items`
+		expect(typeof meta.entityId).toBe('string') // stable id the list collapses into on first add
+		expect(meta.entityId.length).toBeGreaterThan(0)
+		expect(meta.fieldName).toBe('items')
+		expect(meta.isArray).toBe(true)
+		expect(meta.isRelation).toBe(true)
+		expect(meta.targetType).toBe('Block') // has-many item type
+	})
+
+	test('placeholder has-many is a real accessor — getById is callable, items empty', () => {
+		store.setEntityData('Page', 'page-1', { id: 'page-1', title: 'Test' }, true)
+
+		const page = createPageEntity()
+		const itemsRef = page.blocks.items as any
+
+		// emptyHasMany lacked getById entirely (BlockEditor.getReferencedEntity → references.getById).
+		expect(typeof itemsRef.getById).toBe('function')
+		expect([...itemsRef.items]).toEqual([])
 	})
 })

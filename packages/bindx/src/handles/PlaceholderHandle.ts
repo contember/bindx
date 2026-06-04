@@ -19,6 +19,9 @@ import type {
 	EntityPersistingEvent,
 } from '../events/types.js'
 import { createHandleProxy } from './proxyFactory.js'
+import { HasManyListHandle } from './HasManyListHandle.js'
+import { generateTempId } from '../store/entityId.js'
+import { connectRelation } from '../core/actions.js'
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 
 /**
@@ -35,6 +38,12 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 
 	/** Placeholder ID for this handle */
 	private readonly placeholderId: string
+
+	/**
+	 * Stable temp id this placeholder collapses into once it must become a real entity
+	 * (the first time a child is added to one of its has-many relations). Lazily minted.
+	 */
+	private materializedId: string | null = null
 
 	private constructor(
 		private readonly parentEntityType: string,
@@ -147,23 +156,75 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	}
 
 	/**
+	 * Stable temp id this placeholder collapses into when it must become a real entity.
+	 */
+	private getMaterializedId(): string {
+		if (!this.materializedId) this.materializedId = generateTempId()
+		return this.materializedId
+	}
+
+	/**
+	 * Promotes this placeholder into a real (temp) entity connected to its parent relation.
+	 * Called lazily the first time a child is added to one of the placeholder's has-many
+	 * relations — a has-many child needs a real parent to belong to. The entity is seeded
+	 * with whatever placeholder scalar data was typed so far, then connected via the normal
+	 * create path, so persist collects both the entity and its children (see collectHasOne/
+	 * collectHasManyOperations → create). Idempotent.
+	 */
+	private materializeIntoParent(): void {
+		const tempId = this.getMaterializedId()
+		const relation = this.store.getRelation(this.parentEntityType, this.parentEntityId, this.fieldName)
+		if (relation?.currentId === tempId) return // already materialized
+		if (!this.store.getEntitySnapshot(this.targetType, tempId)) {
+			this.store.createEntity(this.targetType, { ...(relation?.placeholderData ?? {}), id: tempId })
+		}
+		this.dispatcher.dispatch(
+			connectRelation(this.parentEntityType, this.parentEntityId, this.fieldName, tempId, this.targetType),
+		)
+	}
+
+	/**
 	 * Creates a field handle for placeholder data.
-	 * For has-many relations, returns an empty has-many-like handle with items/map/length.
+	 * For has-many relations, returns a real (empty) has-many handle bound to this
+	 * placeholder entity, so it behaves identically to a connected one.
 	 */
 	private createPlaceholderFieldHandle(fieldName: string): unknown {
-		// For has-many relations, return an empty has-many-like handle
+		// For has-many relations, return a real HasManyListHandle bound to this placeholder's
+		// stable temp id. Hand-rolling a degenerate stub here used to drop FIELD_REF_META,
+		// getById and a working add() — which crashed the BlockEditor
+		// (`references[FIELD_REF_META].entityType`) on render for any parent without a
+		// connected entity yet. Reads stay empty (no snapshot for the temp id until something
+		// is added); the first add() promotes the placeholder into a real connected entity
+		// (materializeIntoParent) so the children — and the parent itself — round-trip on persist.
 		if (this.schema?.isHasMany(this.targetType, fieldName)) {
-			const emptyItems: EntityAccessor<object>[] = []
-			const emptyHasMany: Record<string, unknown> = {
-				get items() { return emptyItems },
-				get length() { return 0 },
-				map: () => [],
-				add: () => { throw new Error(`Cannot add items to disconnected has-many relation "${fieldName}" on placeholder entity`) },
-				remove: () => {},
-				$state: 'disconnected',
-				[Symbol.iterator]: () => emptyItems[Symbol.iterator](),
+			const itemType = this.schema.getRelationTarget(this.targetType, fieldName)
+			if (!itemType) {
+				throw new Error(`Field "${fieldName}" is not a relation on entity "${this.targetType}"`)
 			}
-			return emptyHasMany
+			const handle = HasManyListHandle.create(
+				this.targetType,
+				this.getMaterializedId(),
+				fieldName,
+				itemType,
+				this.store,
+				this.dispatcher,
+				this.schema,
+				this.__brands,
+			)
+			// Intercept add() to lazily promote the placeholder to a real entity first — a child
+			// can't belong to a parent that doesn't exist. Reads pass through untouched.
+			return new Proxy(handle as object, {
+				get: (target, prop, receiver) => {
+					const value = Reflect.get(target, prop, receiver)
+					if (prop === 'add' && typeof value === 'function') {
+						return (...args: unknown[]): unknown => {
+							this.materializeIntoParent()
+							return (value as (...a: unknown[]) => unknown).apply(target, args)
+						}
+					}
+					return value
+				},
+			})
 		}
 
 		const self = this
