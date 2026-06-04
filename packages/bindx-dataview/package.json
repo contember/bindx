@@ -1,6 +1,6 @@
 {
 	"name": "@contember/bindx-dataview",
-	"version": "0.1.40",
+	"version": "0.1.41",
 	"description": "Headless DataGrid and DataView components for bindx",
 	"type": "module",
 	"main": "./src/index.ts",
