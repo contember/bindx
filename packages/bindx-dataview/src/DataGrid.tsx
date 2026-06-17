@@ -18,6 +18,7 @@ import type { StateStorageOrName } from './stateStorage.js'
 import {
 	useBindxContext,
 	useEntityList,
+	useEntityCount,
 } from '@contember/bindx-react'
 import { useDataViewKey } from './DataViewKeyProvider.js'
 import { DataViewProvider, type DataViewContextValue, type DataViewLoaderState } from './DataViewContext.js'
@@ -108,6 +109,12 @@ function DataGridImpl<TRoleMap extends Record<string, object>>({
 	const items = result.$status === 'ready' ? result.items : []
 	const itemCount = items.length
 
+	// ---- Total count via a standalone count query (keyed on filter only) ----
+	const { count: totalCount } = useEntityCount(entity, {
+		filter: setup.combinedFilter,
+		refreshToken: setup.paging.totalCountRefreshToken,
+	})
+
 	// Update loader state
 	useEffect(() => {
 		if (result.$status === 'ready') {
@@ -120,12 +127,17 @@ function DataGridImpl<TRoleMap extends Record<string, object>>({
 		}
 	}, [result.$status])
 
-	// Update total count when data is ready
+	// Update total count from the count query. Falls back to the partial-page
+	// heuristic (last page returns fewer rows than the page size) when the count
+	// is not yet known — e.g. before it resolves or with adapters that don't
+	// implement count queries.
 	useEffect(() => {
-		if (result.$status === 'ready' && setup.paging.queryLimit !== undefined && setup.paging.queryOffset !== undefined && itemCount < setup.paging.queryLimit) {
+		if (totalCount !== null) {
+			setup.paging.setTotalCount(totalCount)
+		} else if (result.$status === 'ready' && setup.paging.queryLimit !== undefined && setup.paging.queryOffset !== undefined && itemCount < setup.paging.queryLimit) {
 			setup.paging.setTotalCount(setup.paging.queryOffset + itemCount)
 		}
-	}, [result.$status, itemCount, setup.paging.queryLimit, setup.paging.queryOffset, setup.paging.setTotalCount])
+	}, [totalCount, result.$status, itemCount, setup.paging.queryLimit, setup.paging.queryOffset, setup.paging.setTotalCount])
 
 	// ---- Reload ----
 	const [, setReloadCounter] = useState(0)

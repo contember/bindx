@@ -1,4 +1,4 @@
-import type { BackendAdapter, Query, QueryResult, QueryOptions, GetQuery, ListQuery, PersistResult, CreateResult, DeleteResult } from './types.js'
+import type { BackendAdapter, Query, QueryResult, QueryOptions, GetQuery, ListQuery, CountQuery, PersistResult, CreateResult, DeleteResult } from './types.js'
 import { MockQueryEngine } from './MockQueryEngine.js'
 
 /**
@@ -83,6 +83,8 @@ export class MockAdapter implements BackendAdapter {
 		return queries.map(q => {
 			if (q.type === 'get') {
 				return this.executeGet(q)
+			} else if (q.type === 'count') {
+				return this.executeCount(q)
 			} else {
 				return this.executeList(q)
 			}
@@ -147,6 +149,21 @@ export class MockAdapter implements BackendAdapter {
 		this.log('executeList result', results)
 
 		return { type: 'list', data: results }
+	}
+
+	private executeCount(query: CountQuery): QueryResult {
+		const entityStore = this.store[query.entityType]
+		if (!entityStore) {
+			return { type: 'count', count: 0 }
+		}
+
+		let entities = Object.values(entityStore)
+		if (query.filter) {
+			entities = this.queryEngine.filter(entities, query.filter as Record<string, unknown>)
+		}
+
+		this.log('executeCount result', entities.length)
+		return { type: 'count', count: entities.length }
 	}
 
 	async persist(

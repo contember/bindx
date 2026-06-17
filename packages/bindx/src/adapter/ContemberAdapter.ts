@@ -17,7 +17,7 @@ import {
 } from '@contember/bindx-client'
 import type { GraphQlClient } from '@contember/graphql-client'
 import type { QuerySpec, QueryFieldSpec } from '../selection/buildQuery.js'
-import type { BackendAdapter, Query, QueryResult, QueryOptions, GetQuery, ListQuery, PersistResult, CreateResult, DeleteResult } from './types.js'
+import type { BackendAdapter, Query, QueryResult, QueryOptions, GetQuery, ListQuery, CountQuery, PersistResult, CreateResult, DeleteResult } from './types.js'
 import type { ContemberMutationResult } from '../errors/pathMapper.js'
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 import { GraphQlField } from '@contember/graphql-builder'
@@ -56,6 +56,8 @@ export class ContemberAdapter implements BackendAdapter {
 
 			if (q.type === 'get') {
 				contentQueries[key] = this.buildGetQuery(q)
+			} else if (q.type === 'count') {
+				contentQueries[key] = this.buildCountQuery(q)
 			} else {
 				contentQueries[key] = this.buildListQuery(q)
 			}
@@ -74,6 +76,9 @@ export class ContemberAdapter implements BackendAdapter {
 			if (q.type === 'get') {
 				const unwrapped = data ? unwrapPaginateFields(data as Record<string, unknown>, q.spec) : null
 				return { type: 'get' as const, data: unwrapped }
+			} else if (q.type === 'count') {
+				const connection = data as { pageInfo?: { totalCount?: number } } | null
+				return { type: 'count' as const, count: connection?.pageInfo?.totalCount ?? 0 }
 			} else {
 				const items = (data ?? []) as readonly Record<string, unknown>[]
 				return { type: 'list' as const, data: items.map(item => unwrapPaginateFields(item, q.spec)) }
@@ -108,6 +113,23 @@ export class ContemberAdapter implements BackendAdapter {
 		return new ContentOperation(
 			'query',
 			`list${query.entityType}`,
+			args,
+			selectionSet,
+			value => value,
+		)
+	}
+
+	private buildCountQuery(query: CountQuery): ContentQuery<unknown> {
+		const args = buildListArgs(query.entityType, { filter: query.filter }, 'paginate')
+		const selectionSet = [
+			new GraphQlField(null, 'pageInfo', {}, [
+				new GraphQlField(null, 'totalCount'),
+			]),
+		]
+
+		return new ContentOperation(
+			'query',
+			`paginate${query.entityType}`,
 			args,
 			selectionSet,
 			value => value,

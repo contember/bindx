@@ -48,9 +48,22 @@ export interface ListQuery<TEntity = unknown> {
 }
 
 /**
+ * Query for the total number of entities matching a filter.
+ *
+ * Issued independently from {@link ListQuery} and keyed only on the filter
+ * (not on limit/offset/orderBy), so paging through a list does not recompute
+ * the count. Mirrors Contember's `paginate<Entity> { pageInfo { totalCount } }`.
+ */
+export interface CountQuery<TEntity = unknown> {
+	readonly type: 'count'
+	readonly entityType: string
+	readonly filter?: EntityWhere<TEntity>
+}
+
+/**
  * Union of all query types
  */
-export type Query<TEntity = unknown> = GetQuery | ListQuery<TEntity>
+export type Query<TEntity = unknown> = GetQuery | ListQuery<TEntity> | CountQuery<TEntity>
 
 /**
  * Result for a single get query
@@ -69,9 +82,17 @@ export interface ListQueryResult {
 }
 
 /**
+ * Result for a count query
+ */
+export interface CountQueryResult {
+	readonly type: 'count'
+	readonly count: number
+}
+
+/**
  * Union of query results
  */
-export type QueryResult = GetQueryResult | ListQueryResult
+export type QueryResult = GetQueryResult | ListQueryResult | CountQueryResult
 
 /**
  * Result of a persist operation.
