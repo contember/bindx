@@ -40,6 +40,12 @@ export {
 } from './useEntityList.js'
 
 export {
+	useEntityCount,
+	type UseEntityCountOptions,
+	type UseEntityCountResult,
+} from './useEntityCount.js'
+
+export {
 	ContemberBindxProvider,
 	schemaNamesToDef,
 } from './ContemberBindxProvider.js'

@@ -37,6 +37,7 @@ import type { FieldRef } from '@contember/bindx'
 import {
 	useBindxContext,
 	useEntityList,
+	useEntityCount,
 	createCollectorProxy,
 	mergeSelections,
 	collectSelection,
@@ -165,6 +166,12 @@ function SelectDataViewImpl({
 	const items = result.$status === 'ready' ? result.items : []
 	const itemCount = items.length
 
+	// ---- Total count via a standalone count query (keyed on filter only) ----
+	const { count: totalCount } = useEntityCount(options, {
+		filter: combinedFilter,
+		refreshToken: paging.totalCountRefreshToken,
+	})
+
 	// Update loader state
 	useEffect(() => {
 		if (result.$status === 'ready') {
@@ -177,12 +184,15 @@ function SelectDataViewImpl({
 		}
 	}, [result.$status])
 
-	// Update total count for paging
+	// Update total count from the count query, falling back to the partial-page
+	// heuristic until the count resolves.
 	useEffect(() => {
-		if (result.$status === 'ready' && paging.queryLimit !== undefined && paging.queryOffset !== undefined && itemCount < paging.queryLimit) {
+		if (totalCount !== null) {
+			paging.setTotalCount(totalCount)
+		} else if (result.$status === 'ready' && paging.queryLimit !== undefined && paging.queryOffset !== undefined && itemCount < paging.queryLimit) {
 			paging.setTotalCount(paging.queryOffset + itemCount)
 		}
-	}, [result.$status, itemCount, paging.queryLimit, paging.queryOffset, paging.setTotalCount])
+	}, [totalCount, result.$status, itemCount, paging.queryLimit, paging.queryOffset, paging.setTotalCount])
 
 	// ---- Reload ----
 	const [, setReloadCounter] = useState(0)

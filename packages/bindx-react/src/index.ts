@@ -204,6 +204,9 @@ export type {
 	ErrorEntityListResult,
 	ReadyEntityListResult,
 	UseEntityListResult,
+	// Count hook types
+	UseEntityCountOptions,
+	UseEntityCountResult,
 	// Persistence hook types
 	PersistApi,
 	EntityPersistApi,
@@ -290,6 +293,7 @@ export {
 	// Standalone hooks
 	useEntity,
 	useEntityList,
+	useEntityCount,
 	// Persistence
 	usePersist,
 	usePersistEntity,

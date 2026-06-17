@@ -260,6 +260,11 @@ export interface PagingStateResult {
 	setItemsPerPage(count: number | null): void
 	setTotalCount(count: number): void
 	refreshTotalCount(): void
+	/**
+	 * Increments whenever {@link refreshTotalCount} is called. A data source
+	 * computing the total (e.g. a count query) watches this to re-fetch.
+	 */
+	readonly totalCountRefreshToken: number
 	readonly queryLimit: number | undefined
 	readonly queryOffset: number | undefined
 }
@@ -327,9 +332,11 @@ export function usePagingState(options: UsePagingOptions = {}): PagingStateResul
 		[setItemsPerPageRaw, setPageIndex],
 	)
 
+	// Bump the refresh token so count-query consumers re-fetch. The previous
+	// total is kept (stale-while-revalidate) and overwritten once the new count
+	// resolves, avoiding a flash of "unknown total".
 	const refreshTotalCount = useCallback((): void => {
 		setRefreshCounter(c => c + 1)
-		setTotalCount(null)
 	}, [])
 
 	return {
@@ -345,6 +352,7 @@ export function usePagingState(options: UsePagingOptions = {}): PagingStateResul
 		setItemsPerPage,
 		setTotalCount,
 		refreshTotalCount,
+		totalCountRefreshToken: refreshCounter,
 		queryLimit: itemsPerPage ?? undefined,
 		queryOffset: itemsPerPage === null ? undefined : pageIndex * itemsPerPage,
 	}

@@ -6,7 +6,7 @@
  * uses internally, exposed for building custom grid/list UIs.
  */
 
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import type {
 	EntityDef,
 	EntityAccessor,
@@ -18,7 +18,7 @@ import type {
 	DataViewLayout,
 	SelectionValues,
 } from '@contember/bindx'
-import { useEntityList } from '@contember/bindx-react'
+import { useEntityList, useEntityCount } from '@contember/bindx-react'
 import {
 	useFilteringState,
 	useSortingState,
@@ -135,6 +135,19 @@ export function useDataView(
 	})
 
 	const items = result.$status === 'ready' ? result.items : []
+
+	// Total count via a standalone count query (keyed on filter only), so paging
+	// does not recompute it and "page X of Y" / jump-to-last work on full pages.
+	const { count: totalCount } = useEntityCount(entity, {
+		filter: combinedFilter,
+		refreshToken: paging.totalCountRefreshToken,
+	})
+	const { setTotalCount } = paging
+	useEffect(() => {
+		if (totalCount !== null) {
+			setTotalCount(totalCount)
+		}
+	}, [totalCount, setTotalCount])
 
 	return {
 		status: result.$status,
