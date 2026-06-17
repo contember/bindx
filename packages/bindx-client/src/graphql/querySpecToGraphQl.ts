@@ -130,6 +130,27 @@ function buildPaginateField(
 }
 
 /**
+ * Builds the selection set for a standalone count query.
+ *
+ * Generates:
+ * ```graphql
+ * pageInfo { totalCount }
+ * ```
+ *
+ * Must live here (and not in the adapter package) so the `GraphQlField` instances
+ * are created by the same `@contember/graphql-builder` copy that the query printer
+ * uses for `instanceof` checks — otherwise the selection set is silently dropped
+ * when a consumer resolves a divergent graphql-builder version for the two packages.
+ */
+export function buildCountSelection(): GraphQlSelectionSet {
+	return [
+		new GraphQlField(null, 'pageInfo', {}, [
+			new GraphQlField(null, 'totalCount'),
+		]),
+	]
+}
+
+/**
  * Transform function for unwrapping paginateRelation Connection format to flat arrays.
  *
  * Converts:

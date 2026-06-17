@@ -12,6 +12,7 @@ import {
 	buildDeleteArgs,
 	buildMutationSelection,
 	buildNodeSelectionFromMutationData,
+	buildCountSelection,
 	mutationFragments,
 	unwrapPaginateResult,
 } from '@contember/bindx-client'
@@ -20,7 +21,6 @@ import type { QuerySpec, QueryFieldSpec } from '../selection/buildQuery.js'
 import type { BackendAdapter, Query, QueryResult, QueryOptions, GetQuery, ListQuery, CountQuery, PersistResult, CreateResult, DeleteResult } from './types.js'
 import type { ContemberMutationResult } from '../errors/pathMapper.js'
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
-import { GraphQlField } from '@contember/graphql-builder'
 
 /**
  * Options for ContemberAdapter
@@ -121,11 +121,7 @@ export class ContemberAdapter implements BackendAdapter {
 
 	private buildCountQuery(query: CountQuery): ContentQuery<unknown> {
 		const args = buildListArgs(query.entityType, { filter: query.filter }, 'paginate')
-		const selectionSet = [
-			new GraphQlField(null, 'pageInfo', {}, [
-				new GraphQlField(null, 'totalCount'),
-			]),
-		]
+		const selectionSet = buildCountSelection()
 
 		return new ContentOperation(
 			'query',
