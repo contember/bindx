@@ -129,6 +129,6 @@ export { MutationFailedError } from './operations/index.js'
 export { ContentClient, type ContentClientOptions } from './client/index.js'
 
 // GraphQL internals (for advanced use)
-export { querySpecToGraphQl, unwrapPaginateResult, type QuerySpecContext } from './graphql/index.js'
+export { querySpecToGraphQl, buildCountSelection, unwrapPaginateResult, type QuerySpecContext } from './graphql/index.js'
 export { buildTypedArgs, buildListArgs, buildGetArgs, buildCreateArgs, buildUpdateArgs, buildUpsertArgs, buildDeleteArgs } from './graphql/index.js'
 export { mutationFragments, buildMutationSelection, buildNodeSelectionFromMutationData } from './graphql/index.js'
