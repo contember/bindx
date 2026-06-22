@@ -1109,6 +1109,8 @@ describe('SnapshotStore', () => {
 
 			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
 			store.setEntityData('Author', 'auth-1', { id: 'auth-1', name: 'John' }, true)
+			// Parent notification is derived from the live relation edge.
+			store.setRelation('Article', 'a-1', 'author', { currentId: 'auth-1', state: 'connected' })
 			store.registerParentChild('Article', 'a-1', 'Author', 'auth-1')
 			store.subscribeToEntity('Article', 'a-1', subscriber.fn)
 
@@ -1117,18 +1119,19 @@ describe('SnapshotStore', () => {
 			expect(subscriber.callCount()).toBeGreaterThan(0)
 		})
 
-		test('should unregister parent-child relationship', () => {
+		test('should stop propagating after the relation edge is disconnected', () => {
 			const subscriber = createMockSubscriber()
 
 			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
 			store.setEntityData('Author', 'auth-1', { id: 'auth-1', name: 'John' }, true)
-			store.registerParentChild('Article', 'a-1', 'Author', 'auth-1')
-			store.unregisterParentChild('Article', 'a-1', 'Author', 'auth-1')
+			store.setRelation('Article', 'a-1', 'author', { currentId: 'auth-1', state: 'connected' })
+			// Disconnecting the edge severs parent notification (no separate registry).
+			store.setRelation('Article', 'a-1', 'author', { currentId: null, state: 'disconnected' })
 			store.subscribeToEntity('Article', 'a-1', subscriber.fn)
 
 			store.setFieldValue('Author', 'auth-1', ['name'], 'Jane')
 
-			// Parent should not be notified after unregistering
+			// Parent should not be notified — there is no live edge to it.
 			expect(subscriber.callCount()).toBe(0)
 		})
 	})

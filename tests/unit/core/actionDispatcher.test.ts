@@ -704,20 +704,28 @@ describe('ActionDispatcher', () => {
 			expect(parentCallback).toHaveBeenCalled()
 		})
 
-		test('store.addToHasMany alone does NOT register parent-child', () => {
+		test('store.addToHasMany alone propagates: the live edge is the notification source', () => {
 			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
 			store.getOrCreateHasMany('Article', 'a-1', 'tags')
 			store.setEntityData('Tag', 't-1', { id: 't-1', name: 'JS' }, true)
 
-			// Use low-level store API directly (no dispatcher)
+			// Use low-level store API directly (no dispatcher). The has-many edge IS the
+			// single source of truth for parent notification — there is no separate
+			// parent-child registry to populate.
 			store.addToHasMany('Article', 'a-1', 'tags', 't-1')
 
 			const parentCallback = mock(() => {})
 			store.subscribeToEntity('Article', 'a-1', parentCallback)
 			parentCallback.mockClear()
 
-			// Modifying the child should NOT propagate — no parent-child registered
+			// Modifying the child propagates to the parent via the live relation edge.
 			store.setFieldValue('Tag', 't-1', ['name'], 'TypeScript')
+			expect(parentCallback).toHaveBeenCalled()
+
+			// Removing the edge severs propagation.
+			store.removeFromHasMany('Article', 'a-1', 'tags', 't-1', 'disconnect')
+			parentCallback.mockClear()
+			store.setFieldValue('Tag', 't-1', ['name'], 'JavaScript')
 			expect(parentCallback).not.toHaveBeenCalled()
 		})
 	})

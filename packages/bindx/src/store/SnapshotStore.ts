@@ -64,6 +64,10 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	constructor() {
 		this.reachability = new ReachabilityAnalyzer(this.entitySnapshots, this.meta, this.relations, this.roots)
 		this.dirtyTracker = new DirtyTracker(this.entitySnapshots, this.meta, this.relations, this.reachability)
+		// Parent re-render propagation is derived from the relation store's live
+		// edges — the single source of truth for relation membership — rather than
+		// a separate parent-child registry.
+		this.subscriptions.setParentKeyLookup(this.relations)
 		// The participants are visited in this exact order on every rekey — see the
 		// ordering contract in RekeyOrchestrator.rekey(). Propagation tracking lives
 		// on this store, so it joins as a small inline adapter.
@@ -823,19 +827,20 @@ export class SnapshotStore implements SnapshotVersionBumper {
 
 	// ==================== Parent-Child Relationships ====================
 
+	/**
+	 * Anchors a child under a parent relation. Parent re-render notification is now
+	 * DERIVED from the relation store's live edges (see
+	 * {@link SubscriptionManager.getParentKeys}), so the only remaining effect is
+	 * the reachability one: a child anchored by a parent relation is no longer a
+	 * top-level root; its reachability flows through the parent. (No-op for server
+	 * children that were never roots.)
+	 *
+	 * Callers (handles, the action dispatcher) keep calling this on connect so the
+	 * root-unregister stays centralized in one place.
+	 */
 	registerParentChild(parentType: string, parentId: string, childType: string, childId: string): void {
-		const parentKey = this.getEntityKey(parentType, parentId)
 		const childKey = this.getEntityKey(childType, childId)
-		this.subscriptions.registerParentChild(parentKey, childKey)
-		// A child anchored by a parent relation is no longer a top-level root; its
-		// reachability now flows through the parent. (No-op for server children.)
 		this.roots.unregister(childKey)
-	}
-
-	unregisterParentChild(parentType: string, parentId: string, childType: string, childId: string): void {
-		const parentKey = this.getEntityKey(parentType, parentId)
-		const childKey = this.getEntityKey(childType, childId)
-		this.subscriptions.unregisterParentChild(parentKey, childKey)
 	}
 
 	// ==================== Partial Snapshot Export/Import ====================

@@ -73,7 +73,7 @@ describe('Notification propagation', () => {
 		expect(parent.callCount()).toBe(1)
 	})
 
-	test('disconnect still notifies the former parent (current append-only behavior)', () => {
+	test('disconnect stops notifying the former parent', () => {
 		// Server parent A with a child B connected via has-one.
 		store.setEntityData('Author', 'author-1', { id: 'author-1', name: 'Alice' }, true)
 		store.setEntityData('Article', 'article-1', { id: 'article-1', title: 'Draft' }, true)
@@ -91,8 +91,8 @@ describe('Notification propagation', () => {
 		})
 		store.registerParentChild('Author', 'author-1', 'Article', 'article-1')
 
-		// "Disconnect" the child: clear the relation. Note that a relation disconnect
-		// does NOT call unregisterParentChild, so the parent link survives.
+		// "Disconnect" the child: clear the relation edge. Parent notification is now
+		// derived from the live relation edge, so clearing it severs the link.
 		store.setRelation('Author', 'author-1', 'featuredArticle', {
 			currentId: null,
 			state: 'disconnected',
@@ -105,17 +105,24 @@ describe('Notification propagation', () => {
 		// Mutate the now-disconnected child.
 		store.setFieldValue('Article', 'article-1', ['title'], 'Updated')
 
-		// LEAK: PR 7 will make a disconnected child stop notifying its former parent;
-		// this assertion will flip then.
-		expect(parent.callCount()).toBe(1)
+		// The former parent must NOT be notified — there is no live edge to it.
+		expect(parent.callCount()).toBe(0)
 	})
 
 	test('diamond: a shared child notifies both parents', () => {
-		// Child B connected to TWO parents A1 and A2.
+		// Child B connected to TWO parents A1 and A2 via live relation edges.
 		store.setEntityData('Author', 'author-1', { id: 'author-1', name: 'Alice' }, true)
 		store.setEntityData('Author', 'author-2', { id: 'author-2', name: 'Bob' }, true)
 		store.setEntityData('Article', 'article-1', { id: 'article-1', title: 'Draft' }, true)
 
+		store.setRelation('Author', 'author-1', 'featuredArticle', {
+			currentId: 'article-1',
+			state: 'connected',
+		})
+		store.setRelation('Author', 'author-2', 'featuredArticle', {
+			currentId: 'article-1',
+			state: 'connected',
+		})
 		store.registerParentChild('Author', 'author-1', 'Article', 'article-1')
 		store.registerParentChild('Author', 'author-2', 'Article', 'article-1')
 
