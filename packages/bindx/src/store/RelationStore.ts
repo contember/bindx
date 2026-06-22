@@ -1,5 +1,6 @@
 import type { HasOneRelationState } from '../handles/types.js'
 import type { EntitySnapshot } from './snapshots.js'
+import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
 
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
 	if (a.size !== b.size) return false
@@ -49,7 +50,7 @@ export interface StoredRelationState {
  * Relation keys use the format "parentType:parentId:fieldName".
  * Notification is handled by callers via callback returns.
  */
-export class RelationStore {
+export class RelationStore implements Rekeyable {
 	/** Relation states keyed by "parentType:parentId:fieldName" */
 	private readonly relationStates = new Map<string, StoredRelationState>()
 
@@ -832,6 +833,16 @@ export class RelationStore {
 				})
 			}
 		}
+	}
+
+	/**
+	 * Migrates an entity's relation state for a temp→persisted rekey: first the
+	 * relation/has-many keys it owns (the parent id in the key), then every value
+	 * reference to its id from other entities' relations.
+	 */
+	rekey(ctx: RekeyContext): void {
+		this.rekeyOwner(ctx.oldKeyPrefix, ctx.newKeyPrefix)
+		this.replaceEntityId(ctx.oldId, ctx.newId)
 	}
 
 	/**

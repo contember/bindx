@@ -1,6 +1,6 @@
 import type { LoadStatus } from './snapshots.js'
-import { isPersistedId, isPlaceholderId } from './entityId.js'
 import type { FieldError } from '../errors/types.js'
+import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
 
 /**
  * Entity load state tracking.
@@ -26,7 +26,7 @@ export interface EntityMeta {
  * Keys are pre-computed composite strings (e.g., "entityType:id").
  * Follows the same pattern as ErrorStore and RelationStore.
  */
-export class EntityMetaStore {
+export class EntityMetaStore implements Rekeyable {
 	/** Load states keyed by "entityType:id" */
 	private readonly loadStates = new Map<string, EntityLoadState>()
 
@@ -35,9 +35,6 @@ export class EntityMetaStore {
 
 	/** Persisting status keyed by "entityType:id" */
 	private readonly persistingEntities = new Set<string>()
-
-	/** Mapping from temp ID to persisted ID (keyed by "entityType:tempId") */
-	private readonly tempToPersistedId = new Map<string, string>()
 
 	/**
 	 * Monotonic counter bumped when reachability-relevant metadata changes —
@@ -118,65 +115,41 @@ export class EntityMetaStore {
 		}
 	}
 
-	// ==================== Temp ID Mapping ====================
-
-	mapTempIdToPersistedId(key: string, persistedId: string): void {
-		this.tempToPersistedId.set(key, persistedId)
-		this.setExistsOnServer(key, true)
-	}
-
-	getPersistedId(key: string, id: string): string | null {
-		if (isPlaceholderId(id)) return null
-		if (isPersistedId(id)) return id
-		return this.tempToPersistedId.get(key) ?? null
-	}
-
-	isNewEntity(key: string, id: string): boolean {
-		if (isPlaceholderId(id)) return true
-		if (isPersistedId(id)) return false
-		return !this.tempToPersistedId.has(key)
-	}
-
 	/**
-	 * Removes all metadata for an entity (load state, meta, persisting, temp mapping).
+	 * Removes all metadata for an entity (load state, meta, persisting).
 	 */
 	remove(key: string): void {
 		this.loadStates.delete(key)
 		this.entityMetas.delete(key)
 		this.persistingEntities.delete(key)
-		this.tempToPersistedId.delete(key)
 		this.mutationVersion++
 	}
 
 	/**
-	 * Moves all metadata from oldKey to newKey.
+	 * Moves all metadata from the temp key to the persisted key. The entity has
+	 * just been confirmed by the server, so it is also marked as existing there
+	 * (this replaces the former separate mapTempIdToPersistedId step).
 	 */
-	rekey(oldKey: string, newKey: string): void {
-		const meta = this.entityMetas.get(oldKey)
+	rekey(ctx: RekeyContext): void {
+		const meta = this.entityMetas.get(ctx.oldKey)
 		if (meta) {
-			this.entityMetas.delete(oldKey)
-			this.entityMetas.set(newKey, meta)
+			this.entityMetas.delete(ctx.oldKey)
+			this.entityMetas.set(ctx.newKey, meta)
 		}
 
-		const loadState = this.loadStates.get(oldKey)
+		const loadState = this.loadStates.get(ctx.oldKey)
 		if (loadState) {
-			this.loadStates.delete(oldKey)
-			this.loadStates.set(newKey, loadState)
+			this.loadStates.delete(ctx.oldKey)
+			this.loadStates.set(ctx.newKey, loadState)
 		}
 
-		if (this.persistingEntities.has(oldKey)) {
-			this.persistingEntities.delete(oldKey)
-			this.persistingEntities.add(newKey)
-		}
-
-		// Move temp ID mapping
-		const persistedId = this.tempToPersistedId.get(oldKey)
-		if (persistedId !== undefined) {
-			this.tempToPersistedId.delete(oldKey)
-			this.tempToPersistedId.set(newKey, persistedId)
+		if (this.persistingEntities.has(ctx.oldKey)) {
+			this.persistingEntities.delete(ctx.oldKey)
+			this.persistingEntities.add(ctx.newKey)
 		}
 
 		this.mutationVersion++
+		this.setExistsOnServer(ctx.newKey, true)
 	}
 
 	// ==================== Bulk Operations ====================
@@ -205,7 +178,6 @@ export class EntityMetaStore {
 		this.loadStates.clear()
 		this.entityMetas.clear()
 		this.persistingEntities.clear()
-		this.tempToPersistedId.clear()
 		this.mutationVersion++
 	}
 }

@@ -15,6 +15,7 @@ import { DirtyTracker } from './DirtyTracker.js'
 import { EntitySnapshotStore } from './EntitySnapshotStore.js'
 import { RootRegistry } from './RootRegistry.js'
 import { ReachabilityAnalyzer } from './ReachabilityAnalyzer.js'
+import { RekeyOrchestrator } from './RekeyOrchestrator.js'
 
 export type { HasManyRemovalType, StoredHasManyState, StoredRelationState } from './RelationStore.js'
 export type { EntityMeta } from './EntityMetaStore.js'
@@ -49,6 +50,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	private readonly roots = new RootRegistry()
 	private readonly reachability: ReachabilityAnalyzer
 	private readonly dirtyTracker: DirtyTracker
+	private readonly rekeyOrchestrator: RekeyOrchestrator
 
 	/**
 	 * Tracks the last embedded data reference propagated from parent to child.
@@ -61,16 +63,25 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	constructor() {
 		this.reachability = new ReachabilityAnalyzer(this.entitySnapshots, this.meta, this.relations, this.roots)
 		this.dirtyTracker = new DirtyTracker(this.entitySnapshots, this.meta, this.relations, this.reachability)
+		// The participants are visited in this exact order on every rekey — see the
+		// ordering contract in RekeyOrchestrator.rekey(). Propagation tracking lives
+		// on this store, so it joins as a small inline adapter.
+		this.rekeyOrchestrator = new RekeyOrchestrator([
+			this.roots,
+			this.entitySnapshots,
+			this.meta,
+			this.subscriptions,
+			this.relations,
+			this.errors,
+			this.touched,
+			{ rekey: ctx => this.rekeyPropagatedData(ctx.oldKeyPrefix, ctx.newKeyPrefix) },
+		])
 	}
 
 	// ==================== Key Generation ====================
 
-	/** Maps temp ID entity keys to their persisted ID entity keys for transparent resolution */
-	private readonly rekeyedEntities = new Map<string, string>()
-
 	private getEntityKey(entityType: string, id: string): string {
-		const key = `${entityType}:${id}`
-		return this.rekeyedEntities.get(key) ?? key
+		return this.rekeyOrchestrator.resolveKey(entityType, id)
 	}
 
 	private getRelationKey(parentType: string, parentId: string, fieldName: string): string {
@@ -82,13 +93,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	 * Resolves an ID to its persisted ID if it has been rekeyed.
 	 */
 	private resolveId(entityType: string, id: string): string {
-		const key = `${entityType}:${id}`
-		const rekeyed = this.rekeyedEntities.get(key)
-		if (rekeyed) {
-			// Extract the ID from the rekeyed key (format: "EntityType:id")
-			return rekeyed.slice(entityType.length + 1)
-		}
-		return id
+		return this.rekeyOrchestrator.resolveId(entityType, id)
 	}
 
 	// ==================== SnapshotVersionBumper ====================
@@ -367,52 +372,20 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	}
 
 	mapTempIdToPersistedId(entityType: string, tempId: string, persistedId: string): void {
-		// Use raw keys (bypass resolveId) since we're the ones creating the mapping
-		const oldKey = `${entityType}:${tempId}`
-		const newKey = `${entityType}:${persistedId}`
-		const oldKeyPrefix = `${entityType}:${tempId}:`
-		const newKeyPrefix = `${entityType}:${persistedId}:`
+		// The orchestrator owns the temp→persisted redirect and drives the rekey
+		// fan-out across every sub-store in its documented order.
+		this.rekeyOrchestrator.rekey(entityType, tempId, persistedId)
 
-		// Register redirect so future lookups by temp ID resolve to persisted key
-		this.rekeyedEntities.set(oldKey, newKey)
-
-		// Keep root registration consistent across the rekey (the persisted entity
-		// is now a server root via existsOnServer, but keep the registry aligned).
-		this.roots.rekey(oldKey, newKey)
-
-		// Rekey entity snapshot (moves data, updates id field)
-		this.entitySnapshots.rekey(oldKey, newKey, persistedId)
-
-		// Rekey metadata FIRST, then set persisted mapping (which sets existsOnServer)
-		this.meta.rekey(oldKey, newKey)
-		this.meta.mapTempIdToPersistedId(newKey, persistedId)
-
-		// Rekey subscriptions, parent-child relationships, and relation subscribers
-		this.subscriptions.rekey(oldKey, newKey, oldKeyPrefix, newKeyPrefix)
-
-		// Rekey relations/hasMany owned by this entity (parent key changes)
-		this.relations.rekeyOwner(oldKeyPrefix, newKeyPrefix)
-
-		// Replace tempId with persistedId in all relation/hasMany VALUE references
-		this.relations.replaceEntityId(tempId, persistedId)
-
-		// Rekey errors, touched state, and propagation tracking
-		this.errors.rekey(oldKey, newKey, oldKeyPrefix, newKeyPrefix)
-		this.touched.rekey(oldKeyPrefix, newKeyPrefix)
-		this.rekeyPropagatedData(oldKeyPrefix, newKeyPrefix)
-
-		// Notify on the NEW key so React picks up the change
-		this.notifyEntitySubscribers(newKey)
+		// Notify on the NEW key so React picks up the change.
+		this.notifyEntitySubscribers(`${entityType}:${persistedId}`)
 	}
 
 	getPersistedId(entityType: string, id: string): string | null {
-		const key = this.getEntityKey(entityType, id)
-		return this.meta.getPersistedId(key, id)
+		return this.rekeyOrchestrator.getPersistedId(entityType, id)
 	}
 
 	isNewEntity(entityType: string, id: string): boolean {
-		const key = this.getEntityKey(entityType, id)
-		return this.meta.isNewEntity(key, id)
+		return this.rekeyOrchestrator.isNewEntity(entityType, id)
 	}
 
 	// ==================== Has-Many State (delegated to RelationStore) ====================
@@ -953,6 +926,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		this.errors.clear()
 		this.touched.clear()
 		this.roots.clear()
+		this.rekeyOrchestrator.clear()
 		this.lastPropagatedData.clear()
 
 		this.subscriptions.notify()
