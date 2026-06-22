@@ -792,28 +792,6 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		this.relations.resetAllRelations(keyPrefix)
 	}
 
-	getAllRelationsForEntity(entityType: string, entityId: string): Map<string, StoredRelationState> {
-		const keyPrefix = `${entityType}:${entityId}:`
-		return this.relations.getAllRelationsForEntity(keyPrefix)
-	}
-
-	getAllHasManyForEntity(entityType: string, entityId: string): Map<string, StoredHasManyState> {
-		const keyPrefix = `${entityType}:${entityId}:`
-		return this.relations.getAllHasManyForEntity(keyPrefix)
-	}
-
-	restoreHasManyState(
-		parentType: string,
-		parentId: string,
-		fieldName: string,
-		state: StoredHasManyState,
-		alias?: string,
-	): void {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		this.relations.restoreHasManyState(key, state)
-		this.notifyRelationSubscribers(key)
-	}
-
 	// ==================== Subscriptions (delegated to SubscriptionManager) ====================
 
 	subscribeToEntity(entityType: string, id: string, callback: Subscriber): () => void {
