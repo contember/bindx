@@ -470,7 +470,9 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		alias?: string,
 	): Set<string> | undefined {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		return this.relations.getHasMany(key)?.plannedConnections
+		const state = this.relations.getHasMany(key)
+		if (!state) return undefined
+		return new Set(state.plannedAdditions.keys())
 	}
 
 	commitHasMany(
@@ -568,7 +570,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	): boolean {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		const state = this.relations.getHasMany(key)
-		return state?.createdEntities.has(itemId) ?? false
+		return state?.plannedAdditions.get(itemId) === 'created'
 	}
 
 	getHasManyCreatedEntities(
@@ -578,7 +580,13 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		alias?: string,
 	): Set<string> | undefined {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		return this.relations.getHasMany(key)?.createdEntities
+		const state = this.relations.getHasMany(key)
+		if (!state) return undefined
+		const created = new Set<string>()
+		for (const [id, kind] of state.plannedAdditions) {
+			if (kind === 'created') created.add(id)
+		}
+		return created
 	}
 
 	// ==================== Persisting State (delegated to EntityMetaStore) ====================

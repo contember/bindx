@@ -372,8 +372,8 @@ describe('HasManyListHandle', () => {
 			handle.remove(tempId)
 
 			const state = store.getHasMany('Article', 'a-1', 'tags')
-			expect(state?.createdEntities.has(tempId)).toBe(false)
-			expect(state?.plannedConnections.has(tempId)).toBe(false)
+			expect(state?.plannedAdditions.get(tempId) === 'created').toBe(false)
+			expect(state?.plannedAdditions.has(tempId)).toBe(false)
 		})
 
 		test('should remove server entity — manyHasMany uses disconnect', () => {
@@ -564,8 +564,8 @@ describe('HasManyListHandle', () => {
 			handle.remove(tempId)
 
 			const state = store.getHasMany('Article', 'a-1', 'comments')
-			expect(state?.createdEntities.has(tempId)).toBe(false)
-			expect(state?.plannedConnections.has(tempId)).toBe(false)
+			expect(state?.plannedAdditions.get(tempId) === 'created').toBe(false)
+			expect(state?.plannedAdditions.has(tempId)).toBe(false)
 			// No planned removal — the add was cancelled, not a delete
 			expect(state?.plannedRemovals.has(tempId)).toBe(false)
 		})
@@ -605,8 +605,8 @@ describe('HasManyListHandle', () => {
 
 			const state = store.getHasMany('Article', 'a-1', 'tags')
 			expect(state?.plannedRemovals.has(tempId)).toBe(false)
-			expect(state?.plannedConnections.has(tempId)).toBe(false)
-			expect(state?.createdEntities.has(tempId)).toBe(false)
+			expect(state?.plannedAdditions.has(tempId)).toBe(false)
+			expect(state?.plannedAdditions.get(tempId) === 'created').toBe(false)
 			expect(handle.items.length).toBe(0)
 		})
 
@@ -625,8 +625,8 @@ describe('HasManyListHandle', () => {
 
 			const state = store.getHasMany('Article', 'a-1', 'tags')
 			expect(state?.plannedRemovals.has(tempId)).toBe(false)
-			expect(state?.plannedConnections.has(tempId)).toBe(false)
-			expect(state?.createdEntities.has(tempId)).toBe(false)
+			expect(state?.plannedAdditions.has(tempId)).toBe(false)
+			expect(state?.plannedAdditions.get(tempId) === 'created').toBe(false)
 			expect(handle.items.length).toBe(0)
 		})
 	})
@@ -825,7 +825,7 @@ describe('HasManyListHandle', () => {
 
 			const state = store.getHasMany('Article', 'a-1', 'tags')
 			expect(state?.plannedRemovals.size).toBe(0)
-			expect(state?.plannedConnections.size).toBe(0)
+			expect(state?.plannedAdditions.size).toBe(0)
 		})
 	})
 
@@ -1029,7 +1029,7 @@ describe('HasManyListHandle', () => {
 			handle.connect('t-1')
 
 			const state = store.getHasMany('Article', 'a-1', 'tags')
-			expect(state?.plannedConnections.has('t-1')).toBe(false)
+			expect(state?.plannedAdditions.has('t-1')).toBe(false)
 		})
 
 		test('interceptor can cancel disconnect()', () => {

@@ -16,19 +16,30 @@ function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
 export type HasManyRemovalType = 'disconnect' | 'delete'
 
 /**
+ * Kind of a planned has-many addition:
+ *   - 'created': a newly created entity (via add())
+ *   - 'connected': an existing persisted entity being connected (via connect())
+ */
+export type HasManyAdditionKind = 'created' | 'connected'
+
+/**
  * Has-many list state stored in SnapshotStore
  */
 export interface StoredHasManyState {
 	/** IDs of items from server */
 	serverIds: Set<string>
-	/** Explicit ordered list of item IDs, null means use default order (serverIds + plannedConnections) */
+	/** Explicit ordered list of item IDs, null means use default order (serverIds + plannedAdditions) */
 	orderedIds: string[] | null
 	/** Planned removals (disconnect or delete) keyed by entity ID */
 	plannedRemovals: Map<string, HasManyRemovalType>
-	/** Planned connections (IDs to add to the list) */
-	plannedConnections: Set<string>
-	/** Entity IDs created via add() - tracked for proper remove() semantics and mutation generation */
-	createdEntities: Set<string>
+	/**
+	 * Planned additions (IDs to add to the list) keyed by entity ID, with the
+	 * value distinguishing newly CREATED entities (add()) from existing PERSISTED
+	 * entities being CONNECTED (connect()). The keys are exactly the connections;
+	 * the keys whose value is 'created' are exactly the created entities, so the
+	 * "created ⊆ connections" invariant is structural.
+	 */
+	plannedAdditions: Map<string, HasManyAdditionKind>
 	version: number
 }
 
@@ -188,8 +199,7 @@ export class RelationStore implements Rekeyable {
 				serverIds: new Set(serverIds ?? []),
 				orderedIds: null,
 				plannedRemovals: new Map(),
-				plannedConnections: new Set(),
-				createdEntities: new Set(),
+				plannedAdditions: new Map(),
 				version: 0,
 			})
 		} else if (serverIds !== undefined) {
@@ -225,8 +235,7 @@ export class RelationStore implements Rekeyable {
 				serverIds: new Set(serverIds),
 				orderedIds: null,
 				plannedRemovals: new Map(),
-				plannedConnections: new Set(),
-				createdEntities: new Set(),
+				plannedAdditions: new Map(),
 				version: 0,
 			})
 		} else {
@@ -250,27 +259,23 @@ export class RelationStore implements Rekeyable {
 				serverIds: new Set(),
 				orderedIds: null,
 				plannedRemovals: new Map([[itemId, type]]),
-				plannedConnections: new Set(),
-				createdEntities: new Set(),
+				plannedAdditions: new Map(),
 				version: 0,
 			})
 		} else {
 			const newPlannedRemovals = new Map(existing.plannedRemovals)
 			newPlannedRemovals.set(itemId, type)
-			const newPlannedConnections = new Set(existing.plannedConnections)
-			newPlannedConnections.delete(itemId)
+			const newPlannedAdditions = new Map(existing.plannedAdditions)
+			newPlannedAdditions.delete(itemId)
 			let newOrderedIds = existing.orderedIds
 			if (newOrderedIds !== null) {
 				newOrderedIds = newOrderedIds.filter(id => id !== itemId)
 			}
-			const newCreatedEntities = new Set(existing.createdEntities)
-			newCreatedEntities.delete(itemId)
 			this.writeHasMany(key, {
 				...existing,
 				orderedIds: newOrderedIds,
 				plannedRemovals: newPlannedRemovals,
-				plannedConnections: newPlannedConnections,
-				createdEntities: newCreatedEntities,
+				plannedAdditions: newPlannedAdditions,
 				version: existing.version + 1,
 			})
 		}
@@ -287,13 +292,15 @@ export class RelationStore implements Rekeyable {
 				serverIds: new Set(),
 				orderedIds: null,
 				plannedRemovals: new Map(),
-				plannedConnections: new Set([itemId]),
-				createdEntities: new Set(),
+				plannedAdditions: new Map([[itemId, 'connected']]),
 				version: 0,
 			})
 		} else {
-			const newPlannedConnections = new Set(existing.plannedConnections)
-			newPlannedConnections.add(itemId)
+			const newPlannedAdditions = new Map(existing.plannedAdditions)
+			// Do not downgrade an existing 'created' addition to 'connected'.
+			if (newPlannedAdditions.get(itemId) !== 'created') {
+				newPlannedAdditions.set(itemId, 'connected')
+			}
 			const newPlannedRemovals = new Map(existing.plannedRemovals)
 			newPlannedRemovals.delete(itemId)
 			let newOrderedIds = existing.orderedIds
@@ -303,7 +310,7 @@ export class RelationStore implements Rekeyable {
 			this.writeHasMany(key, {
 				...existing,
 				orderedIds: newOrderedIds,
-				plannedConnections: newPlannedConnections,
+				plannedAdditions: newPlannedAdditions,
 				plannedRemovals: newPlannedRemovals,
 				version: existing.version + 1,
 			})
@@ -320,8 +327,7 @@ export class RelationStore implements Rekeyable {
 			serverIds: new Set(newServerIds),
 			orderedIds: null,
 			plannedRemovals: new Map(),
-			plannedConnections: new Set(),
-			createdEntities: new Set(),
+			plannedAdditions: new Map(),
 			version: (existing?.version ?? 0) + 1,
 		})
 	}
@@ -337,8 +343,7 @@ export class RelationStore implements Rekeyable {
 			serverIds: existing.serverIds,
 			orderedIds: null,
 			plannedRemovals: new Map(),
-			plannedConnections: new Set(),
-			createdEntities: new Set(),
+			plannedAdditions: new Map(),
 			version: existing.version + 1,
 		})
 	}
@@ -355,22 +360,18 @@ export class RelationStore implements Rekeyable {
 				serverIds: new Set(),
 				orderedIds: [itemId],
 				plannedRemovals: new Map(),
-				plannedConnections: new Set([itemId]),
-				createdEntities: new Set([itemId]),
+				plannedAdditions: new Map([[itemId, 'created']]),
 				version: 0,
 			})
 		} else {
-			const newPlannedConnections = new Set(existing.plannedConnections)
-			newPlannedConnections.add(itemId)
-			const newCreatedEntities = new Set(existing.createdEntities)
-			newCreatedEntities.add(itemId)
+			const newPlannedAdditions = new Map(existing.plannedAdditions)
+			newPlannedAdditions.set(itemId, 'created')
 			const currentOrderedIds = existing.orderedIds ?? computeDefaultOrderedIds(existing)
 			const newOrderedIds = [...currentOrderedIds, itemId]
 			this.writeHasMany(key, {
 				...existing,
 				orderedIds: newOrderedIds,
-				plannedConnections: newPlannedConnections,
-				createdEntities: newCreatedEntities,
+				plannedAdditions: newPlannedAdditions,
 				version: existing.version + 1,
 			})
 		}
@@ -378,8 +379,8 @@ export class RelationStore implements Rekeyable {
 
 	/**
 	 * Connects an existing (persisted) entity to a has-many relation.
-	 * Unlike addToHasMany, does NOT add to createdEntities — used for
-	 * materializing embedded connect references to existing entities.
+	 * Unlike addToHasMany, records the addition as 'connected' (not 'created') —
+	 * used for materializing embedded connect references to existing entities.
 	 */
 	connectExistingToHasMany(key: string, itemId: string): void {
 		const existing = this.hasManyStates.get(key)
@@ -389,19 +390,21 @@ export class RelationStore implements Rekeyable {
 				serverIds: new Set(),
 				orderedIds: [itemId],
 				plannedRemovals: new Map(),
-				plannedConnections: new Set([itemId]),
-				createdEntities: new Set(),
+				plannedAdditions: new Map([[itemId, 'connected']]),
 				version: 0,
 			})
 		} else {
-			const newPlannedConnections = new Set(existing.plannedConnections)
-			newPlannedConnections.add(itemId)
+			const newPlannedAdditions = new Map(existing.plannedAdditions)
+			// Do not downgrade an existing 'created' addition to 'connected'.
+			if (newPlannedAdditions.get(itemId) !== 'created') {
+				newPlannedAdditions.set(itemId, 'connected')
+			}
 			const currentOrderedIds = existing.orderedIds ?? computeDefaultOrderedIds(existing)
 			const newOrderedIds = [...currentOrderedIds, itemId]
 			this.writeHasMany(key, {
 				...existing,
 				orderedIds: newOrderedIds,
-				plannedConnections: newPlannedConnections,
+				plannedAdditions: newPlannedAdditions,
 				version: existing.version + 1,
 			})
 		}
@@ -417,13 +420,11 @@ export class RelationStore implements Rekeyable {
 		const existing = this.hasManyStates.get(key)
 		if (!existing) return false
 
-		const isCreatedEntity = existing.createdEntities.has(itemId)
+		const isCreatedEntity = existing.plannedAdditions.get(itemId) === 'created'
 
 		if (isCreatedEntity) {
-			const newPlannedConnections = new Set(existing.plannedConnections)
-			newPlannedConnections.delete(itemId)
-			const newCreatedEntities = new Set(existing.createdEntities)
-			newCreatedEntities.delete(itemId)
+			const newPlannedAdditions = new Map(existing.plannedAdditions)
+			newPlannedAdditions.delete(itemId)
 			let newOrderedIds = existing.orderedIds
 			if (newOrderedIds !== null) {
 				newOrderedIds = newOrderedIds.filter(id => id !== itemId)
@@ -432,14 +433,12 @@ export class RelationStore implements Rekeyable {
 			const newState: StoredHasManyState = {
 				...existing,
 				orderedIds: newOrderedIds,
-				plannedConnections: newPlannedConnections,
-				createdEntities: newCreatedEntities,
+				plannedAdditions: newPlannedAdditions,
 				version: existing.version + 1,
 			}
 
 			if (
-				newPlannedConnections.size === 0 &&
-				newCreatedEntities.size === 0 &&
+				newPlannedAdditions.size === 0 &&
 				existing.plannedRemovals.size === 0 &&
 				newOrderedIds !== null
 			) {
@@ -466,8 +465,8 @@ export class RelationStore implements Rekeyable {
 	 *   - has-one: currentId, when the relation is not disconnected/deleted
 	 *     (a disconnected relation has a null currentId; a 'deleted' relation is
 	 *     removing its target, so the target is not anchored by it).
-	 *   - has-many: effective members = (serverIds ∪ plannedConnections ∪
-	 *     createdEntities) minus plannedRemovals.
+	 *   - has-many: effective members = (serverIds ∪ plannedAdditions.keys())
+	 *     minus plannedRemovals.
 	 */
 	getLiveChildIds(keyPrefix: string): string[] {
 		const ids = new Set<string>()
@@ -484,10 +483,7 @@ export class RelationStore implements Rekeyable {
 			for (const id of state.serverIds) {
 				if (!state.plannedRemovals.has(id)) ids.add(id)
 			}
-			for (const id of state.plannedConnections) {
-				if (!state.plannedRemovals.has(id)) ids.add(id)
-			}
-			for (const id of state.createdEntities) {
+			for (const id of state.plannedAdditions.keys()) {
 				if (!state.plannedRemovals.has(id)) ids.add(id)
 			}
 		}
@@ -508,7 +504,7 @@ export class RelationStore implements Rekeyable {
 	 * Liveness matches {@link getLiveChildIds} EXACTLY so the two never disagree:
 	 *   - has-one: currentId === childId, when the relation is not 'deleted'
 	 *     (a disconnected relation has a null currentId and is skipped);
-	 *   - has-many: childId ∈ (serverIds ∪ plannedConnections ∪ createdEntities)
+	 *   - has-many: childId ∈ (serverIds ∪ plannedAdditions.keys())
 	 *     and childId ∉ plannedRemovals.
 	 *
 	 * Implemented as an on-demand scan of the live edges rather than an
@@ -527,11 +523,7 @@ export class RelationStore implements Rekeyable {
 
 		for (const [key, state] of this.hasManyStates) {
 			if (state.plannedRemovals.has(childId)) continue
-			if (
-				state.serverIds.has(childId) ||
-				state.plannedConnections.has(childId) ||
-				state.createdEntities.has(childId)
-			) {
+			if (state.serverIds.has(childId) || state.plannedAdditions.has(childId)) {
 				parents.add(parentKeyFromRelationKey(key))
 			}
 		}
@@ -618,7 +610,7 @@ export class RelationStore implements Rekeyable {
 				for (const removedId of state.plannedRemovals.keys()) {
 					newServerIds.delete(removedId)
 				}
-				for (const connectedId of state.plannedConnections) {
+				for (const connectedId of state.plannedAdditions.keys()) {
 					newServerIds.add(connectedId)
 				}
 				this.commitHasMany(key, Array.from(newServerIds))
@@ -668,7 +660,7 @@ export class RelationStore implements Rekeyable {
 			if (!key.startsWith(keyPrefix)) continue
 			const fieldName = key.slice(keyPrefix.length)
 
-			if (state.plannedRemovals.size > 0 || state.plannedConnections.size > 0) {
+			if (state.plannedRemovals.size > 0 || state.plannedAdditions.size > 0) {
 				dirtyRelations.push(fieldName)
 			}
 		}
@@ -707,8 +699,7 @@ export class RelationStore implements Rekeyable {
 					serverIds: new Set(state.serverIds),
 					orderedIds: state.orderedIds ? [...state.orderedIds] : null,
 					plannedRemovals: new Map(state.plannedRemovals),
-					plannedConnections: new Set(state.plannedConnections),
-					createdEntities: new Set(state.createdEntities),
+					plannedAdditions: new Map(state.plannedAdditions),
 					version: state.version,
 				})
 			}
@@ -743,8 +734,7 @@ export class RelationStore implements Rekeyable {
 				serverIds: new Set(state.serverIds),
 				orderedIds: state.orderedIds ? [...state.orderedIds] : null,
 				plannedRemovals: new Map(state.plannedRemovals),
-				plannedConnections: new Set(state.plannedConnections),
-				createdEntities: new Set(state.createdEntities),
+				plannedAdditions: new Map(state.plannedAdditions),
 				version: state.version + 1,
 			})
 			keys.push(key)
@@ -771,7 +761,7 @@ export class RelationStore implements Rekeyable {
 			}
 		}
 
-		// Replace in has-many states: serverIds, orderedIds, plannedConnections, createdEntities, plannedRemovals
+		// Replace in has-many states: serverIds, orderedIds, plannedAdditions, plannedRemovals
 		for (const [key, state] of this.hasManyStates) {
 			let changed = false
 
@@ -793,19 +783,12 @@ export class RelationStore implements Rekeyable {
 				}
 			}
 
-			let plannedConnections = state.plannedConnections
-			if (plannedConnections.has(oldId)) {
-				plannedConnections = new Set(plannedConnections)
-				plannedConnections.delete(oldId)
-				plannedConnections.add(newId)
-				changed = true
-			}
-
-			let createdEntities = state.createdEntities
-			if (createdEntities.has(oldId)) {
-				createdEntities = new Set(createdEntities)
-				createdEntities.delete(oldId)
-				createdEntities.add(newId)
+			let plannedAdditions = state.plannedAdditions
+			const additionKind = plannedAdditions.get(oldId)
+			if (additionKind !== undefined) {
+				plannedAdditions = new Map(plannedAdditions)
+				plannedAdditions.delete(oldId)
+				plannedAdditions.set(newId, additionKind)
 				changed = true
 			}
 
@@ -823,8 +806,7 @@ export class RelationStore implements Rekeyable {
 					serverIds,
 					orderedIds,
 					plannedRemovals,
-					plannedConnections,
-					createdEntities,
+					plannedAdditions,
 					version: state.version + 1,
 				})
 			}
@@ -893,7 +875,7 @@ function parentKeyFromRelationKey(relationKey: string): string {
 
 /**
  * Computes the default ordered IDs for a has-many relation.
- * Order is: serverIds (minus removals) + plannedConnections
+ * Order is: serverIds (minus removals) + plannedAdditions
  */
 export function computeDefaultOrderedIds(state: StoredHasManyState): string[] {
 	const result: string[] = []
@@ -904,7 +886,7 @@ export function computeDefaultOrderedIds(state: StoredHasManyState): string[] {
 		}
 	}
 
-	for (const id of state.plannedConnections) {
+	for (const id of state.plannedAdditions.keys()) {
 		if (!result.includes(id)) {
 			result.push(id)
 		}
