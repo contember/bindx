@@ -39,6 +39,18 @@ export class EntityMetaStore {
 	/** Mapping from temp ID to persisted ID (keyed by "entityType:tempId") */
 	private readonly tempToPersistedId = new Map<string, string>()
 
+	/**
+	 * Monotonic counter bumped when reachability-relevant metadata changes —
+	 * `existsOnServer` and `isPersisting` (which seed the reachability roots) plus
+	 * entity removal/rekey. Load state and deletion scheduling do NOT bump it.
+	 * Used by {@link ReachabilityAnalyzer} to memoize its walk.
+	 */
+	private mutationVersion = 0
+
+	getMutationVersion(): number {
+		return this.mutationVersion
+	}
+
 	// ==================== Load State ====================
 
 	getLoadState(key: string): EntityLoadState | undefined {
@@ -60,8 +72,15 @@ export class EntityMetaStore {
 	}
 
 	setExistsOnServer(key: string, existsOnServer: boolean): void {
-		const existing = this.entityMetas.get(key) ?? { existsOnServer: false, isScheduledForDeletion: false }
-		this.entityMetas.set(key, { ...existing, existsOnServer })
+		const existing = this.entityMetas.get(key)
+		if (existing && existing.existsOnServer === existsOnServer) {
+			return
+		}
+		this.entityMetas.set(key, {
+			existsOnServer,
+			isScheduledForDeletion: existing?.isScheduledForDeletion ?? false,
+		})
+		this.mutationVersion++
 	}
 
 	existsOnServer(key: string): boolean {
@@ -90,9 +109,12 @@ export class EntityMetaStore {
 
 	setPersisting(key: string, isPersisting: boolean): void {
 		if (isPersisting) {
-			this.persistingEntities.add(key)
-		} else {
-			this.persistingEntities.delete(key)
+			if (!this.persistingEntities.has(key)) {
+				this.persistingEntities.add(key)
+				this.mutationVersion++
+			}
+		} else if (this.persistingEntities.delete(key)) {
+			this.mutationVersion++
 		}
 	}
 
@@ -123,6 +145,7 @@ export class EntityMetaStore {
 		this.entityMetas.delete(key)
 		this.persistingEntities.delete(key)
 		this.tempToPersistedId.delete(key)
+		this.mutationVersion++
 	}
 
 	/**
@@ -152,6 +175,8 @@ export class EntityMetaStore {
 			this.tempToPersistedId.delete(oldKey)
 			this.tempToPersistedId.set(newKey, persistedId)
 		}
+
+		this.mutationVersion++
 	}
 
 	// ==================== Bulk Operations ====================
@@ -168,9 +193,12 @@ export class EntityMetaStore {
 	}
 
 	importMetas(metas: Map<string, EntityMeta>): void {
+		let imported = false
 		for (const [key, meta] of metas) {
 			this.entityMetas.set(key, { ...meta })
+			imported = true
 		}
+		if (imported) this.mutationVersion++
 	}
 
 	clear(): void {
@@ -178,5 +206,6 @@ export class EntityMetaStore {
 		this.entityMetas.clear()
 		this.persistingEntities.clear()
 		this.tempToPersistedId.clear()
+		this.mutationVersion++
 	}
 }

@@ -18,6 +18,14 @@ import type { RootRegistry } from './RootRegistry.js'
  * The graph is read from {@link RelationStore} (the source of truth for live
  * relation membership), never from the subscription parent-child registry,
  * which is append-mostly for notifications and does not reflect disconnects.
+ *
+ * The walk is O(E+R) and runs on every dirty check and post-persist sweep, so
+ * its result is memoized. Each sub-store the walk reads exposes a monotonic
+ * `getMutationVersion()` that bumps only when graph-relevant state changes
+ * (entity key set, `existsOnServer`/`isPersisting`, roots, relation edges).
+ * Their sum is a cache key: it is strictly increasing, so an unchanged sum
+ * proves nothing relevant changed and the cached set can be returned. Pure
+ * field edits do not bump any counter, keeping the cache warm on the hot path.
  */
 export class ReachabilityAnalyzer {
 	constructor(
@@ -27,11 +35,40 @@ export class ReachabilityAnalyzer {
 		private readonly roots: RootRegistry,
 	) {}
 
+	private cache: { version: number; result: Set<string> } | null = null
+
 	/**
 	 * Returns the set of entity keys ("entityType:id") for created
 	 * (never-persisted) entities reachable from a root through live relations.
+	 *
+	 * The returned set is the cached instance and is owned by the analyzer —
+	 * callers must treat it as read-only (the current consumers only call
+	 * `.has(...)` on it).
 	 */
 	computeReachableCreated(): Set<string> {
+		const version = this.graphVersion()
+		const cached = this.cache
+		if (cached !== null && cached.version === version) {
+			return cached.result
+		}
+
+		const result = this.walk()
+		this.cache = { version, result }
+		return result
+	}
+
+	/**
+	 * Sum of the graph-relevant mutation counters across the sub-stores the walk
+	 * reads. Monotonic, so an unchanged value means no relevant mutation happened.
+	 */
+	private graphVersion(): number {
+		return this.entitySnapshots.getMutationVersion()
+			+ this.meta.getMutationVersion()
+			+ this.relations.getMutationVersion()
+			+ this.roots.getMutationVersion()
+	}
+
+	private walk(): Set<string> {
 		const reachableCreated = new Set<string>()
 		const visited = new Set<string>()
 		const stack: string[] = []
