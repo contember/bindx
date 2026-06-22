@@ -23,6 +23,19 @@ export class EntitySnapshotStore {
 	 */
 	private readonly idIndex = new Map<string, string>()
 
+	/**
+	 * Monotonic counter bumped only when the set of keys or the id→key index
+	 * changes (new key, removal, rekey, bulk import, clear). Pure value edits
+	 * (setFieldValue/updateFields/commit/reset/...) do NOT bump it — they cannot
+	 * change reachability — so the per-keystroke edit path keeps the
+	 * {@link ReachabilityAnalyzer} cache warm.
+	 */
+	private mutationVersion = 0
+
+	getMutationVersion(): number {
+		return this.mutationVersion
+	}
+
 	get(key: string): EntitySnapshot | undefined {
 		return this.snapshots.get(key)
 	}
@@ -62,6 +75,7 @@ export class EntitySnapshotStore {
 
 		this.snapshots.set(key, newSnapshot)
 		this.idIndex.set(id, key)
+		if (!existing) this.mutationVersion++
 		return newSnapshot
 	}
 
@@ -208,6 +222,7 @@ export class EntitySnapshotStore {
 		// that survivor as id-unresolvable.
 		if (existing && this.idIndex.get(existing.id) === key) {
 			this.idIndex.delete(existing.id)
+			this.mutationVersion++
 		}
 		this.snapshots.delete(key)
 	}
@@ -284,6 +299,7 @@ export class EntitySnapshotStore {
 			this.idIndex.set(snapshot.id, key)
 			keys.add(key)
 		}
+		if (keys.size > 0) this.mutationVersion++
 		return keys
 	}
 
@@ -310,6 +326,7 @@ export class EntitySnapshotStore {
 		this.snapshots.set(newKey, newSnapshot)
 		this.idIndex.delete(snapshot.id)
 		this.idIndex.set(newId, newKey)
+		this.mutationVersion++
 	}
 
 	keys(): IterableIterator<string> {
@@ -329,6 +346,7 @@ export class EntitySnapshotStore {
 	clear(): void {
 		this.snapshots.clear()
 		this.idIndex.clear()
+		this.mutationVersion++
 	}
 }
 

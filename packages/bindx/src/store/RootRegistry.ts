@@ -16,12 +16,26 @@
 export class RootRegistry {
 	private readonly roots = new Set<string>()
 
+	/**
+	 * Monotonic counter bumped whenever the root set actually changes. Used by
+	 * {@link ReachabilityAnalyzer} to memoize the reachability walk. Bumps happen
+	 * only on a real change so the per-render `registerParentChild` → `unregister`
+	 * call (almost always a no-op for an already-anchored child) does not
+	 * needlessly invalidate the cache.
+	 */
+	private mutationVersion = 0
+
 	register(key: string): void {
-		this.roots.add(key)
+		if (!this.roots.has(key)) {
+			this.roots.add(key)
+			this.mutationVersion++
+		}
 	}
 
 	unregister(key: string): void {
-		this.roots.delete(key)
+		if (this.roots.delete(key)) {
+			this.mutationVersion++
+		}
 	}
 
 	keys(): IterableIterator<string> {
@@ -35,10 +49,16 @@ export class RootRegistry {
 	rekey(oldKey: string, newKey: string): void {
 		if (this.roots.delete(oldKey)) {
 			this.roots.add(newKey)
+			this.mutationVersion++
 		}
 	}
 
 	clear(): void {
 		this.roots.clear()
+		this.mutationVersion++
+	}
+
+	getMutationVersion(): number {
+		return this.mutationVersion
 	}
 }

@@ -56,6 +56,29 @@ export class RelationStore {
 	/** Has-many list states keyed by "parentType:parentId:fieldName" */
 	private readonly hasManyStates = new Map<string, StoredHasManyState>()
 
+	/**
+	 * Monotonic counter bumped on every actual write to relation/has-many state.
+	 * Used by {@link ReachabilityAnalyzer} to memoize its walk. All writes funnel
+	 * through {@link writeRelation}/{@link writeHasMany} (plus the delete/clear
+	 * paths), so a read-only `getOrCreate*` call on the per-render materialize
+	 * path — which does not write when the entry already matches — never bumps it.
+	 */
+	private mutationVersion = 0
+
+	getMutationVersion(): number {
+		return this.mutationVersion
+	}
+
+	private writeRelation(key: string, state: StoredRelationState): void {
+		this.relationStates.set(key, state)
+		this.mutationVersion++
+	}
+
+	private writeHasMany(key: string, state: StoredHasManyState): void {
+		this.hasManyStates.set(key, state)
+		this.mutationVersion++
+	}
+
 	// ==================== Has-One Relations ====================
 
 	/**
@@ -66,7 +89,7 @@ export class RelationStore {
 		initial: Omit<StoredRelationState, 'version'>,
 	): StoredRelationState {
 		if (!this.relationStates.has(key)) {
-			this.relationStates.set(key, { ...initial, version: 0 })
+			this.writeRelation(key, { ...initial, version: 0 })
 		}
 
 		return this.relationStates.get(key)!
@@ -103,7 +126,7 @@ export class RelationStore {
 				}
 			}
 
-			this.relationStates.set(key, {
+			this.writeRelation(key, {
 				currentId: 'currentId' in updates ? updates.currentId! : serverId,
 				serverId,
 				state: 'state' in updates ? updates.state! : serverState,
@@ -112,7 +135,7 @@ export class RelationStore {
 				version: 0,
 			})
 		} else {
-			this.relationStates.set(key, {
+			this.writeRelation(key, {
 				...existing,
 				...updates,
 				version: existing.version + 1,
@@ -127,7 +150,7 @@ export class RelationStore {
 		const existing = this.relationStates.get(key)
 		if (!existing) return
 
-		this.relationStates.set(key, {
+		this.writeRelation(key, {
 			...existing,
 			serverId: existing.currentId,
 			serverState: existing.state === 'creating' ? 'connected' : existing.state,
@@ -143,7 +166,7 @@ export class RelationStore {
 		const existing = this.relationStates.get(key)
 		if (!existing) return
 
-		this.relationStates.set(key, {
+		this.writeRelation(key, {
 			...existing,
 			currentId: existing.serverId,
 			state: existing.serverState,
@@ -160,7 +183,7 @@ export class RelationStore {
 	getOrCreateHasMany(key: string, serverIds?: string[]): StoredHasManyState {
 		const existing = this.hasManyStates.get(key)
 		if (!existing) {
-			this.hasManyStates.set(key, {
+			this.writeHasMany(key, {
 				serverIds: new Set(serverIds ?? []),
 				orderedIds: null,
 				plannedRemovals: new Map(),
@@ -171,7 +194,7 @@ export class RelationStore {
 		} else if (serverIds !== undefined) {
 			const newServerIds = new Set(serverIds)
 			if (!setsEqual(existing.serverIds, newServerIds)) {
-				this.hasManyStates.set(key, {
+				this.writeHasMany(key, {
 					...existing,
 					serverIds: newServerIds,
 					orderedIds: null,
@@ -197,7 +220,7 @@ export class RelationStore {
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) {
-			this.hasManyStates.set(key, {
+			this.writeHasMany(key, {
 				serverIds: new Set(serverIds),
 				orderedIds: null,
 				plannedRemovals: new Map(),
@@ -206,7 +229,7 @@ export class RelationStore {
 				version: 0,
 			})
 		} else {
-			this.hasManyStates.set(key, {
+			this.writeHasMany(key, {
 				...existing,
 				serverIds: new Set(serverIds),
 				orderedIds: null,
@@ -222,7 +245,7 @@ export class RelationStore {
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) {
-			this.hasManyStates.set(key, {
+			this.writeHasMany(key, {
 				serverIds: new Set(),
 				orderedIds: null,
 				plannedRemovals: new Map([[itemId, type]]),
@@ -241,7 +264,7 @@ export class RelationStore {
 			}
 			const newCreatedEntities = new Set(existing.createdEntities)
 			newCreatedEntities.delete(itemId)
-			this.hasManyStates.set(key, {
+			this.writeHasMany(key, {
 				...existing,
 				orderedIds: newOrderedIds,
 				plannedRemovals: newPlannedRemovals,
@@ -259,7 +282,7 @@ export class RelationStore {
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) {
-			this.hasManyStates.set(key, {
+			this.writeHasMany(key, {
 				serverIds: new Set(),
 				orderedIds: null,
 				plannedRemovals: new Map(),
@@ -276,7 +299,7 @@ export class RelationStore {
 			if (newOrderedIds !== null && !newOrderedIds.includes(itemId)) {
 				newOrderedIds = [...newOrderedIds, itemId]
 			}
-			this.hasManyStates.set(key, {
+			this.writeHasMany(key, {
 				...existing,
 				orderedIds: newOrderedIds,
 				plannedConnections: newPlannedConnections,
@@ -292,7 +315,7 @@ export class RelationStore {
 	commitHasMany(key: string, newServerIds: string[]): void {
 		const existing = this.hasManyStates.get(key)
 
-		this.hasManyStates.set(key, {
+		this.writeHasMany(key, {
 			serverIds: new Set(newServerIds),
 			orderedIds: null,
 			plannedRemovals: new Map(),
@@ -309,7 +332,7 @@ export class RelationStore {
 		const existing = this.hasManyStates.get(key)
 		if (!existing) return
 
-		this.hasManyStates.set(key, {
+		this.writeHasMany(key, {
 			serverIds: existing.serverIds,
 			orderedIds: null,
 			plannedRemovals: new Map(),
@@ -327,7 +350,7 @@ export class RelationStore {
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) {
-			this.hasManyStates.set(key, {
+			this.writeHasMany(key, {
 				serverIds: new Set(),
 				orderedIds: [itemId],
 				plannedRemovals: new Map(),
@@ -342,7 +365,7 @@ export class RelationStore {
 			newCreatedEntities.add(itemId)
 			const currentOrderedIds = existing.orderedIds ?? computeDefaultOrderedIds(existing)
 			const newOrderedIds = [...currentOrderedIds, itemId]
-			this.hasManyStates.set(key, {
+			this.writeHasMany(key, {
 				...existing,
 				orderedIds: newOrderedIds,
 				plannedConnections: newPlannedConnections,
@@ -361,7 +384,7 @@ export class RelationStore {
 		const existing = this.hasManyStates.get(key)
 
 		if (!existing) {
-			this.hasManyStates.set(key, {
+			this.writeHasMany(key, {
 				serverIds: new Set(),
 				orderedIds: [itemId],
 				plannedRemovals: new Map(),
@@ -374,7 +397,7 @@ export class RelationStore {
 			newPlannedConnections.add(itemId)
 			const currentOrderedIds = existing.orderedIds ?? computeDefaultOrderedIds(existing)
 			const newOrderedIds = [...currentOrderedIds, itemId]
-			this.hasManyStates.set(key, {
+			this.writeHasMany(key, {
 				...existing,
 				orderedIds: newOrderedIds,
 				plannedConnections: newPlannedConnections,
@@ -425,7 +448,7 @@ export class RelationStore {
 				}
 			}
 
-			this.hasManyStates.set(key, newState)
+			this.writeHasMany(key, newState)
 			return true
 		} else {
 			this.planHasManyRemoval(key, itemId, removalType)
@@ -477,16 +500,20 @@ export class RelationStore {
 	 * stale relation state behind.
 	 */
 	removeOwnedRelations(keyPrefix: string): void {
+		let changed = false
 		for (const key of [...this.relationStates.keys()]) {
 			if (key.startsWith(keyPrefix)) {
 				this.relationStates.delete(key)
+				changed = true
 			}
 		}
 		for (const key of [...this.hasManyStates.keys()]) {
 			if (key.startsWith(keyPrefix)) {
 				this.hasManyStates.delete(key)
+				changed = true
 			}
 		}
+		if (changed) this.mutationVersion++
 	}
 
 	/**
@@ -507,7 +534,7 @@ export class RelationStore {
 		if (movedItem === undefined) return
 		newOrderedIds.splice(toIndex, 0, movedItem)
 
-		this.hasManyStates.set(key, {
+		this.writeHasMany(key, {
 			...existing,
 			orderedIds: newOrderedIds,
 			version: existing.version + 1,
@@ -533,7 +560,7 @@ export class RelationStore {
 	 * Used in pessimistic mode after successful server confirmation.
 	 */
 	restoreHasManyState(key: string, state: StoredHasManyState): void {
-		this.hasManyStates.set(key, {
+		this.writeHasMany(key, {
 			serverIds: new Set(state.serverIds),
 			orderedIds: state.orderedIds ? [...state.orderedIds] : null,
 			plannedRemovals: new Map(state.plannedRemovals),
@@ -699,7 +726,7 @@ export class RelationStore {
 	importRelationStates(states: Map<string, StoredRelationState>): string[] {
 		const keys: string[] = []
 		for (const [key, state] of states) {
-			this.relationStates.set(key, {
+			this.writeRelation(key, {
 				...state,
 				placeholderData: { ...state.placeholderData },
 			})
@@ -715,7 +742,7 @@ export class RelationStore {
 	importHasManyStates(states: Map<string, StoredHasManyState>): string[] {
 		const keys: string[] = []
 		for (const [key, state] of states) {
-			this.hasManyStates.set(key, {
+			this.writeHasMany(key, {
 				serverIds: new Set(state.serverIds),
 				orderedIds: state.orderedIds ? [...state.orderedIds] : null,
 				plannedRemovals: new Map(state.plannedRemovals),
@@ -743,7 +770,7 @@ export class RelationStore {
 			if (serverId === oldId) { serverId = newId; changed = true }
 
 			if (changed) {
-				this.relationStates.set(key, { ...state, currentId, serverId, version: state.version + 1 })
+				this.writeRelation(key, { ...state, currentId, serverId, version: state.version + 1 })
 			}
 		}
 
@@ -795,7 +822,7 @@ export class RelationStore {
 			}
 
 			if (changed) {
-				this.hasManyStates.set(key, {
+				this.writeHasMany(key, {
 					serverIds,
 					orderedIds,
 					plannedRemovals,
@@ -819,7 +846,7 @@ export class RelationStore {
 		}
 		for (const [oldKey, value] of toMoveRelations) {
 			this.relationStates.delete(oldKey)
-			this.relationStates.set(newKeyPrefix + oldKey.slice(oldKeyPrefix.length), value)
+			this.writeRelation(newKeyPrefix + oldKey.slice(oldKeyPrefix.length), value)
 		}
 
 		const toMoveHasMany: [string, StoredHasManyState][] = []
@@ -830,7 +857,7 @@ export class RelationStore {
 		}
 		for (const [oldKey, value] of toMoveHasMany) {
 			this.hasManyStates.delete(oldKey)
-			this.hasManyStates.set(newKeyPrefix + oldKey.slice(oldKeyPrefix.length), value)
+			this.writeHasMany(newKeyPrefix + oldKey.slice(oldKeyPrefix.length), value)
 		}
 	}
 
@@ -840,6 +867,7 @@ export class RelationStore {
 	clear(): void {
 		this.relationStates.clear()
 		this.hasManyStates.clear()
+		this.mutationVersion++
 	}
 }
 
