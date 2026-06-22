@@ -37,6 +37,14 @@ export class EntityMetaStore implements Rekeyable {
 	private readonly persistingEntities = new Set<string>()
 
 	/**
+	 * Entities whose in-flight persist is pessimistic, keyed by "entityType:id".
+	 * A subset of {@link persistingEntities}. While present, the entity is
+	 * presented at its server baseline (see SnapshotStore.getPresentationSnapshot)
+	 * even though its canonical data stays dirty.
+	 */
+	private readonly pessimisticInFlight = new Set<string>()
+
+	/**
 	 * Monotonic counter bumped when reachability-relevant metadata changes —
 	 * `existsOnServer` and `isPersisting` (which seed the reachability roots) plus
 	 * entity removal/rekey. Load state and deletion scheduling do NOT bump it.
@@ -104,15 +112,29 @@ export class EntityMetaStore implements Rekeyable {
 		return this.persistingEntities.has(key)
 	}
 
-	setPersisting(key: string, isPersisting: boolean): void {
+	setPersisting(key: string, isPersisting: boolean, pessimistic: boolean = false): void {
 		if (isPersisting) {
 			if (!this.persistingEntities.has(key)) {
 				this.persistingEntities.add(key)
 				this.mutationVersion++
 			}
-		} else if (this.persistingEntities.delete(key)) {
-			this.mutationVersion++
+			// The pessimistic flag drives presentation only, not reachability, so it
+			// deliberately does not bump mutationVersion.
+			if (pessimistic) {
+				this.pessimisticInFlight.add(key)
+			} else {
+				this.pessimisticInFlight.delete(key)
+			}
+		} else {
+			if (this.persistingEntities.delete(key)) {
+				this.mutationVersion++
+			}
+			this.pessimisticInFlight.delete(key)
 		}
+	}
+
+	isPessimisticInFlight(key: string): boolean {
+		return this.pessimisticInFlight.has(key)
 	}
 
 	/**
@@ -122,6 +144,7 @@ export class EntityMetaStore implements Rekeyable {
 		this.loadStates.delete(key)
 		this.entityMetas.delete(key)
 		this.persistingEntities.delete(key)
+		this.pessimisticInFlight.delete(key)
 		this.mutationVersion++
 	}
 
@@ -146,6 +169,11 @@ export class EntityMetaStore implements Rekeyable {
 		if (this.persistingEntities.has(ctx.oldKey)) {
 			this.persistingEntities.delete(ctx.oldKey)
 			this.persistingEntities.add(ctx.newKey)
+		}
+
+		if (this.pessimisticInFlight.has(ctx.oldKey)) {
+			this.pessimisticInFlight.delete(ctx.oldKey)
+			this.pessimisticInFlight.add(ctx.newKey)
 		}
 
 		this.mutationVersion++
@@ -178,6 +206,7 @@ export class EntityMetaStore implements Rekeyable {
 		this.loadStates.clear()
 		this.entityMetas.clear()
 		this.persistingEntities.clear()
+		this.pessimisticInFlight.clear()
 		this.mutationVersion++
 	}
 }
