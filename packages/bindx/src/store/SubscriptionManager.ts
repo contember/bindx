@@ -1,3 +1,5 @@
+import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
+
 type Subscriber = () => void
 
 /**
@@ -18,7 +20,7 @@ export interface SnapshotVersionBumper {
  * - Parent-child change propagation
  * - Global version tracking for change detection
  */
-export class SubscriptionManager {
+export class SubscriptionManager implements Rekeyable {
 	/** Subscribers per entity key */
 	private readonly entitySubscribers = new Map<string, Set<Subscriber>>()
 
@@ -271,7 +273,8 @@ export class SubscriptionManager {
 	 * Also rekeys relation subscribers under oldKeyPrefix to newKeyPrefix.
 	 * Registers redirects so unsubscribe closures can find migrated callbacks.
 	 */
-	rekey(oldKey: string, newKey: string, oldKeyPrefix: string, newKeyPrefix: string): void {
+	rekey(ctx: RekeyContext): void {
+		const { oldKey, newKey, oldKeyPrefix, newKeyPrefix } = ctx
 		// Register redirect for entity key (update existing chains first)
 		for (const [fromKey, toKey] of this.rekeyedKeys) {
 			if (toKey === oldKey) {

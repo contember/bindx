@@ -2,6 +2,7 @@ import {
 	createEntitySnapshot,
 	type EntitySnapshot,
 } from './snapshots.js'
+import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
 
 /**
  * Manages entity snapshots — core CRUD for immutable entity data.
@@ -12,7 +13,7 @@ import {
  * Follows the same sub-store pattern as ErrorStore, RelationStore, etc.
  * SnapshotStore delegates entity snapshot operations here.
  */
-export class EntitySnapshotStore {
+export class EntitySnapshotStore implements Rekeyable {
 	private readonly snapshots = new Map<string, EntitySnapshot>()
 
 	/**
@@ -304,28 +305,29 @@ export class EntitySnapshotStore {
 	}
 
 	/**
-	 * Moves a snapshot from oldKey to newKey, updating the id in the snapshot data.
+	 * Moves a snapshot from the temp key to the persisted key, updating the id in
+	 * the snapshot data.
 	 */
-	rekey(oldKey: string, newKey: string, newId: string): void {
-		const snapshot = this.snapshots.get(oldKey)
+	rekey(ctx: RekeyContext): void {
+		const snapshot = this.snapshots.get(ctx.oldKey)
 		if (!snapshot) return
 
 		// Update id field in data and serverData
-		const data = { ...snapshot.data as Record<string, unknown>, id: newId }
-		const serverData = { ...snapshot.serverData as Record<string, unknown>, id: newId }
+		const data = { ...snapshot.data as Record<string, unknown>, id: ctx.newId }
+		const serverData = { ...snapshot.serverData as Record<string, unknown>, id: ctx.newId }
 
 		const newSnapshot = createEntitySnapshot(
-			newId,
+			ctx.newId,
 			snapshot.entityType,
 			data,
 			serverData,
 			snapshot.version + 1,
 		)
 
-		this.snapshots.delete(oldKey)
-		this.snapshots.set(newKey, newSnapshot)
+		this.snapshots.delete(ctx.oldKey)
+		this.snapshots.set(ctx.newKey, newSnapshot)
 		this.idIndex.delete(snapshot.id)
-		this.idIndex.set(newId, newKey)
+		this.idIndex.set(ctx.newId, ctx.newKey)
 		this.mutationVersion++
 	}
 

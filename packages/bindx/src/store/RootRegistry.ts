@@ -13,7 +13,9 @@
  *
  * Keys use the same composite format as the rest of the store: "entityType:id".
  */
-export class RootRegistry {
+import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
+
+export class RootRegistry implements Rekeyable {
 	private readonly roots = new Set<string>()
 
 	/**
@@ -43,12 +45,12 @@ export class RootRegistry {
 	}
 
 	/**
-	 * Moves a root entry from oldKey to newKey (used after persist rekeys a temp
-	 * id to a server-assigned id).
+	 * Moves a root entry from the temp key to the persisted key (used after
+	 * persist rekeys a temp id to a server-assigned id).
 	 */
-	rekey(oldKey: string, newKey: string): void {
-		if (this.roots.delete(oldKey)) {
-			this.roots.add(newKey)
+	rekey(ctx: RekeyContext): void {
+		if (this.roots.delete(ctx.oldKey)) {
+			this.roots.add(ctx.newKey)
 			this.mutationVersion++
 		}
 	}

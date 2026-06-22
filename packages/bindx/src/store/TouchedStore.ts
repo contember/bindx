@@ -1,3 +1,5 @@
+import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
+
 /**
  * Manages touched state for entity fields.
  *
@@ -6,7 +8,7 @@
  *
  * Keys are pre-computed composite strings (e.g., "entityType:id:fieldName").
  */
-export class TouchedStore {
+export class TouchedStore implements Rekeyable {
 	/** Touched state keyed by "entityType:id:fieldName" */
 	private readonly touchedFields = new Map<string, boolean>()
 
@@ -39,7 +41,8 @@ export class TouchedStore {
 	/**
 	 * Rekeys all touched fields from oldKeyPrefix to newKeyPrefix.
 	 */
-	rekey(oldKeyPrefix: string, newKeyPrefix: string): void {
+	rekey(ctx: RekeyContext): void {
+		const { oldKeyPrefix, newKeyPrefix } = ctx
 		const toMove: [string, boolean][] = []
 		for (const [key, value] of this.touchedFields) {
 			if (key.startsWith(oldKeyPrefix)) {
