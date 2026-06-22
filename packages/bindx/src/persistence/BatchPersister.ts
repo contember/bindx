@@ -26,19 +26,6 @@ import type { StoredHasManyState, StoredRelationState } from '../store/SnapshotS
 import { deepEqual } from '../utils/deepEqual.js'
 
 /**
- * Captured state for pessimistic mode restoration.
- * Contains all the data needed to restore an entity's dirty state after
- * temporarily resetting it to server state during pessimistic persistence.
- */
-interface CapturedEntityState {
-	entityType: string
-	entityId: string
-	snapshot: EntitySnapshot | undefined
-	relations: Map<string, StoredRelationState>
-	hasManyStates: Map<string, StoredHasManyState>
-}
-
-/**
  * Options for BatchPersister
  */
 export interface BatchPersisterOptions {
@@ -216,17 +203,12 @@ export class BatchPersister {
 		// Block undo during persist
 		this.undoManager?.block()
 
-		// For pessimistic mode, capture dirty state before building mutations
-		// This allows us to restore and commit the state after server confirmation
-		let capturedStates: CapturedEntityState[] | null = null
-		if (updateMode === 'pessimistic') {
-			capturedStates = this.captureEntityStates(sortedEntities)
-		}
-
 		let result: PersistenceResult | undefined
 		try {
-			// Build mutations BEFORE resetting state (for pessimistic mode)
-			// The mutations need to contain the dirty data to send to server
+			// Build mutations from the (dirty) canonical state. The store is never
+			// mutated to the server view — pessimistic mode presents the server
+			// baseline via getPresentationSnapshot instead — so there is nothing to
+			// capture or restore.
 			const mutations = this.buildMutations(sortedEntities, scope)
 
 			if (mutations.length === 0) {
@@ -241,23 +223,11 @@ export class BatchPersister {
 				return result
 			}
 
-			// For pessimistic mode, reset entities to server state after capturing
-			// This makes the UI show the "old" (server) data while persisting
-			if (updateMode === 'pessimistic') {
-				for (const entity of sortedEntities) {
-					// Only reset updates, not creates (creates don't have server state)
-					if (entity.changeType === 'update') {
-						this.dispatcher.dispatch(resetEntity(entity.entityType, entity.entityId))
-						this.store.resetAllRelations(entity.entityType, entity.entityId)
-					}
-				}
-			}
-
 			// Execute transaction
 			const transactionResult = await this.executeTransaction(mutations, options?.signal)
 
-			// Process results with captured state for pessimistic mode
-			result = this.processTransactionResult(sortedEntities, transactionResult, scope, options, capturedStates)
+			// Assigned to `result` so the finally block can gate the sweep on full success.
+			result = this.processTransactionResult(sortedEntities, transactionResult, scope, options)
 			return result
 
 		} finally {
@@ -273,9 +243,9 @@ export class BatchPersister {
 			this.undoManager?.unblock()
 
 			// Reclaim memory: drop snapshots of any created entities orphaned during
-			// editing. Only after a FULLY successful persist — on failure the captured
-			// creates/edits were restored for retry (see processTransactionResult), and
-			// sweeping then could reclaim a create the user still intends to save.
+			// editing. Only after a FULLY successful persist — on a failed or partial
+			// persist the user's creates and edits are left intact and dirty for a retry,
+			// and sweeping then could reclaim a create the user still intends to save.
 			if (result?.success) {
 				this.store.sweepUnreachableCreated()
 			}
@@ -675,13 +645,11 @@ export class BatchPersister {
 		transactionResult: TransactionResult,
 		scope: PersistScope,
 		options?: BatchPersistOptions,
-		capturedStates?: CapturedEntityState[] | null,
 	): PersistenceResult {
 		const results: EntityPersistResult[] = []
 		let successCount = 0
 		let failedCount = 0
 		const rollbackOnError = options?.rollbackOnError ?? false
-		const isPessimistic = capturedStates != null
 
 		if (transactionResult.ok) {
 			// All succeeded - commit all
@@ -692,24 +660,16 @@ export class BatchPersister {
 				)
 
 				if (entity) {
-					// For pessimistic mode, restore captured state and commit
-					if (isPessimistic && capturedStates) {
-						const capturedState = capturedStates.find(
-							s => s.entityType === entity.entityType && s.entityId === entity.entityId,
-						)
-						if (capturedState) {
-							this.restoreEntityState(capturedState, true)
-						}
+					// The store was never mutated to the server view, so a successful
+					// persist just commits the dirty state as the new server baseline —
+					// the same path optimistic mode always took.
+					if (scope.type === 'fields' && scope.entityType === entity.entityType && scope.entityId === entity.entityId) {
+						// Partial commit for field scope
+						this.store.commitFields(entity.entityType, entity.entityId, [...scope.fields])
 					} else {
-						// Commit based on scope
-						if (scope.type === 'fields' && scope.entityType === entity.entityType && scope.entityId === entity.entityId) {
-							// Partial commit for field scope
-							this.store.commitFields(entity.entityType, entity.entityId, [...scope.fields])
-						} else {
-							// Full commit
-							this.dispatcher.dispatch(commitEntity(entity.entityType, entity.entityId))
-							this.store.commitAllRelations(entity.entityType, entity.entityId)
-						}
+						// Full commit
+						this.dispatcher.dispatch(commitEntity(entity.entityType, entity.entityId))
+						this.store.commitAllRelations(entity.entityType, entity.entityId)
 					}
 
 					// Map temp ID if create
@@ -759,10 +719,11 @@ export class BatchPersister {
 							mutationResult.errorMessage,
 						)
 
-						// Optimistic mode rolls a FAILED entity back to server state only when
-						// rollbackOnError is set. Pessimistic restore is handled below for ALL
-						// captured entities, not just the failed ones.
-						if (!isPessimistic && rollbackOnError) {
+						// The store was never mutated to the server view, so on failure the
+						// entity's edits and creates are already intact and dirty — they
+						// simply survive for a retry (P2), no restore needed. Rollback to
+						// server state happens only when rollbackOnError is set.
+						if (rollbackOnError) {
 							this.rollbackEntity(entity)
 						}
 					}
@@ -786,20 +747,6 @@ export class BatchPersister {
 					}
 				}
 			}
-
-			// Pessimistic mode: the transaction failed, so from the user's point of view
-			// nothing was committed. Undo the pre-transaction server-view reset for EVERY
-			// captured entity (not only the ones whose individual mutation failed) and keep
-			// the restored data dirty (commit=false) so the user can retry. Restoring even
-			// the entities whose mutation happened to succeed in the non-atomic sequential
-			// fallback is what re-establishes their relation edges to inline-created
-			// children — keeping those creates reachable so the post-persist sweep does not
-			// reclaim a child the user still intends to save (P2).
-			if (isPessimistic && capturedStates) {
-				for (const capturedState of capturedStates) {
-					this.restoreEntityState(capturedState, false)
-				}
-			}
 		}
 
 		return {
@@ -808,83 +755,6 @@ export class BatchPersister {
 			successCount,
 			failedCount,
 			skippedCount: 0,
-		}
-	}
-
-	/**
-	 * Captures the current state of entities for pessimistic mode.
-	 * This allows us to restore the dirty state after a successful persist.
-	 */
-	private captureEntityStates(entities: DirtyEntity[]): CapturedEntityState[] {
-		return entities.map(entity => {
-			const snapshot = this.store.getEntitySnapshot(entity.entityType, entity.entityId)
-			const relations = this.store.getAllRelationsForEntity(entity.entityType, entity.entityId)
-			const hasManyStates = this.store.getAllHasManyForEntity(entity.entityType, entity.entityId)
-
-			return {
-				entityType: entity.entityType,
-				entityId: entity.entityId,
-				snapshot,
-				relations,
-				hasManyStates,
-			}
-		})
-	}
-
-	/**
-	 * Restores a captured entity state (pessimistic mode), optionally committing it.
-	 *
-	 * - commit=true (server confirmed): restore the dirty data and commit it as the
-	 *   new server baseline.
-	 * - commit=false (server rejected): restore the dirty data but leave it dirty, so
-	 *   the user's in-flight edits and creates survive for a retry (P2) instead of
-	 *   being stuck at the server view the pessimistic reset left behind.
-	 */
-	private restoreEntityState(capturedState: CapturedEntityState, commit: boolean): void {
-		if (capturedState.snapshot) {
-			this.store.setEntityData(
-				capturedState.entityType,
-				capturedState.entityId,
-				capturedState.snapshot.data as Record<string, unknown>,
-				commit, // server data only when confirmed; otherwise keep it as a dirty edit
-			)
-		}
-
-		for (const [relationKey, relationState] of capturedState.relations) {
-			const fieldName = relationKey.split(':')[2]
-			if (fieldName) {
-				this.store.setRelation(capturedState.entityType, capturedState.entityId, fieldName, {
-					currentId: relationState.currentId,
-					state: relationState.state,
-					// Restore placeholderData too: a has-one in the 'creating' state carries
-					// its inline create payload here, and getDirtyRelations treats a
-					// non-empty placeholderData as a dirty signal. Dropping it on a
-					// commit=false retry would lose the inline data and silently mark the
-					// relation clean. (For commit=true it is cleared by commitRelation below.)
-					placeholderData: relationState.placeholderData,
-				})
-				if (commit) {
-					this.store.commitRelation(capturedState.entityType, capturedState.entityId, fieldName)
-				}
-			}
-		}
-
-		for (const [hasManyKey, hasManyState] of capturedState.hasManyStates) {
-			const fieldName = hasManyKey.split(':')[2]
-			if (fieldName) {
-				this.store.restoreHasManyState(capturedState.entityType, capturedState.entityId, fieldName, hasManyState)
-				if (commit) {
-					// Compute new server IDs: serverIds - removals + connections
-					const newServerIds = new Set(hasManyState.serverIds)
-					for (const removedId of hasManyState.plannedRemovals.keys()) {
-						newServerIds.delete(removedId)
-					}
-					for (const connectedId of hasManyState.plannedConnections) {
-						newServerIds.add(connectedId)
-					}
-					this.store.commitHasMany(capturedState.entityType, capturedState.entityId, fieldName, Array.from(newServerIds))
-				}
-			}
 		}
 	}
 

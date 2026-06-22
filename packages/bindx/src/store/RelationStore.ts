@@ -556,21 +556,6 @@ export class RelationStore implements Rekeyable {
 		return computeDefaultOrderedIds(existing)
 	}
 
-	/**
-	 * Restores a has-many state from a captured snapshot.
-	 * Used in pessimistic mode after successful server confirmation.
-	 */
-	restoreHasManyState(key: string, state: StoredHasManyState): void {
-		this.writeHasMany(key, {
-			serverIds: new Set(state.serverIds),
-			orderedIds: state.orderedIds ? [...state.orderedIds] : null,
-			plannedRemovals: new Map(state.plannedRemovals),
-			plannedConnections: new Set(state.plannedConnections),
-			createdEntities: new Set(state.createdEntities),
-			version: state.version + 1,
-		})
-	}
-
 	// ==================== Bulk Operations ====================
 
 	/**
@@ -612,39 +597,6 @@ export class RelationStore implements Rekeyable {
 				this.resetHasMany(key)
 			}
 		}
-	}
-
-	/**
-	 * Gets all relation states for an entity.
-	 */
-	getAllRelationsForEntity(keyPrefix: string): Map<string, StoredRelationState> {
-		const result = new Map<string, StoredRelationState>()
-		for (const [key, state] of this.relationStates) {
-			if (key.startsWith(keyPrefix)) {
-				result.set(key, { ...state })
-			}
-		}
-		return result
-	}
-
-	/**
-	 * Gets all has-many states for an entity.
-	 */
-	getAllHasManyForEntity(keyPrefix: string): Map<string, StoredHasManyState> {
-		const result = new Map<string, StoredHasManyState>()
-		for (const [key, state] of this.hasManyStates) {
-			if (key.startsWith(keyPrefix)) {
-				result.set(key, {
-					serverIds: new Set(state.serverIds),
-					orderedIds: state.orderedIds ? [...state.orderedIds] : null,
-					plannedRemovals: new Map(state.plannedRemovals),
-					plannedConnections: new Set(state.plannedConnections),
-					createdEntities: new Set(state.createdEntities),
-					version: state.version,
-				})
-			}
-		}
-		return result
 	}
 
 	// ==================== Dirty Tracking ====================
