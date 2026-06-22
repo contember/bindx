@@ -140,11 +140,14 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	}
 
 	/**
-	 * Gets the current entity data.
+	 * Gets the current entity data to DISPLAY.
 	 * Returns selected fields subset as specified by TSelected type parameter.
+	 * While a pessimistic persist is in-flight this is the server baseline; the
+	 * canonical snapshot (see {@link getSnapshot}, used for dirty tracking) stays
+	 * dirty underneath.
 	 */
 	get data(): TSelected | null {
-		const snapshot = this.getSnapshot()
+		const snapshot = this.store.getPresentationSnapshot<T>(this.entityType, this.entityId)
 		return (snapshot?.data ?? null) as TSelected | null
 	}
 

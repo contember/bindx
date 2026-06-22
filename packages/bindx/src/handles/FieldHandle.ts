@@ -87,10 +87,11 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	}
 
 	/**
-	 * Gets the current field value.
+	 * Gets the current field value to DISPLAY. While a pessimistic persist is
+	 * in-flight this is the server baseline; otherwise it is the live value.
 	 */
 	get value(): T | null {
-		const data = this.getEntityData()
+		const data = this.getPresentationData()
 		if (!data) return null
 		return getNestedValue(data, this.fieldPath) as T | null
 	}
@@ -105,10 +106,14 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	}
 
 	/**
-	 * Checks if the field has been modified.
+	 * Checks if the field has been modified. Compares the CANONICAL value against
+	 * the server value — never the presented value, so a field stays correctly
+	 * dirty even while its display shows the server baseline mid-pessimistic-persist.
 	 */
 	get isDirty(): boolean {
-		return !deepEqual(this.value, this.serverValue)
+		const data = this.getEntityData()
+		const value = data ? (getNestedValue(data, this.fieldPath) as T | null) : null
+		return !deepEqual(value, this.serverValue)
 	}
 
 	/**
