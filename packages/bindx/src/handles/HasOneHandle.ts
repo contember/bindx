@@ -1,6 +1,7 @@
 import { EntityRelatedHandle, embeddedDataMatchesSnapshot } from './BaseHandle.js'
 import type { ActionDispatcher } from '../core/ActionDispatcher.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
+import type { StoredRelationState } from '../store/RelationStore.js'
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 import type { SelectionMeta } from '../selection/types.js'
 import {
@@ -17,6 +18,7 @@ import {
 	type Unsubscribe,
 	type EntityAccessor,
 	type HasOneAccessor,
+	type HasOneRelationState,
 } from './types.js'
 import { createClientError, type ErrorInput, type FieldError } from '../errors/types.js'
 import type {
@@ -137,51 +139,122 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 
 	/**
 	 * Gets the relation state.
-	 * Falls back to snapshot data when no explicit relation state exists,
-	 * so server-loaded has-one relations report 'connected' without
-	 * requiring a prior RelationStore entry.
+	 * Materializes the RelationStore entry from embedded snapshot data first, so a
+	 * server-loaded has-one reports 'connected' without a prior explicit entry.
 	 */
-	get state(): 'connected' | 'disconnected' | 'deleted' | 'creating' {
+	get state(): HasOneRelationState {
+		this.ensureEntry()
 		const relation = this.store.getRelation(
 			this.entityType,
 			this.entityId,
 			this.fieldName,
 		)
-		if (relation) {
-			return relation.state
-		}
-		// No explicit relation state — check if snapshot has embedded data
-		if (this.relatedId !== null) {
-			return 'connected'
-		}
-		return 'disconnected'
+		return relation?.state ?? 'disconnected'
 	}
 
 	/**
-	 * Gets the current related entity ID.
-	 * Falls back to entity data if relation state is not initialized.
+	 * Gets the current related entity ID — read exclusively from the RelationStore
+	 * after materializing the entry from embedded snapshot data.
 	 */
 	get relatedId(): string | null {
-		// First check relation state (for manual changes like connect/disconnect)
+		this.ensureEntry()
 		const relation = this.store.getRelation(
 			this.entityType,
 			this.entityId,
 			this.fieldName,
 		)
-		if (relation) {
-			return relation.currentId
+		return relation?.currentId ?? null
+	}
+
+	/**
+	 * Materializes this has-one's RelationStore entry from the parent's embedded
+	 * snapshot data, so the store is the single source of truth (symmetric with
+	 * {@link HasManyListHandle.materializeEmbeddedItems}).
+	 *
+	 * Only the relation entry is touched here — child-snapshot propagation stays in
+	 * {@link ensureRelatedEntitySnapshot}, which owns the per-relation propagation
+	 * slot so the two paths never double-consume it.
+	 *
+	 * - No entry yet + the parent embeds a related object with an id → create a
+	 *   `connected` entry (non-notifying) whose server baseline comes from the
+	 *   parent's serverData, so a freshly loaded relation is not dirty
+	 *   (currentId === serverId, state === serverState).
+	 * - Existing entry + parent re-fetch (embedded reference changed) that is NOT
+	 *   locally dirty → advance the server baseline to the new related id.
+	 * - A local connect/disconnect, a placeholder, or a `creating` entry is left
+	 *   untouched — it is detected as a locally-dirty relation.
+	 * - No embedded data and no entry → the relation stays unmaterialized (null).
+	 */
+	private ensureEntry(): void {
+		const existing = this.store.getRelation(this.entityType, this.entityId, this.fieldName)
+		const embeddedId = this.readEmbeddedRelatedId()
+
+		if (!existing) {
+			if (embeddedId === null) return
+			const serverId = this.readServerRelatedId()
+			this.store.getOrCreateRelation(this.entityType, this.entityId, this.fieldName, {
+				currentId: embeddedId,
+				serverId,
+				state: 'connected',
+				serverState: serverId !== null ? 'connected' : 'disconnected',
+				placeholderData: {},
+			})
+			return
 		}
 
-		// Fallback to entity snapshot data (for server-loaded data)
-		const parentSnapshot = this.store.getEntitySnapshot(this.entityType, this.entityId)
-		if (parentSnapshot?.data) {
-			const relatedData = (parentSnapshot.data as Record<string, unknown>)[this.fieldName]
-			if (relatedData && typeof relatedData === 'object' && 'id' in relatedData) {
-				return (relatedData as { id: string }).id
-			}
+		this.advanceServerBaselineOnRefetch(existing, embeddedId)
+	}
+
+	/**
+	 * On a parent re-fetch (embedded reference changed) advances the relation's
+	 * server baseline to the embedded related id, but only when the relation is
+	 * not locally dirty — a local connect/disconnect/create must survive a re-fetch.
+	 *
+	 * Does NOT consume the propagation slot — {@link ensureRelatedEntitySnapshot}
+	 * owns it. The same reference-change signal drives both, so both run within the
+	 * one render that observes a new parent reference.
+	 */
+	private advanceServerBaselineOnRefetch(
+		existing: StoredRelationState,
+		embeddedId: string | null,
+	): void {
+		if (embeddedId === null || existing.serverId === embeddedId) return
+		if (this.isLocallyDirty(existing)) return
+
+		const embeddedData = this.readEmbeddedRelatedData()
+		if (!this.store.hasEmbeddedDataChanged(this.entityType, this.entityId, this.fieldName, embeddedData)) {
+			return
 		}
 
-		return null
+		this.store.setRelation(this.entityType, this.entityId, this.fieldName, {
+			currentId: embeddedId,
+			serverId: embeddedId,
+			state: 'connected',
+			serverState: 'connected',
+		})
+	}
+
+	private isLocallyDirty(relation: StoredRelationState): boolean {
+		return (
+			relation.currentId !== relation.serverId ||
+			relation.state !== relation.serverState ||
+			Object.keys(relation.placeholderData).length > 0
+		)
+	}
+
+	/** Reads the embedded related object from the parent's canonical current data. */
+	private readEmbeddedRelatedData(): unknown {
+		return this.getEntityData()?.[this.fieldName]
+	}
+
+	/** Extracts the related id from the parent's embedded current data, or null. */
+	private readEmbeddedRelatedId(): string | null {
+		return extractRelatedId(this.readEmbeddedRelatedData())
+	}
+
+	/** Extracts the related id from the parent's embedded server data, or null. */
+	private readServerRelatedId(): string | null {
+		return extractRelatedId(this.getServerData()?.[this.fieldName])
 	}
 
 	/**
@@ -354,6 +427,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 * Checks if the relation is dirty.
 	 */
 	get isDirty(): boolean {
+		this.ensureEntry()
 		const relation = this.store.getRelation(
 			this.entityType,
 			this.entityId,
@@ -361,11 +435,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		)
 		if (!relation) return false
 
-		return (
-			relation.currentId !== relation.serverId ||
-			relation.state !== relation.serverState ||
-			Object.keys(relation.placeholderData).length > 0
-		)
+		return this.isLocallyDirty(relation)
 	}
 
 	/**
@@ -592,4 +662,14 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		return this.entityRaw.interceptPersisting(interceptor)
 	}
 
+}
+
+/**
+ * Extracts the related entity id from an embedded has-one object, or null when
+ * the value is absent / not an object with a string id.
+ */
+function extractRelatedId(embedded: unknown): string | null {
+	if (!embedded || typeof embedded !== 'object' || !('id' in embedded)) return null
+	const id = embedded.id
+	return typeof id === 'string' ? id : null
 }
