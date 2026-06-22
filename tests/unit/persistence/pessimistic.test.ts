@@ -110,7 +110,7 @@ describe('pessimistic update mode', () => {
 			expect(finalSnapshot?.serverData).toEqual({ id: '1', title: 'Updated Title' })
 		})
 
-		test('should revert to server state when persist fails in pessimistic mode', async () => {
+		test('should preserve local edits for retry when persist fails in pessimistic mode', async () => {
 			const adapter = createFailingAdapter()
 			const persister = new BatchPersister(adapter, store, dispatcher)
 
@@ -126,10 +126,36 @@ describe('pessimistic update mode', () => {
 			// Should fail
 			expect(result.success).toBe(false)
 
-			// State should be back to original (server state)
+			// P2: the user's edit is restored and kept dirty so they can fix the error
+			// and retry — not stuck showing server data the pessimistic reset left.
 			const finalSnapshot = store.getEntitySnapshot('Article', '1')
-			expect((finalSnapshot?.data as { title: string })?.title).toBe('Original Title')
+			expect((finalSnapshot?.data as { title: string })?.title).toBe('Failed Update')
 			expect((finalSnapshot?.serverData as { title: string })?.title).toBe('Original Title')
+			expect(store.getAllDirtyEntities()).toContainEqual({
+				entityType: 'Article',
+				entityId: '1',
+				changeType: 'update',
+			})
+		})
+
+		test('should preserve a created entity for retry when persist fails in pessimistic mode', async () => {
+			const adapter = createFailingAdapter()
+			const persister = new BatchPersister(adapter, store, dispatcher)
+
+			const tempId = store.createEntity('Article', { title: 'Draft' })
+
+			const result = await persister.persist('Article', tempId, { updateMode: 'pessimistic' })
+			expect(result.success).toBe(false)
+
+			// P2: the create survives as a pending create the user can retry — not
+			// stranded in a half-state nor dropped by the post-persist sweep.
+			expect(store.hasEntity('Article', tempId)).toBe(true)
+			expect((store.getEntitySnapshot('Article', tempId)?.data as { title: string })?.title).toBe('Draft')
+			expect(store.getAllDirtyEntities()).toContainEqual({
+				entityType: 'Article',
+				entityId: tempId,
+				changeType: 'create',
+			})
 		})
 
 		test('should commit changes on success with optimistic mode', async () => {
@@ -262,7 +288,7 @@ describe('pessimistic update mode', () => {
 			expect((store.getEntitySnapshot('Article', '2')?.data as { title: string })?.title).toBe('Updated 2')
 		})
 
-		test('should keep server state on batch failure in pessimistic mode', async () => {
+		test('should preserve local edits for retry on batch failure in pessimistic mode', async () => {
 			const adapter = createFailingAdapter()
 			const persister = new BatchPersister(adapter, store, dispatcher)
 
@@ -280,9 +306,11 @@ describe('pessimistic update mode', () => {
 			// Should fail
 			expect(result.success).toBe(false)
 
-			// Both should be at server state (original)
-			expect((store.getEntitySnapshot('Article', '1')?.data as { title: string })?.title).toBe('Title 1')
-			expect((store.getEntitySnapshot('Article', '2')?.data as { title: string })?.title).toBe('Title 2')
+			// P2: both edits are preserved (kept dirty) for a retry rather than reverted.
+			expect((store.getEntitySnapshot('Article', '1')?.data as { title: string })?.title).toBe('Updated 1')
+			expect((store.getEntitySnapshot('Article', '2')?.data as { title: string })?.title).toBe('Updated 2')
+			expect((store.getEntitySnapshot('Article', '1')?.serverData as { title: string })?.title).toBe('Title 1')
+			expect((store.getEntitySnapshot('Article', '2')?.serverData as { title: string })?.title).toBe('Title 2')
 		})
 	})
 })
