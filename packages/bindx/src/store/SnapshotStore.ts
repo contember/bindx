@@ -248,10 +248,13 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	 * metadata, root registration, errors, touched state, propagation tracking,
 	 * and owned relation state).
 	 *
-	 * This does NOT cascade into descendants. With reachability-based create
-	 * detection a detached created entity is simply unreachable and produces no
-	 * mutation, so stranded descendants are harmless — they are collected by the
-	 * lazy memory sweep rather than by an eager cascade.
+	 * This does NOT cascade into descendants, and it does NOT strip inbound edges
+	 * (other entities' has-many membership / has-one currentId that point AT the
+	 * removed id). Callers must therefore only remove an entity that is unreachable
+	 * — i.e. no live parent relation references it — so the graph cannot dangle. The
+	 * lazy {@link sweepUnreachableCreated} guarantees this by construction; the React
+	 * unmount cleanup routes through it (via {@link unregisterRootEntity} + a sweep)
+	 * rather than calling removeEntity on a possibly-referenced id.
 	 */
 	removeEntity(entityType: string, id: string): void {
 		const key = this.getEntityKey(entityType, id)
@@ -276,9 +279,9 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	 * row to delete.
 	 */
 	isNeverPersisted(entityId: string): boolean {
-		const snapshot = this.entitySnapshots.findByEntityId(entityId)
-		if (!snapshot) return false
-		return !this.meta.existsOnServer(`${snapshot.entityType}:${snapshot.id}`)
+		const key = this.entitySnapshots.keyForId(entityId)
+		if (!key) return false
+		return !this.meta.existsOnServer(key)
 	}
 
 	// ==================== Load State (delegated to EntityMetaStore) ====================
@@ -352,8 +355,12 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	}
 
 	/**
-	 * Unregisters a top-level root (e.g. when its owning component unmounts or the
-	 * entity is removed from a top-level list).
+	 * Unregisters a top-level root WITHOUT removing its snapshot. Called by the React
+	 * unmount cleanup (a `<Entity create>` form / `useEntityList` draft) before a
+	 * {@link sweepUnreachableCreated} pass: dropping the root lets the sweep reclaim a
+	 * truly-orphaned create, while a create still anchored by another live relation
+	 * stays reachable and survives. (Un-rooting also happens implicitly via
+	 * {@link registerParentChild} and the rekey in {@link mapTempIdToPersistedId}.)
 	 */
 	unregisterRootEntity(entityType: string, id: string): void {
 		this.roots.unregister(this.getEntityKey(entityType, id))

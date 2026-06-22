@@ -222,6 +222,7 @@ export class BatchPersister {
 			capturedStates = this.captureEntityStates(sortedEntities)
 		}
 
+		let result: PersistenceResult | undefined
 		try {
 			// Build mutations BEFORE resetting state (for pessimistic mode)
 			// The mutations need to contain the dirty data to send to server
@@ -229,13 +230,14 @@ export class BatchPersister {
 
 			if (mutations.length === 0) {
 				// Nothing to persist
-				return {
+				result = {
 					success: true,
 					results: [],
 					successCount: 0,
 					failedCount: 0,
 					skippedCount: 0,
 				}
+				return result
 			}
 
 			// For pessimistic mode, reset entities to server state after capturing
@@ -254,7 +256,8 @@ export class BatchPersister {
 			const transactionResult = await this.executeTransaction(mutations, options?.signal)
 
 			// Process results with captured state for pessimistic mode
-			return this.processTransactionResult(sortedEntities, transactionResult, scope, options, capturedStates)
+			result = this.processTransactionResult(sortedEntities, transactionResult, scope, options, capturedStates)
+			return result
 
 		} finally {
 			// Clear in-flight status
@@ -269,9 +272,12 @@ export class BatchPersister {
 			this.undoManager?.unblock()
 
 			// Reclaim memory: drop snapshots of any created entities orphaned during
-			// editing. Runs once the persist has settled (state restored, persisting
-			// cleared), so live in-flight creates are never swept.
-			this.store.sweepUnreachableCreated()
+			// editing. Only after a FULLY successful persist — on failure the captured
+			// creates/edits were restored for retry (see processTransactionResult), and
+			// sweeping then could reclaim a create the user still intends to save.
+			if (result?.success) {
+				this.store.sweepUnreachableCreated()
+			}
 		}
 	}
 
@@ -752,19 +758,10 @@ export class BatchPersister {
 							mutationResult.errorMessage,
 						)
 
-						// In pessimistic mode the entity was reset to its server view before the
-						// transaction. On failure, restore its captured dirty state WITHOUT
-						// committing (P2) so the user's edits and creates survive for a retry
-						// instead of being stuck showing server data. Optimistic mode rolls back
-						// to server state only when rollbackOnError is set.
-						if (isPessimistic && capturedStates) {
-							const capturedState = capturedStates.find(
-								s => s.entityType === entity.entityType && s.entityId === entity.entityId,
-							)
-							if (capturedState) {
-								this.restoreEntityState(capturedState, false)
-							}
-						} else if (rollbackOnError) {
+						// Optimistic mode rolls a FAILED entity back to server state only when
+						// rollbackOnError is set. Pessimistic restore is handled below for ALL
+						// captured entities, not just the failed ones.
+						if (!isPessimistic && rollbackOnError) {
 							this.rollbackEntity(entity)
 						}
 					}
@@ -786,6 +783,20 @@ export class BatchPersister {
 					} else {
 						failedCount++
 					}
+				}
+			}
+
+			// Pessimistic mode: the transaction failed, so from the user's point of view
+			// nothing was committed. Undo the pre-transaction server-view reset for EVERY
+			// captured entity (not only the ones whose individual mutation failed) and keep
+			// the restored data dirty (commit=false) so the user can retry. Restoring even
+			// the entities whose mutation happened to succeed in the non-atomic sequential
+			// fallback is what re-establishes their relation edges to inline-created
+			// children — keeping those creates reachable so the post-persist sweep does not
+			// reclaim a child the user still intends to save (P2).
+			if (isPessimistic && capturedStates) {
+				for (const capturedState of capturedStates) {
+					this.restoreEntityState(capturedState, false)
 				}
 			}
 		}
@@ -844,6 +855,12 @@ export class BatchPersister {
 				this.store.setRelation(capturedState.entityType, capturedState.entityId, fieldName, {
 					currentId: relationState.currentId,
 					state: relationState.state,
+					// Restore placeholderData too: a has-one in the 'creating' state carries
+					// its inline create payload here, and getDirtyRelations treats a
+					// non-empty placeholderData as a dirty signal. Dropping it on a
+					// commit=false retry would lose the inline data and silently mark the
+					// relation clean. (For commit=true it is cleared by commitRelation below.)
+					placeholderData: relationState.placeholderData,
 				})
 				if (commit) {
 					this.store.commitRelation(capturedState.entityType, capturedState.entityId, fieldName)

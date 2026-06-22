@@ -24,10 +24,6 @@ export class RootRegistry {
 		this.roots.delete(key)
 	}
 
-	has(key: string): boolean {
-		return this.roots.has(key)
-	}
-
 	keys(): IterableIterator<string> {
 		return this.roots.keys()
 	}

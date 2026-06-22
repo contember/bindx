@@ -178,6 +178,20 @@ export class ActionDispatcher {
 	}
 
 	/**
+	 * Reverts a has-one relation to the disconnected state. Shared by
+	 * DISCONNECT_RELATION and the never-persisted arm of DELETE_RELATION (deleting a
+	 * never-created target just cancels its creation — there is no server row to
+	 * delete), so the "disconnected" semantics live in one place.
+	 */
+	private disconnectRelation(entityType: string, entityId: string, fieldName: string): void {
+		this.store.setRelation(entityType, entityId, fieldName, {
+			currentId: null,
+			state: 'disconnected',
+			placeholderData: {},
+		})
+	}
+
+	/**
 	 * Executes an action, updating the store.
 	 */
 	private execute(action: Action): void {
@@ -231,16 +245,7 @@ export class ActionDispatcher {
 			}
 
 			case 'DISCONNECT_RELATION': {
-				this.store.setRelation(
-					action.entityType,
-					action.entityId,
-					action.fieldName,
-					{
-						currentId: null,
-						state: 'disconnected',
-						placeholderData: {},
-					},
-				)
+				this.disconnectRelation(action.entityType, action.entityId, action.fieldName)
 				break
 			}
 
@@ -251,16 +256,7 @@ export class ActionDispatcher {
 				// parent is not spuriously dirtied by a 'deleted' state; reachability then
 				// drops the orphaned create. A server target gets the normal 'deleted'.
 				if (deletedId && this.store.isNeverPersisted(deletedId)) {
-					this.store.setRelation(
-						action.entityType,
-						action.entityId,
-						action.fieldName,
-						{
-							currentId: null,
-							state: 'disconnected',
-							placeholderData: {},
-						},
-					)
+					this.disconnectRelation(action.entityType, action.entityId, action.fieldName)
 				} else {
 					this.store.setRelation(
 						action.entityType,

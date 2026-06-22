@@ -201,7 +201,12 @@ export class EntitySnapshotStore {
 	 */
 	remove(key: string): void {
 		const existing = this.snapshots.get(key)
-		if (existing) {
+		// Only drop the id→key entry when it still points at THIS key. Ids are
+		// globally unique by construction (server UUIDs / minted temp ids), but if a
+		// caller-supplied id ever collided across types, last-writer-wins means
+		// another snapshot now owns the entry — removing this one must not strand
+		// that survivor as id-unresolvable.
+		if (existing && this.idIndex.get(existing.id) === key) {
 			this.idIndex.delete(existing.id)
 		}
 		this.snapshots.delete(key)
@@ -313,19 +318,12 @@ export class EntitySnapshotStore {
 
 	/**
 	 * Resolves an entity id (without its type) to its composite key in O(1).
+	 * Relation state records only child ids, not their types, so this is how a
+	 * reachability walk (and {@link SnapshotStore.isNeverPersisted}) maps a child
+	 * id back to its snapshot. Ids are globally unique, so the mapping is unambiguous.
 	 */
 	keyForId(id: string): string | undefined {
 		return this.idIndex.get(id)
-	}
-
-	/**
-	 * Finds a snapshot by its entity id alone (without knowing the entity type).
-	 * Used during cascade purges where a relation only records child ids, not their
-	 * types. Temp ids are globally unique, so the first match is unambiguous.
-	 */
-	findByEntityId(id: string): EntitySnapshot | undefined {
-		const key = this.idIndex.get(id)
-		return key ? this.snapshots.get(key) : undefined
 	}
 
 	clear(): void {

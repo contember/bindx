@@ -140,4 +140,24 @@ describe('reachability create detection', () => {
 			changeType: 'delete',
 		})
 	})
+
+	// getLiveChildIds contract: a has-one edge in the 'deleted' state must NOT count
+	// its target as a live child — the target is being removed by that edge, so it no
+	// longer anchors a created entity reachable only through it. (Server targets stay
+	// reachable as roots regardless; this guards the created-only case.)
+	test('a created target reached only through a deleted has-one is NOT a create', () => {
+		store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'T' }, true)
+		const auId = store.createEntity('Author', { name: 'draft' })
+
+		// Reach the created Author solely through a has-one whose state is 'deleted',
+		// and strip its top-level root so the deleted edge is its only path.
+		store.setRelation('Article', 'a-1', 'author', { currentId: auId, state: 'deleted' })
+		store.unregisterRootEntity('Author', auId)
+
+		expect(creates()).toEqual([])
+
+		// Contrast: a live ('connected') edge to the same created target makes it a create.
+		store.setRelation('Article', 'a-1', 'author', { currentId: auId, state: 'connected' })
+		expect(creates()).toEqual([{ entityType: 'Author', entityId: auId, changeType: 'create' }])
+	})
 })

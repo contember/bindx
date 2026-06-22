@@ -36,16 +36,28 @@ export class ReachabilityAnalyzer {
 		const visited = new Set<string>()
 		const stack: string[] = []
 
-		// Seed: every server entity is a root, and so is every in-flight (persisting)
-		// entity. The latter keeps a created entity live while it is mid-persist —
-		// e.g. pessimistic mode temporarily resets an update parent to its server
-		// view, which would otherwise make a freshly-created child look unreachable
-		// during the async transaction window.
+		// Seed roots and, in the same pass, detect whether any never-persisted
+		// (created) snapshot exists at all. Every server entity is a root, and so is
+		// every in-flight (persisting) entity — the latter keeps a created entity
+		// live while it is mid-persist (e.g. pessimistic mode temporarily resets an
+		// update parent to its server view, which would otherwise make a freshly
+		// created child look unreachable during the async transaction window).
+		let hasCreated = false
 		for (const key of this.entitySnapshots.keys()) {
-			if (this.meta.existsOnServer(key) || this.meta.isPersisting(key)) {
+			const onServer = this.meta.existsOnServer(key)
+			if (!onServer) hasCreated = true
+			if (onServer || this.meta.isPersisting(key)) {
 				stack.push(key)
 			}
 		}
+
+		// Fast path: with no created snapshot anywhere, nothing can be a reachable
+		// create. Skip the O(V·(R+H)) graph walk entirely — the common update-only
+		// form/grid pays only the single existsOnServer scan above (which the seed
+		// loop performs regardless) instead of walking every server entity's edges
+		// on every dirty check (this runs on each store notification, ≈ keystroke).
+		if (!hasCreated) return reachableCreated
+
 		// Seed: explicitly-registered top-level creates (no persisted parent).
 		for (const key of this.roots.keys()) {
 			if (this.entitySnapshots.has(key)) {

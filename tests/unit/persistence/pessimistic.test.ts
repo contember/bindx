@@ -3,10 +3,38 @@ import {
 	SnapshotStore,
 	ActionDispatcher,
 	BatchPersister,
+	SchemaRegistry,
+	type SchemaDefinition,
 	type BackendAdapter,
 	type TransactionResult,
 	type TransactionMutation,
 } from '@contember/bindx'
+
+interface PersistSchema {
+	Article: { id: string; title: string; comments?: Array<{ id: string; text: string }> }
+	Comment: { id: string; text: string }
+	[key: string]: object
+}
+
+// Minimal schema enabling relation persistence (auto-creates a MutationCollector),
+// so a created child nests into its parent's mutation.
+const persistSchema: SchemaDefinition<PersistSchema> = {
+	entities: {
+		Article: {
+			fields: {
+				id: { type: 'scalar' },
+				title: { type: 'scalar' },
+				comments: { type: 'hasMany', target: 'Comment', relationKind: 'oneHasMany' },
+			},
+		},
+		Comment: {
+			fields: {
+				id: { type: 'scalar' },
+				text: { type: 'scalar' },
+			},
+		},
+	},
+}
 
 // Helper to create a mock adapter
 function createMockAdapter(options?: {
@@ -311,6 +339,85 @@ describe('pessimistic update mode', () => {
 			expect((store.getEntitySnapshot('Article', '2')?.data as { title: string })?.title).toBe('Updated 2')
 			expect((store.getEntitySnapshot('Article', '1')?.serverData as { title: string })?.title).toBe('Title 1')
 			expect((store.getEntitySnapshot('Article', '2')?.serverData as { title: string })?.title).toBe('Title 2')
+		})
+
+		// PERSIST-1 regression: on a PARTIAL failure (one mutation succeeds, the
+		// transaction fails overall via the non-atomic sequential fallback — the only
+		// path any real adapter takes), the succeeded-but-reset entity must NOT be
+		// stranded at the server view. Every captured entity is restored for retry.
+		test('should restore even the individually-succeeded entity on a partial batch failure', async () => {
+			// One mutation succeeds, the other fails → transaction reported as failed.
+			const adapter: BackendAdapter = {
+				query: mock(() => Promise.resolve([])),
+				persist: mock((_entityType: string, id: string) =>
+					id === '2'
+						? Promise.resolve({ ok: false, errorMessage: 'Failed 2' })
+						: Promise.resolve({ ok: true }),
+				),
+				create: mock(() => Promise.resolve({ ok: true, data: {} })),
+				delete: mock(() => Promise.resolve({ ok: true })),
+			}
+			const persister = new BatchPersister(adapter, store, dispatcher)
+
+			store.setEntityData('Article', '1', { id: '1', title: 'Title 1' }, true)
+			store.setEntityData('Article', '2', { id: '2', title: 'Title 2' }, true)
+			store.setFieldValue('Article', '1', ['title'], 'Updated 1')
+			store.setFieldValue('Article', '2', ['title'], 'Updated 2')
+
+			const result = await persister.persistAll({ updateMode: 'pessimistic' })
+			expect(result.success).toBe(false)
+
+			// '1' succeeded individually but the transaction failed — it must be restored
+			// to its dirty edit (not left showing the reset server view) and kept dirty.
+			expect((store.getEntitySnapshot('Article', '1')?.data as { title: string })?.title).toBe('Updated 1')
+			expect((store.getEntitySnapshot('Article', '2')?.data as { title: string })?.title).toBe('Updated 2')
+			expect(store.getAllDirtyEntities()).toContainEqual({
+				entityType: 'Article', entityId: '1', changeType: 'update',
+			})
+			expect(store.getAllDirtyEntities()).toContainEqual({
+				entityType: 'Article', entityId: '2', changeType: 'update',
+			})
+		})
+
+		// PERSIST-1 regression: an inline-created child of a reset parent must survive a
+		// partial batch failure — restore-all re-establishes the parent's edge so the
+		// child stays reachable, and the post-persist sweep runs only on success.
+		test('should preserve an inline-created child of a succeeded parent on partial batch failure', async () => {
+			const schema = new SchemaRegistry(persistSchema)
+			const adapter: BackendAdapter = {
+				query: mock(() => Promise.resolve([])),
+				persist: mock((_entityType: string, id: string) =>
+					id === '2'
+						? Promise.resolve({ ok: false, errorMessage: 'Failed 2' })
+						: Promise.resolve({ ok: true, data: { id } }),
+				),
+				create: mock(() => Promise.resolve({ ok: true, data: {} })),
+				delete: mock(() => Promise.resolve({ ok: true })),
+			}
+			const persister = new BatchPersister(adapter, store, dispatcher, { schema })
+
+			// Server parent A with a created child + a dirty title (so A is an update that
+			// gets reset pre-transaction), plus an unrelated server parent B that fails.
+			store.setEntityData('Article', '1', { id: '1', title: 'A', comments: [] }, true)
+			store.setEntityData('Article', '2', { id: '2', title: 'B' }, true)
+			store.setFieldValue('Article', '1', ['title'], 'A edited')
+			store.setFieldValue('Article', '2', ['title'], 'B edited')
+
+			const childId = store.createEntity('Comment', { text: 'draft' })
+			store.addToHasMany('Article', '1', 'comments', childId)
+			store.registerParentChild('Article', '1', 'Comment', childId)
+
+			const result = await persister.persistAll({ updateMode: 'pessimistic' })
+			expect(result.success).toBe(false)
+
+			// The created child must NOT be swept: A's edge is restored (reachable again)
+			// and the sweep is gated to full success. It survives as a pending create.
+			expect(store.hasEntity('Comment', childId)).toBe(true)
+			expect(store.getAllDirtyEntities()).toContainEqual({
+				entityType: 'Comment', entityId: childId, changeType: 'create',
+			})
+			// A's own edit is preserved for retry as well.
+			expect((store.getEntitySnapshot('Article', '1')?.data as { title: string })?.title).toBe('A edited')
 		})
 	})
 })

@@ -185,17 +185,27 @@ function EntityCreateMode({
 		return id
 	}, [entityType, store])
 
-	// Discard a never-persisted create when this form unmounts, so its snapshot
-	// and root registration do not leak. A persisted entity (rekeyed to a server
-	// id) is left untouched.
+	// Lifecycle of the draft entity:
+	// - Re-seed it under the SAME temp id if a previous unmount's cleanup removed
+	//   it. This keeps the form bound across a React StrictMode mount→cleanup→mount
+	//   cycle (effects run twice in dev), where the memoized id survives but the
+	//   snapshot would otherwise be gone. No-op on first mount and after the entity
+	//   was persisted (rekeyed to a server id).
+	// - On unmount, discard a never-persisted draft. Drop its root registration and
+	//   let the reachability-aware sweep reclaim it ONLY if nothing else references
+	//   it — a draft connected into another live parent stays reachable and survives
+	//   (the diamond / shared-create case). A persisted entity is left untouched.
 	useEffect(() => {
+		if (!store.getPersistedId(entityType, tempId) && !store.hasEntity(entityType, tempId)) {
+			store.createEntity(entityType, { id: tempId })
+		}
 		return () => {
-			const id = tempIdRef.current
-			if (id && !store.getPersistedId(entityType, id)) {
-				store.removeEntity(entityType, id)
+			if (!store.getPersistedId(entityType, tempId)) {
+				store.unregisterRootEntity(entityType, tempId)
+				store.sweepUnreachableCreated()
 			}
 		}
-	}, [store, entityType])
+	}, [store, entityType, tempId])
 
 	// Subscribe to store changes for this entity
 	const subscribe = useCallback(
