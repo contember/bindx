@@ -283,6 +283,19 @@ export function useEntityList(
 		[store],
 	)
 
+	// Discard never-persisted drafts when the list unmounts. List-level creates are
+	// top-level roots (nothing anchors them), so the lazy sweep never reclaims them;
+	// removing them here unregisters the root and frees the snapshot.
+	useEffect(() => {
+		return () => {
+			for (const item of listStateRef.current.items) {
+				if (isTempId(item.id) && !store.getPersistedId(entityType, item.id)) {
+					store.removeEntity(entityType, item.id)
+				}
+			}
+		}
+	}, [store, entityType])
+
 	// --- Snapshot ---
 	const getSnapshot = useCallback((): UseEntityListResult<any> => {
 		const state = listStateRef.current

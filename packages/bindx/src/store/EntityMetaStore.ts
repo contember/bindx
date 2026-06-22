@@ -116,6 +116,16 @@ export class EntityMetaStore {
 	}
 
 	/**
+	 * Removes all metadata for an entity (load state, meta, persisting, temp mapping).
+	 */
+	remove(key: string): void {
+		this.loadStates.delete(key)
+		this.entityMetas.delete(key)
+		this.persistingEntities.delete(key)
+		this.tempToPersistedId.delete(key)
+	}
+
+	/**
 	 * Moves all metadata from oldKey to newKey.
 	 */
 	rekey(oldKey: string, newKey: string): void {

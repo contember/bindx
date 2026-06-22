@@ -185,6 +185,18 @@ function EntityCreateMode({
 		return id
 	}, [entityType, store])
 
+	// Discard a never-persisted create when this form unmounts, so its snapshot
+	// and root registration do not leak. A persisted entity (rekeyed to a server
+	// id) is left untouched.
+	useEffect(() => {
+		return () => {
+			const id = tempIdRef.current
+			if (id && !store.getPersistedId(entityType, id)) {
+				store.removeEntity(entityType, id)
+			}
+		}
+	}, [store, entityType])
+
 	// Subscribe to store changes for this entity
 	const subscribe = useCallback(
 		(callback: () => void) => store.subscribeToEntity(entityType, tempId, callback),

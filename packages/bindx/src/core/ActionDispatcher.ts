@@ -216,7 +216,7 @@ export class ActionDispatcher {
 				)
 				break
 
-			case 'CONNECT_RELATION':
+			case 'CONNECT_RELATION': {
 				this.store.setRelation(
 					action.entityType,
 					action.entityId,
@@ -228,8 +228,9 @@ export class ActionDispatcher {
 				)
 				this.store.registerParentChild(action.entityType, action.entityId, action.targetType, action.targetId)
 				break
+			}
 
-			case 'DISCONNECT_RELATION':
+			case 'DISCONNECT_RELATION': {
 				this.store.setRelation(
 					action.entityType,
 					action.entityId,
@@ -241,17 +242,37 @@ export class ActionDispatcher {
 					},
 				)
 				break
+			}
 
-			case 'DELETE_RELATION':
-				this.store.setRelation(
-					action.entityType,
-					action.entityId,
-					action.fieldName,
-					{
-						state: 'deleted',
-					},
-				)
+			case 'DELETE_RELATION': {
+				const deletedId = this.store.getRelation(action.entityType, action.entityId, action.fieldName)?.currentId
+				// Deleting a never-persisted target just cancels its creation — there is
+				// no server row to delete. Revert the relation to 'disconnected' so the
+				// parent is not spuriously dirtied by a 'deleted' state; reachability then
+				// drops the orphaned create. A server target gets the normal 'deleted'.
+				if (deletedId && this.store.isNeverPersisted(deletedId)) {
+					this.store.setRelation(
+						action.entityType,
+						action.entityId,
+						action.fieldName,
+						{
+							currentId: null,
+							state: 'disconnected',
+							placeholderData: {},
+						},
+					)
+				} else {
+					this.store.setRelation(
+						action.entityType,
+						action.entityId,
+						action.fieldName,
+						{
+							state: 'deleted',
+						},
+					)
+				}
 				break
+			}
 
 			case 'RESET_RELATION':
 				this.store.resetRelation(

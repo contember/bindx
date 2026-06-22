@@ -15,6 +15,14 @@ import {
 export class EntitySnapshotStore {
 	private readonly snapshots = new Map<string, EntitySnapshot>()
 
+	/**
+	 * Index from entity id to its composite key, so reachability walks can resolve
+	 * a relation's child id (which carries no type) to a snapshot in O(1). Ids are
+	 * globally unique (temp ids are minted unique; server ids are UUIDs), so a
+	 * single key per id is unambiguous.
+	 */
+	private readonly idIndex = new Map<string, string>()
+
 	get(key: string): EntitySnapshot | undefined {
 		return this.snapshots.get(key)
 	}
@@ -53,6 +61,7 @@ export class EntitySnapshotStore {
 		)
 
 		this.snapshots.set(key, newSnapshot)
+		this.idIndex.set(id, key)
 		return newSnapshot
 	}
 
@@ -191,6 +200,10 @@ export class EntitySnapshotStore {
 	 * Removes an entity snapshot.
 	 */
 	remove(key: string): void {
+		const existing = this.snapshots.get(key)
+		if (existing) {
+			this.idIndex.delete(existing.id)
+		}
 		this.snapshots.delete(key)
 	}
 
@@ -263,6 +276,7 @@ export class EntitySnapshotStore {
 		const keys = new Set<string>()
 		for (const [key, snapshot] of snapshots) {
 			this.snapshots.set(key, snapshot)
+			this.idIndex.set(snapshot.id, key)
 			keys.add(key)
 		}
 		return keys
@@ -289,14 +303,34 @@ export class EntitySnapshotStore {
 
 		this.snapshots.delete(oldKey)
 		this.snapshots.set(newKey, newSnapshot)
+		this.idIndex.delete(snapshot.id)
+		this.idIndex.set(newId, newKey)
 	}
 
 	keys(): IterableIterator<string> {
 		return this.snapshots.keys()
 	}
 
+	/**
+	 * Resolves an entity id (without its type) to its composite key in O(1).
+	 */
+	keyForId(id: string): string | undefined {
+		return this.idIndex.get(id)
+	}
+
+	/**
+	 * Finds a snapshot by its entity id alone (without knowing the entity type).
+	 * Used during cascade purges where a relation only records child ids, not their
+	 * types. Temp ids are globally unique, so the first match is unambiguous.
+	 */
+	findByEntityId(id: string): EntitySnapshot | undefined {
+		const key = this.idIndex.get(id)
+		return key ? this.snapshots.get(key) : undefined
+	}
+
 	clear(): void {
 		this.snapshots.clear()
+		this.idIndex.clear()
 	}
 }
 
