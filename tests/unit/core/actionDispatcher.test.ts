@@ -237,7 +237,7 @@ describe('ActionDispatcher', () => {
 				})
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.plannedConnections.has('t-1')).toBe(true)
+				expect(state?.plannedAdditions.has('t-1')).toBe(true)
 			})
 
 			test('ADD_TO_LIST should create entity and add to has-many', () => {

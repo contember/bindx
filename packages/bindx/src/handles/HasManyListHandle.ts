@@ -322,8 +322,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 
 		return (
 			state.plannedRemovals.size > 0 ||
-			state.plannedConnections.size > 0 ||
-			state.createdEntities.size > 0 ||
+			state.plannedAdditions.size > 0 ||
 			state.orderedIds !== null
 		)
 	}

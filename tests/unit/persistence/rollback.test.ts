@@ -225,7 +225,7 @@ describe('BatchPersister rollback', () => {
 
 			// Verify local changes
 			const beforeHasMany = store.getHasMany('Article', 'a-1', 'tags')
-			expect(beforeHasMany?.plannedConnections.has('tag-3')).toBe(true)
+			expect(beforeHasMany?.plannedAdditions.has('tag-3')).toBe(true)
 			expect(beforeHasMany?.plannedRemovals.has('tag-1')).toBe(true)
 
 			// Persist with rollback
@@ -239,7 +239,7 @@ describe('BatchPersister rollback', () => {
 
 			// Has-many should be back to server state
 			const afterHasMany = store.getHasMany('Article', 'a-1', 'tags')
-			expect(afterHasMany?.plannedConnections.size).toBe(0)
+			expect(afterHasMany?.plannedAdditions.size).toBe(0)
 			expect(afterHasMany?.plannedRemovals.size).toBe(0)
 		})
 	})

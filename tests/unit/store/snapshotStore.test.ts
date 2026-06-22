@@ -353,7 +353,7 @@ describe('SnapshotStore', () => {
 
 				expect(state.serverIds).toEqual(new Set(['t-1', 't-2']))
 				expect(state.plannedRemovals.size).toBe(0)
-				expect(state.plannedConnections.size).toBe(0)
+				expect(state.plannedAdditions.size).toBe(0)
 			})
 
 			test('should update serverIds when called with new values', () => {
@@ -412,18 +412,18 @@ describe('SnapshotStore', () => {
 				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-1', 'disconnect')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.plannedConnections.has('t-1')).toBe(false)
+				expect(state?.plannedAdditions.has('t-1')).toBe(false)
 			})
 
 			test('should clear createdEntities when planning removal', () => {
 				store.getOrCreateHasMany('Article', 'a-1', 'tags')
 				store.addToHasMany('Article', 'a-1', 'tags', 't-new')
-				expect(store.getHasMany('Article', 'a-1', 'tags')?.createdEntities.has('t-new')).toBe(true)
+				expect(store.getHasMany('Article', 'a-1', 'tags')?.plannedAdditions.get('t-new') === 'created').toBe(true)
 
 				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-new', 'delete')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.createdEntities.has('t-new')).toBe(false)
+				expect(state?.plannedAdditions.get('t-new') === 'created').toBe(false)
 			})
 
 			test('should remove item from orderedIds when planning removal', () => {
@@ -445,7 +445,7 @@ describe('SnapshotStore', () => {
 				store.planHasManyConnection('Article', 'a-1', 'tags', 't-new')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.plannedConnections.has('t-new')).toBe(true)
+				expect(state?.plannedAdditions.has('t-new')).toBe(true)
 			})
 
 			test('should cancel planned disconnect when planning connection', () => {
@@ -464,7 +464,7 @@ describe('SnapshotStore', () => {
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				expect(state?.plannedRemovals.has('t-1')).toBe(false)
-				expect(state?.plannedConnections.has('t-1')).toBe(true)
+				expect(state?.plannedAdditions.has('t-1')).toBe(true)
 			})
 		})
 
@@ -474,7 +474,7 @@ describe('SnapshotStore', () => {
 				store.addToHasMany('Article', 'a-1', 'tags', 't-new')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.plannedConnections.has('t-new')).toBe(true)
+				expect(state?.plannedAdditions.has('t-new')).toBe(true)
 			})
 
 			test('should track item in createdEntities', () => {
@@ -482,7 +482,7 @@ describe('SnapshotStore', () => {
 				store.addToHasMany('Article', 'a-1', 'tags', 't-new')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.createdEntities.has('t-new')).toBe(true)
+				expect(state?.plannedAdditions.get('t-new') === 'created').toBe(true)
 			})
 
 			test('should add to orderedIds', () => {
@@ -501,8 +501,8 @@ describe('SnapshotStore', () => {
 				store.removeFromHasMany('Article', 'a-1', 'tags', 't-new', 'disconnect')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.plannedConnections.has('t-new')).toBe(false)
-				expect(state?.createdEntities.has('t-new')).toBe(false)
+				expect(state?.plannedAdditions.has('t-new')).toBe(false)
+				expect(state?.plannedAdditions.get('t-new') === 'created').toBe(false)
 			})
 
 			test('should plan disconnect for server entity', () => {
@@ -528,8 +528,8 @@ describe('SnapshotStore', () => {
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				// Created entities should be cancelled, not planned for deletion
-				expect(state?.plannedConnections.has('t-new')).toBe(false)
-				expect(state?.createdEntities.has('t-new')).toBe(false)
+				expect(state?.plannedAdditions.has('t-new')).toBe(false)
+				expect(state?.plannedAdditions.get('t-new') === 'created').toBe(false)
 				expect(state?.plannedRemovals.has('t-new')).toBe(false)
 			})
 		})
@@ -570,7 +570,7 @@ describe('SnapshotStore', () => {
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				expect(state?.serverIds).toEqual(new Set(['t-1', 't-2']))
-				expect(state?.plannedConnections.size).toBe(0)
+				expect(state?.plannedAdditions.size).toBe(0)
 			})
 		})
 
@@ -583,7 +583,7 @@ describe('SnapshotStore', () => {
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				expect(state?.plannedRemovals.size).toBe(0)
-				expect(state?.plannedConnections.size).toBe(0)
+				expect(state?.plannedAdditions.size).toBe(0)
 				expect(state?.orderedIds).toBeNull()
 			})
 		})
