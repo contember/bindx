@@ -202,6 +202,12 @@ export interface SetPersistingAction {
 	readonly entityType: string
 	readonly entityId: string
 	readonly isPersisting: boolean
+	/**
+	 * Whether this persist is pessimistic. While a pessimistic persist is
+	 * in-flight, handles present the server baseline instead of the (still dirty)
+	 * local data. Ignored when isPersisting is false.
+	 */
+	readonly pessimistic?: boolean
 }
 
 // ==================== Error Actions ====================
@@ -428,8 +434,9 @@ export function setPersisting(
 	entityType: string,
 	entityId: string,
 	isPersisting: boolean,
+	pessimistic: boolean = false,
 ): SetPersistingAction {
-	return { type: 'SET_PERSISTING', entityType, entityId, isPersisting }
+	return { type: 'SET_PERSISTING', entityType, entityId, isPersisting, pessimistic }
 }
 
 /**

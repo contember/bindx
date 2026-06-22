@@ -1,4 +1,5 @@
 import type { EntitySnapshot, LoadStatus } from './snapshots.js'
+import { createEntitySnapshot } from './snapshots.js'
 import type { FieldError } from '../errors/types.js'
 import { SubscriptionManager, type SnapshotVersionBumper } from './SubscriptionManager.js'
 import { ErrorStore } from './ErrorStore.js'
@@ -583,10 +584,41 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		return this.meta.isPersisting(key)
 	}
 
-	setPersisting(entityType: string, id: string, isPersisting: boolean): void {
+	setPersisting(entityType: string, id: string, isPersisting: boolean, pessimistic: boolean = false): void {
 		const key = this.getEntityKey(entityType, id)
-		this.meta.setPersisting(key, isPersisting)
+		this.meta.setPersisting(key, isPersisting, pessimistic)
 		this.notifyEntitySubscribers(key)
+	}
+
+	/**
+	 * Returns the snapshot a consumer should DISPLAY for an entity.
+	 *
+	 * This equals the canonical {@link getEntitySnapshot} except while the entity
+	 * is pessimistically in-flight, when it returns the server baseline (data ===
+	 * serverData) WITHOUT mutating the store. The canonical snapshot stays dirty,
+	 * so dirty tracking, mutation building, and retry are unaffected — only the
+	 * presented value is the pre-persist server view.
+	 *
+	 * Inert until consumers route their display reads through it (see PR 4); a
+	 * non-pessimistic entity is returned verbatim, so optimistic mode and the
+	 * not-persisting case share this one path.
+	 */
+	getPresentationSnapshot<T extends object>(entityType: string, id: string): EntitySnapshot<T> | undefined {
+		const snapshot = this.getEntitySnapshot<T>(entityType, id)
+		if (!snapshot) return undefined
+
+		const key = this.getEntityKey(entityType, id)
+		if (!this.meta.isPessimisticInFlight(key)) {
+			return snapshot
+		}
+
+		return createEntitySnapshot<T>(
+			snapshot.id,
+			snapshot.entityType,
+			snapshot.serverData,
+			snapshot.serverData,
+			snapshot.version,
+		)
 	}
 
 	// ==================== Error State (delegated to ErrorStore) ====================

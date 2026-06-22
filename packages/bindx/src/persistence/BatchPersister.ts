@@ -206,9 +206,10 @@ export class BatchPersister {
 		// Mark all as in-flight
 		this.changeRegistry.markInFlight(sortedEntities)
 
-		// Set persisting state for all entities
+		// Set persisting state for all entities. In pessimistic mode the flag also
+		// marks the entity for server-baseline presentation while in-flight.
 		for (const entity of sortedEntities) {
-			this.dispatcher.dispatch(setPersisting(entity.entityType, entity.entityId, true))
+			this.dispatcher.dispatch(setPersisting(entity.entityType, entity.entityId, true, updateMode === 'pessimistic'))
 			this.dispatcher.dispatch(clearAllServerErrors(entity.entityType, entity.entityId))
 		}
 
