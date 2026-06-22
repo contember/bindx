@@ -496,6 +496,50 @@ export class RelationStore implements Rekeyable {
 	}
 
 	/**
+	 * Collects the composite keys ("parentType:parentId") of every entity that
+	 * currently has a LIVE relation edge pointing at {@link childId}. This is the
+	 * reverse of {@link getLiveChildIds}: instead of "which children does this
+	 * parent reach", it answers "which parents reference this child".
+	 *
+	 * It is the single source of truth for parent re-render notification — when a
+	 * child entity's own field changes, every parent returned here is notified so
+	 * its rendered view of the child updates.
+	 *
+	 * Liveness matches {@link getLiveChildIds} EXACTLY so the two never disagree:
+	 *   - has-one: currentId === childId, when the relation is not 'deleted'
+	 *     (a disconnected relation has a null currentId and is skipped);
+	 *   - has-many: childId ∈ (serverIds ∪ plannedConnections ∪ createdEntities)
+	 *     and childId ∉ plannedRemovals.
+	 *
+	 * Implemented as an on-demand scan of the live edges rather than an
+	 * incrementally-maintained reverse index: it is correct by construction (it
+	 * reads the same maps the forward query reads), so there is no second
+	 * structure that could drift out of sync on disconnect/remove/rekey/clear.
+	 */
+	getParentKeysForChild(childId: string): Set<string> {
+		const parents = new Set<string>()
+
+		for (const [key, state] of this.relationStates) {
+			if (state.currentId === childId && state.state !== 'deleted') {
+				parents.add(parentKeyFromRelationKey(key))
+			}
+		}
+
+		for (const [key, state] of this.hasManyStates) {
+			if (state.plannedRemovals.has(childId)) continue
+			if (
+				state.serverIds.has(childId) ||
+				state.plannedConnections.has(childId) ||
+				state.createdEntities.has(childId)
+			) {
+				parents.add(parentKeyFromRelationKey(key))
+			}
+		}
+
+		return parents
+	}
+
+	/**
 	 * Removes all relation and has-many state owned by an entity (keys under the
 	 * given owner prefix). Called by removeEntity so a removed entity leaves no
 	 * stale relation state behind.
@@ -835,6 +879,17 @@ export class RelationStore implements Rekeyable {
 }
 
 // ==================== Helper Functions ====================
+
+/**
+ * Derives the parent composite key ("parentType:parentId") from a relation key
+ * ("parentType:parentId:fieldName") by dropping the trailing field segment.
+ * Entity ids and field names never contain ':', so the parent key is everything
+ * before the last separator.
+ */
+function parentKeyFromRelationKey(relationKey: string): string {
+	const lastSeparator = relationKey.lastIndexOf(':')
+	return relationKey.slice(0, lastSeparator)
+}
 
 /**
  * Computes the default ordered IDs for a has-many relation.
