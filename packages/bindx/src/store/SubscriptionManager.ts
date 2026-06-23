@@ -147,6 +147,10 @@ export class SubscriptionManager implements Rekeyable {
 	 * Derives the parent entity keys for a child entity key by reading the live
 	 * relation edges via the injected lookup. The child's bare id is the part of
 	 * the key after the first ':' ("entityType:id").
+	 *
+	 * The child's TYPE is intentionally dropped — {@link ParentKeyLookup} matches on
+	 * the bare id, relying on the store-wide global-id-uniqueness invariant (see
+	 * {@link RelationStore.getParentKeysForChild}).
 	 */
 	private getParentKeys(childKey: string): Set<string> {
 		if (!this.parentKeyLookup) return new Set()
