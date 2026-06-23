@@ -1,4 +1,5 @@
-import { parentKeyFromRelationKey } from './relationKey.js'
+import { parentKeyFromOwnerPrefix, parentKeyFromRelationKey } from './relationKey.js'
+import { RelationEdgeIndex } from './RelationEdgeIndex.js'
 
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
 	if (a.size !== b.size) return false
@@ -82,14 +83,45 @@ export class HasManyStore {
 	/** Has-many list states keyed by "parentType:parentId:fieldName" */
 	private readonly hasManyStates = new Map<string, StoredHasManyState>()
 
+	/**
+	 * Bidirectional live-edge index, maintained by {@link writeHasMany} /
+	 * {@link deleteHasMany} so the parent↔child queries are O(degree) and the two
+	 * directions stay consistent by construction.
+	 */
+	private readonly edges = new RelationEdgeIndex()
+
 	private mutationVersion = 0
 
 	getMutationVersion(): number {
 		return this.mutationVersion
 	}
 
+	/**
+	 * The single write chokepoint. Reconciles the edge index by diffing the live
+	 * members of the previous state against the next, so every state-changing path
+	 * (server ids / planned add/remove / move / import / replaceEntityId / ...)
+	 * keeps the index correct without tracking the reverse direction itself.
+	 */
 	private writeHasMany(key: string, state: StoredHasManyState): void {
+		const oldLive = liveHasManyChildIds(this.hasManyStates.get(key))
+		const newLive = liveHasManyChildIds(state)
 		this.hasManyStates.set(key, state)
+		const parentKey = parentKeyFromRelationKey(key)
+		for (const id of newLive) if (!oldLive.has(id)) this.edges.addEdge(parentKey, id)
+		for (const id of oldLive) if (!newLive.has(id)) this.edges.removeEdge(parentKey, id)
+		this.mutationVersion++
+	}
+
+	/**
+	 * The single delete chokepoint — removes an entry and its live edges. Used by
+	 * the bulk remove and rekey-owner paths so they don't leak edges.
+	 */
+	private deleteHasMany(key: string): void {
+		const existing = this.hasManyStates.get(key)
+		if (!existing) return
+		const parentKey = parentKeyFromRelationKey(key)
+		for (const id of liveHasManyChildIds(existing)) this.edges.removeEdge(parentKey, id)
+		this.hasManyStates.delete(key)
 		this.mutationVersion++
 	}
 
@@ -408,48 +440,31 @@ export class HasManyStore {
 
 	/**
 	 * Collects the ids of child entities reachable through LIVE has-many edges
-	 * (key prefix "parentType:parentId:"):
-	 *   effective members = (serverIds ∪ plannedAdditions.keys()) minus plannedRemovals.
+	 * (key prefix "parentType:parentId:") — an O(degree) read of the edge index.
 	 */
 	collectLiveChildIds(keyPrefix: string, ids: Set<string>): void {
-		for (const [key, state] of this.hasManyStates) {
-			if (!key.startsWith(keyPrefix)) continue
-			for (const id of state.serverIds) {
-				if (!state.plannedRemovals.has(id)) ids.add(id)
-			}
-			for (const id of state.plannedAdditions.keys()) {
-				if (!state.plannedRemovals.has(id)) ids.add(id)
-			}
-		}
+		this.edges.collectChildren(parentKeyFromOwnerPrefix(keyPrefix), ids)
 	}
 
 	/**
 	 * Adds the composite parent keys of every LIVE has-many edge containing
-	 * {@link childId}: childId ∈ (serverIds ∪ plannedAdditions.keys()) and
-	 * childId ∉ plannedRemovals.
+	 * {@link childId} — an O(degree) read of the edge index, the exact reverse of
+	 * {@link collectLiveChildIds}.
 	 */
 	collectParentKeysForChild(childId: string, parents: Set<string>): void {
-		for (const [key, state] of this.hasManyStates) {
-			if (state.plannedRemovals.has(childId)) continue
-			if (state.serverIds.has(childId) || state.plannedAdditions.has(childId)) {
-				parents.add(parentKeyFromRelationKey(key))
-			}
-		}
+		this.edges.collectParents(childId, parents)
 	}
 
 	/**
 	 * Removes all has-many state owned by an entity (keys under the given owner
-	 * prefix). Bumps the mutation version once if anything was removed.
+	 * prefix), dropping each entry's edges through {@link deleteHasMany}.
 	 */
 	removeOwnedRelations(keyPrefix: string): void {
-		let changed = false
 		for (const key of [...this.hasManyStates.keys()]) {
 			if (key.startsWith(keyPrefix)) {
-				this.hasManyStates.delete(key)
-				changed = true
+				this.deleteHasMany(key)
 			}
 		}
-		if (changed) this.mutationVersion++
 	}
 
 	/**
@@ -592,6 +607,8 @@ export class HasManyStore {
 
 	/**
 	 * Rekeys has-many entries owned by an entity (changes the parent ID in the key).
+	 * Routing through {@link deleteHasMany} + {@link writeHasMany} migrates the edge
+	 * index from the old parent key to the new one for free.
 	 */
 	rekeyOwner(oldKeyPrefix: string, newKeyPrefix: string): void {
 		const toMove: [string, StoredHasManyState][] = []
@@ -601,7 +618,7 @@ export class HasManyStore {
 			}
 		}
 		for (const [oldKey, value] of toMove) {
-			this.hasManyStates.delete(oldKey)
+			this.deleteHasMany(oldKey)
 			this.writeHasMany(newKeyPrefix + oldKey.slice(oldKeyPrefix.length), value)
 		}
 	}
@@ -611,6 +628,24 @@ export class HasManyStore {
 	 */
 	clear(): void {
 		this.hasManyStates.clear()
+		this.edges.clear()
 		this.mutationVersion++
 	}
+}
+
+/**
+ * The single liveness predicate for has-many membership: effective members are
+ * (serverIds ∪ plannedAdditions) minus plannedRemovals. Defined once and consumed
+ * by the write chokepoint so the forward/reverse index can never drift from it.
+ */
+function liveHasManyChildIds(state: StoredHasManyState | undefined): Set<string> {
+	const live = new Set<string>()
+	if (!state) return live
+	for (const id of state.serverIds) {
+		if (!state.plannedRemovals.has(id)) live.add(id)
+	}
+	for (const id of state.plannedAdditions.keys()) {
+		if (!state.plannedRemovals.has(id)) live.add(id)
+	}
+	return live
 }
