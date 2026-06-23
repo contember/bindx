@@ -115,6 +115,56 @@ describe('reachability memoization', () => {
 		expect(sortedKeys(result)).toEqual([])
 	})
 
+	// Has-one edge variants of the add/remove tests above. getMutationVersion()
+	// SUMS both sub-store counters, so a has-one setRelation (connect/disconnect)
+	// must invalidate the cache just like a has-many edge change. If the has-one
+	// term were dropped from the sum, a created child connected through a has-one
+	// would be served stale — a dropped or phantom create.
+	test('connecting a created child via has-one invalidates the cache and is reflected', () => {
+		const h = createHarness()
+		h.entitySnapshots.setData('Article:a1', 'a1', 'Article', { id: 'a1' }, true)
+		h.meta.setExistsOnServer('Article:a1', true)
+		// A created (never-persisted) author exists but is not yet reachable.
+		h.entitySnapshots.setData('Author:au1', 'au1', 'Author', { id: 'au1' }, false)
+		expect(sortedKeys(h.analyzer.computeReachableCreated())).toEqual([])
+		const calls = h.walkCount()
+
+		h.relations.setRelation('Article:a1:author', { currentId: 'au1', state: 'connected' }, undefined, 'author')
+
+		const result = h.analyzer.computeReachableCreated()
+		expect(h.walkCount()).toBeGreaterThan(calls) // recomputed, not served stale
+		expect(sortedKeys(result)).toEqual(['Author:au1'])
+	})
+
+	test('disconnecting a created child via has-one invalidates the cache and drops it', () => {
+		const h = createHarness()
+		h.entitySnapshots.setData('Article:a1', 'a1', 'Article', { id: 'a1' }, true)
+		h.meta.setExistsOnServer('Article:a1', true)
+		h.entitySnapshots.setData('Author:au1', 'au1', 'Author', { id: 'au1' }, false)
+		h.relations.setRelation('Article:a1:author', { currentId: 'au1', state: 'connected' }, undefined, 'author')
+		expect(sortedKeys(h.analyzer.computeReachableCreated())).toEqual(['Author:au1'])
+		const calls = h.walkCount()
+
+		h.relations.setRelation('Article:a1:author', { currentId: null, state: 'disconnected' }, undefined, 'author')
+
+		const result = h.analyzer.computeReachableCreated()
+		expect(h.walkCount()).toBeGreaterThan(calls)
+		expect(sortedKeys(result)).toEqual([])
+	})
+
+	test('RelationStore.getMutationVersion sums has-one and has-many writes', () => {
+		const relations = new RelationStore()
+		const v0 = relations.getMutationVersion()
+
+		relations.setRelation('Article:a1:author', { currentId: 'au1', state: 'connected' }, undefined, 'author')
+		const v1 = relations.getMutationVersion()
+		expect(v1).toBeGreaterThan(v0) // has-one write counted
+
+		relations.addToHasMany('Article:a1:comments', 'c1')
+		const v2 = relations.getMutationVersion()
+		expect(v2).toBeGreaterThan(v1) // has-many write also counted (the sum)
+	})
+
 	test('flipping existsOnServer invalidates the cache', () => {
 		const h = createHarness()
 		// A top-level created entity (root) — reported as a create until it exists.
