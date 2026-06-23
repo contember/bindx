@@ -774,12 +774,18 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		parentId: string,
 		fieldName: string,
 		updates: Partial<Omit<StoredRelationState, 'version'>>,
+		skipNotify: boolean = false,
 	): void {
 		const key = this.getRelationKey(parentType, parentId, fieldName)
 		const entityKey = this.getEntityKey(parentType, parentId)
 		const entitySnapshot = this.entitySnapshots.get(entityKey)
 		this.relations.setRelation(key, updates, entitySnapshot, fieldName)
-		this.notifyRelationSubscribers(key)
+		// skipNotify is for writes that happen during a render-phase read (e.g.
+		// HasOneHandle materialization) where the change that triggered them already
+		// notified subscribers — notifying again would call subscribers mid-render.
+		if (!skipNotify) {
+			this.notifyRelationSubscribers(key)
+		}
 	}
 
 	commitRelation(parentType: string, parentId: string, fieldName: string): void {

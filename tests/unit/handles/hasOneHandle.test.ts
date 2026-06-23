@@ -764,6 +764,99 @@ describe('HasOneHandle', () => {
 		})
 	})
 
+	// ==================== Server-baseline advance on re-fetch ====================
+	//
+	// On a parent re-fetch whose embedded related id changed, a non-dirty has-one
+	// must advance its server baseline to the new id (and stay clean), while a
+	// locally-dirty relation must survive the re-fetch. The advance runs during a
+	// render-phase read and must NOT notify subscribers (the re-fetch already did).
+
+	describe('Server-baseline advance on re-fetch', () => {
+		test('a re-fetch that changes the related id advances the baseline and stays clean', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: { id: 'auth-1', name: 'John' },
+			}, true)
+
+			const handle = createHasOneHandleRaw()
+			expect(handle.relatedId).toBe('auth-1')
+			expect(handle.isDirty).toBe(false)
+
+			// Parent re-fetched: a NEW embedded author reference with a different id.
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: { id: 'auth-2', name: 'Jane' },
+			}, true)
+
+			// Reading advances the server baseline to the new related id; still clean.
+			expect(handle.relatedId).toBe('auth-2')
+			expect(handle.isDirty).toBe(false)
+
+			const relation = store.getRelation('Article', 'a-1', 'author')
+			expect(relation?.currentId).toBe('auth-2')
+			expect(relation?.serverId).toBe('auth-2')
+			expect(relation?.state).toBe('connected')
+			expect(relation?.serverState).toBe('connected')
+		})
+
+		test('a locally-connected relation survives a re-fetch that changes the embedded id', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: { id: 'auth-1', name: 'John' },
+			}, true)
+			const handle = createHasOneHandleRaw()
+			expect(handle.relatedId).toBe('auth-1')
+
+			// Local connect to a different author → dirty.
+			store.setRelation('Article', 'a-1', 'author', { currentId: 'auth-2', state: 'connected' })
+			expect(handle.relatedId).toBe('auth-2')
+			expect(handle.isDirty).toBe(true)
+
+			// Parent re-fetched at yet another author — the local dirty connect wins.
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: { id: 'auth-3', name: 'Bob' },
+			}, true)
+
+			expect(handle.relatedId).toBe('auth-2')
+			expect(handle.isDirty).toBe(true)
+		})
+
+		test('the baseline advance does not notify subscribers during a render-phase read', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: { id: 'auth-1', name: 'John' },
+			}, true)
+			const handle = createHasOneHandleRaw()
+			expect(handle.relatedId).toBe('auth-1')
+
+			// Re-fetch with a new related id, setting up the advance on the next read.
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: { id: 'auth-2', name: 'Jane' },
+			}, true)
+
+			// Subscribe AFTER the re-fetch notification: any callback fired now would be
+			// the illegal mid-read notification from the baseline advance (CORR-6).
+			const entityCb = mock(() => {})
+			const relationCb = mock(() => {})
+			store.subscribeToEntity('Article', 'a-1', entityCb)
+			store.subscribeToRelation('Article', 'a-1', 'author', relationCb)
+
+			// This read triggers advanceServerBaselineOnRefetch.
+			expect(handle.relatedId).toBe('auth-2')
+
+			expect(entityCb).not.toHaveBeenCalled()
+			expect(relationCb).not.toHaveBeenCalled()
+		})
+	})
+
 	// ==================== Reachability / dirty for created has-one child ====================
 
 	describe('Created has-one child via embedded data', () => {
