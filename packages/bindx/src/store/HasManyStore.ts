@@ -303,8 +303,15 @@ export class HasManyStore {
 			if (newPlannedAdditions.get(itemId) !== 'created') {
 				newPlannedAdditions.set(itemId, 'connected')
 			}
-			const currentOrderedIds = existing.orderedIds ?? computeDefaultOrderedIds(existing)
-			const newOrderedIds = [...currentOrderedIds, itemId]
+			// Only touch an explicit order — the default order already derives from
+			// plannedAdditions (see computeDefaultOrderedIds). Guard against
+			// re-appending an id that is already listed: this path re-runs whenever an
+			// embedded connect reference is re-materialized, and an unconditional
+			// append would surface the same item twice (mirrors planHasManyConnection).
+			let newOrderedIds = existing.orderedIds
+			if (newOrderedIds !== null && !newOrderedIds.includes(itemId)) {
+				newOrderedIds = [...newOrderedIds, itemId]
+			}
 			this.writeHasMany(key, {
 				...existing,
 				orderedIds: newOrderedIds,
