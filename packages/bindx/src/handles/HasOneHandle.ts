@@ -213,6 +213,13 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 * Does NOT consume the propagation slot — {@link ensureRelatedEntitySnapshot}
 	 * owns it. The same reference-change signal drives both, so both run within the
 	 * one render that observes a new parent reference.
+	 *
+	 * The baseline write is NON-NOTIFYING: it runs during a render-phase read, and
+	 * the parent re-fetch that produced the new embedded reference already notified
+	 * subscribers. Notifying again here would mutate the store and synchronously call
+	 * subscribers mid-render, violating the external-store contract (cf.
+	 * {@link ensureRelatedEntitySnapshot}, which refreshes server data with skipNotify
+	 * for the same reason).
 	 */
 	private advanceServerBaselineOnRefetch(
 		existing: StoredRelationState,
@@ -231,7 +238,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			serverId: embeddedId,
 			state: 'connected',
 			serverState: 'connected',
-		})
+		}, true)
 	}
 
 	private isLocallyDirty(relation: StoredRelationState): boolean {
