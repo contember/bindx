@@ -82,6 +82,22 @@ describe('RelationStore.getParentKeysForChild', () => {
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set(['Author:a1', 'Tag:t1']))
 	})
 
+	test('matches purely on the bare child id (global-id-uniqueness invariant)', () => {
+		const relations = new RelationStore()
+
+		// The reverse lookup receives a BARE id (no entity type) and matches by id
+		// alone, deliberately relying on the store-wide invariant that ids are unique
+		// across types. A single bare id therefore resolves to every parent that
+		// anchors it, regardless of those parents' types. This pins the bare-id
+		// contract: making the lookup type-aware in isolation would change this and
+		// must be a deliberate decision (it would also have to move in lockstep with
+		// the forward reachability walk, which matches on the same bare ids).
+		relations.setRelation('Author:a1:featured', { currentId: 'shared', state: 'connected' }, undefined, 'featured')
+		relations.addToHasMany('Tag:t1:articles', 'shared')
+
+		expect(relations.getParentKeysForChild('shared')).toEqual(new Set(['Author:a1', 'Tag:t1']))
+	})
+
 	test('cross-check: reverse query agrees with getLiveChildIds over a randomized sequence', () => {
 		const relations = new RelationStore()
 		const parents = ['Author:a1', 'Author:a2', 'Tag:t1', 'Tag:t2']

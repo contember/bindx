@@ -138,6 +138,14 @@ export class RelationStore implements Rekeyable {
 	 * currently has a LIVE relation edge pointing at {@link childId} — the reverse
 	 * of {@link getLiveChildIds}. Unions both sub-stores' results, scanning the
 	 * same live edges the forward query reads so the two never disagree.
+	 *
+	 * {@link childId} is a BARE entity id (no type): relation state records child ids
+	 * without their type, so the match is by id alone. This deliberately relies on
+	 * the store-wide invariant that entity ids are globally unique across types
+	 * (server UUIDs / minted temp ids — the same invariant behind
+	 * EntitySnapshotStore's idIndex / keyForId), so a bare id resolves to exactly one
+	 * entity. The forward reachability walk matches on the same bare ids, so making
+	 * this type-aware in isolation would only diverge the two halves of one query.
 	 */
 	getParentKeysForChild(childId: string): Set<string> {
 		const parents = new Set<string>()
