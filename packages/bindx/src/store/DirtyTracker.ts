@@ -1,6 +1,7 @@
 import type { EntitySnapshotStore } from './EntitySnapshotStore.js'
 import type { EntityMetaStore } from './EntityMetaStore.js'
 import type { RelationStore } from './RelationStore.js'
+import type { ReachabilityAnalyzer } from './ReachabilityAnalyzer.js'
 import { deepEqual } from '../utils/deepEqual.js'
 
 interface DirtyEntity {
@@ -20,10 +21,15 @@ export class DirtyTracker {
 		private readonly entitySnapshots: EntitySnapshotStore,
 		private readonly meta: EntityMetaStore,
 		private readonly relations: RelationStore,
+		private readonly reachability: ReachabilityAnalyzer,
 	) {}
 
 	getAllDirtyEntities(): DirtyEntity[] {
 		const dirtyEntities: DirtyEntity[] = []
+		// A created entity is a `create` only when reachable from a root through
+		// live relations. A created entity detached from every relation is
+		// unreachable and must not be reported, even if its snapshot still lingers.
+		const reachableCreated = this.reachability.computeReachableCreated()
 
 		for (const key of this.entitySnapshots.keys()) {
 			const [entityType, ...idParts] = key.split(':')
@@ -41,7 +47,9 @@ export class DirtyTracker {
 			}
 
 			if (!this.meta.existsOnServer(entityKey)) {
-				dirtyEntities.push({ entityType, entityId, changeType: 'create' })
+				if (reachableCreated.has(entityKey)) {
+					dirtyEntities.push({ entityType, entityId, changeType: 'create' })
+				}
 				continue
 			}
 

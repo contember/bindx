@@ -13,6 +13,8 @@ import { TouchedStore } from './TouchedStore.js'
 import { generateTempId } from './entityId.js'
 import { DirtyTracker } from './DirtyTracker.js'
 import { EntitySnapshotStore } from './EntitySnapshotStore.js'
+import { RootRegistry } from './RootRegistry.js'
+import { ReachabilityAnalyzer } from './ReachabilityAnalyzer.js'
 
 export type { HasManyRemovalType, StoredHasManyState, StoredRelationState } from './RelationStore.js'
 export type { EntityMeta } from './EntityMetaStore.js'
@@ -44,6 +46,8 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	private readonly relations = new RelationStore()
 	private readonly meta = new EntityMetaStore()
 	private readonly touched = new TouchedStore()
+	private readonly roots = new RootRegistry()
+	private readonly reachability: ReachabilityAnalyzer
 	private readonly dirtyTracker: DirtyTracker
 
 	/**
@@ -55,7 +59,8 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	private readonly lastPropagatedData = new Map<string, unknown>()
 
 	constructor() {
-		this.dirtyTracker = new DirtyTracker(this.entitySnapshots, this.meta, this.relations)
+		this.reachability = new ReachabilityAnalyzer(this.entitySnapshots, this.meta, this.relations, this.roots)
+		this.dirtyTracker = new DirtyTracker(this.entitySnapshots, this.meta, this.relations, this.reachability)
 	}
 
 	// ==================== Key Generation ====================
@@ -238,12 +243,45 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		this.notifyEntitySubscribers(key)
 	}
 
+	/**
+	 * Removes a single entity and all of its own per-entity state (snapshot,
+	 * metadata, root registration, errors, touched state, propagation tracking,
+	 * and owned relation state).
+	 *
+	 * This does NOT cascade into descendants, and it does NOT strip inbound edges
+	 * (other entities' has-many membership / has-one currentId that point AT the
+	 * removed id). Callers must therefore only remove an entity that is unreachable
+	 * — i.e. no live parent relation references it — so the graph cannot dangle. The
+	 * lazy {@link sweepUnreachableCreated} guarantees this by construction; the React
+	 * unmount cleanup routes through it (via {@link unregisterRootEntity} + a sweep)
+	 * rather than calling removeEntity on a possibly-referenced id.
+	 */
 	removeEntity(entityType: string, id: string): void {
 		const key = this.getEntityKey(entityType, id)
+		const keyPrefix = `${key}:`
+
 		this.entitySnapshots.remove(key)
-		this.meta.clearLoadState(key)
+		this.meta.remove(key)
+		this.roots.unregister(key)
+		this.errors.clearAllErrors(key, keyPrefix)
+		this.touched.clearForEntity(keyPrefix)
 		this.clearPropagatedDataForEntity(entityType, id)
+		this.relations.removeOwnedRelations(keyPrefix)
+
 		this.notifyEntitySubscribers(key)
+	}
+
+	/**
+	 * Whether an entity (looked up by id alone) exists in the store and has never
+	 * been persisted to the server. Used to decide relation-state semantics when a
+	 * has-one target is deleted — deleting a never-persisted target reverts the
+	 * relation to 'disconnected' rather than 'deleted', since there is no server
+	 * row to delete.
+	 */
+	isNeverPersisted(entityId: string): boolean {
+		const key = this.entitySnapshots.keyForId(entityId)
+		if (!key) return false
+		return !this.meta.existsOnServer(key)
 	}
 
 	// ==================== Load State (delegated to EntityMetaStore) ====================
@@ -306,7 +344,26 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		this.setEntityData(entityType, id, data, false)
 		this.setExistsOnServer(entityType, id, false)
 
+		// A freshly created entity is pending-persist by default — a root for
+		// reachability-based create detection. It stops being a root the moment a
+		// relation anchors it as a child (see registerParentChild). A top-level
+		// create (<Entity create>, useEntityList add) is never anchored, so it stays
+		// a root and is reported as a `create`.
+		this.roots.register(this.getEntityKey(entityType, id))
+
 		return id
+	}
+
+	/**
+	 * Unregisters a top-level root WITHOUT removing its snapshot. Called by the React
+	 * unmount cleanup (a `<Entity create>` form / `useEntityList` draft) before a
+	 * {@link sweepUnreachableCreated} pass: dropping the root lets the sweep reclaim a
+	 * truly-orphaned create, while a create still anchored by another live relation
+	 * stays reachable and survives. (Un-rooting also happens implicitly via
+	 * {@link registerParentChild} and the rekey in {@link mapTempIdToPersistedId}.)
+	 */
+	unregisterRootEntity(entityType: string, id: string): void {
+		this.roots.unregister(this.getEntityKey(entityType, id))
 	}
 
 	mapTempIdToPersistedId(entityType: string, tempId: string, persistedId: string): void {
@@ -318,6 +375,10 @@ export class SnapshotStore implements SnapshotVersionBumper {
 
 		// Register redirect so future lookups by temp ID resolve to persisted key
 		this.rekeyedEntities.set(oldKey, newKey)
+
+		// Keep root registration consistent across the rekey (the persisted entity
+		// is now a server root via existsOnServer, but keep the registry aligned).
+		this.roots.rekey(oldKey, newKey)
 
 		// Rekey entity snapshot (moves data, updates id field)
 		this.entitySnapshots.rekey(oldKey, newKey, persistedId)
@@ -402,18 +463,6 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		this.notifyRelationSubscribers(key)
 	}
 
-	cancelHasManyRemoval(
-		parentType: string,
-		parentId: string,
-		fieldName: string,
-		itemId: string,
-		alias?: string,
-	): void {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		this.relations.cancelHasManyRemoval(key, itemId)
-		this.notifyRelationSubscribers(key)
-	}
-
 	getHasManyPlannedRemovals(
 		parentType: string,
 		parentId: string,
@@ -433,18 +482,6 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	): void {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		this.relations.planHasManyConnection(key, itemId)
-		this.notifyRelationSubscribers(key)
-	}
-
-	cancelHasManyConnection(
-		parentType: string,
-		parentId: string,
-		fieldName: string,
-		itemId: string,
-		alias?: string,
-	): void {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		this.relations.cancelHasManyConnection(key, itemId)
 		this.notifyRelationSubscribers(key)
 	}
 
@@ -513,10 +550,10 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		alias?: string,
 	): void {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		const result = this.relations.removeFromHasMany(key, itemId, removalType)
-		if (result === 'planned_removal') {
-			this.notifyRelationSubscribers(key)
-		} else if (result === 'cancelled_connection') {
+		// Cancelling the add of a never-persisted child just removes it from the
+		// list; its now-unreachable snapshot is no longer reported as a `create` and
+		// is collected by the lazy memory sweep.
+		if (this.relations.removeFromHasMany(key, itemId, removalType)) {
 			this.notifyRelationSubscribers(key)
 		}
 	}
@@ -807,6 +844,9 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		const parentKey = this.getEntityKey(parentType, parentId)
 		const childKey = this.getEntityKey(childType, childId)
 		this.subscriptions.registerParentChild(parentKey, childKey)
+		// A child anchored by a parent relation is no longer a top-level root; its
+		// reachability now flows through the parent. (No-op for server children.)
+		this.roots.unregister(childKey)
 	}
 
 	unregisterParentChild(parentType: string, parentId: string, childType: string, childId: string): void {
@@ -870,6 +910,26 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		return this.dirtyTracker.getAllDirtyEntities()
 	}
 
+	/**
+	 * Removes the snapshots of created (never-persisted) entities that are no longer
+	 * reachable from any root — the lazy memory sweep that replaces eager purge.
+	 *
+	 * Correctness never depends on this (unreachable creates are already excluded
+	 * from getAllDirtyEntities); it only reclaims memory. Run it off the hot path,
+	 * e.g. once a persist settles. Shared (diamond) children are kept because
+	 * reachability reports them as live as long as any parent references them.
+	 */
+	sweepUnreachableCreated(): void {
+		const reachable = this.reachability.computeReachableCreated()
+		for (const key of [...this.entitySnapshots.keys()]) {
+			if (this.meta.existsOnServer(key)) continue
+			if (reachable.has(key)) continue
+			const separator = key.indexOf(':')
+			if (separator === -1) continue
+			this.removeEntity(key.slice(0, separator), key.slice(separator + 1))
+		}
+	}
+
 	getDirtyFields(entityType: string, entityId: string): string[] {
 		return this.dirtyTracker.getDirtyFields(entityType, entityId)
 	}
@@ -892,6 +952,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		this.relations.clear()
 		this.errors.clear()
 		this.touched.clear()
+		this.roots.clear()
 		this.lastPropagatedData.clear()
 
 		this.subscriptions.notify()

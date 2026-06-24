@@ -439,26 +439,6 @@ describe('SnapshotStore', () => {
 			})
 		})
 
-		describe('cancelHasManyRemoval', () => {
-			test('should cancel planned removal', () => {
-				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
-				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-1', 'disconnect')
-				store.cancelHasManyRemoval('Article', 'a-1', 'tags', 't-1')
-
-				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.plannedRemovals.has('t-1')).toBe(false)
-			})
-
-			test('should cancel delete-type planned removal', () => {
-				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
-				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-1', 'delete')
-				store.cancelHasManyRemoval('Article', 'a-1', 'tags', 't-1')
-
-				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.plannedRemovals.has('t-1')).toBe(false)
-			})
-		})
-
 		describe('planHasManyConnection', () => {
 			test('should plan connection', () => {
 				store.getOrCreateHasMany('Article', 'a-1', 'tags')

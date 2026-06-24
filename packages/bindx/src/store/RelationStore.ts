@@ -253,22 +253,6 @@ export class RelationStore {
 	}
 
 	/**
-	 * Cancels a planned removal for a has-many item.
-	 */
-	cancelHasManyRemoval(key: string, itemId: string): void {
-		const existing = this.hasManyStates.get(key)
-		if (!existing) return
-
-		const newPlannedRemovals = new Map(existing.plannedRemovals)
-		newPlannedRemovals.delete(itemId)
-		this.hasManyStates.set(key, {
-			...existing,
-			plannedRemovals: newPlannedRemovals,
-			version: existing.version + 1,
-		})
-	}
-
-	/**
 	 * Plans a connection for a has-many item.
 	 */
 	planHasManyConnection(key: string, itemId: string): void {
@@ -300,22 +284,6 @@ export class RelationStore {
 				version: existing.version + 1,
 			})
 		}
-	}
-
-	/**
-	 * Cancels a planned connection for a has-many item.
-	 */
-	cancelHasManyConnection(key: string, itemId: string): void {
-		const existing = this.hasManyStates.get(key)
-		if (!existing) return
-
-		const newPlannedConnections = new Set(existing.plannedConnections)
-		newPlannedConnections.delete(itemId)
-		this.hasManyStates.set(key, {
-			...existing,
-			plannedConnections: newPlannedConnections,
-			version: existing.version + 1,
-		})
 	}
 
 	/**
@@ -419,11 +387,11 @@ export class RelationStore {
 	 * Removes an entity from a has-many relation.
 	 * For newly created entities (via add()), cancels the connection.
 	 * For existing server entities, plans the specified removal type.
-	 * Returns the key if a removal was planned (caller should notify), or null if handled inline.
+	 * Returns true if the state changed (caller should notify), false if it was a no-op.
 	 */
-	removeFromHasMany(key: string, itemId: string, removalType: HasManyRemovalType): 'planned_removal' | 'cancelled_connection' | null {
+	removeFromHasMany(key: string, itemId: string, removalType: HasManyRemovalType): boolean {
 		const existing = this.hasManyStates.get(key)
-		if (!existing) return null
+		if (!existing) return false
 
 		const isCreatedEntity = existing.createdEntities.has(itemId)
 
@@ -458,10 +426,66 @@ export class RelationStore {
 			}
 
 			this.hasManyStates.set(key, newState)
-			return 'cancelled_connection'
+			return true
 		} else {
 			this.planHasManyRemoval(key, itemId, removalType)
-			return 'planned_removal'
+			return true
+		}
+	}
+
+	/**
+	 * Collects the ids of child entities currently reachable through an entity's
+	 * LIVE relations (key prefix "parentType:parentId:"). Used by reachability-based
+	 * create detection to walk the relation graph from roots.
+	 *
+	 * Live edges are:
+	 *   - has-one: currentId, when the relation is not disconnected/deleted
+	 *     (a disconnected relation has a null currentId; a 'deleted' relation is
+	 *     removing its target, so the target is not anchored by it).
+	 *   - has-many: effective members = (serverIds ∪ plannedConnections ∪
+	 *     createdEntities) minus plannedRemovals.
+	 */
+	getLiveChildIds(keyPrefix: string): string[] {
+		const ids = new Set<string>()
+
+		for (const [key, state] of this.relationStates) {
+			if (!key.startsWith(keyPrefix)) continue
+			if (state.currentId !== null && state.state !== 'deleted') {
+				ids.add(state.currentId)
+			}
+		}
+
+		for (const [key, state] of this.hasManyStates) {
+			if (!key.startsWith(keyPrefix)) continue
+			for (const id of state.serverIds) {
+				if (!state.plannedRemovals.has(id)) ids.add(id)
+			}
+			for (const id of state.plannedConnections) {
+				if (!state.plannedRemovals.has(id)) ids.add(id)
+			}
+			for (const id of state.createdEntities) {
+				if (!state.plannedRemovals.has(id)) ids.add(id)
+			}
+		}
+
+		return Array.from(ids)
+	}
+
+	/**
+	 * Removes all relation and has-many state owned by an entity (keys under the
+	 * given owner prefix). Called by removeEntity so a removed entity leaves no
+	 * stale relation state behind.
+	 */
+	removeOwnedRelations(keyPrefix: string): void {
+		for (const key of [...this.relationStates.keys()]) {
+			if (key.startsWith(keyPrefix)) {
+				this.relationStates.delete(key)
+			}
+		}
+		for (const key of [...this.hasManyStates.keys()]) {
+			if (key.startsWith(keyPrefix)) {
+				this.hasManyStates.delete(key)
+			}
 		}
 	}
 

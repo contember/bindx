@@ -283,6 +283,26 @@ export function useEntityList(
 		[store],
 	)
 
+	// Discard never-persisted drafts when the list unmounts. List-level creates are
+	// top-level roots (nothing else anchors them); dropping the root and running the
+	// reachability-aware sweep frees a truly-orphaned draft while preserving one that
+	// was meanwhile connected into another live parent (the diamond / shared-create
+	// case). A persisted draft (rekeyed to a server id) is left untouched.
+	useEffect(() => {
+		return () => {
+			let unrooted = false
+			for (const item of listStateRef.current.items) {
+				if (isTempId(item.id) && !store.getPersistedId(entityType, item.id)) {
+					store.unregisterRootEntity(entityType, item.id)
+					unrooted = true
+				}
+			}
+			if (unrooted) {
+				store.sweepUnreachableCreated()
+			}
+		}
+	}, [store, entityType])
+
 	// --- Snapshot ---
 	const getSnapshot = useCallback((): UseEntityListResult<any> => {
 		const state = listStateRef.current

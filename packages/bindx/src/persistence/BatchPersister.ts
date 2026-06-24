@@ -222,6 +222,7 @@ export class BatchPersister {
 			capturedStates = this.captureEntityStates(sortedEntities)
 		}
 
+		let result: PersistenceResult | undefined
 		try {
 			// Build mutations BEFORE resetting state (for pessimistic mode)
 			// The mutations need to contain the dirty data to send to server
@@ -229,13 +230,14 @@ export class BatchPersister {
 
 			if (mutations.length === 0) {
 				// Nothing to persist
-				return {
+				result = {
 					success: true,
 					results: [],
 					successCount: 0,
 					failedCount: 0,
 					skippedCount: 0,
 				}
+				return result
 			}
 
 			// For pessimistic mode, reset entities to server state after capturing
@@ -254,7 +256,8 @@ export class BatchPersister {
 			const transactionResult = await this.executeTransaction(mutations, options?.signal)
 
 			// Process results with captured state for pessimistic mode
-			return this.processTransactionResult(sortedEntities, transactionResult, scope, options, capturedStates)
+			result = this.processTransactionResult(sortedEntities, transactionResult, scope, options, capturedStates)
+			return result
 
 		} finally {
 			// Clear in-flight status
@@ -267,6 +270,14 @@ export class BatchPersister {
 
 			// Unblock undo
 			this.undoManager?.unblock()
+
+			// Reclaim memory: drop snapshots of any created entities orphaned during
+			// editing. Only after a FULLY successful persist — on failure the captured
+			// creates/edits were restored for retry (see processTransactionResult), and
+			// sweeping then could reclaim a create the user still intends to save.
+			if (result?.success) {
+				this.store.sweepUnreachableCreated()
+			}
 		}
 	}
 
@@ -686,7 +697,7 @@ export class BatchPersister {
 							s => s.entityType === entity.entityType && s.entityId === entity.entityId,
 						)
 						if (capturedState) {
-							this.restoreAndCommitEntityState(capturedState)
+							this.restoreEntityState(capturedState, true)
 						}
 					} else {
 						// Commit based on scope
@@ -747,9 +758,10 @@ export class BatchPersister {
 							mutationResult.errorMessage,
 						)
 
-						// Rollback optimistic changes if enabled (and not in pessimistic mode)
-						// In pessimistic mode, we're already at server state, no rollback needed
-						if (rollbackOnError && !isPessimistic) {
+						// Optimistic mode rolls a FAILED entity back to server state only when
+						// rollbackOnError is set. Pessimistic restore is handled below for ALL
+						// captured entities, not just the failed ones.
+						if (!isPessimistic && rollbackOnError) {
 							this.rollbackEntity(entity)
 						}
 					}
@@ -771,6 +783,20 @@ export class BatchPersister {
 					} else {
 						failedCount++
 					}
+				}
+			}
+
+			// Pessimistic mode: the transaction failed, so from the user's point of view
+			// nothing was committed. Undo the pre-transaction server-view reset for EVERY
+			// captured entity (not only the ones whose individual mutation failed) and keep
+			// the restored data dirty (commit=false) so the user can retry. Restoring even
+			// the entities whose mutation happened to succeed in the non-atomic sequential
+			// fallback is what re-establishes their relation edges to inline-created
+			// children — keeping those creates reachable so the post-persist sweep does not
+			// reclaim a child the user still intends to save (P2).
+			if (isPessimistic && capturedStates) {
+				for (const capturedState of capturedStates) {
+					this.restoreEntityState(capturedState, false)
 				}
 			}
 		}
@@ -805,46 +831,58 @@ export class BatchPersister {
 	}
 
 	/**
-	 * Restores a captured entity state and commits it.
-	 * Used in pessimistic mode after successful server confirmation.
+	 * Restores a captured entity state (pessimistic mode), optionally committing it.
+	 *
+	 * - commit=true (server confirmed): restore the dirty data and commit it as the
+	 *   new server baseline.
+	 * - commit=false (server rejected): restore the dirty data but leave it dirty, so
+	 *   the user's in-flight edits and creates survive for a retry (P2) instead of
+	 *   being stuck at the server view the pessimistic reset left behind.
 	 */
-	private restoreAndCommitEntityState(capturedState: CapturedEntityState): void {
+	private restoreEntityState(capturedState: CapturedEntityState, commit: boolean): void {
 		if (capturedState.snapshot) {
-			// Restore the entity data from captured snapshot
 			this.store.setEntityData(
 				capturedState.entityType,
 				capturedState.entityId,
 				capturedState.snapshot.data as Record<string, unknown>,
-				true, // Mark as server data since it's now confirmed
+				commit, // server data only when confirmed; otherwise keep it as a dirty edit
 			)
 		}
 
-		// Restore and commit relations
 		for (const [relationKey, relationState] of capturedState.relations) {
 			const fieldName = relationKey.split(':')[2]
 			if (fieldName) {
 				this.store.setRelation(capturedState.entityType, capturedState.entityId, fieldName, {
 					currentId: relationState.currentId,
 					state: relationState.state,
+					// Restore placeholderData too: a has-one in the 'creating' state carries
+					// its inline create payload here, and getDirtyRelations treats a
+					// non-empty placeholderData as a dirty signal. Dropping it on a
+					// commit=false retry would lose the inline data and silently mark the
+					// relation clean. (For commit=true it is cleared by commitRelation below.)
+					placeholderData: relationState.placeholderData,
 				})
-				this.store.commitRelation(capturedState.entityType, capturedState.entityId, fieldName)
+				if (commit) {
+					this.store.commitRelation(capturedState.entityType, capturedState.entityId, fieldName)
+				}
 			}
 		}
 
-		// Restore and commit has-many states
 		for (const [hasManyKey, hasManyState] of capturedState.hasManyStates) {
 			const fieldName = hasManyKey.split(':')[2]
 			if (fieldName) {
 				this.store.restoreHasManyState(capturedState.entityType, capturedState.entityId, fieldName, hasManyState)
-				// Compute new server IDs: serverIds - removals + connections
-				const newServerIds = new Set(hasManyState.serverIds)
-				for (const removedId of hasManyState.plannedRemovals.keys()) {
-					newServerIds.delete(removedId)
+				if (commit) {
+					// Compute new server IDs: serverIds - removals + connections
+					const newServerIds = new Set(hasManyState.serverIds)
+					for (const removedId of hasManyState.plannedRemovals.keys()) {
+						newServerIds.delete(removedId)
+					}
+					for (const connectedId of hasManyState.plannedConnections) {
+						newServerIds.add(connectedId)
+					}
+					this.store.commitHasMany(capturedState.entityType, capturedState.entityId, fieldName, Array.from(newServerIds))
 				}
-				for (const connectedId of hasManyState.plannedConnections) {
-					newServerIds.add(connectedId)
-				}
-				this.store.commitHasMany(capturedState.entityType, capturedState.entityId, fieldName, Array.from(newServerIds))
 			}
 		}
 	}
