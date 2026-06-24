@@ -1,48 +1,41 @@
 import type { ActionMiddleware } from '../core/ActionDispatcher.js'
-import type { Action } from '../core/actions.js'
-import {
-	isTrackableAction,
-	getAffectedKeys,
-	mergeAffectedKeys,
-	createEmptyAffectedKeys,
-	type StoreAffectedKeys,
-} from '../core/actionClassification.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
-import type {
-	PartialStoreSnapshot,
-	PendingUndoEntry,
-	UndoEntry,
-	UndoManagerConfig,
-	UndoState,
-} from './types.js'
+import type { RekeyContext } from '../store/RekeyOrchestrator.js'
+import { UndoJournal, cellRefKey, type JournalEntry, type JournalCellImage } from './UndoJournal.js'
+import { rekeyJournalEntry } from './rekeyJournalEntry.js'
+import type { UndoManagerConfig, UndoState } from './types.js'
 
 type Subscriber = () => void
 
 /**
- * Generates a unique ID for undo entries.
+ * Generates a unique id for manual group handles.
  */
 function generateId(): string {
 	return `undo-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
 /**
- * UndoManager provides undo/redo functionality for the Bindx store.
+ * UndoManager — the policy layer over the {@link UndoJournal}.
  *
- * Features:
- * - Automatic debounced grouping of rapid changes
- * - Manual grouping via beginGroup/endGroup
- * - Configurable history size
- * - Block/unblock during persist operations
- * - React integration via subscribe/getState
+ * The journal records each gesture (one dispatch / one handle transaction) as a
+ * {@link JournalEntry} of editable-layer pre-images. UndoManager owns the undo /
+ * redo stacks and the grouping policy (debounced auto-grouping + manual
+ * begin/endGroup), blocks during persist, and keeps the stacks aligned across a
+ * temp→persisted rekey. Restore goes straight through the store's write paths, so
+ * the edge index and reachability cache rebuild themselves; the event/interceptor
+ * pipeline is NOT replayed.
  */
 export class UndoManager {
-	private undoStack: UndoEntry[] = []
-	private redoStack: UndoEntry[] = []
-	private pendingEntry: PendingUndoEntry | null = null
+	private readonly journal: UndoJournal
+	private undoStack: JournalEntry[] = []
+	private redoStack: JournalEntry[] = []
+
+	/** Cells accumulated while a debounce window or manual group is open (first-writer-wins). */
+	private pending: Map<string, JournalCellImage> | null = null
 	private debounceTimer: ReturnType<typeof setTimeout> | null = null
-	private isBlocked = false
 	private manualGroupId: string | null = null
-	private manualGroupLabel: string | undefined = undefined
+
+	private isBlocked = false
 	private subscribers = new Set<Subscriber>()
 	private cachedState: UndoState | null = null
 
@@ -55,333 +48,181 @@ export class UndoManager {
 	) {
 		this.maxHistorySize = config.maxHistorySize ?? 100
 		this.debounceMs = config.debounceMs ?? 300
+		this.journal = new UndoJournal(
+			store,
+			entry => this.onEntry(entry),
+			ctx => this.rekeyStacks(ctx),
+		)
 	}
 
 	/**
-	 * Creates middleware for ActionDispatcher.
-	 * Must be added to dispatcher to enable undo tracking.
+	 * Wires the journal into the store so its write paths record gestures. The
+	 * returned middleware is a backward-compatible pass-through (recording is native
+	 * to the store transaction, not the middleware).
 	 */
 	createMiddleware(): ActionMiddleware {
-		return (action: Action) => {
-			this.handleAction(action)
-			// Always allow action to proceed
-			return true
-		}
+		this.store.setJournal(this.journal)
+		return () => true
 	}
 
-	/**
-	 * Handles an action, capturing state for undo if trackable.
-	 */
-	private handleAction(action: Action): void {
-		// Skip if blocked or not trackable
-		if (this.isBlocked || !isTrackableAction(action)) {
-			return
-		}
+	// ==================== Recording (journal commit sink) ====================
 
-		const keys = getAffectedKeys(action)
+	private onEntry(entry: JournalEntry): void {
+		if (this.isBlocked || entry.cells.length === 0) return
 
-		// Clear redo stack on new action
+		// A fresh user action invalidates the redo stack.
 		if (this.redoStack.length > 0) {
 			this.redoStack = []
-			this.notifySubscribers()
 		}
 
 		if (this.manualGroupId !== null) {
-			// Manual grouping mode
-			this.handleManualGroupAction(keys)
-		} else {
-			// Auto-debounce mode
-			this.handleDebouncedAction(keys)
-		}
-	}
-
-	/**
-	 * Handles action in manual group mode.
-	 */
-	private handleManualGroupAction(keys: StoreAffectedKeys): void {
-		if (!this.pendingEntry) {
-			// First action in group - capture snapshot
-			const snapshot = this.store.exportPartialSnapshot(keys)
-			this.pendingEntry = {
-				beforeSnapshot: snapshot,
-				affectedKeys: { ...keys, entityKeys: [...keys.entityKeys], relationKeys: [...keys.relationKeys], hasManyKeys: [...keys.hasManyKeys] },
-				timestamp: Date.now(),
-				label: this.manualGroupLabel,
-			}
-		} else {
-			// Merge keys and expand snapshot if needed
-			const newKeys = this.getNewKeys(this.pendingEntry.affectedKeys, keys)
-			if (!this.isEmptyKeys(newKeys)) {
-				// Capture additional state for new keys
-				const additionalSnapshot = this.store.exportPartialSnapshot(newKeys)
-				this.mergeSnapshots(this.pendingEntry.beforeSnapshot, additionalSnapshot)
-				mergeAffectedKeys(this.pendingEntry.affectedKeys, keys)
-			}
-		}
-	}
-
-	/**
-	 * Handles action in debounced auto-group mode.
-	 */
-	private handleDebouncedAction(keys: StoreAffectedKeys): void {
-		// If debounceMs is 0, immediately create individual entries (no grouping)
-		if (this.debounceMs === 0) {
-			const snapshot = this.store.exportPartialSnapshot(keys)
-			this.undoStack.push({
-				id: generateId(),
-				beforeSnapshot: snapshot,
-				affectedKeys: { ...keys, entityKeys: [...keys.entityKeys], relationKeys: [...keys.relationKeys], hasManyKeys: [...keys.hasManyKeys] },
-				timestamp: Date.now(),
-			})
-			this.trimHistory()
+			this.mergeIntoPending(entry)
 			this.notifySubscribers()
 			return
 		}
 
-		if (this.pendingEntry) {
-			// Extend existing pending entry
-			const newKeys = this.getNewKeys(this.pendingEntry.affectedKeys, keys)
-			if (!this.isEmptyKeys(newKeys)) {
-				const additionalSnapshot = this.store.exportPartialSnapshot(newKeys)
-				this.mergeSnapshots(this.pendingEntry.beforeSnapshot, additionalSnapshot)
-				mergeAffectedKeys(this.pendingEntry.affectedKeys, keys)
-			}
-			this.resetDebounceTimer()
-		} else {
-			// First action - capture snapshot and start timer
-			const snapshot = this.store.exportPartialSnapshot(keys)
-			this.pendingEntry = {
-				beforeSnapshot: snapshot,
-				affectedKeys: { ...keys, entityKeys: [...keys.entityKeys], relationKeys: [...keys.relationKeys], hasManyKeys: [...keys.hasManyKeys] },
-				timestamp: Date.now(),
-			}
-			this.startDebounceTimer()
-			this.notifySubscribers()
+		if (this.debounceMs === 0) {
+			this.pushEntry(entry)
+			return
 		}
+
+		this.mergeIntoPending(entry)
+		this.resetDebounceTimer()
+		this.notifySubscribers()
 	}
 
-	/**
-	 * Gets keys that are in source but not in target.
-	 */
-	private getNewKeys(target: StoreAffectedKeys, source: StoreAffectedKeys): StoreAffectedKeys {
-		return {
-			entityKeys: source.entityKeys.filter(k => !target.entityKeys.includes(k)),
-			relationKeys: source.relationKeys.filter(k => !target.relationKeys.includes(k)),
-			hasManyKeys: source.hasManyKeys.filter(k => !target.hasManyKeys.includes(k)),
+	private mergeIntoPending(entry: JournalEntry): void {
+		if (!this.pending) {
+			this.pending = new Map()
 		}
-	}
-
-	/**
-	 * Checks if keys object is empty.
-	 */
-	private isEmptyKeys(keys: StoreAffectedKeys): boolean {
-		return keys.entityKeys.length === 0 && keys.relationKeys.length === 0 && keys.hasManyKeys.length === 0
-	}
-
-	/**
-	 * Merges additional snapshot into target.
-	 */
-	private mergeSnapshots(target: PartialStoreSnapshot, source: PartialStoreSnapshot): void {
-		for (const [key, value] of source.entitySnapshots) {
-			if (!target.entitySnapshots.has(key)) {
-				target.entitySnapshots.set(key, value)
-			}
-		}
-		for (const [key, value] of source.relationStates) {
-			if (!target.relationStates.has(key)) {
-				target.relationStates.set(key, value)
-			}
-		}
-		for (const [key, value] of source.hasManyStates) {
-			if (!target.hasManyStates.has(key)) {
-				target.hasManyStates.set(key, value)
-			}
-		}
-		for (const [key, value] of source.entityMetas) {
-			if (!target.entityMetas.has(key)) {
-				target.entityMetas.set(key, value)
+		for (const cell of entry.cells) {
+			const key = cellRefKey(cell)
+			// First-writer-wins: keep the state from before the group began.
+			if (!this.pending.has(key)) {
+				this.pending.set(key, cell)
 			}
 		}
 	}
 
-	/**
-	 * Starts the debounce timer.
-	 */
-	private startDebounceTimer(): void {
-		this.debounceTimer = setTimeout(() => {
-			this.flushPendingEntry()
-		}, this.debounceMs)
-	}
-
-	/**
-	 * Resets the debounce timer.
-	 */
-	private resetDebounceTimer(): void {
-		if (this.debounceTimer) {
-			clearTimeout(this.debounceTimer)
-		}
-		this.startDebounceTimer()
-	}
-
-	/**
-	 * Flushes pending entry to undo stack.
-	 */
-	private flushPendingEntry(): void {
-		if (!this.pendingEntry) return
-
+	private flushPending(): void {
 		if (this.debounceTimer) {
 			clearTimeout(this.debounceTimer)
 			this.debounceTimer = null
 		}
-
-		this.undoStack.push({
-			id: generateId(),
-			label: this.pendingEntry.label,
-			beforeSnapshot: this.pendingEntry.beforeSnapshot,
-			affectedKeys: this.pendingEntry.affectedKeys,
-			timestamp: this.pendingEntry.timestamp,
-		})
-
-		this.pendingEntry = null
-		this.trimHistory()
-		this.notifySubscribers()
-	}
-
-	/**
-	 * Trims history to max size.
-	 */
-	private trimHistory(): void {
-		while (this.undoStack.length > this.maxHistorySize) {
-			this.undoStack.shift()
+		const pending = this.pending
+		this.pending = null
+		if (pending && pending.size > 0) {
+			this.pushEntry({ cells: [...pending.values()] })
 		}
 	}
 
-	/**
-	 * Starts a manual group. All actions until endGroup are grouped as one undo entry.
-	 * Returns group ID that must be passed to endGroup.
-	 */
-	beginGroup(label?: string): string {
-		// Flush any pending debounced entry first
-		this.flushPendingEntry()
-
-		const groupId = generateId()
-		this.manualGroupId = groupId
-		this.manualGroupLabel = label
-		return groupId
+	private pushEntry(entry: JournalEntry): void {
+		this.undoStack.push(entry)
+		while (this.undoStack.length > this.maxHistorySize) {
+			this.undoStack.shift()
+		}
+		this.notifySubscribers()
 	}
 
+	private resetDebounceTimer(): void {
+		if (this.debounceTimer) {
+			clearTimeout(this.debounceTimer)
+		}
+		this.debounceTimer = setTimeout(() => this.flushPending(), this.debounceMs)
+	}
+
+	// ==================== Grouping ====================
+
 	/**
-	 * Ends a manual group and pushes to undo stack.
+	 * Starts a manual group: every gesture until {@link endGroup} folds into one
+	 * undo entry. Returns a handle that must be passed back to endGroup.
 	 */
+	beginGroup(_label?: string): string {
+		this.flushPending()
+		const id = generateId()
+		this.manualGroupId = id
+		return id
+	}
+
 	endGroup(groupId: string): void {
 		if (this.manualGroupId !== groupId) {
 			console.warn(`UndoManager: endGroup called with wrong groupId. Expected ${this.manualGroupId}, got ${groupId}`)
 			return
 		}
-
 		this.manualGroupId = null
-		this.manualGroupLabel = undefined
-		this.flushPendingEntry()
+		this.flushPending()
 	}
 
-	/**
-	 * Undoes the last entry.
-	 */
-	undo(): void {
-		// Flush any pending entry first
-		this.flushPendingEntry()
+	// ==================== Undo / Redo ====================
 
-		if (this.isBlocked || this.undoStack.length === 0) {
-			return
-		}
+	undo(): void {
+		this.flushPending()
+		if (this.isBlocked || this.undoStack.length === 0) return
 
 		const entry = this.undoStack.pop()!
-
-		// Capture current state for redo
-		const currentSnapshot = this.store.exportPartialSnapshot(entry.affectedKeys)
-
-		// Push to redo stack with current state
-		this.redoStack.push({
-			id: entry.id,
-			label: entry.label,
-			beforeSnapshot: currentSnapshot,
-			affectedKeys: entry.affectedKeys,
-			timestamp: Date.now(),
-		})
-
-		// Restore the before snapshot
-		this.store.importPartialSnapshot(entry.beforeSnapshot)
+		// Capture the current state of the same cells as the inverse (redo) entry,
+		// then restore the pre-images.
+		const inverse = this.journal.captureCurrent(entry.cells)
+		this.journal.apply(entry.cells)
+		this.redoStack.push({ cells: inverse })
 
 		this.notifySubscribers()
 	}
 
-	/**
-	 * Redoes the last undone entry.
-	 */
 	redo(): void {
-		if (this.isBlocked || this.redoStack.length === 0) {
-			return
-		}
+		if (this.isBlocked || this.redoStack.length === 0) return
 
 		const entry = this.redoStack.pop()!
-
-		// Capture current state for undo
-		const currentSnapshot = this.store.exportPartialSnapshot(entry.affectedKeys)
-
-		// Push back to undo stack
-		this.undoStack.push({
-			id: entry.id,
-			label: entry.label,
-			beforeSnapshot: currentSnapshot,
-			affectedKeys: entry.affectedKeys,
-			timestamp: Date.now(),
-		})
-
-		// Restore the redo snapshot
-		this.store.importPartialSnapshot(entry.beforeSnapshot)
+		const inverse = this.journal.captureCurrent(entry.cells)
+		this.journal.apply(entry.cells)
+		this.undoStack.push({ cells: inverse })
 
 		this.notifySubscribers()
 	}
 
-	/**
-	 * Blocks undo/redo operations.
-	 * Use during persist to prevent inconsistent state.
-	 */
+	// ==================== Blocking (during persist) ====================
+
 	block(): void {
-		// Flush any pending entry before blocking
-		this.flushPendingEntry()
+		this.flushPending()
 		this.isBlocked = true
 		this.notifySubscribers()
 	}
 
-	/**
-	 * Unblocks undo/redo operations.
-	 */
 	unblock(): void {
 		this.isBlocked = false
 		this.notifySubscribers()
 	}
 
+	// ==================== Persist rekey ====================
+
 	/**
-	 * Clears all undo/redo history.
+	 * Rewrites every stacked entry when a temp id is replaced by its persisted id,
+	 * so stored cells keep valid keys / id references (and sealed creates drop out).
 	 */
+	private rekeyStacks(ctx: RekeyContext): void {
+		const liveServerIds = (key: string): Set<string> => this.store.getLiveHasManyServerIds(key)
+		this.undoStack = this.undoStack.map(entry => rekeyJournalEntry(entry, ctx, liveServerIds))
+		this.redoStack = this.redoStack.map(entry => rekeyJournalEntry(entry, ctx, liveServerIds))
+		if (this.pending) {
+			const rekeyed = rekeyJournalEntry({ cells: [...this.pending.values()] }, ctx, liveServerIds)
+			this.pending = new Map(rekeyed.cells.map(cell => [cellRefKey(cell), cell]))
+		}
+	}
+
+	// ==================== History / State ====================
+
 	clear(): void {
 		if (this.debounceTimer) {
 			clearTimeout(this.debounceTimer)
 			this.debounceTimer = null
 		}
-		this.pendingEntry = null
+		this.pending = null
+		this.manualGroupId = null
 		this.undoStack = []
 		this.redoStack = []
-		this.manualGroupId = null
-		this.manualGroupLabel = undefined
 		this.notifySubscribers()
 	}
 
-	/**
-	 * Subscribes to state changes.
-	 * Returns unsubscribe function.
-	 */
 	subscribe(callback: Subscriber): () => void {
 		this.subscribers.add(callback)
 		return () => {
@@ -389,26 +230,20 @@ export class UndoManager {
 		}
 	}
 
-	/**
-	 * Gets current state for React integration.
-	 * Returns a cached object to satisfy useSyncExternalStore's referential equality requirement.
-	 */
 	getState(): UndoState {
 		if (!this.cachedState) {
+			const hasPending = this.pending !== null && this.pending.size > 0
 			this.cachedState = {
-				canUndo: this.undoStack.length > 0 || this.pendingEntry !== null,
+				canUndo: this.undoStack.length > 0 || hasPending,
 				canRedo: this.redoStack.length > 0,
 				isBlocked: this.isBlocked,
-				undoCount: this.undoStack.length + (this.pendingEntry ? 1 : 0),
+				undoCount: this.undoStack.length + (hasPending ? 1 : 0),
 				redoCount: this.redoStack.length,
 			}
 		}
 		return this.cachedState
 	}
 
-	/**
-	 * Notifies all subscribers of state change.
-	 */
 	private notifySubscribers(): void {
 		this.cachedState = null
 		for (const sub of this.subscribers) {

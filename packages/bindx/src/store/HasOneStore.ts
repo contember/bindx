@@ -182,6 +182,14 @@ export class HasOneStore {
 	}
 
 	/**
+	 * Removes a single has-one relation state (and its live edge). Used by undo
+	 * restore to drop a relation that did not exist before the gesture.
+	 */
+	removeRelation(key: string): void {
+		this.deleteRelation(key)
+	}
+
+	/**
 	 * Removes all has-one state owned by an entity (keys under the given owner
 	 * prefix), dropping each entry's edge through {@link deleteRelation}.
 	 */

@@ -456,6 +456,14 @@ export class HasManyStore {
 	}
 
 	/**
+	 * Removes a single has-many list state (and its live edges). Used by undo
+	 * restore to drop a list that did not exist before the gesture.
+	 */
+	removeHasMany(key: string): void {
+		this.deleteHasMany(key)
+	}
+
+	/**
 	 * Removes all has-many state owned by an entity (keys under the given owner
 	 * prefix), dropping each entry's edges through {@link deleteHasMany}.
 	 */

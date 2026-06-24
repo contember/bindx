@@ -17,6 +17,15 @@ import { EntitySnapshotStore } from './EntitySnapshotStore.js'
 import { RootRegistry } from './RootRegistry.js'
 import { ReachabilityAnalyzer } from './ReachabilityAnalyzer.js'
 import { RekeyOrchestrator } from './RekeyOrchestrator.js'
+import type { RekeyContext } from './RekeyOrchestrator.js'
+import type {
+	UndoJournal,
+	JournalTarget,
+	JournalCellImage,
+	EntityCellImage,
+	RelationCellImage,
+	HasManyCellImage,
+} from '../undo/UndoJournal.js'
 
 export type { HasManyRemovalType, StoredHasManyState, StoredRelationState } from './RelationStore.js'
 export type { EntityMeta } from './EntityMetaStore.js'
@@ -41,7 +50,7 @@ type Subscriber = () => void
  * - EntityMetaStore — entity metadata, load state, persisting, temp ID mapping
  * - TouchedStore — field touched state tracking
  */
-export class SnapshotStore implements SnapshotVersionBumper {
+export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	private readonly entitySnapshots = new EntitySnapshotStore()
 	private readonly subscriptions = new SubscriptionManager()
 	private readonly errors = new ErrorStore()
@@ -60,6 +69,13 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	 * Keyed by "parentType:parentId:fieldName".
 	 */
 	private readonly lastPropagatedData = new Map<string, unknown>()
+
+	/**
+	 * Optional write-journal. When set (by an attached UndoManager), mutating
+	 * methods record editable-layer pre-images of the cells they touch so a gesture
+	 * can be undone. Null ⇒ no undo tracking and the transaction helpers are no-ops.
+	 */
+	private journal: UndoJournal | null = null
 
 	constructor() {
 		this.reachability = new ReachabilityAnalyzer(this.entitySnapshots, this.meta, this.relations, this.roots)
@@ -81,6 +97,42 @@ export class SnapshotStore implements SnapshotVersionBumper {
 			this.touched,
 			{ rekey: ctx => this.rekeyPropagatedData(ctx.oldKeyPrefix, ctx.newKeyPrefix) },
 		])
+	}
+
+	// ==================== Undo Journal ====================
+
+	/**
+	 * Attaches (or detaches) the write-journal. Called by UndoManager when it is
+	 * wired to a dispatcher.
+	 */
+	setJournal(journal: UndoJournal | null): void {
+		this.journal = journal
+	}
+
+	/**
+	 * Opens a journal transaction (re-entrant). All primary-store writes until the
+	 * matching {@link commitTransaction} are captured as ONE undoable gesture.
+	 */
+	beginTransaction(): void {
+		this.journal?.begin()
+	}
+
+	commitTransaction(): void {
+		this.journal?.commit()
+	}
+
+	/**
+	 * Runs a gesture as a single undoable transaction. Used by handle operations
+	 * (e.g. list add / has-one create) that write to the store outside the
+	 * dispatcher, so their pre-create writes join the same undo entry.
+	 */
+	transaction<T>(fn: () => T): T {
+		this.beginTransaction()
+		try {
+			return fn()
+		} finally {
+			this.commitTransaction()
+		}
 	}
 
 	// ==================== Key Generation ====================
@@ -184,6 +236,9 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		skipNotify: boolean = false,
 	): EntitySnapshot<T> {
 		const key = this.getEntityKey(entityType, id)
+		// Server loads are not user gestures; only journal local data sets (incl. the
+		// initial write of a freshly created entity, which captures an absent pre-image).
+		if (!isServerData) this.journal?.recordEntity(key)
 		const newSnapshot = this.entitySnapshots.setData(key, id, entityType, data, isServerData)
 
 		if (isServerData) {
@@ -222,6 +277,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		updates: Partial<T>,
 	): EntitySnapshot<T> | undefined {
 		const key = this.getEntityKey(entityType, id)
+		this.journal?.recordEntity(key)
 		const result = this.entitySnapshots.updateFields<T>(key, updates)
 		if (result) {
 			this.notifyEntitySubscribers(key)
@@ -236,6 +292,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		value: unknown,
 	): void {
 		const key = this.getEntityKey(entityType, id)
+		this.journal?.recordEntity(key)
 		if (this.entitySnapshots.setFieldValue(key, fieldPath, value)) {
 			this.notifyEntitySubscribers(key)
 		}
@@ -249,6 +306,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 
 	resetEntity(entityType: string, id: string): void {
 		const key = this.getEntityKey(entityType, id)
+		this.journal?.recordEntity(key)
 		this.entitySnapshots.reset(key)
 		this.notifyEntitySubscribers(key)
 	}
@@ -327,12 +385,14 @@ export class SnapshotStore implements SnapshotVersionBumper {
 
 	scheduleForDeletion(entityType: string, id: string): void {
 		const key = this.getEntityKey(entityType, id)
+		this.journal?.recordEntity(key)
 		this.meta.scheduleForDeletion(key)
 		this.notifyEntitySubscribers(key)
 	}
 
 	unscheduleForDeletion(entityType: string, id: string): void {
 		const key = this.getEntityKey(entityType, id)
+		this.journal?.recordEntity(key)
 		this.meta.unscheduleForDeletion(key)
 		this.notifyEntitySubscribers(key)
 	}
@@ -380,6 +440,18 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		// The orchestrator owns the temp→persisted redirect and drives the rekey
 		// fan-out across every sub-store in its documented order.
 		this.rekeyOrchestrator.rekey(entityType, tempId, persistedId)
+
+		// Keep the undo journal aligned: rewrite stored keys + embedded id references
+		// in every entry, and seal the now-persisted create so undo can't delete it.
+		const ctx: RekeyContext = {
+			oldKey: `${entityType}:${tempId}`,
+			newKey: `${entityType}:${persistedId}`,
+			oldKeyPrefix: `${entityType}:${tempId}:`,
+			newKeyPrefix: `${entityType}:${persistedId}:`,
+			oldId: tempId,
+			newId: persistedId,
+		}
+		this.journal?.rekey(ctx)
 
 		// Notify on the NEW key so React picks up the change.
 		this.notifyEntitySubscribers(`${entityType}:${persistedId}`)
@@ -437,6 +509,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		alias?: string,
 	): void {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		this.journal?.recordHasMany(key)
 		this.relations.planHasManyRemoval(key, itemId, type)
 		this.notifyRelationSubscribers(key)
 	}
@@ -459,6 +532,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		alias?: string,
 	): void {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		this.journal?.recordHasMany(key)
 		this.relations.planHasManyConnection(key, itemId)
 		this.notifyRelationSubscribers(key)
 	}
@@ -494,6 +568,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		alias?: string,
 	): void {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		this.journal?.recordHasMany(key)
 		this.relations.resetHasMany(key)
 		this.notifyRelationSubscribers(key)
 	}
@@ -506,6 +581,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		alias?: string,
 	): void {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		this.journal?.recordHasMany(key)
 		this.relations.addToHasMany(key, itemId)
 		this.notifyRelationSubscribers(key)
 	}
@@ -517,6 +593,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		itemId: string,
 	): void {
 		const key = this.getRelationKey(parentType, parentId, fieldName)
+		this.journal?.recordHasMany(key)
 		this.relations.connectExistingToHasMany(key, itemId)
 		this.notifyRelationSubscribers(key)
 	}
@@ -530,6 +607,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		alias?: string,
 	): void {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		this.journal?.recordHasMany(key)
 		// Cancelling the add of a never-persisted child just removes it from the
 		// list; its now-unreachable snapshot is no longer reported as a `create` and
 		// is collected by the lazy memory sweep.
@@ -547,6 +625,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		alias?: string,
 	): void {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		this.journal?.recordHasMany(key)
 		this.relations.moveInHasMany(key, fromIndex, toIndex)
 		this.notifyRelationSubscribers(key)
 	}
@@ -781,6 +860,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		skipNotify: boolean = false,
 	): void {
 		const key = this.getRelationKey(parentType, parentId, fieldName)
+		this.journal?.recordRelation(key)
 		const entityKey = this.getEntityKey(parentType, parentId)
 		const entitySnapshot = this.entitySnapshots.get(entityKey)
 		this.relations.setRelation(key, updates, entitySnapshot, fieldName)
@@ -800,6 +880,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 
 	resetRelation(parentType: string, parentId: string, fieldName: string): void {
 		const key = this.getRelationKey(parentType, parentId, fieldName)
+		this.journal?.recordRelation(key)
 		this.relations.resetRelation(key)
 		this.notifyRelationSubscribers(key)
 	}
@@ -858,6 +939,9 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	 */
 	registerParentChild(parentType: string, parentId: string, childType: string, childId: string): void {
 		const childKey = this.getEntityKey(childType, childId)
+		// Capture the child's root membership before it is dropped, so undoing the
+		// connect/add that anchored it restores it as a reachable create.
+		this.journal?.recordEntity(childKey)
 		this.roots.unregister(childKey)
 	}
 
@@ -903,6 +987,164 @@ export class SnapshotStore implements SnapshotVersionBumper {
 
 		for (const key of notifiedRelationKeys) {
 			this.subscriptions.notifyRelationDirect(key)
+		}
+	}
+
+	// ==================== Undo Journal Target (cell capture / restore) ====================
+
+	/**
+	 * Captures the editable-layer pre-image of an entity cell: the current snapshot
+	 * (data + baseline), plus the meta and root membership needed to restore or
+	 * re-create it. `present: false` means the entity did not exist — undo removes it.
+	 */
+	exportEntityCell(key: string): EntityCellImage {
+		const snapshot = this.entitySnapshots.get(key)
+		if (!snapshot) {
+			return { kind: 'entity', key, present: false }
+		}
+		return {
+			kind: 'entity',
+			key,
+			present: true,
+			snapshot,
+			existsOnServer: this.meta.existsOnServer(key),
+			isScheduledForDeletion: this.meta.isScheduledForDeletion(key),
+			isRoot: this.roots.has(key),
+		}
+	}
+
+	exportRelationCell(key: string): RelationCellImage {
+		const state = this.relations.getRelation(key)
+		if (!state) return { kind: 'relation', key, present: false }
+		return {
+			kind: 'relation',
+			key,
+			present: true,
+			state: { ...state, placeholderData: { ...state.placeholderData } },
+		}
+	}
+
+	/**
+	 * Live server-member ids of a has-many list by its raw relation key. Used by the
+	 * journal's rekey to rebase a pre-image when a just-persisted create became a
+	 * permanent member of the list (membership rebase for sealed creates).
+	 */
+	getLiveHasManyServerIds(relationKey: string): Set<string> {
+		const state = this.relations.getHasMany(relationKey)
+		return new Set(state?.serverIds ?? [])
+	}
+
+	exportHasManyCell(key: string): HasManyCellImage {
+		const state = this.relations.getHasMany(key)
+		if (!state) return { kind: 'hasMany', key, present: false }
+		return {
+			kind: 'hasMany',
+			key,
+			present: true,
+			state: {
+				serverIds: new Set(state.serverIds),
+				orderedIds: state.orderedIds ? [...state.orderedIds] : null,
+				plannedRemovals: new Map(state.plannedRemovals),
+				plannedAdditions: new Map(state.plannedAdditions),
+				version: state.version,
+			},
+		}
+	}
+
+	/**
+	 * Restores a set of cell pre-images through the write paths (so the edge index
+	 * reconciles and the reachability cache invalidates). Order matters: present
+	 * entities are restored/recreated first so relations can reference live targets,
+	 * then present relations, then un-creates, then dropped relations.
+	 */
+	applyJournalImages(images: JournalCellImage[]): void {
+		const notifyEntities = new Set<string>()
+		const notifyRelations = new Set<string>()
+
+		const presentEntities: EntityCellImage[] = []
+		const presentRelations: Array<RelationCellImage | HasManyCellImage> = []
+		const absentEntities: EntityCellImage[] = []
+		const absentRelations: Array<RelationCellImage | HasManyCellImage> = []
+
+		for (const img of images) {
+			if (img.kind === 'entity') {
+				notifyEntities.add(img.key)
+				;(img.present ? presentEntities : absentEntities).push(img)
+			} else {
+				notifyRelations.add(img.key)
+				notifyEntities.add(entityKeyOfRelationKey(img.key))
+				;(img.present ? presentRelations : absentRelations).push(img)
+			}
+		}
+
+		for (const img of presentEntities) this.applyEntityImage(img)
+		for (const img of presentRelations) this.applyRelationImage(img)
+		for (const img of absentEntities) {
+			const [type, id] = splitEntityKey(img.key)
+			this.removeEntity(type, id)
+		}
+		for (const img of absentRelations) {
+			if (img.kind === 'relation') this.relations.removeRelationState(img.key)
+			else this.relations.removeHasManyState(img.key)
+		}
+
+		this.subscriptions.notifyGlobal()
+		for (const key of notifyEntities) this.subscriptions.notifyEntityDirect(key)
+		for (const key of notifyRelations) this.subscriptions.notifyRelationDirect(key)
+	}
+
+	private applyEntityImage(img: EntityCellImage): void {
+		const snapshot = img.snapshot!
+		const live = this.entitySnapshots.get(img.key)
+		if (live) {
+			// Splice the editable layer (data) onto the LIVE server baseline; keep the
+			// live id so an undo after persist re-dirties against the current baseline.
+			const spliced = createEntitySnapshot(
+				live.id,
+				live.entityType,
+				{ ...(snapshot.data as Record<string, unknown>), id: live.id },
+				live.serverData,
+				live.version + 1,
+			)
+			this.entitySnapshots.importSnapshots(new Map([[img.key, spliced]]))
+			this.meta.importMetas(new Map([[img.key, {
+				existsOnServer: this.meta.existsOnServer(img.key),
+				isScheduledForDeletion: img.isScheduledForDeletion ?? false,
+			}]]))
+		} else {
+			// Entity is gone (swept / un-created): recreate it from the captured snapshot.
+			this.entitySnapshots.importSnapshots(new Map([[img.key, snapshot]]))
+			this.meta.importMetas(new Map([[img.key, {
+				existsOnServer: img.existsOnServer ?? false,
+				isScheduledForDeletion: img.isScheduledForDeletion ?? false,
+			}]]))
+		}
+		if (img.isRoot) this.roots.register(img.key)
+		else this.roots.unregister(img.key)
+	}
+
+	private applyRelationImage(img: RelationCellImage | HasManyCellImage): void {
+		if (img.kind === 'relation') {
+			const s = img.state!
+			const live = this.relations.getRelation(img.key)
+			this.relations.importRelationStates(new Map([[img.key, {
+				currentId: s.currentId,
+				state: s.state,
+				placeholderData: { ...s.placeholderData },
+				serverId: live ? live.serverId : s.serverId,
+				serverState: live ? live.serverState : s.serverState,
+				version: (live?.version ?? s.version) + 1,
+			}]]))
+		} else {
+			const s = img.state!
+			const live = this.relations.getHasMany(img.key)
+			this.relations.importHasManyStates(new Map([[img.key, {
+				serverIds: new Set(live ? live.serverIds : s.serverIds),
+				orderedIds: s.orderedIds ? [...s.orderedIds] : null,
+				plannedRemovals: new Map(s.plannedRemovals),
+				plannedAdditions: new Map(s.plannedAdditions),
+				version: (live?.version ?? s.version) + 1,
+			}]]))
 		}
 	}
 
@@ -964,4 +1206,23 @@ export class SnapshotStore implements SnapshotVersionBumper {
 
 		this.subscriptions.notify()
 	}
+}
+
+/**
+ * Splits an entity key "entityType:id" into its parts. Entity ids never contain
+ * ':' (store-wide invariant), so the first ':' is the type/id boundary.
+ */
+function splitEntityKey(key: string): [string, string] {
+	const i = key.indexOf(':')
+	return [key.slice(0, i), key.slice(i + 1)]
+}
+
+/**
+ * Derives the owning entity key "entityType:id" from a relation/has-many key
+ * "entityType:id:fieldName".
+ */
+function entityKeyOfRelationKey(key: string): string {
+	const first = key.indexOf(':')
+	const second = key.indexOf(':', first + 1)
+	return second === -1 ? key : key.slice(0, second)
 }
