@@ -88,7 +88,12 @@ export interface EnumListFilterArtifact {
  * IsDefined filter artifact
  */
 export interface IsDefinedFilterArtifact {
-	readonly defined: boolean | null
+	/**
+	 * Follows the shared `nullCondition` convention used by every other filter handler.
+	 * `false` = exclude nulls (is-defined); `true` = include-nulls-only (not-defined);
+	 * `undefined` = filter inactive.
+	 */
+	readonly nullCondition?: boolean
 }
 
 /**
