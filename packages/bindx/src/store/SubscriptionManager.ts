@@ -157,6 +157,11 @@ export class SubscriptionManager {
 	): void {
 		// Prevent infinite recursion
 		if (notifiedKeys.has(key)) return
+		// Capture "am I the root invocation" BEFORE adding/recursing — the parent
+		// propagation below grows the shared `notifiedKeys` set, so checking its
+		// size after recursion would misclassify any child-with-parent as non-root
+		// and skip the global notification (see issue #51).
+		const isRoot = notifiedKeys.size === 0
 		notifiedKeys.add(key)
 
 		this.globalVersion++
@@ -179,8 +184,9 @@ export class SubscriptionManager {
 			}
 		}
 
-		// Notify global subscribers (only once, not for each parent)
-		if (notifiedKeys.size === 1) {
+		// Notify global subscribers (only once, from the root invocation — not
+		// again for each parent reached via propagation)
+		if (isRoot) {
 			for (const sub of this.globalSubscribers) {
 				sub()
 			}
