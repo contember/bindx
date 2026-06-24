@@ -174,18 +174,22 @@ export function useEntityList(
 	const { store, dispatcher, batcher } = useBindxContext()
 
 	// --- Selection resolution ---
+	// Both selection paths (definer 3rd-arg and pre-resolved options.selection)
+	// are stabilized identically: the raw meta is resolved every render, but its
+	// reference is only swapped when the serialized query content actually
+	// changes. This keeps `selectionMeta` identity stable across content-identical
+	// renders (e.g. DataGrid rebuilding a new-but-equal selection object), which
+	// in turn keeps the data-loading effect from refiring spuriously.
 	// resolveSelectionMeta is a pure function; useRef is called unconditionally.
-	const resolvedMeta = definer ? resolveSelectionMeta(definer) : null
-	const definerQueryKey = resolvedMeta ? JSON.stringify(buildQueryFromSelection(resolvedMeta)) : null
-	const selectionRef = useRef<{ meta: SelectionMeta; queryKey: string } | null>(null)
+	const rawMeta = definer ? resolveSelectionMeta(definer) : options.selection!
+	const selectionContentKey = JSON.stringify(buildQueryFromSelection(rawMeta))
+	const selectionRef = useRef<{ meta: SelectionMeta; contentKey: string } | null>(null)
 
-	if (definerQueryKey && resolvedMeta) {
-		if (!selectionRef.current || selectionRef.current.queryKey !== definerQueryKey) {
-			selectionRef.current = { meta: resolvedMeta, queryKey: definerQueryKey }
-		}
+	if (!selectionRef.current || selectionRef.current.contentKey !== selectionContentKey) {
+		selectionRef.current = { meta: rawMeta, contentKey: selectionContentKey }
 	}
 
-	const selectionMeta = definer ? selectionRef.current!.meta : options.selection!
+	const selectionMeta = selectionRef.current.meta
 
 	// --- Stable options key ---
 	const optionsKey = useMemo(
@@ -199,11 +203,14 @@ export function useEntityList(
 	)
 
 	// --- Effective query key for cache invalidation ---
+	// Derived from the stable selectionContentKey so it keeps identity while the
+	// query content is unchanged, even if the caller passes a fresh selection object.
 	const effectiveQueryKey = useMemo(() => {
 		if (options.queryKey) return options.queryKey
-		const query = buildQueryFromSelection(selectionMeta)
-		return JSON.stringify({ entityType, query })
-	}, [options.queryKey, selectionMeta, entityType])
+		// selectionContentKey is already the serialized query; just namespace it
+		// by entity type (avoids double-encoding the JSON string).
+		return `${entityType}:${selectionContentKey}`
+	}, [options.queryKey, selectionContentKey, entityType])
 
 	// --- List state tracking ---
 	const listStateRef = useRef<{
