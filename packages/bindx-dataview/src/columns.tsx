@@ -45,6 +45,7 @@ interface FieldRefMetaCarrier {
 	readonly [FIELD_REF_META]: {
 		readonly entityType: string
 		readonly fieldName: string
+		readonly fullPath?: readonly string[]
 		readonly isArray: boolean
 		readonly isRelation: boolean
 		readonly enumName?: string
@@ -56,9 +57,18 @@ export function hasFieldRefMeta(ref: unknown): ref is FieldRefMetaCarrier {
 	return ref != null && typeof ref === 'object' && FIELD_REF_META in ref
 }
 
-/** Extract field name from a field ref (works in both collector and runtime proxies). */
+/**
+ * Extract the dotted field path from a field ref (works in both collector and
+ * runtime proxies). For fields reached through has-one relations
+ * (e.g. `it.author.name`) this is the full dotted path (`"author.name"`) so the
+ * DataGrid can build correct nested where/orderBy clauses; for top-level fields
+ * it is simply the field name (`"title"`).
+ */
 export function extractFieldName(ref: unknown): string | null {
-	return hasFieldRefMeta(ref) ? ref[FIELD_REF_META].fieldName : null
+	if (!hasFieldRefMeta(ref)) return null
+	const meta = ref[FIELD_REF_META]
+	const fullPath = meta.fullPath
+	return fullPath && fullPath.length > 0 ? fullPath.join('.') : meta.fieldName
 }
 
 /** Extract enum name from a field ref (if field is an enum). */
@@ -303,7 +313,7 @@ export const DataGridColumn = Object.assign(
 				header,
 				renderCell: (accessor: EntityAccessor<object>) => {
 					if (!fieldName) return null
-					const ref = (accessor as unknown as Record<string, unknown>)[fieldName]
+					const ref = accessField(accessor, fieldName)
 					const value = ref && typeof ref === 'object' && 'value' in ref
 						? (ref as { value: unknown }).value ?? null
 						: null

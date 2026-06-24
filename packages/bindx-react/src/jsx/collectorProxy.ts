@@ -33,13 +33,14 @@ export function createCollectorProxy<T>(
 	scope: SelectionScope,
 	entityName: string | null = null,
 	schemaRegistry: SchemaRegistry<Record<string, object>> | null = null,
+	parentPath: readonly string[] = [],
 ): EntityAccessor<T> {
 	const fieldsProxy = new Proxy({} as EntityFields<T>, {
 		get(_, fieldName: string): FieldAccessor<unknown> | HasManyAccessor<unknown> | HasOneAccessor<unknown> {
 			// Return a collector ref that works for all field types
 			// The actual type (scalar/hasMany/hasOne) will be determined
 			// by how it's used in components or by schema lookup
-			return createCollectorFieldRef(scope, fieldName, entityName, schemaRegistry)
+			return createCollectorFieldRef(scope, fieldName, entityName, schemaRegistry, parentPath)
 		},
 	})
 
@@ -97,6 +98,7 @@ function createCollectorFieldRef(
 	fieldName: string,
 	entityName: string | null,
 	schemaRegistry: SchemaRegistry<Record<string, object>> | null,
+	parentPath: readonly string[] = [],
 ): CollectorRef {
 	// Look up field type from schema if available
 	const fieldDef = entityName && schemaRegistry
@@ -132,11 +134,17 @@ function createCollectorFieldRef(
 		return childScope
 	}
 
+	// Absolute path from the root collector to this field. `fieldName` / `path`
+	// stay relative (last segment only) so selection/relation metadata is
+	// unaffected; `fullPath` carries the dotted chain for DataGrid columns.
+	const fullPath = [...parentPath, fieldName]
+
 	const meta = {
 		entityType: targetEntityName ?? '', // Collection phase - entity type from schema
 		entityId: '', // Collection phase - no entity
 		path: [fieldName],
 		fieldName,
+		fullPath,
 		isArray: isHasManyRelation,
 		isRelation: isHasOneRelation || isHasManyRelation,
 		enumName,
@@ -149,8 +157,10 @@ function createCollectorFieldRef(
 		get(_, nestedFieldName: string) {
 			// Get child scope (upgrades to relation)
 			const scope = getChildScope()
-			// Create nested field ref in the child scope, passing target entity info
-			return createCollectorFieldRef(scope, nestedFieldName, targetEntityName, schemaRegistry)
+			// Create nested field ref in the child scope, passing target entity info.
+			// Thread the current field's fullPath so e.g. `it.author.name` carries
+			// the dotted absolute path `['author', 'name']`.
+			return createCollectorFieldRef(scope, nestedFieldName, targetEntityName, schemaRegistry, fullPath)
 		},
 	})
 
@@ -158,7 +168,9 @@ function createCollectorFieldRef(
 		// Get child scope and mark as array relation
 		const scope = getChildScope()
 		parentScope.markAsArray(fieldName)
-		// Call fn once with collector to gather nested selection, passing target entity info
+		// Call fn once with collector to gather nested selection, passing target entity info.
+		// Items of a has-many start a fresh path: dotted where/sort paths only
+		// make sense across has-one chains, not across collection items.
 		fn(createCollectorProxy<unknown>(scope, targetEntityName, schemaRegistry), 0)
 		return []
 	}
@@ -211,9 +223,11 @@ function createCollectorFieldRef(
 		$isDirty: false,
 		$fields: hasOneFieldsProxy,
 		get $entity(): EntityAccessor<unknown> {
-			// Get child scope (upgrades to relation) and return proxy with scope
+			// Get child scope (upgrades to relation) and return proxy with scope.
+			// Thread fullPath for has-one so nested fields keep their dotted chain;
+			// has-many items start fresh (handled via getById/map).
 			const scope = getChildScope()
-			return createCollectorProxy<unknown>(scope, targetEntityName, schemaRegistry)
+			return createCollectorProxy<unknown>(scope, targetEntityName, schemaRegistry, isHasManyRelation ? [] : fullPath)
 		},
 		$delete: () => {},
 		$remove: () => {},

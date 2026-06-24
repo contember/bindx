@@ -52,12 +52,25 @@ export function defineColumnType<TValue, TFilterArtifact extends FilterArtifact>
 // ============================================================================
 
 /**
- * Access a field on an EntityAccessor by name.
+ * Access a field on an EntityAccessor by name or dotted path.
  * EntityAccessor is a Proxy — bracket notation triggers the proxy get trap.
+ * Dotted paths (e.g. `"author.name"`) are traversed through has-one relations:
+ * each intermediate segment resolves to a related EntityAccessor, and the final
+ * segment to the leaf field ref.
  */
 export function accessField(accessor: EntityAccessor<object>, fieldName: string): unknown {
-	// EntityAccessor is a Proxy — bracket access goes through the get trap
-	return (accessor as unknown as Record<string, unknown>)[fieldName]
+	if (!fieldName.includes('.')) {
+		// EntityAccessor is a Proxy — bracket access goes through the get trap
+		return (accessor as unknown as Record<string, unknown>)[fieldName]
+	}
+
+	const segments = fieldName.split('.')
+	let current: unknown = accessor
+	for (let i = 0; i < segments.length; i++) {
+		if (current == null || typeof current !== 'object') return null
+		current = (current as Record<string, unknown>)[segments[i]!]
+	}
+	return current
 }
 
 function extractScalarValue<T>(accessor: EntityAccessor<object>, fieldName: string): T | null {
