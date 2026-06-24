@@ -241,9 +241,6 @@ export { UndoManager } from './undo/index.js'
 export type {
 	UndoManagerConfig,
 	UndoState,
-	UndoEntry,
-	PartialStoreSnapshot,
-	StoreAffectedKeys,
 } from './undo/index.js'
 
 // Store types (for undo)

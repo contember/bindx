@@ -157,6 +157,22 @@ export class RelationStore implements Rekeyable {
 	// ==================== Bulk Operations ====================
 
 	/**
+	 * Removes a single has-one relation state by key (undo restore of an
+	 * absent-before-the-gesture relation).
+	 */
+	removeRelationState(key: string): void {
+		this.hasOne.removeRelation(key)
+	}
+
+	/**
+	 * Removes a single has-many list state by key (undo restore of an
+	 * absent-before-the-gesture list).
+	 */
+	removeHasManyState(key: string): void {
+		this.hasMany.removeHasMany(key)
+	}
+
+	/**
 	 * Removes all relation and has-many state owned by an entity (keys under the
 	 * given owner prefix). Called by removeEntity so a removed entity leaves no
 	 * stale relation state behind.

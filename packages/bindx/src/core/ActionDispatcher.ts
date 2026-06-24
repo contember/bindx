@@ -42,39 +42,46 @@ export class ActionDispatcher {
 	 * Async interceptors are skipped with a warning — use dispatchAsync() for those.
 	 */
 	dispatch(action: Action): void {
-		// Run through middlewares first
-		for (const middleware of this.middlewares) {
-			const result = middleware(action, this.store)
-			if (result === false) {
-				// Middleware can cancel the action
-				return
+		// One dispatch = one undoable gesture. The store records every primary write
+		// made between begin/commit into a single journal entry (no-op without undo).
+		this.store.beginTransaction()
+		try {
+			// Run through middlewares first
+			for (const middleware of this.middlewares) {
+				const result = middleware(action, this.store)
+				if (result === false) {
+					// Middleware can cancel the action
+					return
+				}
 			}
-		}
 
-		// Create and run before event through interceptors (synchronously)
-		const beforeEvent = createBeforeEvent(action, this.store)
-		if (beforeEvent) {
-			const result = this.eventEmitter.runInterceptorsSync(beforeEvent)
-			if (result === null) {
-				// Interceptor cancelled the action
-				return
+			// Create and run before event through interceptors (synchronously)
+			const beforeEvent = createBeforeEvent(action, this.store)
+			if (beforeEvent) {
+				const result = this.eventEmitter.runInterceptorsSync(beforeEvent)
+				if (result === null) {
+					// Interceptor cancelled the action
+					return
+				}
+				// If event was modified, update action accordingly
+				if (result !== beforeEvent) {
+					action = this.updateActionFromEvent(action, result)
+				}
 			}
-			// If event was modified, update action accordingly
-			if (result !== beforeEvent) {
-				action = this.updateActionFromEvent(action, result)
+
+			// Capture state before execution (for after events)
+			const stateBefore = captureStateBeforeAction(action, this.store)
+
+			// Execute the action
+			this.execute(action)
+
+			// Emit after event
+			const afterEvent = createAfterEvent(action, stateBefore, this.store)
+			if (afterEvent) {
+				this.eventEmitter.emit(afterEvent)
 			}
-		}
-
-		// Capture state before execution (for after events)
-		const stateBefore = captureStateBeforeAction(action, this.store)
-
-		// Execute the action
-		this.execute(action)
-
-		// Emit after event
-		const afterEvent = createAfterEvent(action, stateBefore, this.store)
-		if (afterEvent) {
-			this.eventEmitter.emit(afterEvent)
+		} finally {
+			this.store.commitTransaction()
 		}
 	}
 
@@ -83,41 +90,46 @@ export class ActionDispatcher {
 	 * Returns true if the action was executed, false if it was cancelled by an interceptor.
 	 */
 	async dispatchAsync(action: Action): Promise<boolean> {
-		// Run through middlewares first
-		for (const middleware of this.middlewares) {
-			const result = middleware(action, this.store)
-			if (result === false) {
-				return false
+		this.store.beginTransaction()
+		try {
+			// Run through middlewares first
+			for (const middleware of this.middlewares) {
+				const result = middleware(action, this.store)
+				if (result === false) {
+					return false
+				}
 			}
-		}
 
-		// Create and run before event through interceptors
-		const beforeEvent = createBeforeEvent(action, this.store)
-		if (beforeEvent) {
-			const result = await this.eventEmitter.runInterceptors(beforeEvent)
-			if (result === null) {
-				// Interceptor cancelled the action
-				return false
+			// Create and run before event through interceptors
+			const beforeEvent = createBeforeEvent(action, this.store)
+			if (beforeEvent) {
+				const result = await this.eventEmitter.runInterceptors(beforeEvent)
+				if (result === null) {
+					// Interceptor cancelled the action
+					return false
+				}
+				// If event was modified, update action accordingly
+				if (result !== beforeEvent) {
+					action = this.updateActionFromEvent(action, result)
+				}
 			}
-			// If event was modified, update action accordingly
-			if (result !== beforeEvent) {
-				action = this.updateActionFromEvent(action, result)
+
+			// Capture state before execution (for after events)
+			const stateBefore = captureStateBeforeAction(action, this.store)
+
+			// Execute the action
+			this.execute(action)
+
+			// Emit after event
+			const afterEvent = createAfterEvent(action, stateBefore, this.store)
+			if (afterEvent) {
+				this.eventEmitter.emit(afterEvent)
 			}
+
+			return true
+		} finally {
+			this.store.commitTransaction()
 		}
-
-		// Capture state before execution (for after events)
-		const stateBefore = captureStateBeforeAction(action, this.store)
-
-		// Execute the action
-		this.execute(action)
-
-		// Emit after event
-		const afterEvent = createAfterEvent(action, stateBefore, this.store)
-		if (afterEvent) {
-			this.eventEmitter.emit(afterEvent)
-		}
-
-		return true
 	}
 
 	/**

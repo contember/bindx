@@ -44,6 +44,10 @@ export class RootRegistry implements Rekeyable {
 		return this.roots.keys()
 	}
 
+	has(key: string): boolean {
+		return this.roots.has(key)
+	}
+
 	/**
 	 * Moves a root entry from the temp key to the persisted key (used after
 	 * persist rekeys a temp id to a server-assigned id).

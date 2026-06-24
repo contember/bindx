@@ -99,7 +99,6 @@ export type {
 	// Undo types
 	UndoManagerConfig,
 	UndoState,
-	UndoEntry,
 	// Event types
 	BindxEvent,
 	FieldScopedEvent,
