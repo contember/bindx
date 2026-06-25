@@ -1,19 +1,21 @@
-import type { Disposable, DisposableGroup } from '../core/Disposable.js'
 import type { ActionDispatcher } from '../core/ActionDispatcher.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
 
 /**
  * Base class for all handles.
- * Provides common functionality for subscription and disposal.
  *
- * Handles are stable objects that:
+ * Handles are stateless live views over the store:
  * - Have stable identity (same instance across renders)
- * - Provide subscribe/getSnapshot for useSyncExternalStore
+ * - Provide subscribe/getVersion for useSyncExternalStore
  * - Dispatch actions for mutations
+ *
+ * They own no resources — the only subscriptions a handle creates are returned
+ * from `subscribe()` and owned by `useSyncExternalStore`, not stored on the
+ * handle. There is therefore intentionally no dispose lifecycle: a handle is
+ * reclaimed by GC once unreferenced, and a superseded handle (one replaced by a
+ * fresh instance on a data change) stays fully usable for late reads/writes.
  */
-export abstract class BaseHandle implements Disposable {
-	protected _disposed = false
-
+export abstract class BaseHandle {
 	constructor(
 		protected readonly store: SnapshotStore,
 		protected readonly dispatcher: ActionDispatcher,
@@ -28,29 +30,6 @@ export abstract class BaseHandle implements Disposable {
 	 * Get current version for change detection.
 	 */
 	abstract getVersion(): number
-
-	/**
-	 * Dispose resources (unsubscribe, cleanup).
-	 */
-	dispose(): void {
-		this._disposed = true
-	}
-
-	/**
-	 * Check if the handle has been disposed.
-	 */
-	get isDisposed(): boolean {
-		return this._disposed
-	}
-
-	/**
-	 * Throws if the handle has been disposed.
-	 */
-	protected assertNotDisposed(): void {
-		if (this._disposed) {
-			throw new Error('Handle has been disposed')
-		}
-	}
 }
 
 /**

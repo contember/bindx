@@ -436,22 +436,4 @@ describe('EntityHandle', () => {
 		})
 
 	})
-
-	// ==================== Dispose ====================
-
-	describe('Dispose', () => {
-		test('should dispose handle and clear caches', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
-			const handle = createEntityHandleRaw()
-
-			// Access some fields to populate cache
-			handle.field('title')
-			handle.hasOne('author')
-
-			handle.dispose()
-
-			// After dispose, handle should throw on operations
-			expect(() => handle.reset()).toThrow()
-		})
-	})
 })

@@ -340,7 +340,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Connects an existing entity to this has-many relation.
 	 */
 	connect(itemId: string): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			connectToList(this.entityType, this.entityId, this.fieldName, itemId, this.itemType, this.alias),
 		)
@@ -352,7 +351,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * For created entities (via add()), cancels the add operation.
 	 */
 	disconnect(itemId: string): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, 'disconnect', this.alias),
 		)
@@ -364,7 +362,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * For created entities (via add()), cancels the add operation.
 	 */
 	delete(itemId: string): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, 'delete', this.alias),
 		)
@@ -376,7 +373,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * For connecting existing entities, use connect() instead.
 	 */
 	add(data?: Partial<TEntity>): string {
-		this.assertNotDisposed()
 
 		// Pre-create entity so we can return tempId
 		const tempId = this.store.createEntity(this.itemType, data as Record<string, unknown>)
@@ -399,7 +395,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Falls back to disconnect when schema metadata is not available.
 	 */
 	remove(itemId: string): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, this.resolveRemovalType(), this.alias),
 		)
@@ -430,7 +425,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * use an 'order' field on the entity.
 	 */
 	move(fromIndex: number, toIndex: number): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			moveInList(this.entityType, this.entityId, this.fieldName, fromIndex, toIndex, this.alias),
 		)
@@ -441,26 +435,12 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Clears all planned connections and removals.
 	 */
 	reset(): void {
-		this.assertNotDisposed()
 		this.store.resetHasMany(
 			this.entityType,
 			this.entityId,
 			this.fieldName,
 			this.alias,
 		)
-	}
-
-	/**
-	 * Disposes the handle.
-	 */
-	override dispose(): void {
-		super.dispose()
-
-		for (const handle of this.itemHandleCacheRaw.values()) {
-			handle.dispose()
-		}
-		this.itemHandleCacheRaw.clear()
-		this.itemHandleCacheProxy.clear()
 	}
 
 	/**
@@ -489,7 +469,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Adds a client-side error to this relation.
 	 */
 	addError(error: ErrorInput): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			addRelationError(this.entityType, this.entityId, this.fieldName, createClientError(error)),
 		)
@@ -499,7 +478,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Clears all errors from this relation.
 	 */
 	clearErrors(): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			clearRelationErrors(this.entityType, this.entityId, this.fieldName),
 		)

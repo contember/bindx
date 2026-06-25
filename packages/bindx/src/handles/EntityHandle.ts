@@ -29,11 +29,10 @@ import { createHandleProxy } from './proxyFactory.js'
 import type { SelectionMeta } from '../selection/types.js'
 import { UnfetchedFieldError } from '../errors/UnfetchedFieldError.js'
 
-/** Minimal internal interface for cached relation handles that need reset/dispose.
- * At runtime, the proxied handles satisfy this through delegation, even if the public type doesn't expose dispose(). */
+/** Minimal internal interface for cached relation handles that need reset.
+ * At runtime, the proxied handles satisfy this through delegation. */
 interface RelationHandleRaw {
 	reset(): void
-	dispose(): void
 }
 
 interface CachedFieldHandle {
@@ -428,7 +427,6 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	 * Also resets all relation states (hasOne, hasMany).
 	 */
 	reset(): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(resetEntity(this.entityType, this.entityId))
 
 		// Reset all cached relation handles
@@ -441,25 +439,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	 * Commits changes (serverData = data).
 	 */
 	commit(): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(commitEntity(this.entityType, this.entityId))
-	}
-
-	/**
-	 * Disposes the handle and all cached child handles.
-	 */
-	override dispose(): void {
-		super.dispose()
-
-		for (const { raw } of this.fieldHandleCache.values()) {
-			raw.dispose()
-		}
-		this.fieldHandleCache.clear()
-
-		for (const { raw } of this.relationHandleCache.values()) {
-			raw.dispose()
-		}
-		this.relationHandleCache.clear()
 	}
 
 	/**
@@ -541,7 +521,6 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	 * Adds a client-side error to this entity.
 	 */
 	addError(error: ErrorInput): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			addEntityError(this.entityType, this.entityId, createClientError(error)),
 		)
@@ -551,7 +530,6 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	 * Clears entity-level errors.
 	 */
 	clearErrors(): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			clearEntityErrors(this.entityType, this.entityId),
 		)
@@ -561,7 +539,6 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	 * Clears all errors (entity-level, fields, and relations).
 	 */
 	clearAllErrors(): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			clearAllErrorsAction(this.entityType, this.entityId),
 		)
