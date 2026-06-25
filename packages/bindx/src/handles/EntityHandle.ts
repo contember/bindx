@@ -26,7 +26,7 @@ import type {
 import { HasOneHandle } from './HasOneHandle.js'
 import { HasManyListHandle } from './HasManyListHandle.js'
 import { createHandleProxy } from './proxyFactory.js'
-import type { SelectionMeta } from '../selection/types.js'
+import type { SelectionMeta, SelectionFieldMeta } from '../selection/types.js'
 import { UnfetchedFieldError } from '../errors/UnfetchedFieldError.js'
 
 /** Minimal internal interface for cached relation handles that need reset.
@@ -454,12 +454,14 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	get fields(): EntityFieldsAccessor<T, TSelected> {
 		return new Proxy({} as EntityFieldsAccessor<T, TSelected>, {
 			get: (_, fieldName: string) => {
+				const fieldMeta = this.resolveSelectionField(fieldName)
+
 				// Selection validation
-				if (this.selection && !this.selection.fields.has(fieldName)) {
+				if (this.selection && !fieldMeta) {
 					throw new UnfetchedFieldError(this.entityType, this.entityId, [fieldName])
 				}
 
-				const nestedSelection = this.selection?.fields.get(fieldName)?.nested
+				const nestedSelection = fieldMeta?.nested
 
 				// Use schema to determine field type
 				const fieldDef = this.schema.getFieldDef(this.entityType, fieldName)
@@ -475,14 +477,40 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 				}
 
 				if (fieldDef.type === 'hasMany') {
-					// Has-many relation - return HasManyListHandle
-					return this.hasMany(fieldName, undefined, nestedSelection)
+					// Has-many relation - return HasManyListHandle.
+					// Thread the selected alias so the handle reads data stored under the
+					// auto-generated alias (e.g. `tags_<hash>`) for params-bearing relations.
+					return this.hasMany(fieldName, fieldMeta?.alias, nestedSelection)
 				}
 
 				// Unknown field type - fallback to FieldHandle
 				return this.field(fieldName as keyof T)
 			},
 		})
+	}
+
+	/**
+	 * Resolves the selection metadata for an accessed property name.
+	 *
+	 * Direct lookup covers scalars, has-one, plain has-many, and explicit-alias access.
+	 * A has-many selected with params (filter/orderBy/limit/offset) is keyed by an
+	 * auto-generated alias (e.g. `tags_<hash>`) while consumers still read it by the
+	 * real field name (`tags`). For that case fall back to matching on `fieldName` so
+	 * the stored alias is recovered. The fallback is restricted to array relations:
+	 * explicit scalar/has-one aliases are addressed by their chosen alias and must
+	 * still report as unfetched when read by their original name.
+	 */
+	private resolveSelectionField(name: string): SelectionFieldMeta | undefined {
+		if (!this.selection) return undefined
+
+		const direct = this.selection.fields.get(name)
+		if (direct) return direct
+
+		for (const meta of this.selection.fields.values()) {
+			if (meta.isArray && meta.fieldName === name) return meta
+		}
+
+		return undefined
 	}
 
 	/**

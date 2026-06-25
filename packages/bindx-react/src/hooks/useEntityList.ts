@@ -341,6 +341,8 @@ export function useEntityList(
 					store,
 					dispatcher,
 					schemaRegistry as SchemaRegistry<Record<string, object>>,
+					undefined,
+					selectionMeta,
 				) as unknown as EntityAccessor<any>
 			})
 
@@ -368,7 +370,7 @@ export function useEntityList(
 		}
 
 		return result
-	}, [entityType, store, dispatcher, schemaRegistry, addItem, removeItem, moveItem])
+	}, [entityType, store, dispatcher, schemaRegistry, selectionMeta, addItem, removeItem, moveItem])
 
 	const isEqual = useCallback(
 		(a: UseEntityListResult<any>, b: UseEntityListResult<any>): boolean => {
