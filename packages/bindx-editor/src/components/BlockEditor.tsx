@@ -22,7 +22,7 @@ import { EditorErrorBoundary } from './EditorErrorBoundary.js'
 import { ReferenceElementWrapper } from '../plugins/references/ReferenceElementWrapper.js'
 import { EditorGetReferencedEntityProvider, useEditorGetReferencedEntity } from '../contexts/EditorReferencesContext.js'
 import { EditorBlockElementProvider } from '../contexts/EditorBlockElementContext.js'
-import { BINDX_COMPONENT, type SelectionFieldMeta, type SelectionProvider, type SelectionMeta, createCollectorProxy, useField, useHasMany, useEntityBeforePersist } from '@contember/bindx-react'
+import { BINDX_COMPONENT, type FieldAccessor, type SelectionFieldMeta, type SelectionProvider, type SelectionMeta, createCollectorProxy, useField, useHasMany, useEntityBeforePersist } from '@contember/bindx-react'
 import { SelectionScope } from '@contember/bindx'
 
 export type { BlockEditorBaseProps, BlockEditorWithReferencesProps, BlockEditorProps }
@@ -50,14 +50,22 @@ export function BlockEditor<
 	return <BlockEditorSimple {...props} />
 }
 
-function BlockEditorSimple({ field, plugins, children }: BlockEditorBaseProps): ReactNode {
-	const fullField = useField(field as FieldRef<SerializableEditorNode | null>)
+/**
+ * Builds the Slate `onChange` handler that mirrors the editor document back into the bindx field.
+ *
+ * Pure selection changes (click, arrow keys) leave the document untouched — writing them back
+ * churns the field for nothing, and under React StrictMode's double-invoked commit that round
+ * trip reverts the caret to its previous position. Skip them, mirroring Slate's onValueChange.
+ */
+function useEditorChangeHandler(
+	editor: Editor,
+	fullField: FieldAccessor<SerializableEditorNode | null>,
+): (value: Descendant[]) => void {
+	return useCallback((value: Descendant[]) => {
+		if (!editor.operations.some(op => op.type !== 'set_selection')) {
+			return
+		}
 
-	const [{ editor, OuterWrapper, InnerWrapper }] = useState(() => {
-		return createEditor({ defaultElementType: paragraphElementType, plugins })
-	})
-
-	const handleEditorOnChange = useCallback((value: Descendant[]) => {
 		const contentJson: SerializableEditorNode | null = value.length > 0 ? { formatVersion: 2, children: value } : null
 
 		const currentValue = fullField.value
@@ -66,7 +74,17 @@ function BlockEditorSimple({ field, plugins, children }: BlockEditorBaseProps): 
 		}
 
 		fullField.setValue(contentJson)
-	}, [fullField])
+	}, [fullField, editor])
+}
+
+function BlockEditorSimple({ field, plugins, children }: BlockEditorBaseProps): ReactNode {
+	const fullField = useField(field as FieldRef<SerializableEditorNode | null>)
+
+	const [{ editor, OuterWrapper, InnerWrapper }] = useState(() => {
+		return createEditor({ defaultElementType: paragraphElementType, plugins })
+	})
+
+	const handleEditorOnChange = useEditorChangeHandler(editor, fullField)
 
 	const [emptyValue] = useState(() => [{ ...editor.createDefaultElement([{ text: '' }]), key: createElementKey() }])
 
@@ -179,16 +197,7 @@ function BlockEditorWithReferences<
 		}
 	}, [editor, insertBlock])
 
-	const handleEditorOnChange = useCallback((value: Descendant[]) => {
-		const contentJson: SerializableEditorNode | null = value.length > 0 ? { formatVersion: 2, children: value } : null
-
-		const currentValue = fullField.value
-		if (contentJson && currentValue && typeof currentValue === 'object' && 'children' in currentValue && currentValue.children === value) {
-			return
-		}
-
-		fullField.setValue(contentJson)
-	}, [fullField])
+	const handleEditorOnChange = useEditorChangeHandler(editor, fullField)
 
 	const [emptyValue] = useState(() => [{ ...editor.createDefaultElement([{ text: '' }]), key: createElementKey() }])
 
