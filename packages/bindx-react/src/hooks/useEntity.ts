@@ -323,20 +323,19 @@ export function useEntity(
 	}, [entityType, id, byKey, effectiveQueryKey, options.cache, batcher, store, dispatcher, selectionMeta])
 
 	// --- EntityHandle ---
+	// The handle keeps a stable identity across data changes — it is a stateless live view over the
+	// store (see BaseHandle), so `snapshot` is intentionally NOT a dependency here. The host already
+	// re-renders on data changes via useStoreSubscription above (keeping inline `accessor.value`
+	// reads fresh), and memoized children re-render through their own subscription (useField/useAccessor).
 	const rawHandle = useMemo(
 		() => EntityHandle.createRaw(id, entityType, store, dispatcher, schemaRegistry as SchemaRegistry<Record<string, object>>),
-		[id, entityType, store, dispatcher, schemaRegistry, snapshot],
+		[id, entityType, store, dispatcher, schemaRegistry],
 	)
 
 	const handle = useMemo(
 		() => EntityHandle.wrapProxy(rawHandle),
 		[rawHandle],
 	)
-
-	// `snapshot` is a useMemo dep, so `rawHandle` is recreated on every entity data change (to give
-	// memoized children a fresh reference). Superseded handles need no cleanup: EntityHandle is a
-	// stateless live view that owns no resources (see BaseHandle), so it is reclaimed by GC once
-	// unreferenced and a handle a consumer still holds stays usable for late reads/writes.
 
 	// --- Persist & reset callbacks ---
 	const persist = useCallback(async () => {
