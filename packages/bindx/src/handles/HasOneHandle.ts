@@ -374,7 +374,6 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 * Accessible via proxy as `$create()`.
 	 */
 	create(data?: Partial<TEntity>): string {
-		this.assertNotDisposed()
 		const tempId = this.store.createEntity(this.targetType, data as Record<string, unknown>)
 		this.dispatcher.dispatch(
 			connectRelation(this.entityType, this.entityId, this.fieldName, tempId, this.targetType),
@@ -386,7 +385,6 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 * Connects the relation to an entity.
 	 */
 	connect(targetId: string): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			connectRelation(this.entityType, this.entityId, this.fieldName, targetId, this.targetType),
 		)
@@ -397,7 +395,6 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 * Sets the FK to null — only works when the FK column is nullable.
 	 */
 	disconnect(): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			disconnectRelation(this.entityType, this.entityId, this.fieldName),
 		)
@@ -407,7 +404,6 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 * Marks the related entity for deletion.
 	 */
 	delete(): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			deleteRelation(this.entityType, this.entityId, this.fieldName),
 		)
@@ -432,20 +428,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 * Resets the relation to server state.
 	 */
 	reset(): void {
-		this.assertNotDisposed()
 		this.store.resetRelation(this.entityType, this.entityId, this.fieldName)
-	}
-
-	/**
-	 * Disposes the handle.
-	 */
-	override dispose(): void {
-		super.dispose()
-		this.entityHandleCacheRaw?.dispose()
-		this.entityHandleCacheRaw = null
-		this.entityHandleCacheProxy = null
-		this.placeholderCacheRaw = null
-		this.placeholderCacheProxy = null
 	}
 
 	/**
@@ -474,7 +457,6 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 * Adds a client-side error to this relation.
 	 */
 	addError(error: ErrorInput): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			addRelationError(this.entityType, this.entityId, this.fieldName, createClientError(error)),
 		)
@@ -484,7 +466,6 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 * Clears all errors from this relation.
 	 */
 	clearErrors(): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			clearRelationErrors(this.entityType, this.entityId, this.fieldName),
 		)

@@ -333,11 +333,10 @@ export function useEntity(
 		[rawHandle],
 	)
 
-	useEffect(() => {
-		return () => {
-			rawHandle.dispose()
-		}
-	}, [rawHandle])
+	// `snapshot` is a useMemo dep, so `rawHandle` is recreated on every entity data change (to give
+	// memoized children a fresh reference). Superseded handles need no cleanup: EntityHandle is a
+	// stateless live view that owns no resources (see BaseHandle), so it is reclaimed by GC once
+	// unreferenced and a handle a consumer still holds stays usable for late reads/writes.
 
 	// --- Persist & reset callbacks ---
 	const persist = useCallback(async () => {

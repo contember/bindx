@@ -320,7 +320,12 @@ function EntityHandleRenderer({
 		[rawHandle],
 	)
 
-	useEffect(() => () => { rawHandle.dispose() }, [rawHandle])
+	// `version` is a useMemo dep, so `rawHandle` is recreated on every entity data change (to give
+	// memoized children a fresh reference). Superseded handles need no cleanup: EntityHandle and its
+	// child Field/HasMany handles are stateless live views that own no resources (see BaseHandle),
+	// so they are reclaimed by GC once unreferenced — and a consumer that still holds an accessor
+	// from an earlier render (e.g. the Slate block editor dispatching `setValue` from an async
+	// onChange after the version bumped) can keep using it.
 
 	const result = children(handle as EntityAccessor<unknown>)
 	return <>{annotateElement(result, { 'data-entity': entityType, 'data-entity-id': entityId })}</>

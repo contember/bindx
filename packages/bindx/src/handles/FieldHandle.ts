@@ -124,7 +124,6 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	 * Call this on blur or other interaction events.
 	 */
 	touch(): void {
-		this.assertNotDisposed()
 		this.store.setFieldTouched(this.entityType, this.entityId, this.fieldName, true)
 	}
 
@@ -133,7 +132,6 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	 * Also clears non-sticky client errors.
 	 */
 	setValue(value: T | null): void {
-		this.assertNotDisposed()
 		// Clear non-sticky errors when value changes
 		this.store.clearNonStickyFieldErrors(this.entityType, this.entityId, this.fieldName)
 		this.dispatcher.dispatch(
@@ -159,7 +157,6 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	 * Adds a client-side error to this field.
 	 */
 	addError(error: ErrorInput): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			addFieldError(this.entityType, this.entityId, this.fieldName, createClientError(error)),
 		)
@@ -169,7 +166,6 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	 * Clears all errors from this field.
 	 */
 	clearErrors(): void {
-		this.assertNotDisposed()
 		this.dispatcher.dispatch(
 			clearFieldErrors(this.entityType, this.entityId, this.fieldName),
 		)
