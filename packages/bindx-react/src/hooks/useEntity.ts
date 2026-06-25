@@ -324,8 +324,8 @@ export function useEntity(
 
 	// --- EntityHandle ---
 	const rawHandle = useMemo(
-		() => EntityHandle.createRaw(id, entityType, store, dispatcher, schemaRegistry as SchemaRegistry<Record<string, object>>),
-		[id, entityType, store, dispatcher, schemaRegistry, snapshot],
+		() => EntityHandle.createRaw(id, entityType, store, dispatcher, schemaRegistry as SchemaRegistry<Record<string, object>>, undefined, selectionMeta),
+		[id, entityType, store, dispatcher, schemaRegistry, snapshot, selectionMeta],
 	)
 
 	const handle = useMemo(
