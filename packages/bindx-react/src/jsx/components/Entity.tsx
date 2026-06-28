@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useSyncExternalStore, type ReactElement } from 'react'
+import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react'
 import { useBindxContext, useSchemaRegistry } from '../../hooks/BackendAdapterContext.js'
 import { annotateElement } from '../devAnnotations.js'
 import { useEntity } from '../../hooks/useEntity.js'
@@ -163,49 +163,83 @@ interface CreateModeSnapshot {
 }
 
 /**
- * Internal component for create mode (creating a new entity)
+ * Internal component for create mode (creating a new entity).
+ *
+ * The draft entity is minted in a layout effect, NEVER during render. A
+ * render-phase store mutation is unsafe two ways:
+ *  - it leaks the draft whenever the render is discarded — StrictMode
+ *    double-invoke, an aborted concurrent render, a thrown render, Suspense —
+ *    because no effect cleanup runs for a render that never commits;
+ *  - it synchronously notifies the store's global subscribers, force-updating an
+ *    already-mounted aggregate subscriber (e.g. a `usePersist` consumer)
+ *    mid-render. React rejects that ("Cannot update a component while rendering a
+ *    different component") and the create form renders blank.
+ * A layout effect runs before paint, so the draft exists before the user sees
+ * anything and its creation notifies subscribers normally (no stale dirty state).
  */
 function EntityCreateMode({
 	entityType,
 	children,
-	error: errorFallback,
 	onPersisted,
 }: EntityCreateModeProps): ReactElement {
-	const { store, dispatcher } = useBindxContext()
-	const schemaRegistry = useSchemaRegistry()
+	const { store } = useBindxContext()
 	const tempIdRef = useRef<string | null>(null)
+	const [tempId, setTempId] = useState<string | null>(null)
 
-	// Create entity once on mount (using ref to ensure only one creation)
-	const tempId = useMemo(() => {
-		if (tempIdRef.current) {
-			return tempIdRef.current
-		}
-		const id = store.createEntity(entityType)
-		tempIdRef.current = id
-		return id
-	}, [entityType, store])
-
-	// Lifecycle of the draft entity:
-	// - Re-seed it under the SAME temp id if a previous unmount's cleanup removed
-	//   it. This keeps the form bound across a React StrictMode mount→cleanup→mount
-	//   cycle (effects run twice in dev), where the memoized id survives but the
-	//   snapshot would otherwise be gone. No-op on first mount and after the entity
-	//   was persisted (rekeyed to a server id).
-	// - On unmount, discard a never-persisted draft. Drop its root registration and
-	//   let the reachability-aware sweep reclaim it ONLY if nothing else references
-	//   it — a draft connected into another live parent stays reachable and survives
-	//   (the diamond / shared-create case). A persisted entity is left untouched.
-	useEffect(() => {
-		if (!store.getPersistedId(entityType, tempId) && !store.hasEntity(entityType, tempId)) {
-			store.createEntity(entityType, { id: tempId })
+	useLayoutEffect(() => {
+		if (!tempIdRef.current) {
+			tempIdRef.current = store.createEntity(entityType)
+			setTempId(tempIdRef.current)
+		} else if (!store.getPersistedId(entityType, tempIdRef.current) && !store.hasEntity(entityType, tempIdRef.current)) {
+			// Re-seed under the SAME temp id if a previous cleanup removed it (a React
+			// StrictMode mount→cleanup→mount cycle), so the form stays bound across it.
+			store.createEntity(entityType, { id: tempIdRef.current })
 		}
 		return () => {
-			if (!store.getPersistedId(entityType, tempId)) {
-				store.unregisterRootEntity(entityType, tempId)
+			const id = tempIdRef.current
+			// On unmount, discard a never-persisted draft: drop its root registration
+			// and let the reachability-aware sweep reclaim it ONLY if nothing else
+			// references it — a draft connected into another live parent stays reachable
+			// and survives (the diamond / shared-create case). A persisted entity is
+			// left untouched.
+			if (id && !store.getPersistedId(entityType, id)) {
+				store.unregisterRootEntity(entityType, id)
 				store.sweepUnreachableCreated()
 			}
 		}
-	}, [store, entityType, tempId])
+	}, [store, entityType])
+
+	// First render, before the layout effect mints the draft. The draft is created
+	// before paint, so this empty frame is never visible.
+	if (tempId === null) {
+		return <></>
+	}
+
+	return (
+		<EntityCreateModeInner entityType={entityType} tempId={tempId} onPersisted={onPersisted}>
+			{children}
+		</EntityCreateModeInner>
+	)
+}
+
+/**
+ * Renders the create-mode draft once it exists. Split out of EntityCreateMode so
+ * its store subscriptions and selection collection always run against a real
+ * tempId (never null) — the hooks stay unconditional.
+ */
+function EntityCreateModeInner({
+	entityType,
+	tempId,
+	children,
+	onPersisted,
+}: {
+	entityType: string
+	tempId: string
+	children: (entity: EntityAccessor<unknown>) => React.ReactNode
+	onPersisted?: (id: string) => void
+}): ReactElement {
+	const { store, dispatcher } = useBindxContext()
+	const schemaRegistry = useSchemaRegistry()
 
 	// Subscribe to store changes for this entity
 	const subscribe = useCallback(
