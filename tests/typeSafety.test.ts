@@ -19,6 +19,8 @@ import type {
 	EntityFieldsAccessor,
 	EntityFromProp,
 	SelectionFromProp,
+	ScalarKeys,
+	FieldAccessor,
 } from '@contember/bindx-react'
 import {
 	createFragment,
@@ -637,5 +639,41 @@ describe('Type Safety - Integration', () => {
 		assertTrue<AssertExtends<'author', keyof ArticleResult>>()
 		assertTrue<AssertExtends<'tags', keyof ArticleResult>>()
 		assertFalse<AssertExtends<'content', keyof ArticleResult>>()
+	})
+})
+
+// Regression test for https://github.com/contember/bindx/issues/<N — filled in after issue creation>
+//
+// A native list/array scalar column (e.g. a Contember `enumColumn(...).list()` —
+// typed as `readonly T[]` where `T` is a string enum, NOT an entity) is dropped
+// by every branch of the accessor field-type mapping:
+//   - `ScalarKeys<T>` excludes it (`T[K] extends (infer _U)[] ? never : …`)
+//   - `HasManyKeys<T>` excludes it (element is not an object)
+//   - `HasOneKeys<T>` excludes it (it IS an array)
+// so the accessor proxy exposes no `FieldAccessor` for it: `.value` / `.setValue`
+// don't exist on the type, even though the runtime `FieldHandle` handles array
+// columns fine. Reading or writing such a column from `createComponent` explicit
+// selection therefore fails to compile.
+interface Lesson {
+	id: string
+	title: string
+	// Native list/array scalar column — array of a string enum, not a relation.
+	groupSize: readonly ('whole' | 'group' | 'individual')[]
+}
+
+describe('Type Safety - list/array scalar columns', () => {
+	test('a list scalar column is classified as a scalar key', () => {
+		// EXPECTED: `groupSize` is a scalar field key (it is a column, just array-valued).
+		// ACTUAL (bug): `ScalarKeys<Lesson>` is `'id' | 'title'` — `groupSize` is missing.
+		assertTrue<AssertExtends<'groupSize', ScalarKeys<Lesson>>>()
+	})
+
+	test('a list scalar column accessor exposes .value / .setValue', () => {
+		type LessonAcc = EntityAccessor<Lesson, { groupSize: readonly string[] }>
+		type GroupSizeField = LessonAcc['$fields']['groupSize']
+
+		// EXPECTED: the field is a FieldAccessor carrying the array value.
+		// ACTUAL (bug): it resolves to a HasOne-style accessor with no `.value`.
+		assertTrue<AssertExtends<GroupSizeField, FieldAccessor<readonly string[]>>>()
 	})
 })
