@@ -676,4 +676,31 @@ describe('Type Safety - list/array scalar columns', () => {
 		// ACTUAL (bug): it resolves to a HasOne-style accessor with no `.value`.
 		assertTrue<AssertExtends<GroupSizeField, FieldAccessor<readonly string[]>>>()
 	})
+
+	test('a list scalar column is selectable with a zero-arg builder method', () => {
+		// The same root cause surfaces in the selection builder: `SelectionBuilderMethods`
+		// routes `TEntity[K] extends Array<infer U>` to `HasManyMethod`, which requires a
+		// nested-selection / fragment argument. So `e.groupSize()` (a scalar list column)
+		// is rejected with "Expected 1-4 arguments, but got 0".
+		const lessonSchema = defineSchema<{ Lesson: Lesson }>({
+			entities: {
+				Lesson: {
+					fields: {
+						id: scalar(),
+						title: scalar(),
+						groupSize: scalar(),
+					},
+				},
+			},
+		})
+		void lessonSchema
+		const LessonDef = entityDef<Lesson>('Lesson')
+
+		// EXPECTED to compile: `groupSize` is a scalar column, selectable with zero args.
+		// ACTUAL (bug): `e.groupSize()` errors "Expected 1-4 arguments, but got 0".
+		const Comp = createComponent()
+			.entity('lesson', LessonDef, e => e.id().groupSize())
+			.render(() => null)
+		void Comp
+	})
 })
