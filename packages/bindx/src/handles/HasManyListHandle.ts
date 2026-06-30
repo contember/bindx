@@ -117,7 +117,14 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Uses ordered IDs to preserve order including after move() operations.
 	 */
 	get items(): EntityAccessor<TEntity, TSelected>[] {
-		if (!this.materializeEmbeddedItems()) return []
+		// Hydrate embedded data when present. A `false` return only means there is
+		// nothing embedded to hydrate — NOT that the list is empty: a freshly-created
+		// / unpersisted parent (no fetched relation array) can still carry staged
+		// connections or created children in the store. Always consult the ordered
+		// ids, which merge serverIds + plannedConnections + createdEntities and
+		// return [] when no state exists (so a truly empty relation stays empty).
+		// Mirrors getById(), which resolves handles regardless of embedded data.
+		this.materializeEmbeddedItems()
 
 		// Use ordered IDs from store (handles removals, connections, and ordering)
 		const orderedIds = this.store.getHasManyOrderedIds(
