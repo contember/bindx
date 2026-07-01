@@ -1,7 +1,7 @@
 import '../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
 import { render, waitFor, act, fireEvent, cleanup } from '@testing-library/react'
-import React, { memo } from 'react'
+import React, { memo, useState } from 'react'
 import { BindxProvider, MockAdapter, Entity, Field, useField, useEntity } from '@contember/bindx-react'
 import type { EntityRef, FieldRef, FieldAccessor } from '@contember/bindx'
 import type { Article } from '../../shared'
@@ -105,8 +105,9 @@ describe('<Entity> handle identity across data-driven re-render', () => {
 })
 
 describe('useEntity handle identity across data-driven re-render', () => {
-	test('the returned field accessor keeps a stable identity', async () => {
+	test('the returned ready accessor and field accessor keep stable identities', async () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+		const seenArticles: object[] = []
 		const seenTitle: FieldAccessor<string>[] = []
 
 		function Probe(): React.ReactElement {
@@ -114,6 +115,7 @@ describe('useEntity handle identity across data-driven re-render', () => {
 			if (article.$status !== 'ready') {
 				return <span data-testid="loading">loading</span>
 			}
+			seenArticles.push(article)
 			seenTitle.push(article.title)
 			return (
 				<button
@@ -143,7 +145,67 @@ describe('useEntity handle identity across data-driven re-render', () => {
 		expect(getByTestId(container, 'title').textContent).toBe('Hello World!')
 		// Re-rendered on the data change ...
 		expect(seenTitle.length).toBeGreaterThan(rendersBefore)
+		// The top-level ready accessor is also the same proxy, not just article.title.
+		expect(new Set(seenArticles).size).toBe(1)
 		// ... but the field accessor was the same instance every time (handle cache survived).
 		expect(new Set(seenTitle).size).toBe(1)
+	})
+
+	test('the stable ready accessor exposes fresh refetch metadata', async () => {
+		const mockData = createMockData()
+		const adapter = new MockAdapter(mockData, { delay: 20 })
+		const seenArticles: object[] = []
+		const seenRefetching: boolean[] = []
+		let setKey: (key: string) => void = () => {}
+
+		function Probe(): React.ReactElement {
+			const [key, setLocalKey] = useState('v1')
+			setKey = setLocalKey
+
+			const article = useEntity(
+				schema.Article,
+				{ by: { id: 'article-1' }, queryKey: key },
+				e => e.title(),
+			)
+			if (article.$status !== 'ready') {
+				return <span data-testid="loading">loading</span>
+			}
+
+			seenArticles.push(article)
+			seenRefetching.push(article.$isRefetching)
+			return (
+				<div>
+					<span data-testid="title">{article.title.value}</span>
+					<span data-testid="refetching">{article.$isRefetching ? 'yes' : 'no'}</span>
+				</div>
+			)
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<Probe />
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'title')).not.toBeNull()
+		})
+		const firstReadyArticle = seenArticles[seenArticles.length - 1]
+		expect(getByTestId(container, 'refetching').textContent).toBe('no')
+
+		mockData.Article['article-1']!.title = 'Updated By RPC'
+		act(() => {
+			setKey('v2')
+		})
+
+		expect(getByTestId(container, 'refetching').textContent).toBe('yes')
+		expect(seenArticles[seenArticles.length - 1]).toBe(firstReadyArticle)
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'title').textContent).toBe('Updated By RPC')
+		})
+		expect(getByTestId(container, 'refetching').textContent).toBe('no')
+		expect(new Set(seenArticles).size).toBe(1)
+		expect(seenRefetching).toContain(true)
 	})
 })
