@@ -67,6 +67,27 @@ describe('pessimistic presentation flag', () => {
 		expect(presentedTitle()).toBe('Local edit')
 	})
 
+	test('pessimistic presentation toggles bump the entity snapshot version', () => {
+		const currentVersion = (): number =>
+			store.getEntitySnapshot('Article', 'a1')?.version ?? -1
+		const observedVersions: number[] = []
+		const initialVersion = currentVersion()
+
+		store.subscribeToEntity('Article', 'a1', () => {
+			observedVersions.push(currentVersion())
+		})
+
+		store.setPersisting('Article', 'a1', true, true)
+		const inFlightVersion = currentVersion()
+		expect(inFlightVersion).toBeGreaterThan(initialVersion)
+		expect(observedVersions).toEqual([inFlightVersion])
+
+		store.setPersisting('Article', 'a1', false)
+		const restoredVersion = currentVersion()
+		expect(restoredVersion).toBeGreaterThan(inFlightVersion)
+		expect(observedVersions).toEqual([inFlightVersion, restoredVersion])
+	})
+
 	test('the presented baseline snapshot is frozen and does not alias the stored one', () => {
 		store.setPersisting('Article', 'a1', true, true)
 		const presented = store.getPresentationSnapshot<Article>('Article', 'a1')

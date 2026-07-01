@@ -801,6 +801,34 @@ describe('HasOneHandle', () => {
 			expect(relation?.serverState).toBe('connected')
 		})
 
+		test('a re-fetch with explicit null advances a clean relation to disconnected', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: { id: 'auth-1', name: 'John' },
+			}, true)
+
+			const handle = createHasOneHandleRaw()
+			expect(handle.relatedId).toBe('auth-1')
+			expect(handle.isDirty).toBe(false)
+
+			store.refreshServerData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: null,
+			})
+
+			expect(handle.relatedId).toBeNull()
+			expect(handle.state).toBe('disconnected')
+			expect(handle.isDirty).toBe(false)
+
+			const relation = store.getRelation('Article', 'a-1', 'author')
+			expect(relation?.currentId).toBeNull()
+			expect(relation?.serverId).toBeNull()
+			expect(relation?.state).toBe('disconnected')
+			expect(relation?.serverState).toBe('disconnected')
+		})
+
 		test('a locally-connected relation survives a re-fetch that changes the embedded id', () => {
 			store.setEntityData('Article', 'a-1', {
 				id: 'a-1',
@@ -824,6 +852,60 @@ describe('HasOneHandle', () => {
 
 			expect(handle.relatedId).toBe('auth-2')
 			expect(handle.isDirty).toBe(true)
+		})
+
+		test('a locally-connected relation survives an explicit null re-fetch', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: { id: 'auth-1', name: 'John' },
+			}, true)
+			const handle = createHasOneHandleRaw()
+			expect(handle.relatedId).toBe('auth-1')
+
+			store.setRelation('Article', 'a-1', 'author', { currentId: 'auth-2', state: 'connected' })
+			expect(handle.relatedId).toBe('auth-2')
+			expect(handle.isDirty).toBe(true)
+
+			store.refreshServerData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: null,
+			})
+
+			const relation = store.getRelation('Article', 'a-1', 'author')
+			expect(handle.relatedId).toBe('auth-2')
+			expect(handle.state).toBe('connected')
+			expect(handle.isDirty).toBe(true)
+			expect(relation?.serverId).toBe('auth-1')
+			expect(relation?.serverState).toBe('connected')
+		})
+
+		test('a locally-disconnected relation survives an explicit null re-fetch', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: { id: 'auth-1', name: 'John' },
+			}, true)
+			const handle = createHasOneHandleRaw()
+			expect(handle.relatedId).toBe('auth-1')
+
+			store.setRelation('Article', 'a-1', 'author', { currentId: null, state: 'disconnected' })
+			expect(handle.relatedId).toBeNull()
+			expect(handle.isDirty).toBe(true)
+
+			store.refreshServerData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: null,
+			})
+
+			const relation = store.getRelation('Article', 'a-1', 'author')
+			expect(handle.relatedId).toBeNull()
+			expect(handle.state).toBe('disconnected')
+			expect(handle.isDirty).toBe(true)
+			expect(relation?.serverId).toBe('auth-1')
+			expect(relation?.serverState).toBe('connected')
 		})
 
 		test('the baseline advance does not notify subscribers during a render-phase read', () => {

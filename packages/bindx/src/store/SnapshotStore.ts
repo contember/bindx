@@ -598,7 +598,11 @@ export class SnapshotStore implements SnapshotVersionBumper {
 
 	setPersisting(entityType: string, id: string, isPersisting: boolean, pessimistic: boolean = false): void {
 		const key = this.getEntityKey(entityType, id)
+		const wasPessimistic = this.meta.isPessimisticInFlight(key)
 		this.meta.setPersisting(key, isPersisting, pessimistic)
+		if (wasPessimistic !== this.meta.isPessimisticInFlight(key)) {
+			this.bumpEntitySnapshotVersion(key)
+		}
 		this.notifyEntitySubscribers(key)
 	}
 
