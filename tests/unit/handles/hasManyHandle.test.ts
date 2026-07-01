@@ -161,6 +161,19 @@ describe('HasManyListHandle', () => {
 
 			expect(handle.items.length).toBe(2)
 		})
+
+		test('should include planned connections without embedded relation data', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+			}, true)
+			store.setEntityData('Tag', 't-2', { id: 't-2', name: 'Tag 2' }, true)
+
+			const handle = createHasManyHandle()
+			handle.connect('t-2')
+
+			expect(handle.items.map((item) => item.$fields.id.value)).toEqual(['t-2'])
+		})
 	})
 
 	// ==================== Length ====================

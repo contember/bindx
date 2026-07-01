@@ -117,7 +117,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Uses ordered IDs to preserve order including after move() operations.
 	 */
 	get items(): EntityAccessor<TEntity, TSelected>[] {
-		if (!this.materializeEmbeddedItems()) return []
+		this.materializeEmbeddedItems()
 
 		// Use ordered IDs from store (handles removals, connections, and ordering)
 		const orderedIds = this.store.getHasManyOrderedIds(
