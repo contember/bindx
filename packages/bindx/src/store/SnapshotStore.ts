@@ -109,6 +109,18 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		this.journal = journal
 	}
 
+	clearJournal(journal: UndoJournal): void {
+		if (this.journal === journal) {
+			this.journal = null
+		}
+	}
+
+	private recordExistingEntity(key: string): void {
+		if (this.entitySnapshots.has(key)) {
+			this.journal?.recordEntity(key)
+		}
+	}
+
 	/**
 	 * Opens a journal transaction (re-entrant). All primary-store writes until the
 	 * matching {@link commitTransaction} are captured as ONE undoable gesture.
@@ -277,7 +289,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		updates: Partial<T>,
 	): EntitySnapshot<T> | undefined {
 		const key = this.getEntityKey(entityType, id)
-		this.journal?.recordEntity(key)
+		this.recordExistingEntity(key)
 		const result = this.entitySnapshots.updateFields<T>(key, updates)
 		if (result) {
 			this.notifyEntitySubscribers(key)
@@ -292,7 +304,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		value: unknown,
 	): void {
 		const key = this.getEntityKey(entityType, id)
-		this.journal?.recordEntity(key)
+		this.recordExistingEntity(key)
 		if (this.entitySnapshots.setFieldValue(key, fieldPath, value)) {
 			this.notifyEntitySubscribers(key)
 		}
@@ -306,7 +318,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 
 	resetEntity(entityType: string, id: string): void {
 		const key = this.getEntityKey(entityType, id)
-		this.journal?.recordEntity(key)
+		this.recordExistingEntity(key)
 		this.entitySnapshots.reset(key)
 		this.notifyEntitySubscribers(key)
 	}
@@ -385,14 +397,14 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 
 	scheduleForDeletion(entityType: string, id: string): void {
 		const key = this.getEntityKey(entityType, id)
-		this.journal?.recordEntity(key)
+		this.recordExistingEntity(key)
 		this.meta.scheduleForDeletion(key)
 		this.notifyEntitySubscribers(key)
 	}
 
 	unscheduleForDeletion(entityType: string, id: string): void {
 		const key = this.getEntityKey(entityType, id)
-		this.journal?.recordEntity(key)
+		this.recordExistingEntity(key)
 		this.meta.unscheduleForDeletion(key)
 		this.notifyEntitySubscribers(key)
 	}
@@ -941,7 +953,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		const childKey = this.getEntityKey(childType, childId)
 		// Capture the child's root membership before it is dropped, so undoing the
 		// connect/add that anchored it restores it as a reachable create.
-		this.journal?.recordEntity(childKey)
+		this.recordExistingEntity(childKey)
 		this.roots.unregister(childKey)
 	}
 
