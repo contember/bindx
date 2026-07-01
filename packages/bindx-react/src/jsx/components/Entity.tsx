@@ -285,9 +285,13 @@ interface EntityHandleRendererProps {
  * Shared component that creates an EntityHandle and renders children with it.
  * Used by both EntityByMode and EntityCreateMode.
  *
- * Subscribes to entity snapshot changes so that the handle reference changes
- * when entity data changes. This is necessary because children may be wrapped
- * in React.memo and need a new handle reference to trigger re-renders.
+ * Subscribes to the entity snapshot so this host re-renders on data changes,
+ * which keeps inline reads in `children` fresh. The EntityHandle itself has a
+ * stable identity — it is intentionally NOT recreated on data changes — because
+ * it is a stateless live view over the store (see BaseHandle). Memoized leaf
+ * components (<Field>, <HasOne>, <HasMany>) re-render through their own store
+ * subscription (useField/useAccessor), not through a changing handle reference,
+ * so a data change re-renders only the leaves that read the changed data.
  */
 function EntityHandleRenderer({
 	entityId,
@@ -308,24 +312,20 @@ function EntityHandleRenderer({
 		[store, entityType, entityId],
 	)
 
-	const version = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+	// Subscribe so this host re-renders on data changes (keeps inline reads in `children` fresh).
+	// The version is deliberately NOT fed into the handle memo below: the handle is a stable live
+	// view and must keep a stable identity across data changes.
+	useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
 	const rawHandle = useMemo(
 		() => EntityHandle.createRaw(entityId, entityType, store, dispatcher, schemaRegistry, undefined, selection),
-		[entityId, entityType, store, dispatcher, schemaRegistry, selection, version],
+		[entityId, entityType, store, dispatcher, schemaRegistry, selection],
 	)
 
 	const handle = useMemo(
 		() => EntityHandle.wrapProxy(rawHandle),
 		[rawHandle],
 	)
-
-	// `version` is a useMemo dep, so `rawHandle` is recreated on every entity data change (to give
-	// memoized children a fresh reference). Superseded handles need no cleanup: EntityHandle and its
-	// child Field/HasMany handles are stateless live views that own no resources (see BaseHandle),
-	// so they are reclaimed by GC once unreferenced — and a consumer that still holds an accessor
-	// from an earlier render (e.g. the Slate block editor dispatching `setValue` from an async
-	// onChange after the version bumped) can keep using it.
 
 	const result = children(handle as EntityAccessor<unknown>)
 	return <>{annotateElement(result, { 'data-entity': entityType, 'data-entity-id': entityId })}</>

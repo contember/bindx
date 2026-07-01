@@ -323,20 +323,19 @@ export function useEntity(
 	}, [entityType, id, byKey, effectiveQueryKey, options.cache, batcher, store, dispatcher, selectionMeta])
 
 	// --- EntityHandle ---
+	// The handle keeps a stable identity across data changes — it is a stateless live view over the
+	// store (see BaseHandle), so `snapshot` is intentionally NOT a dependency here. The host already
+	// re-renders on data changes via useStoreSubscription above (keeping inline `accessor.value`
+	// reads fresh), and memoized children re-render through their own subscription (useField/useAccessor).
 	const rawHandle = useMemo(
 		() => EntityHandle.createRaw(id, entityType, store, dispatcher, schemaRegistry as SchemaRegistry<Record<string, object>>),
-		[id, entityType, store, dispatcher, schemaRegistry, snapshot],
+		[id, entityType, store, dispatcher, schemaRegistry],
 	)
 
 	const handle = useMemo(
 		() => EntityHandle.wrapProxy(rawHandle),
 		[rawHandle],
 	)
-
-	// `snapshot` is a useMemo dep, so `rawHandle` is recreated on every entity data change (to give
-	// memoized children a fresh reference). Superseded handles need no cleanup: EntityHandle is a
-	// stateless live view that owns no resources (see BaseHandle), so it is reclaimed by GC once
-	// unreferenced and a handle a consumer still holds stays usable for late reads/writes.
 
 	// --- Persist & reset callbacks ---
 	const persist = useCallback(async () => {
@@ -346,6 +345,33 @@ export function useEntity(
 	const reset = useCallback(() => {
 		rawHandle.reset()
 	}, [rawHandle])
+
+	// Keep the public ready proxy stable while serving fresh metadata from each render.
+	const readyMetaRef = useRef<ReadyResultMeta>({
+		$status: 'ready',
+		$isLoading: false,
+		$isRefetching: false,
+		$isError: false,
+		$isNotFound: false,
+		$error: null,
+		$persist: persist,
+		$reset: reset,
+	})
+	readyMetaRef.current = {
+		$status: 'ready',
+		$isLoading: false,
+		$isRefetching: isRefetching,
+		$isError: false,
+		$isNotFound: false,
+		$error: null,
+		$persist: persist,
+		$reset: reset,
+	}
+
+	const readyResult = useMemo(
+		() => createReadyResult(handle, readyMetaRef),
+		[handle],
+	)
 
 	// --- Build result ---
 	const result = useMemo((): UseEntityResult<object, object> => {
@@ -362,8 +388,8 @@ export function useEntity(
 		}
 
 		// Ready — layer status metadata on top of EntityHandle proxy
-		return createReadyResult(handle, persist, reset, isRefetching)
-	}, [snapshot, loadState, isPersisting, id, handle, persist, reset, isRefetching])
+		return readyResult
+	}, [snapshot, loadState, isPersisting, id, persist, reset, readyResult])
 
 	// Proxy-based result satisfies the full UseEntityResult<T> at runtime via field access delegation
 	return result as UseEntityResult<any, any>
@@ -373,32 +399,32 @@ export function useEntity(
 // Result factories
 // ============================================================================
 
+interface ReadyResultMeta extends Record<string, unknown> {
+	readonly $status: 'ready'
+	readonly $isLoading: false
+	readonly $isRefetching: boolean
+	readonly $isError: false
+	readonly $isNotFound: false
+	readonly $error: null
+	$persist(): Promise<void>
+	$reset(): void
+}
+
 function createReadyResult(
 	handle: EntityAccessor<object, object>,
-	persist: () => Promise<void>,
-	reset: () => void,
-	isRefetching: boolean,
+	metaRef: { readonly current: ReadyResultMeta },
 ): UseEntityResult<object, object> {
-	const meta: Record<string, unknown> = {
-		$status: 'ready' as const,
-		$isLoading: false as const,
-		$isRefetching: isRefetching,
-		$isError: false as const,
-		$isNotFound: false as const,
-		$error: null,
-		$persist: persist,
-		$reset: reset,
-	}
-
 	// Proxy merges status metadata onto EntityAccessor — satisfies ReadyEntityResult at runtime
 	return new Proxy(handle as object, {
 		get(target, prop, receiver) {
+			const meta = metaRef.current
 			if (typeof prop === 'string' && prop in meta) {
 				return meta[prop]
 			}
 			return Reflect.get(target, prop, receiver)
 		},
 		has(target, prop) {
+			const meta = metaRef.current
 			if (typeof prop === 'string' && prop in meta) {
 				return true
 			}
