@@ -187,13 +187,14 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 */
 	private ensureEntry(): void {
 		const existing = this.store.getRelation(this.entityType, this.entityId, this.fieldName)
-		const embeddedId = this.readEmbeddedRelatedId()
+		const embeddedData = this.readEmbeddedRelatedData()
+		const embeddedReference = readEmbeddedRelatedReference(embeddedData)
 
 		if (!existing) {
-			if (embeddedId === null) return
+			if (embeddedReference.kind !== 'connected') return
 			const serverId = this.readServerRelatedId()
 			this.store.getOrCreateRelation(this.entityType, this.entityId, this.fieldName, {
-				currentId: embeddedId,
+				currentId: embeddedReference.id,
 				serverId,
 				state: 'connected',
 				serverState: serverId !== null ? 'connected' : 'disconnected',
@@ -202,7 +203,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			return
 		}
 
-		this.advanceServerBaselineOnRefetch(existing, embeddedId)
+		this.advanceServerBaselineOnRefetch(existing, embeddedReference, embeddedData)
 	}
 
 	/**
@@ -223,19 +224,35 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 */
 	private advanceServerBaselineOnRefetch(
 		existing: StoredRelationState,
-		embeddedId: string | null,
+		embeddedReference: EmbeddedRelatedReference,
+		embeddedData: unknown,
 	): void {
-		if (embeddedId === null || existing.serverId === embeddedId) return
+		if (embeddedReference.kind === 'absent') return
 		if (this.isLocallyDirty(existing)) return
 
-		const embeddedData = this.readEmbeddedRelatedData()
+		if (embeddedReference.kind === 'null' && existing.serverId === null && existing.serverState === 'disconnected') {
+			return
+		}
+		if (embeddedReference.kind === 'connected' && existing.serverId === embeddedReference.id && existing.serverState === 'connected') {
+			return
+		}
 		if (!this.store.hasEmbeddedDataChanged(this.entityType, this.entityId, this.fieldName, embeddedData)) {
 			return
 		}
 
+		if (embeddedReference.kind === 'null') {
+			this.store.setRelation(this.entityType, this.entityId, this.fieldName, {
+				currentId: null,
+				serverId: null,
+				state: 'disconnected',
+				serverState: 'disconnected',
+			}, true)
+			return
+		}
+
 		this.store.setRelation(this.entityType, this.entityId, this.fieldName, {
-			currentId: embeddedId,
-			serverId: embeddedId,
+			currentId: embeddedReference.id,
+			serverId: embeddedReference.id,
 			state: 'connected',
 			serverState: 'connected',
 		}, true)
@@ -252,11 +269,6 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	/** Reads the embedded related object from the parent's canonical current data. */
 	private readEmbeddedRelatedData(): unknown {
 		return this.getEntityData()?.[this.fieldName]
-	}
-
-	/** Extracts the related id from the parent's embedded current data, or null. */
-	private readEmbeddedRelatedId(): string | null {
-		return extractRelatedId(this.readEmbeddedRelatedData())
 	}
 
 	/** Extracts the related id from the parent's embedded server data, or null. */
@@ -652,12 +664,27 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 
 }
 
+type EmbeddedRelatedReference =
+	| { kind: 'absent' }
+	| { kind: 'null' }
+	| { kind: 'connected'; id: string }
+
+/**
+ * Reads an embedded has-one value while preserving explicit null.
+ */
+function readEmbeddedRelatedReference(embedded: unknown): EmbeddedRelatedReference {
+	if (embedded === undefined) return { kind: 'absent' }
+	if (embedded === null) return { kind: 'null' }
+	if (typeof embedded !== 'object' || !('id' in embedded)) return { kind: 'absent' }
+	const id = embedded.id
+	return typeof id === 'string' ? { kind: 'connected', id } : { kind: 'absent' }
+}
+
 /**
  * Extracts the related entity id from an embedded has-one object, or null when
- * the value is absent / not an object with a string id.
+ * the value is not an object with a string id.
  */
 function extractRelatedId(embedded: unknown): string | null {
-	if (!embedded || typeof embedded !== 'object' || !('id' in embedded)) return null
-	const id = embedded.id
-	return typeof id === 'string' ? id : null
+	const reference = readEmbeddedRelatedReference(embedded)
+	return reference.kind === 'connected' ? reference.id : null
 }
