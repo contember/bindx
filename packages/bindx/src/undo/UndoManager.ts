@@ -62,7 +62,11 @@ export class UndoManager {
 	 */
 	createMiddleware(): ActionMiddleware {
 		this.store.setJournal(this.journal)
-		return () => true
+		const middleware: ActionMiddleware = () => true
+		middleware.dispose = () => {
+			this.store.clearJournal(this.journal)
+		}
+		return middleware
 	}
 
 	// ==================== Recording (journal commit sink) ====================
@@ -201,11 +205,32 @@ export class UndoManager {
 	 */
 	private rekeyStacks(ctx: RekeyContext): void {
 		const liveServerIds = (key: string): Set<string> => this.store.getLiveHasManyServerIds(key)
-		this.undoStack = this.undoStack.map(entry => rekeyJournalEntry(entry, ctx, liveServerIds))
-		this.redoStack = this.redoStack.map(entry => rekeyJournalEntry(entry, ctx, liveServerIds))
+		const undoCount = this.undoStack.length
+		const redoCount = this.redoStack.length
+		const hadPending = this.pending !== null && this.pending.size > 0
+
+		this.undoStack = this.undoStack
+			.map(entry => rekeyJournalEntry(entry, ctx, liveServerIds))
+			.filter(entry => entry.cells.length > 0)
+		this.redoStack = this.redoStack
+			.map(entry => rekeyJournalEntry(entry, ctx, liveServerIds))
+			.filter(entry => entry.cells.length > 0)
 		if (this.pending) {
 			const rekeyed = rekeyJournalEntry({ cells: [...this.pending.values()] }, ctx, liveServerIds)
-			this.pending = new Map(rekeyed.cells.map(cell => [cellRefKey(cell), cell]))
+			if (rekeyed.cells.length > 0) {
+				this.pending = new Map(rekeyed.cells.map(cell => [cellRefKey(cell), cell]))
+			} else {
+				this.pending = null
+				if (this.debounceTimer) {
+					clearTimeout(this.debounceTimer)
+					this.debounceTimer = null
+				}
+			}
+		}
+
+		const hasPending = this.pending !== null && this.pending.size > 0
+		if (this.undoStack.length !== undoCount || this.redoStack.length !== redoCount || hasPending !== hadPending) {
+			this.notifySubscribers()
 		}
 	}
 

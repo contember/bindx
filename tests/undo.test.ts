@@ -208,6 +208,20 @@ describe('UndoManager', () => {
 	})
 
 	describe('History management', () => {
+		test('removing undo middleware detaches journal recording', () => {
+			const localStore = new SnapshotStore()
+			const localDispatcher = new ActionDispatcher(localStore)
+			const localUndo = new UndoManager(localStore, { debounceMs: 0 })
+			const middleware = localUndo.createMiddleware()
+			localDispatcher.addMiddleware(middleware)
+			localDispatcher.removeMiddleware(middleware)
+
+			localStore.setEntityData('Article', '1', { id: '1', title: 'Original' }, true)
+			localDispatcher.dispatch(setField('Article', '1', ['title'], 'Changed'))
+
+			expect(localUndo.getState().canUndo).toBe(false)
+		})
+
 		test('should respect maxHistorySize', () => {
 			const limitedUndoManager = new UndoManager(store, { maxHistorySize: 3, debounceMs: 0 })
 			const limitedDispatcher = new ActionDispatcher(store)

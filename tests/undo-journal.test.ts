@@ -34,6 +34,40 @@ describe('undo journal — deep coverage', () => {
 	// Seal — undo of a journaled create after it has been persisted
 	// ============================================================
 	describe('create-seal across persist', () => {
+		test('standalone persisted create is removed from undo history after rekey', () => {
+			store.transaction(() => {
+				store.createEntity('Article', { id: 'ctemp', title: 'draft' })
+			})
+			expect(undo.getState().undoCount).toBe(1)
+
+			store.commitEntity('Article', 'ctemp')
+			store.setExistsOnServer('Article', 'ctemp', true)
+			store.mapTempIdToPersistedId('Article', 'ctemp', 'cp')
+
+			expect(undo.getState().undoCount).toBe(0)
+			expect(undo.getState().canUndo).toBe(false)
+			expect(store.getEntitySnapshot('Article', 'cp')).toBeDefined()
+		})
+
+		test('pending standalone create is cleared after persist rekey seals it', () => {
+			const pendingStore = new SnapshotStore()
+			const pendingUndo = new UndoManager(pendingStore, { debounceMs: 1000 })
+			pendingUndo.createMiddleware()
+
+			pendingStore.transaction(() => {
+				pendingStore.createEntity('Article', { id: 'ctemp', title: 'draft' })
+			})
+			expect(pendingUndo.getState().undoCount).toBe(1)
+
+			pendingStore.commitEntity('Article', 'ctemp')
+			pendingStore.setExistsOnServer('Article', 'ctemp', true)
+			pendingStore.mapTempIdToPersistedId('Article', 'ctemp', 'cp')
+
+			expect(pendingUndo.getState().undoCount).toBe(0)
+			expect(pendingUndo.getState().canUndo).toBe(false)
+			expect(pendingStore.getEntitySnapshot('Article', 'cp')).toBeDefined()
+		})
+
 		test('default order: undo after persist keeps the created (now server) child', () => {
 			store.setEntityData('Article', 'p', { id: 'p' }, true)
 			store.setHasManyServerIds('Article', 'p', 'items', ['s'])
@@ -264,6 +298,42 @@ describe('undo journal — deep coverage', () => {
 		expect(store.getEntitySnapshot('Tag', 'c1')).toBeUndefined()
 	})
 
+	test('dispatchAsync delayed by interceptor does not merge interleaved dispatch into its undo entry', async () => {
+		store.setEntityData('Article', 'a', { id: 'a', title: 'A' }, true)
+		store.setEntityData('Article', 'b', { id: 'b', title: 'B' }, true)
+
+		let releaseInterceptor: (() => void) | undefined
+		const interceptorGate = new Promise<void>(resolve => {
+			releaseInterceptor = resolve
+		})
+
+		dispatcher.getEventEmitter().intercept('field:changing', event => {
+			if (event.entityId === 'a') {
+				return interceptorGate
+			}
+			return undefined
+		})
+
+		const pendingDispatch = dispatcher.dispatchAsync(setField('Article', 'a', ['title'], 'A async'))
+		if (!releaseInterceptor) {
+			throw new Error('Interceptor did not start')
+		}
+
+		dispatcher.dispatch(setField('Article', 'b', ['title'], 'B sync'))
+		expect(undo.getState().undoCount).toBe(1)
+
+		releaseInterceptor()
+		expect(await pendingDispatch).toBe(true)
+		expect(undo.getState().undoCount).toBe(2)
+
+		undo.undo()
+		expect(store.getEntitySnapshot<{ title: string }>('Article', 'a')?.data.title).toBe('A')
+		expect(store.getEntitySnapshot<{ title: string }>('Article', 'b')?.data.title).toBe('B sync')
+
+		undo.undo()
+		expect(store.getEntitySnapshot<{ title: string }>('Article', 'b')?.data.title).toBe('B')
+	})
+
 	// ============================================================
 	// Redo after a persist-surviving undo
 	// ============================================================
@@ -300,6 +370,18 @@ describe('undo journal — deep coverage', () => {
 		undo.undo()
 		// The relation state did not exist before the gesture → it is removed entirely.
 		expect(store.getRelation('Article', 'a', 'author')).toBeUndefined()
+	})
+
+	test('connect to existing unloaded child does not undo a later server load of that child', () => {
+		store.setEntityData('Article', 'a', { id: 'a' }, true)
+
+		dispatcher.dispatch(connectRelation('Article', 'a', 'author', 'b', 'Author'))
+		store.setEntityData('Author', 'b', { id: 'b', name: 'Loaded later' }, true)
+
+		undo.undo()
+
+		expect(store.getRelation('Article', 'a', 'author')).toBeUndefined()
+		expect(store.getEntitySnapshot<{ name: string }>('Author', 'b')?.data.name).toBe('Loaded later')
 	})
 
 	// ============================================================

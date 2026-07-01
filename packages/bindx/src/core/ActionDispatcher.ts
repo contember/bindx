@@ -90,33 +90,33 @@ export class ActionDispatcher {
 	 * Returns true if the action was executed, false if it was cancelled by an interceptor.
 	 */
 	async dispatchAsync(action: Action): Promise<boolean> {
+		// Run through middlewares first
+		for (const middleware of this.middlewares) {
+			const result = middleware(action, this.store)
+			if (result === false) {
+				return false
+			}
+		}
+
+		// Create and run before event through interceptors
+		const beforeEvent = createBeforeEvent(action, this.store)
+		if (beforeEvent) {
+			const result = await this.eventEmitter.runInterceptors(beforeEvent)
+			if (result === null) {
+				// Interceptor cancelled the action
+				return false
+			}
+			// If event was modified, update action accordingly
+			if (result !== beforeEvent) {
+				action = this.updateActionFromEvent(action, result)
+			}
+		}
+
+		// Capture state before execution (for after events)
+		const stateBefore = captureStateBeforeAction(action, this.store)
+
 		this.store.beginTransaction()
 		try {
-			// Run through middlewares first
-			for (const middleware of this.middlewares) {
-				const result = middleware(action, this.store)
-				if (result === false) {
-					return false
-				}
-			}
-
-			// Create and run before event through interceptors
-			const beforeEvent = createBeforeEvent(action, this.store)
-			if (beforeEvent) {
-				const result = await this.eventEmitter.runInterceptors(beforeEvent)
-				if (result === null) {
-					// Interceptor cancelled the action
-					return false
-				}
-				// If event was modified, update action accordingly
-				if (result !== beforeEvent) {
-					action = this.updateActionFromEvent(action, result)
-				}
-			}
-
-			// Capture state before execution (for after events)
-			const stateBefore = captureStateBeforeAction(action, this.store)
-
 			// Execute the action
 			this.execute(action)
 
@@ -186,6 +186,9 @@ export class ActionDispatcher {
 		const index = this.middlewares.indexOf(middleware)
 		if (index !== -1) {
 			this.middlewares.splice(index, 1)
+			if (!this.middlewares.includes(middleware)) {
+				middleware.dispose?.()
+			}
 		}
 	}
 
@@ -468,7 +471,10 @@ export class ActionDispatcher {
  * Can inspect/modify actions before execution.
  * Return false to cancel the action.
  */
-export type ActionMiddleware = (action: Action, store: SnapshotStore) => boolean | void
+export interface ActionMiddleware {
+	(action: Action, store: SnapshotStore): boolean | void
+	dispose?: () => void
+}
 
 /**
  * Creates a logging middleware for debugging.
