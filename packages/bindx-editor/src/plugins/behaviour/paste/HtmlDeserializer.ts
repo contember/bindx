@@ -103,7 +103,19 @@ export class HtmlDeserializer {
 
 	deserializeBlocks(list: Node[], cumulativeTextAttrs: TextAttrs): Descendant[] {
 		const result = this.processNodeListPaste(list, cumulativeTextAttrs)
-		return result?.texts ?? result?.elements ?? []
+		if (result === null) {
+			return []
+		}
+		// `deserializeBlocks` is the block-content boundary — it is called both at the top level
+		// (from `withPaste`) and for a block's children (from each block plugin's `next`). Interior
+		// whitespace has already been collapsed per text node, but a run assembled from
+		// pretty-printed / indented source HTML still carries a leading/trailing space at the block
+		// edge (e.g. `<p>\n\t\tSome text\n</p>` → `" Some text "`). Trim those edges so pasting does
+		// not prepend or append a stray space, matching how a browser renders `white-space: normal`.
+		if (result.texts !== undefined) {
+			return trimBlockEdgeWhitespace(result.texts)
+		}
+		return result.elements
 	}
 
 	private deserializeTextNode(node: Node, cumulativeTextAttrs: TextAttrs): Descendant[] | null {
@@ -165,4 +177,25 @@ export class HtmlDeserializer {
 		}
 		return null
 	}
+}
+
+// Trims leading whitespace from the first text leaf and trailing whitespace from the last text leaf
+// of a block's inline content, descending through inline wrappers (e.g. anchors) to reach the edge leaf.
+const trimBlockEdgeWhitespace = (nodes: Descendant[]): Descendant[] => {
+	const trimmedStart = mapEdgeTextLeaf(nodes, 'start', text => text.replace(/^\s+/, ''))
+	return mapEdgeTextLeaf(trimmedStart, 'end', text => text.replace(/\s+$/, ''))
+}
+
+const mapEdgeTextLeaf = (nodes: Descendant[], edge: 'start' | 'end', map: (text: string) => string): Descendant[] => {
+	const index = edge === 'start' ? 0 : nodes.length - 1
+	const node = nodes[index]
+	if (node === undefined) {
+		return nodes
+	}
+	const mapped: Descendant = SlateText.isText(node)
+		? { ...node, text: map(node.text) }
+		: { ...node, children: mapEdgeTextLeaf(node.children, edge, map) }
+	const copy = nodes.slice()
+	copy[index] = mapped
+	return copy
 }
