@@ -2,6 +2,7 @@ import {
 	createEntitySnapshot,
 	type EntitySnapshot,
 } from './snapshots.js'
+import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
 
 /**
  * Manages entity snapshots — core CRUD for immutable entity data.
@@ -12,7 +13,7 @@ import {
  * Follows the same sub-store pattern as ErrorStore, RelationStore, etc.
  * SnapshotStore delegates entity snapshot operations here.
  */
-export class EntitySnapshotStore {
+export class EntitySnapshotStore implements Rekeyable {
 	private readonly snapshots = new Map<string, EntitySnapshot>()
 
 	/**
@@ -22,6 +23,19 @@ export class EntitySnapshotStore {
 	 * single key per id is unambiguous.
 	 */
 	private readonly idIndex = new Map<string, string>()
+
+	/**
+	 * Monotonic counter bumped only when the set of keys or the id→key index
+	 * changes (new key, removal, rekey, bulk import, clear). Pure value edits
+	 * (setFieldValue/updateFields/commit/reset/...) do NOT bump it — they cannot
+	 * change reachability — so the per-keystroke edit path keeps the
+	 * {@link ReachabilityAnalyzer} cache warm.
+	 */
+	private mutationVersion = 0
+
+	getMutationVersion(): number {
+		return this.mutationVersion
+	}
 
 	get(key: string): EntitySnapshot | undefined {
 		return this.snapshots.get(key)
@@ -62,6 +76,7 @@ export class EntitySnapshotStore {
 
 		this.snapshots.set(key, newSnapshot)
 		this.idIndex.set(id, key)
+		if (!existing) this.mutationVersion++
 		return newSnapshot
 	}
 
@@ -208,6 +223,7 @@ export class EntitySnapshotStore {
 		// that survivor as id-unresolvable.
 		if (existing && this.idIndex.get(existing.id) === key) {
 			this.idIndex.delete(existing.id)
+			this.mutationVersion++
 		}
 		this.snapshots.delete(key)
 	}
@@ -284,32 +300,35 @@ export class EntitySnapshotStore {
 			this.idIndex.set(snapshot.id, key)
 			keys.add(key)
 		}
+		if (keys.size > 0) this.mutationVersion++
 		return keys
 	}
 
 	/**
-	 * Moves a snapshot from oldKey to newKey, updating the id in the snapshot data.
+	 * Moves a snapshot from the temp key to the persisted key, updating the id in
+	 * the snapshot data.
 	 */
-	rekey(oldKey: string, newKey: string, newId: string): void {
-		const snapshot = this.snapshots.get(oldKey)
+	rekey(ctx: RekeyContext): void {
+		const snapshot = this.snapshots.get(ctx.oldKey)
 		if (!snapshot) return
 
 		// Update id field in data and serverData
-		const data = { ...snapshot.data as Record<string, unknown>, id: newId }
-		const serverData = { ...snapshot.serverData as Record<string, unknown>, id: newId }
+		const data = { ...snapshot.data as Record<string, unknown>, id: ctx.newId }
+		const serverData = { ...snapshot.serverData as Record<string, unknown>, id: ctx.newId }
 
 		const newSnapshot = createEntitySnapshot(
-			newId,
+			ctx.newId,
 			snapshot.entityType,
 			data,
 			serverData,
 			snapshot.version + 1,
 		)
 
-		this.snapshots.delete(oldKey)
-		this.snapshots.set(newKey, newSnapshot)
+		this.snapshots.delete(ctx.oldKey)
+		this.snapshots.set(ctx.newKey, newSnapshot)
 		this.idIndex.delete(snapshot.id)
-		this.idIndex.set(newId, newKey)
+		this.idIndex.set(ctx.newId, ctx.newKey)
+		this.mutationVersion++
 	}
 
 	keys(): IterableIterator<string> {
@@ -329,6 +348,7 @@ export class EntitySnapshotStore {
 	clear(): void {
 		this.snapshots.clear()
 		this.idIndex.clear()
+		this.mutationVersion++
 	}
 }
 

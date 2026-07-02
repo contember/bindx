@@ -213,7 +213,8 @@ describe('Subscription migration after mapTempIdToPersistedId', () => {
 		const parentId = store.createEntity('Author', { name: 'John' })
 		const childId = store.createEntity('Article', { title: 'Draft' })
 
-		// Register parent-child before mapping
+		// Establish a live relation edge — parent notification is derived from it.
+		store.setRelation('Author', parentId, 'featuredArticle', { currentId: childId, state: 'connected' })
 		store.registerParentChild('Author', parentId, 'Article', childId)
 
 		const parentCallback = mock(() => {})
@@ -243,7 +244,11 @@ describe('Subscription migration after mapTempIdToPersistedId', () => {
 		const roundId = store.createEntity('Round', { roundNumber: 1 })
 		const reviewId = store.createEntity('Review', { comment: 'initial' })
 
-		// Register parent-child chain (simulates what handles do during render)
+		// Establish live relation edges down the chain — parent notification is
+		// derived from these. registerParentChild also un-roots each anchored child.
+		store.setRelation('Program', 'prog-1', 'approval', { currentId: approvalId, state: 'connected' })
+		store.setRelation('Approval', approvalId, 'round', { currentId: roundId, state: 'connected' })
+		store.setRelation('Round', roundId, 'review', { currentId: reviewId, state: 'connected' })
 		store.registerParentChild('Program', 'prog-1', 'Approval', approvalId)
 		store.registerParentChild('Approval', approvalId, 'Round', roundId)
 		store.registerParentChild('Round', roundId, 'Review', reviewId)
@@ -275,6 +280,9 @@ describe('Subscription migration after mapTempIdToPersistedId', () => {
 		const roundId = store.createEntity('Round', { roundNumber: 1 })
 		const reviewId = store.createEntity('Review', { comment: 'initial' })
 
+		store.setRelation('Program', 'prog-1', 'approval', { currentId: approvalId, state: 'connected' })
+		store.setRelation('Approval', approvalId, 'round', { currentId: roundId, state: 'connected' })
+		store.setRelation('Round', roundId, 'review', { currentId: reviewId, state: 'connected' })
 		store.registerParentChild('Program', 'prog-1', 'Approval', approvalId)
 		store.registerParentChild('Approval', approvalId, 'Round', roundId)
 		store.registerParentChild('Round', roundId, 'Review', reviewId)
@@ -307,7 +315,9 @@ describe('Subscription migration after mapTempIdToPersistedId', () => {
 		const approvalId = store.createEntity('Approval', { status: 'pending' })
 		const roundId = store.createEntity('Round', { roundNumber: 1 })
 
-		// Initial parent-child registration
+		// Initial relation edges + parent-child registration
+		store.setRelation('Program', 'prog-1', 'approval', { currentId: approvalId, state: 'connected' })
+		store.setRelation('Approval', approvalId, 'round', { currentId: roundId, state: 'connected' })
 		store.registerParentChild('Program', 'prog-1', 'Approval', approvalId)
 		store.registerParentChild('Approval', approvalId, 'Round', roundId)
 
@@ -338,12 +348,15 @@ describe('Subscription migration after mapTempIdToPersistedId', () => {
 		const roundId = store.createEntity('Round', { roundNumber: 1 })
 		const reviewId = store.createEntity('Review', { comment: 'init' })
 
-		// Rekey WITHOUT any prior registerParentChild
+		// Rekey WITHOUT any prior relation edge / registerParentChild
 		store.mapTempIdToPersistedId('Round', roundId, 'uuid-round')
 		store.mapTempIdToPersistedId('Review', reviewId, 'uuid-review')
 
-		// Now handles register parent-child (during render AFTER persist)
-		// using temp IDs — getEntityKey resolves them
+		// Now handles establish the relation edges + register parent-child (during
+		// render AFTER persist) using temp IDs — getRelationKey/getEntityKey resolve
+		// them to the persisted keys/ids, so notification follows the live edges.
+		store.setRelation('Program', 'prog-1', 'round', { currentId: 'uuid-round', state: 'connected' })
+		store.setRelation('Round', roundId, 'review', { currentId: 'uuid-review', state: 'connected' })
 		store.registerParentChild('Program', 'prog-1', 'Round', roundId)
 		store.registerParentChild('Round', roundId, 'Review', reviewId)
 
@@ -366,6 +379,10 @@ describe('Subscription migration after mapTempIdToPersistedId', () => {
 		const parentId = store.createEntity('Parent', { data: 1 })
 		const childId = store.createEntity('Child', { data: 2 })
 
+		// Live relation edges drive notification; replaceEntityId migrates the stored
+		// currentId references when each end is rekeyed, in either order.
+		store.setRelation('Root', 'root-1', 'child', { currentId: parentId, state: 'connected' })
+		store.setRelation('Parent', parentId, 'child', { currentId: childId, state: 'connected' })
 		store.registerParentChild('Root', 'root-1', 'Parent', parentId)
 		store.registerParentChild('Parent', parentId, 'Child', childId)
 

@@ -472,20 +472,17 @@ export class MutationCollector implements MutationDataCollector {
 			}
 		}
 
-		// Created entities -> create (using collectCreateData for full recursive collection)
-		if (targetType) {
-			for (const tempId of hasManyState.createdEntities) {
-				this._nestedEntityIds.add(tempId)
-				this._nestedEntityTypes.set(tempId, targetType)
-				const createData = this.collectCreateData(targetType, tempId)
-				operations.push({ create: createData ?? {}, alias: tempId })
+		// Planned additions -> create (newly created) or connect (existing persisted)
+		for (const [additionId, kind] of hasManyState.plannedAdditions) {
+			if (kind === 'created') {
+				if (!targetType) continue
+				this._nestedEntityIds.add(additionId)
+				this._nestedEntityTypes.set(additionId, targetType)
+				const createData = this.collectCreateData(targetType, additionId)
+				operations.push({ create: createData ?? {}, alias: additionId })
+			} else {
+				operations.push({ connect: { id: additionId }, alias: additionId })
 			}
-		}
-
-		// Planned connections (minus created entities) -> connect
-		for (const connectedId of hasManyState.plannedConnections) {
-			if (hasManyState.createdEntities.has(connectedId)) continue
-			operations.push({ connect: { id: connectedId }, alias: connectedId })
 		}
 
 		// Server items that aren't removed -> check for updates via entity snapshots
@@ -723,7 +720,7 @@ export class MutationCollector implements MutationDataCollector {
 
 		// Skip if store already has managed entities for this relation
 		const existing = this.store.getHasMany(entityType, entityId, fieldName)
-		if (existing && (existing.createdEntities.size > 0 || existing.plannedConnections.size > 0)) {
+		if (existing && existing.plannedAdditions.size > 0) {
 			return
 		}
 

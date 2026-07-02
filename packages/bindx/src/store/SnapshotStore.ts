@@ -1,4 +1,5 @@
 import type { EntitySnapshot, LoadStatus } from './snapshots.js'
+import { createEntitySnapshot } from './snapshots.js'
 import type { FieldError } from '../errors/types.js'
 import { SubscriptionManager, type SnapshotVersionBumper } from './SubscriptionManager.js'
 import { ErrorStore } from './ErrorStore.js'
@@ -15,6 +16,7 @@ import { DirtyTracker } from './DirtyTracker.js'
 import { EntitySnapshotStore } from './EntitySnapshotStore.js'
 import { RootRegistry } from './RootRegistry.js'
 import { ReachabilityAnalyzer } from './ReachabilityAnalyzer.js'
+import { RekeyOrchestrator } from './RekeyOrchestrator.js'
 
 export type { HasManyRemovalType, StoredHasManyState, StoredRelationState } from './RelationStore.js'
 export type { EntityMeta } from './EntityMetaStore.js'
@@ -49,6 +51,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	private readonly roots = new RootRegistry()
 	private readonly reachability: ReachabilityAnalyzer
 	private readonly dirtyTracker: DirtyTracker
+	private readonly rekeyOrchestrator: RekeyOrchestrator
 
 	/**
 	 * Tracks the last embedded data reference propagated from parent to child.
@@ -61,16 +64,29 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	constructor() {
 		this.reachability = new ReachabilityAnalyzer(this.entitySnapshots, this.meta, this.relations, this.roots)
 		this.dirtyTracker = new DirtyTracker(this.entitySnapshots, this.meta, this.relations, this.reachability)
+		// Parent re-render propagation is derived from the relation store's live
+		// edges — the single source of truth for relation membership — rather than
+		// a separate parent-child registry.
+		this.subscriptions.setParentKeyLookup(this.relations)
+		// The participants are visited in this exact order on every rekey — see the
+		// ordering contract in RekeyOrchestrator.rekey(). Propagation tracking lives
+		// on this store, so it joins as a small inline adapter.
+		this.rekeyOrchestrator = new RekeyOrchestrator([
+			this.roots,
+			this.entitySnapshots,
+			this.meta,
+			this.subscriptions,
+			this.relations,
+			this.errors,
+			this.touched,
+			{ rekey: ctx => this.rekeyPropagatedData(ctx.oldKeyPrefix, ctx.newKeyPrefix) },
+		])
 	}
 
 	// ==================== Key Generation ====================
 
-	/** Maps temp ID entity keys to their persisted ID entity keys for transparent resolution */
-	private readonly rekeyedEntities = new Map<string, string>()
-
 	private getEntityKey(entityType: string, id: string): string {
-		const key = `${entityType}:${id}`
-		return this.rekeyedEntities.get(key) ?? key
+		return this.rekeyOrchestrator.resolveKey(entityType, id)
 	}
 
 	private getRelationKey(parentType: string, parentId: string, fieldName: string): string {
@@ -82,13 +98,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	 * Resolves an ID to its persisted ID if it has been rekeyed.
 	 */
 	private resolveId(entityType: string, id: string): string {
-		const key = `${entityType}:${id}`
-		const rekeyed = this.rekeyedEntities.get(key)
-		if (rekeyed) {
-			// Extract the ID from the rekeyed key (format: "EntityType:id")
-			return rekeyed.slice(entityType.length + 1)
-		}
-		return id
+		return this.rekeyOrchestrator.resolveId(entityType, id)
 	}
 
 	// ==================== SnapshotVersionBumper ====================
@@ -367,52 +377,20 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	}
 
 	mapTempIdToPersistedId(entityType: string, tempId: string, persistedId: string): void {
-		// Use raw keys (bypass resolveId) since we're the ones creating the mapping
-		const oldKey = `${entityType}:${tempId}`
-		const newKey = `${entityType}:${persistedId}`
-		const oldKeyPrefix = `${entityType}:${tempId}:`
-		const newKeyPrefix = `${entityType}:${persistedId}:`
+		// The orchestrator owns the temp→persisted redirect and drives the rekey
+		// fan-out across every sub-store in its documented order.
+		this.rekeyOrchestrator.rekey(entityType, tempId, persistedId)
 
-		// Register redirect so future lookups by temp ID resolve to persisted key
-		this.rekeyedEntities.set(oldKey, newKey)
-
-		// Keep root registration consistent across the rekey (the persisted entity
-		// is now a server root via existsOnServer, but keep the registry aligned).
-		this.roots.rekey(oldKey, newKey)
-
-		// Rekey entity snapshot (moves data, updates id field)
-		this.entitySnapshots.rekey(oldKey, newKey, persistedId)
-
-		// Rekey metadata FIRST, then set persisted mapping (which sets existsOnServer)
-		this.meta.rekey(oldKey, newKey)
-		this.meta.mapTempIdToPersistedId(newKey, persistedId)
-
-		// Rekey subscriptions, parent-child relationships, and relation subscribers
-		this.subscriptions.rekey(oldKey, newKey, oldKeyPrefix, newKeyPrefix)
-
-		// Rekey relations/hasMany owned by this entity (parent key changes)
-		this.relations.rekeyOwner(oldKeyPrefix, newKeyPrefix)
-
-		// Replace tempId with persistedId in all relation/hasMany VALUE references
-		this.relations.replaceEntityId(tempId, persistedId)
-
-		// Rekey errors, touched state, and propagation tracking
-		this.errors.rekey(oldKey, newKey, oldKeyPrefix, newKeyPrefix)
-		this.touched.rekey(oldKeyPrefix, newKeyPrefix)
-		this.rekeyPropagatedData(oldKeyPrefix, newKeyPrefix)
-
-		// Notify on the NEW key so React picks up the change
-		this.notifyEntitySubscribers(newKey)
+		// Notify on the NEW key so React picks up the change.
+		this.notifyEntitySubscribers(`${entityType}:${persistedId}`)
 	}
 
 	getPersistedId(entityType: string, id: string): string | null {
-		const key = this.getEntityKey(entityType, id)
-		return this.meta.getPersistedId(key, id)
+		return this.rekeyOrchestrator.getPersistedId(entityType, id)
 	}
 
 	isNewEntity(entityType: string, id: string): boolean {
-		const key = this.getEntityKey(entityType, id)
-		return this.meta.isNewEntity(key, id)
+		return this.rekeyOrchestrator.isNewEntity(entityType, id)
 	}
 
 	// ==================== Has-Many State (delegated to RelationStore) ====================
@@ -492,7 +470,9 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		alias?: string,
 	): Set<string> | undefined {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		return this.relations.getHasMany(key)?.plannedConnections
+		const state = this.relations.getHasMany(key)
+		if (!state) return undefined
+		return new Set(state.plannedAdditions.keys())
 	}
 
 	commitHasMany(
@@ -581,6 +561,21 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		return this.relations.getHasManyOrderedIds(key)
 	}
 
+	getPresentationHasManyOrderedIds(
+		parentType: string,
+		parentId: string,
+		fieldName: string,
+		alias?: string,
+	): string[] {
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		if (!this.meta.isPessimisticInFlight(this.getEntityKey(parentType, parentId))) {
+			return this.relations.getHasManyOrderedIds(key)
+		}
+
+		const state = this.relations.getHasMany(key)
+		return state ? [...state.serverIds] : []
+	}
+
 	isHasManyItemCreated(
 		parentType: string,
 		parentId: string,
@@ -590,7 +585,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	): boolean {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		const state = this.relations.getHasMany(key)
-		return state?.createdEntities.has(itemId) ?? false
+		return state?.plannedAdditions.get(itemId) === 'created'
 	}
 
 	getHasManyCreatedEntities(
@@ -600,7 +595,13 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		alias?: string,
 	): Set<string> | undefined {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		return this.relations.getHasMany(key)?.createdEntities
+		const state = this.relations.getHasMany(key)
+		if (!state) return undefined
+		const created = new Set<string>()
+		for (const [id, kind] of state.plannedAdditions) {
+			if (kind === 'created') created.add(id)
+		}
+		return created
 	}
 
 	// ==================== Persisting State (delegated to EntityMetaStore) ====================
@@ -610,10 +611,45 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		return this.meta.isPersisting(key)
 	}
 
-	setPersisting(entityType: string, id: string, isPersisting: boolean): void {
+	setPersisting(entityType: string, id: string, isPersisting: boolean, pessimistic: boolean = false): void {
 		const key = this.getEntityKey(entityType, id)
-		this.meta.setPersisting(key, isPersisting)
+		const wasPessimistic = this.meta.isPessimisticInFlight(key)
+		this.meta.setPersisting(key, isPersisting, pessimistic)
+		if (wasPessimistic !== this.meta.isPessimisticInFlight(key)) {
+			this.bumpEntitySnapshotVersion(key)
+		}
 		this.notifyEntitySubscribers(key)
+	}
+
+	/**
+	 * Returns the snapshot a consumer should DISPLAY for an entity.
+	 *
+	 * This equals the canonical {@link getEntitySnapshot} except while the entity
+	 * is pessimistically in-flight, when it returns the server baseline (data ===
+	 * serverData) WITHOUT mutating the store. The canonical snapshot stays dirty,
+	 * so dirty tracking, mutation building, and retry are unaffected — only the
+	 * presented value is the pre-persist server view.
+	 *
+	 * Inert until consumers route their display reads through it (see PR 4); a
+	 * non-pessimistic entity is returned verbatim, so optimistic mode and the
+	 * not-persisting case share this one path.
+	 */
+	getPresentationSnapshot<T extends object>(entityType: string, id: string): EntitySnapshot<T> | undefined {
+		const snapshot = this.getEntitySnapshot<T>(entityType, id)
+		if (!snapshot) return undefined
+
+		const key = this.getEntityKey(entityType, id)
+		if (!this.meta.isPessimisticInFlight(key)) {
+			return snapshot
+		}
+
+		return createEntitySnapshot<T>(
+			snapshot.id,
+			snapshot.entityType,
+			snapshot.serverData,
+			snapshot.serverData,
+			snapshot.version,
+		)
 	}
 
 	// ==================== Error State (delegated to ErrorStore) ====================
@@ -752,17 +788,41 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		return this.relations.getRelation(key)
 	}
 
+	getPresentationRelation(
+		parentType: string,
+		parentId: string,
+		fieldName: string,
+	): StoredRelationState | undefined {
+		const relation = this.getRelation(parentType, parentId, fieldName)
+		if (!relation || !this.meta.isPessimisticInFlight(this.getEntityKey(parentType, parentId))) {
+			return relation
+		}
+
+		return {
+			...relation,
+			currentId: relation.serverId,
+			state: relation.serverState,
+			placeholderData: {},
+		}
+	}
+
 	setRelation(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
 		updates: Partial<Omit<StoredRelationState, 'version'>>,
+		skipNotify: boolean = false,
 	): void {
 		const key = this.getRelationKey(parentType, parentId, fieldName)
 		const entityKey = this.getEntityKey(parentType, parentId)
 		const entitySnapshot = this.entitySnapshots.get(entityKey)
 		this.relations.setRelation(key, updates, entitySnapshot, fieldName)
-		this.notifyRelationSubscribers(key)
+		// skipNotify is for writes that happen during a render-phase read (e.g.
+		// HasOneHandle materialization) where the change that triggered them already
+		// notified subscribers — notifying again would call subscribers mid-render.
+		if (!skipNotify) {
+			this.notifyRelationSubscribers(key)
+		}
 	}
 
 	commitRelation(parentType: string, parentId: string, fieldName: string): void {
@@ -785,28 +845,6 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	resetAllRelations(entityType: string, entityId: string): void {
 		const keyPrefix = `${entityType}:${entityId}:`
 		this.relations.resetAllRelations(keyPrefix)
-	}
-
-	getAllRelationsForEntity(entityType: string, entityId: string): Map<string, StoredRelationState> {
-		const keyPrefix = `${entityType}:${entityId}:`
-		return this.relations.getAllRelationsForEntity(keyPrefix)
-	}
-
-	getAllHasManyForEntity(entityType: string, entityId: string): Map<string, StoredHasManyState> {
-		const keyPrefix = `${entityType}:${entityId}:`
-		return this.relations.getAllHasManyForEntity(keyPrefix)
-	}
-
-	restoreHasManyState(
-		parentType: string,
-		parentId: string,
-		fieldName: string,
-		state: StoredHasManyState,
-		alias?: string,
-	): void {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		this.relations.restoreHasManyState(key, state)
-		this.notifyRelationSubscribers(key)
 	}
 
 	// ==================== Subscriptions (delegated to SubscriptionManager) ====================
@@ -840,19 +878,20 @@ export class SnapshotStore implements SnapshotVersionBumper {
 
 	// ==================== Parent-Child Relationships ====================
 
+	/**
+	 * Anchors a child under a parent relation. Parent re-render notification is now
+	 * DERIVED from the relation store's live edges (see
+	 * {@link SubscriptionManager.getParentKeys}), so the only remaining effect is
+	 * the reachability one: a child anchored by a parent relation is no longer a
+	 * top-level root; its reachability flows through the parent. (No-op for server
+	 * children that were never roots.)
+	 *
+	 * Callers (handles, the action dispatcher) keep calling this on connect so the
+	 * root-unregister stays centralized in one place.
+	 */
 	registerParentChild(parentType: string, parentId: string, childType: string, childId: string): void {
-		const parentKey = this.getEntityKey(parentType, parentId)
 		const childKey = this.getEntityKey(childType, childId)
-		this.subscriptions.registerParentChild(parentKey, childKey)
-		// A child anchored by a parent relation is no longer a top-level root; its
-		// reachability now flows through the parent. (No-op for server children.)
 		this.roots.unregister(childKey)
-	}
-
-	unregisterParentChild(parentType: string, parentId: string, childType: string, childId: string): void {
-		const parentKey = this.getEntityKey(parentType, parentId)
-		const childKey = this.getEntityKey(childType, childId)
-		this.subscriptions.unregisterParentChild(parentKey, childKey)
 	}
 
 	// ==================== Partial Snapshot Export/Import ====================
@@ -953,6 +992,7 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		this.errors.clear()
 		this.touched.clear()
 		this.roots.clear()
+		this.rekeyOrchestrator.clear()
 		this.lastPropagatedData.clear()
 
 		this.subscriptions.notify()

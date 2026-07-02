@@ -1,3 +1,5 @@
+import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
+
 type Subscriber = () => void
 
 /**
@@ -9,16 +11,26 @@ export interface SnapshotVersionBumper {
 }
 
 /**
+ * Resolves the parent entity keys that currently have a LIVE relation edge to a
+ * child, so a child-field change can propagate up to its parents. Implemented by
+ * the relation store (the single source of truth for relation membership); this
+ * interface keeps {@link SubscriptionManager} decoupled from its concrete type.
+ */
+export interface ParentKeyLookup {
+	getParentKeysForChild(childId: string): Set<string>
+}
+
+/**
  * Manages subscriptions for entity and relation changes.
  *
  * Provides:
  * - Entity-level subscriptions
  * - Relation-level subscriptions
  * - Global subscriptions (any change)
- * - Parent-child change propagation
+ * - Parent-child change propagation (derived from live relation edges)
  * - Global version tracking for change detection
  */
-export class SubscriptionManager {
+export class SubscriptionManager implements Rekeyable {
 	/** Subscribers per entity key */
 	private readonly entitySubscribers = new Map<string, Set<Subscriber>>()
 
@@ -28,14 +40,18 @@ export class SubscriptionManager {
 	/** Global subscribers (notified on any change) */
 	private readonly globalSubscribers = new Set<Subscriber>()
 
-	/** Parent-child relationships: childKey -> Set of parentKeys */
-	private readonly childToParents = new Map<string, Set<string>>()
-
 	/** Maps old keys → new keys after rekey, so unsubscribe closures can find migrated callbacks */
 	private readonly rekeyedKeys = new Map<string, string>()
 
 	/** Global version number for change detection */
 	private globalVersion = 0
+
+	/**
+	 * Resolves a child's parents from live relation edges. Injected after
+	 * construction (the relation store and this manager are siblings under
+	 * SnapshotStore) via {@link setParentKeyLookup}.
+	 */
+	private parentKeyLookup: ParentKeyLookup | undefined
 
 	/**
 	 * Resolves a key through the rekey redirect chain.
@@ -119,29 +135,29 @@ export class SubscriptionManager {
 	// ==================== Parent-Child Relationships ====================
 
 	/**
-	 * Registers a parent-child relationship for change propagation.
-	 * When the child entity changes, parent entity subscribers will be notified.
+	 * Wires the live-edge parent lookup. Parent re-render propagation is derived
+	 * from the relation store's edges rather than a separate registry, so there is
+	 * one source of truth for the parent-child graph.
 	 */
-	registerParentChild(parentKey: string, childKey: string): void {
-		let parents = this.childToParents.get(childKey)
-		if (!parents) {
-			parents = new Set()
-			this.childToParents.set(childKey, parents)
-		}
-		parents.add(parentKey)
+	setParentKeyLookup(lookup: ParentKeyLookup): void {
+		this.parentKeyLookup = lookup
 	}
 
 	/**
-	 * Unregisters a parent-child relationship.
+	 * Derives the parent entity keys for a child entity key by reading the live
+	 * relation edges via the injected lookup. The child's bare id is the part of
+	 * the key after the first ':' ("entityType:id").
+	 *
+	 * The child's TYPE is intentionally dropped — {@link ParentKeyLookup} matches on
+	 * the bare id, relying on the store-wide global-id-uniqueness invariant (see
+	 * {@link RelationStore.getParentKeysForChild}).
 	 */
-	unregisterParentChild(parentKey: string, childKey: string): void {
-		const parents = this.childToParents.get(childKey)
-		if (parents) {
-			parents.delete(parentKey)
-			if (parents.size === 0) {
-				this.childToParents.delete(childKey)
-			}
-		}
+	private getParentKeys(childKey: string): Set<string> {
+		if (!this.parentKeyLookup) return new Set()
+		const separator = childKey.indexOf(':')
+		if (separator === -1) return new Set()
+		const childId = childKey.slice(separator + 1)
+		return this.parentKeyLookup.getParentKeysForChild(childId)
 	}
 
 	// ==================== Notification ====================
@@ -174,14 +190,14 @@ export class SubscriptionManager {
 			}
 		}
 
-		// Notify parent entity subscribers (propagate change up the tree)
-		const parents = this.childToParents.get(key)
-		if (parents) {
-			for (const parentKey of parents) {
-				// Bump parent snapshot version so useSyncExternalStore detects a change
-				bumper.bumpEntitySnapshotVersion(parentKey)
-				this.notifyEntitySubscribers(parentKey, bumper, notifiedKeys)
-			}
+		// Notify parent entity subscribers (propagate change up the tree).
+		// Parents are derived from the relation store's LIVE edges, so a
+		// disconnected child no longer reaches its former parent.
+		const parents = this.getParentKeys(key)
+		for (const parentKey of parents) {
+			// Bump parent snapshot version so useSyncExternalStore detects a change
+			bumper.bumpEntitySnapshotVersion(parentKey)
+			this.notifyEntitySubscribers(parentKey, bumper, notifiedKeys)
 		}
 
 		// Notify global subscribers (only once, from the root invocation — not
@@ -267,11 +283,15 @@ export class SubscriptionManager {
 	}
 
 	/**
-	 * Moves subscriptions and parent-child relationships from oldKey to newKey.
+	 * Moves entity and relation subscriptions from oldKey to newKey.
 	 * Also rekeys relation subscribers under oldKeyPrefix to newKeyPrefix.
 	 * Registers redirects so unsubscribe closures can find migrated callbacks.
+	 *
+	 * Parent-child links are NOT migrated here — they are derived from the
+	 * relation store's live edges, which migrate their own id references on rekey.
 	 */
-	rekey(oldKey: string, newKey: string, oldKeyPrefix: string, newKeyPrefix: string): void {
+	rekey(ctx: RekeyContext): void {
+		const { oldKey, newKey, oldKeyPrefix, newKeyPrefix } = ctx
 		// Register redirect for entity key (update existing chains first)
 		for (const [fromKey, toKey] of this.rekeyedKeys) {
 			if (toKey === oldKey) {
@@ -307,21 +327,6 @@ export class SubscriptionManager {
 
 			this.relationSubscribers.delete(oldRelKey)
 			this.relationSubscribers.set(newRelKey, subs)
-		}
-
-		// Move parent-child: update child→parent mappings
-		const parents = this.childToParents.get(oldKey)
-		if (parents) {
-			this.childToParents.delete(oldKey)
-			this.childToParents.set(newKey, parents)
-		}
-
-		// Update parent-child: replace oldKey in any parent sets that reference it
-		for (const parentSet of this.childToParents.values()) {
-			if (parentSet.has(oldKey)) {
-				parentSet.delete(oldKey)
-				parentSet.add(newKey)
-			}
 		}
 	}
 }

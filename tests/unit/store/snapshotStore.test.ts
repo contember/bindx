@@ -353,7 +353,7 @@ describe('SnapshotStore', () => {
 
 				expect(state.serverIds).toEqual(new Set(['t-1', 't-2']))
 				expect(state.plannedRemovals.size).toBe(0)
-				expect(state.plannedConnections.size).toBe(0)
+				expect(state.plannedAdditions.size).toBe(0)
 			})
 
 			test('should update serverIds when called with new values', () => {
@@ -368,6 +368,19 @@ describe('SnapshotStore', () => {
 				const state2 = store.getOrCreateHasMany('Article', 'a-1', 'tags')
 
 				expect(state2.serverIds).toEqual(new Set(['t-1']))
+			})
+
+			test('returned state mutations do not bypass the store write path', () => {
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
+				const state = store.getHasMany('Article', 'a-1', 'tags')
+				if (!state) throw new Error('Expected has-many state')
+
+				state.serverIds.add('leaked')
+				state.plannedAdditions.set('leaked', 'connected')
+				state.plannedRemovals.set('t-1', 'disconnect')
+
+				expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags')).toEqual(['t-1'])
+				expect(store.getHasMany('Article', 'a-1', 'tags')?.plannedRemovals.size).toBe(0)
 			})
 		})
 
@@ -386,6 +399,16 @@ describe('SnapshotStore', () => {
 
 				const newState = store.getHasMany('Article', 'a-1', 'tags')
 				expect(newState?.orderedIds).toBeNull()
+			})
+
+			test('ordered id reads cannot mutate the stored explicit order', () => {
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2'])
+				store.moveInHasMany('Article', 'a-1', 'tags', 0, 1)
+				const orderedIds = store.getHasManyOrderedIds('Article', 'a-1', 'tags')
+
+				orderedIds.push('leaked')
+
+				expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags')).toEqual(['t-2', 't-1'])
 			})
 		})
 
@@ -412,18 +435,18 @@ describe('SnapshotStore', () => {
 				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-1', 'disconnect')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.plannedConnections.has('t-1')).toBe(false)
+				expect(state?.plannedAdditions.has('t-1')).toBe(false)
 			})
 
 			test('should clear createdEntities when planning removal', () => {
 				store.getOrCreateHasMany('Article', 'a-1', 'tags')
 				store.addToHasMany('Article', 'a-1', 'tags', 't-new')
-				expect(store.getHasMany('Article', 'a-1', 'tags')?.createdEntities.has('t-new')).toBe(true)
+				expect(store.getHasMany('Article', 'a-1', 'tags')?.plannedAdditions.get('t-new') === 'created').toBe(true)
 
 				store.planHasManyRemoval('Article', 'a-1', 'tags', 't-new', 'delete')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.createdEntities.has('t-new')).toBe(false)
+				expect(state?.plannedAdditions.get('t-new') === 'created').toBe(false)
 			})
 
 			test('should remove item from orderedIds when planning removal', () => {
@@ -445,7 +468,7 @@ describe('SnapshotStore', () => {
 				store.planHasManyConnection('Article', 'a-1', 'tags', 't-new')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.plannedConnections.has('t-new')).toBe(true)
+				expect(state?.plannedAdditions.has('t-new')).toBe(true)
 			})
 
 			test('should cancel planned disconnect when planning connection', () => {
@@ -464,7 +487,7 @@ describe('SnapshotStore', () => {
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				expect(state?.plannedRemovals.has('t-1')).toBe(false)
-				expect(state?.plannedConnections.has('t-1')).toBe(true)
+				expect(state?.plannedAdditions.has('t-1')).toBe(true)
 			})
 		})
 
@@ -474,7 +497,7 @@ describe('SnapshotStore', () => {
 				store.addToHasMany('Article', 'a-1', 'tags', 't-new')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.plannedConnections.has('t-new')).toBe(true)
+				expect(state?.plannedAdditions.has('t-new')).toBe(true)
 			})
 
 			test('should track item in createdEntities', () => {
@@ -482,7 +505,7 @@ describe('SnapshotStore', () => {
 				store.addToHasMany('Article', 'a-1', 'tags', 't-new')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.createdEntities.has('t-new')).toBe(true)
+				expect(state?.plannedAdditions.get('t-new') === 'created').toBe(true)
 			})
 
 			test('should add to orderedIds', () => {
@@ -501,8 +524,8 @@ describe('SnapshotStore', () => {
 				store.removeFromHasMany('Article', 'a-1', 'tags', 't-new', 'disconnect')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
-				expect(state?.plannedConnections.has('t-new')).toBe(false)
-				expect(state?.createdEntities.has('t-new')).toBe(false)
+				expect(state?.plannedAdditions.has('t-new')).toBe(false)
+				expect(state?.plannedAdditions.get('t-new') === 'created').toBe(false)
 			})
 
 			test('should plan disconnect for server entity', () => {
@@ -528,8 +551,8 @@ describe('SnapshotStore', () => {
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				// Created entities should be cancelled, not planned for deletion
-				expect(state?.plannedConnections.has('t-new')).toBe(false)
-				expect(state?.createdEntities.has('t-new')).toBe(false)
+				expect(state?.plannedAdditions.has('t-new')).toBe(false)
+				expect(state?.plannedAdditions.get('t-new') === 'created').toBe(false)
 				expect(state?.plannedRemovals.has('t-new')).toBe(false)
 			})
 		})
@@ -570,7 +593,7 @@ describe('SnapshotStore', () => {
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				expect(state?.serverIds).toEqual(new Set(['t-1', 't-2']))
-				expect(state?.plannedConnections.size).toBe(0)
+				expect(state?.plannedAdditions.size).toBe(0)
 			})
 		})
 
@@ -583,7 +606,7 @@ describe('SnapshotStore', () => {
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				expect(state?.plannedRemovals.size).toBe(0)
-				expect(state?.plannedConnections.size).toBe(0)
+				expect(state?.plannedAdditions.size).toBe(0)
 				expect(state?.orderedIds).toBeNull()
 			})
 		})
@@ -680,6 +703,25 @@ describe('SnapshotStore', () => {
 				const state = store.getRelation('Article', 'a-1', 'author')
 				expect(state?.currentId).toBe('auth-2')
 				expect(state?.serverId).toBe('auth-1')
+			})
+
+			test('returned relation state mutations do not bypass the store write path', () => {
+				store.getOrCreateRelation('Article', 'a-1', 'author', {
+					currentId: 'auth-1',
+					serverId: 'auth-1',
+					state: 'connected',
+					serverState: 'connected',
+					placeholderData: {},
+				})
+				const state = store.getRelation('Article', 'a-1', 'author')
+				if (!state) throw new Error('Expected relation state')
+
+				state.currentId = 'leaked'
+				state.placeholderData['name'] = 'Leaked'
+
+				const fresh = store.getRelation('Article', 'a-1', 'author')
+				expect(fresh?.currentId).toBe('auth-1')
+				expect(fresh?.placeholderData).toEqual({})
 			})
 		})
 
@@ -1109,6 +1151,8 @@ describe('SnapshotStore', () => {
 
 			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
 			store.setEntityData('Author', 'auth-1', { id: 'auth-1', name: 'John' }, true)
+			// Parent notification is derived from the live relation edge.
+			store.setRelation('Article', 'a-1', 'author', { currentId: 'auth-1', state: 'connected' })
 			store.registerParentChild('Article', 'a-1', 'Author', 'auth-1')
 			store.subscribeToEntity('Article', 'a-1', subscriber.fn)
 
@@ -1117,18 +1161,19 @@ describe('SnapshotStore', () => {
 			expect(subscriber.callCount()).toBeGreaterThan(0)
 		})
 
-		test('should unregister parent-child relationship', () => {
+		test('should stop propagating after the relation edge is disconnected', () => {
 			const subscriber = createMockSubscriber()
 
 			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
 			store.setEntityData('Author', 'auth-1', { id: 'auth-1', name: 'John' }, true)
-			store.registerParentChild('Article', 'a-1', 'Author', 'auth-1')
-			store.unregisterParentChild('Article', 'a-1', 'Author', 'auth-1')
+			store.setRelation('Article', 'a-1', 'author', { currentId: 'auth-1', state: 'connected' })
+			// Disconnecting the edge severs parent notification (no separate registry).
+			store.setRelation('Article', 'a-1', 'author', { currentId: null, state: 'disconnected' })
 			store.subscribeToEntity('Article', 'a-1', subscriber.fn)
 
 			store.setFieldValue('Author', 'auth-1', ['name'], 'Jane')
 
-			// Parent should not be notified after unregistering
+			// Parent should not be notified — there is no live edge to it.
 			expect(subscriber.callCount()).toBe(0)
 		})
 	})
