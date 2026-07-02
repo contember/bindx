@@ -237,7 +237,7 @@ export { MutationCollector, ContemberSchemaMutationAdapter, type SchemaNames } f
 export type { MutationSchemaProvider, EntityMutationResult } from './contember/index.js'
 
 // Undo/Redo
-export { UndoManager } from './undo/index.js'
+export { UndoManager, UnrecordedWriteError } from './undo/index.js'
 export type {
 	UndoManagerConfig,
 	UndoState,

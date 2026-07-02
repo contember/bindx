@@ -35,8 +35,20 @@ export class HasOneStore {
 
 	private mutationVersion = 0
 
+	/**
+	 * Monotonic counter bumped on EDITABLE-layer has-one writes (setRelation /
+	 * resetRelation) — the writes an undo gesture must first record. Materialization
+	 * (getOrCreateRelation), post-persist commit, import, replaceEntityId, rekey and
+	 * delete deliberately do NOT bump it. Read by the undo write-guard (see UndoJournal).
+	 */
+	private editableWriteVersion = 0
+
 	getMutationVersion(): number {
 		return this.mutationVersion
+	}
+
+	getEditableWriteVersion(): number {
+		return this.editableWriteVersion
 	}
 
 	/**
@@ -130,6 +142,7 @@ export class HasOneStore {
 				version: existing.version + 1,
 			})
 		}
+		this.editableWriteVersion++
 	}
 
 	/**
@@ -162,6 +175,7 @@ export class HasOneStore {
 			placeholderData: {},
 			version: existing.version + 1,
 		})
+		this.editableWriteVersion++
 	}
 
 	/**

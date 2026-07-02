@@ -25,6 +25,7 @@ import type {
 	EntityCellImage,
 	RelationCellImage,
 	HasManyCellImage,
+	EditableWriteCounters,
 } from '../undo/UndoJournal.js'
 
 export type { HasManyRemovalType, StoredHasManyState, StoredRelationState } from './RelationStore.js'
@@ -118,6 +119,22 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	private recordExistingEntity(key: string): void {
 		if (this.entitySnapshots.has(key)) {
 			this.journal?.recordEntity(key)
+		}
+	}
+
+	/**
+	 * Aggregates the sub-stores' editable-layer write counters into the three
+	 * journal kinds. The "entity" kind fuses snapshot + meta + roots — the cells a
+	 * single {@link recordEntity} pre-image captures together. Read by the journal's
+	 * write-guard at each transaction boundary; a few integer adds, hot-path cheap.
+	 */
+	getEditableWriteCounters(): EditableWriteCounters {
+		return {
+			entity: this.entitySnapshots.getEditableWriteVersion()
+				+ this.meta.getEditableWriteVersion()
+				+ this.roots.getEditableWriteVersion(),
+			relation: this.relations.getEditableHasOneWriteVersion(),
+			hasMany: this.relations.getEditableHasManyWriteVersion(),
 		}
 	}
 
