@@ -1,6 +1,7 @@
 import type { EntitySnapshot } from '../store/snapshots.js'
 import type { StoredRelationState, StoredHasManyState } from '../store/RelationStore.js'
 import type { RekeyContext } from '../store/RekeyOrchestrator.js'
+import { UnrecordedWriteError } from './UnrecordedWriteError.js'
 
 /**
  * Write-journal for undo/redo.
@@ -53,6 +54,21 @@ export interface HasManyCellImage {
 
 export type JournalCellImage = EntityCellImage | RelationCellImage | HasManyCellImage
 
+/** The kind axis shared by cell images, editable-write counters, and the guard. */
+export type JournalCellKind = JournalCellImage['kind']
+
+/**
+ * Monotonic editable-layer write counters, one per journal kind. Provided by the
+ * store so the journal can prove — at transaction close — that every editable
+ * write was preceded by a record call (see {@link UndoJournal.commit}). Counters
+ * only ever increase, so a per-transaction delta is `now - base`.
+ */
+export interface EditableWriteCounters {
+	readonly entity: number
+	readonly relation: number
+	readonly hasMany: number
+}
+
 /** One undoable unit: the editable-layer pre-images of every cell a gesture touched. */
 export interface JournalEntry {
 	readonly cells: JournalCellImage[]
@@ -74,6 +90,12 @@ export interface JournalTarget {
 	 */
 	exportUnreachableCreatedSubgraph(seedIds: ReadonlySet<string>): JournalCellImage[]
 	applyJournalImages(images: JournalCellImage[]): void
+	/**
+	 * Current editable-layer write counters across the sub-stores. Read once when a
+	 * transaction opens and again when it closes to detect writes that skipped their
+	 * record call. Must be O(1) — it is on the write hot path.
+	 */
+	getEditableWriteCounters(): EditableWriteCounters
 }
 
 function cellRefKey(image: JournalCellImage): string {
@@ -103,6 +125,8 @@ export class UndoJournal {
 	private depth = 0
 	/** Cells recorded in the currently-open transaction, deduped first-writer-wins. */
 	private active: Map<string, JournalCellImage> | null = null
+	/** Editable-write counters snapshotted when the outermost transaction opened. */
+	private baseCounters: EditableWriteCounters | null = null
 
 	constructor(
 		private readonly target: JournalTarget,
@@ -118,6 +142,7 @@ export class UndoJournal {
 	begin(): void {
 		if (this.depth === 0) {
 			this.active = new Map()
+			this.baseCounters = this.target.getEditableWriteCounters()
 		}
 		this.depth++
 	}
@@ -128,10 +153,39 @@ export class UndoJournal {
 		if (this.depth > 0) return
 		const active = this.active
 		this.active = null
+		// Guard runs even for an empty entry: a write that skipped its record call
+		// leaves zero cells yet still advanced the counters — that is the bug to catch.
+		this.assertAllWritesRecorded(active)
+		this.baseCounters = null
 		if (active && active.size > 0) {
 			this.closeOverUnreachableCreated(active)
 			this.onCommit({ cells: [...active.values()] })
 		}
+	}
+
+	/**
+	 * Coarse per-kind invariant check at transaction close: for each journal kind
+	 * whose editable-write counter advanced during the transaction, at least one
+	 * cell of that kind must have been recorded. A positive delta with no recorded
+	 * cell means a mutating method wrote without recording — undo would restore
+	 * stale/partial state — so fail loudly naming the offending kind(s).
+	 */
+	private assertAllWritesRecorded(active: Map<string, JournalCellImage> | null): void {
+		const base = this.baseCounters
+		if (base === null) return
+		const now = this.target.getEditableWriteCounters()
+
+		const recorded: Record<JournalCellKind, boolean> = { entity: false, relation: false, hasMany: false }
+		if (active) {
+			for (const image of active.values()) recorded[image.kind] = true
+		}
+
+		const unrecorded: JournalCellKind[] = []
+		if (now.entity > base.entity && !recorded.entity) unrecorded.push('entity')
+		if (now.relation > base.relation && !recorded.relation) unrecorded.push('relation')
+		if (now.hasMany > base.hasMany && !recorded.hasMany) unrecorded.push('hasMany')
+
+		if (unrecorded.length > 0) throw new UnrecordedWriteError(unrecorded)
 	}
 
 	/**
@@ -194,7 +248,9 @@ export class UndoJournal {
 	clear(): void {
 		// A full store clear wipes the world these pre-images describe. Drop the open
 		// gesture's cells but keep `active` non-null so begin/commit depth stays paired.
+		// Null the baseline too: the wiped transaction can't be meaningfully guarded.
 		if (this.active !== null) this.active = new Map()
+		this.baseCounters = null
 		this.onClear?.()
 	}
 }

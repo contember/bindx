@@ -39,6 +39,16 @@ export class RelationStore implements Rekeyable {
 		return this.hasOne.getMutationVersion() + this.hasMany.getMutationVersion()
 	}
 
+	/** Editable-layer has-one write counter — read by the undo write-guard. */
+	getEditableHasOneWriteVersion(): number {
+		return this.hasOne.getEditableWriteVersion()
+	}
+
+	/** Editable-layer has-many write counter — read by the undo write-guard. */
+	getEditableHasManyWriteVersion(): number {
+		return this.hasMany.getEditableWriteVersion()
+	}
+
 	// ==================== Has-One Relations ====================
 
 	getOrCreateRelation(
