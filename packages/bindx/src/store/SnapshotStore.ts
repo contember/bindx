@@ -1259,6 +1259,8 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		this.roots.clear()
 		this.rekeyOrchestrator.clear()
 		this.lastPropagatedData.clear()
+		// Undo history describes the now-wiped world; drop it with the store.
+		this.journal?.clear()
 
 		this.subscriptions.notify()
 	}

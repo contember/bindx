@@ -52,6 +52,7 @@ export class UndoManager {
 			store,
 			entry => this.onEntry(entry),
 			ctx => this.rekeyStacks(ctx),
+			() => this.clear(),
 		)
 	}
 

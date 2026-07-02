@@ -108,6 +108,7 @@ export class UndoJournal {
 		private readonly target: JournalTarget,
 		private readonly onCommit: (entry: JournalEntry) => void,
 		private readonly onRekey?: (ctx: RekeyContext) => void,
+		private readonly onClear?: () => void,
 	) {}
 
 	get isRecording(): boolean {
@@ -187,6 +188,14 @@ export class UndoJournal {
 	/** Forwarded from the store when a temp id is rekeyed; lets the owner rewrite stacks. */
 	rekey(ctx: RekeyContext): void {
 		this.onRekey?.(ctx)
+	}
+
+	/** Forwarded from the store on a full clear; drops all owner history and any open gesture. */
+	clear(): void {
+		// A full store clear wipes the world these pre-images describe. Drop the open
+		// gesture's cells but keep `active` non-null so begin/commit depth stays paired.
+		if (this.active !== null) this.active = new Map()
+		this.onClear?.()
 	}
 }
 
