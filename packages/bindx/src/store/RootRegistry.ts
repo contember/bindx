@@ -27,21 +27,41 @@ export class RootRegistry implements Rekeyable {
 	 */
 	private mutationVersion = 0
 
+	/**
+	 * Monotonic counter bumped on EDITABLE-layer root changes — the create-root
+	 * register/unregister that back an undoable gesture (createEntity,
+	 * registerParentChild). The persist rekey and full clear deliberately do NOT
+	 * bump it. Read by the undo write-guard (see UndoJournal). The unjournaled
+	 * register/unregister callers (undo restore, memory sweep, unmount cleanup) all
+	 * run outside a journal transaction, so counting them here is harmless.
+	 */
+	private editableWriteVersion = 0
+
 	register(key: string): void {
 		if (!this.roots.has(key)) {
 			this.roots.add(key)
 			this.mutationVersion++
+			this.editableWriteVersion++
 		}
 	}
 
 	unregister(key: string): void {
 		if (this.roots.delete(key)) {
 			this.mutationVersion++
+			this.editableWriteVersion++
 		}
+	}
+
+	getEditableWriteVersion(): number {
+		return this.editableWriteVersion
 	}
 
 	keys(): IterableIterator<string> {
 		return this.roots.keys()
+	}
+
+	has(key: string): boolean {
+		return this.roots.has(key)
 	}
 
 	/**

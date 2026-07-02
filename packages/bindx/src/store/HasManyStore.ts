@@ -92,8 +92,21 @@ export class HasManyStore {
 
 	private mutationVersion = 0
 
+	/**
+	 * Monotonic counter bumped on EDITABLE-layer has-many writes (plan add/remove,
+	 * add, connectExisting, remove, move, reset) — the writes an undo gesture must
+	 * first record. Server- id ingestion (setHasManyServerIds), materialization
+	 * (getOrCreateHasMany), post-persist commit, import, replaceEntityId, rekey and
+	 * delete deliberately do NOT bump it. Read by the undo write-guard (see UndoJournal).
+	 */
+	private editableWriteVersion = 0
+
 	getMutationVersion(): number {
 		return this.mutationVersion
+	}
+
+	getEditableWriteVersion(): number {
+		return this.editableWriteVersion
 	}
 
 	/**
@@ -215,6 +228,7 @@ export class HasManyStore {
 				version: existing.version + 1,
 			})
 		}
+		this.editableWriteVersion++
 	}
 
 	/**
@@ -251,6 +265,7 @@ export class HasManyStore {
 				version: existing.version + 1,
 			})
 		}
+		this.editableWriteVersion++
 	}
 
 	/**
@@ -282,6 +297,7 @@ export class HasManyStore {
 			plannedAdditions: new Map(),
 			version: existing.version + 1,
 		})
+		this.editableWriteVersion++
 	}
 
 	/**
@@ -311,6 +327,7 @@ export class HasManyStore {
 				version: existing.version + 1,
 			})
 		}
+		this.editableWriteVersion++
 	}
 
 	/**
@@ -351,6 +368,7 @@ export class HasManyStore {
 				version: existing.version + 1,
 			})
 		}
+		this.editableWriteVersion++
 	}
 
 	/**
@@ -392,8 +410,10 @@ export class HasManyStore {
 			}
 
 			this.writeHasMany(key, newState)
+			this.editableWriteVersion++
 			return true
 		} else {
+			// planHasManyRemoval bumps editableWriteVersion itself.
 			this.planHasManyRemoval(key, itemId, removalType)
 			return true
 		}
@@ -422,6 +442,7 @@ export class HasManyStore {
 			orderedIds: newOrderedIds,
 			version: existing.version + 1,
 		})
+		this.editableWriteVersion++
 	}
 
 	/**
@@ -453,6 +474,24 @@ export class HasManyStore {
 	 */
 	collectParentKeysForChild(childId: string, parents: Set<string>): void {
 		this.edges.collectParents(childId, parents)
+	}
+
+	/**
+	 * Collects the keys of every has-many list owned by an entity (keys under the
+	 * given owner prefix). Mirrors {@link removeOwnedRelations} but only enumerates.
+	 */
+	collectOwnedKeys(keyPrefix: string, keys: string[]): void {
+		for (const key of this.hasManyStates.keys()) {
+			if (key.startsWith(keyPrefix)) keys.push(key)
+		}
+	}
+
+	/**
+	 * Removes a single has-many list state (and its live edges). Used by undo
+	 * restore to drop a list that did not exist before the gesture.
+	 */
+	removeHasMany(key: string): void {
+		this.deleteHasMany(key)
 	}
 
 	/**

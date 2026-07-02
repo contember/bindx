@@ -377,15 +377,19 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	add(data?: Partial<TEntity>): string {
 		this.assertNotDisposed()
 
-		// Pre-create entity so we can return tempId
-		const tempId = this.store.createEntity(this.itemType, data as Record<string, unknown>)
+		// One gesture = one undo entry: the pre-create and the list-add are journaled
+		// together so undo removes (and redo re-creates) the whole row.
+		return this.store.transaction(() => {
+			// Pre-create entity so we can return tempId
+			const tempId = this.store.createEntity(this.itemType, data as Record<string, unknown>)
 
-		// Add to has-many relation through dispatcher (enables events/interceptors)
-		this.dispatcher.dispatch(
-			addToList(this.entityType, this.entityId, this.fieldName, this.itemType, tempId, this.alias),
-		)
+			// Add to has-many relation through dispatcher (enables events/interceptors)
+			this.dispatcher.dispatch(
+				addToList(this.entityType, this.entityId, this.fieldName, this.itemType, tempId, this.alias),
+			)
 
-		return tempId
+			return tempId
+		})
 	}
 
 	/**

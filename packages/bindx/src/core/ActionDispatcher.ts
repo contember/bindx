@@ -42,39 +42,46 @@ export class ActionDispatcher {
 	 * Async interceptors are skipped with a warning — use dispatchAsync() for those.
 	 */
 	dispatch(action: Action): void {
-		// Run through middlewares first
-		for (const middleware of this.middlewares) {
-			const result = middleware(action, this.store)
-			if (result === false) {
-				// Middleware can cancel the action
-				return
+		// One dispatch = one undoable gesture. The store records every primary write
+		// made between begin/commit into a single journal entry (no-op without undo).
+		this.store.beginTransaction()
+		try {
+			// Run through middlewares first
+			for (const middleware of this.middlewares) {
+				const result = middleware(action, this.store)
+				if (result === false) {
+					// Middleware can cancel the action
+					return
+				}
 			}
-		}
 
-		// Create and run before event through interceptors (synchronously)
-		const beforeEvent = createBeforeEvent(action, this.store)
-		if (beforeEvent) {
-			const result = this.eventEmitter.runInterceptorsSync(beforeEvent)
-			if (result === null) {
-				// Interceptor cancelled the action
-				return
+			// Create and run before event through interceptors (synchronously)
+			const beforeEvent = createBeforeEvent(action, this.store)
+			if (beforeEvent) {
+				const result = this.eventEmitter.runInterceptorsSync(beforeEvent)
+				if (result === null) {
+					// Interceptor cancelled the action
+					return
+				}
+				// If event was modified, update action accordingly
+				if (result !== beforeEvent) {
+					action = this.updateActionFromEvent(action, result)
+				}
 			}
-			// If event was modified, update action accordingly
-			if (result !== beforeEvent) {
-				action = this.updateActionFromEvent(action, result)
+
+			// Capture state before execution (for after events)
+			const stateBefore = captureStateBeforeAction(action, this.store)
+
+			// Execute the action
+			this.execute(action)
+
+			// Emit after event
+			const afterEvent = createAfterEvent(action, stateBefore, this.store)
+			if (afterEvent) {
+				this.eventEmitter.emit(afterEvent)
 			}
-		}
-
-		// Capture state before execution (for after events)
-		const stateBefore = captureStateBeforeAction(action, this.store)
-
-		// Execute the action
-		this.execute(action)
-
-		// Emit after event
-		const afterEvent = createAfterEvent(action, stateBefore, this.store)
-		if (afterEvent) {
-			this.eventEmitter.emit(afterEvent)
+		} finally {
+			this.store.commitTransaction()
 		}
 	}
 
@@ -108,16 +115,21 @@ export class ActionDispatcher {
 		// Capture state before execution (for after events)
 		const stateBefore = captureStateBeforeAction(action, this.store)
 
-		// Execute the action
-		this.execute(action)
+		this.store.beginTransaction()
+		try {
+			// Execute the action
+			this.execute(action)
 
-		// Emit after event
-		const afterEvent = createAfterEvent(action, stateBefore, this.store)
-		if (afterEvent) {
-			this.eventEmitter.emit(afterEvent)
+			// Emit after event
+			const afterEvent = createAfterEvent(action, stateBefore, this.store)
+			if (afterEvent) {
+				this.eventEmitter.emit(afterEvent)
+			}
+
+			return true
+		} finally {
+			this.store.commitTransaction()
 		}
-
-		return true
 	}
 
 	/**
@@ -174,6 +186,9 @@ export class ActionDispatcher {
 		const index = this.middlewares.indexOf(middleware)
 		if (index !== -1) {
 			this.middlewares.splice(index, 1)
+			if (!this.middlewares.includes(middleware)) {
+				middleware.dispose?.()
+			}
 		}
 	}
 
@@ -456,7 +471,10 @@ export class ActionDispatcher {
  * Can inspect/modify actions before execution.
  * Return false to cancel the action.
  */
-export type ActionMiddleware = (action: Action, store: SnapshotStore) => boolean | void
+export interface ActionMiddleware {
+	(action: Action, store: SnapshotStore): boolean | void
+	dispose?: () => void
+}
 
 /**
  * Creates a logging middleware for debugging.

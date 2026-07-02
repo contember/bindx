@@ -33,8 +33,22 @@ export class EntitySnapshotStore implements Rekeyable {
 	 */
 	private mutationVersion = 0
 
+	/**
+	 * Monotonic counter bumped on every EDITABLE-layer snapshot write (local
+	 * setData / updateFields / setFieldValue / reset) — the writes an undo gesture
+	 * must first record. Server-baseline writes (server setData, refreshServerData,
+	 * commit, commitFields) and non-write bookkeeping (remove, bumpVersion, import,
+	 * rekey, clear) deliberately do NOT bump it. Read by the undo write-guard to
+	 * detect a mutating path that wrote without recording. See UndoJournal.
+	 */
+	private editableWriteVersion = 0
+
 	getMutationVersion(): number {
 		return this.mutationVersion
+	}
+
+	getEditableWriteVersion(): number {
+		return this.editableWriteVersion
 	}
 
 	get(key: string): EntitySnapshot | undefined {
@@ -77,6 +91,7 @@ export class EntitySnapshotStore implements Rekeyable {
 		this.snapshots.set(key, newSnapshot)
 		this.idIndex.set(id, key)
 		if (!existing) this.mutationVersion++
+		if (!isServerData) this.editableWriteVersion++
 		return newSnapshot
 	}
 
@@ -151,6 +166,7 @@ export class EntitySnapshotStore implements Rekeyable {
 		)
 
 		this.snapshots.set(key, newSnapshot)
+		this.editableWriteVersion++
 		return newSnapshot
 	}
 
@@ -172,6 +188,7 @@ export class EntitySnapshotStore implements Rekeyable {
 		)
 
 		this.snapshots.set(key, newSnapshot)
+		this.editableWriteVersion++
 		return true
 	}
 
@@ -209,6 +226,7 @@ export class EntitySnapshotStore implements Rekeyable {
 		)
 
 		this.snapshots.set(key, newSnapshot)
+		this.editableWriteVersion++
 	}
 
 	/**
