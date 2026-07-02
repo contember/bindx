@@ -50,6 +50,16 @@ export interface StoredHasManyState {
 	version: number
 }
 
+function cloneHasManyState(state: StoredHasManyState): StoredHasManyState {
+	return {
+		serverIds: new Set(state.serverIds),
+		orderedIds: state.orderedIds ? [...state.orderedIds] : null,
+		plannedRemovals: new Map(state.plannedRemovals),
+		plannedAdditions: new Map(state.plannedAdditions),
+		version: state.version,
+	}
+}
+
 /**
  * Computes the default ordered IDs for a has-many relation.
  * Order is: serverIds (minus removals) + plannedAdditions
@@ -150,14 +160,15 @@ export class HasManyStore {
 			}
 		}
 
-		return this.hasManyStates.get(key)!
+		return cloneHasManyState(this.hasManyStates.get(key)!)
 	}
 
 	/**
 	 * Gets has-many list state.
 	 */
 	getHasMany(key: string): StoredHasManyState | undefined {
-		return this.hasManyStates.get(key)
+		const state = this.hasManyStates.get(key)
+		return state ? cloneHasManyState(state) : undefined
 	}
 
 	/**
@@ -432,7 +443,7 @@ export class HasManyStore {
 		if (!existing) return []
 
 		if (existing.orderedIds !== null) {
-			return existing.orderedIds
+			return [...existing.orderedIds]
 		}
 
 		return computeDefaultOrderedIds(existing)
@@ -518,13 +529,7 @@ export class HasManyStore {
 		for (const key of keys) {
 			const state = this.hasManyStates.get(key)
 			if (state) {
-				result.set(key, {
-					serverIds: new Set(state.serverIds),
-					orderedIds: state.orderedIds ? [...state.orderedIds] : null,
-					plannedRemovals: new Map(state.plannedRemovals),
-					plannedAdditions: new Map(state.plannedAdditions),
-					version: state.version,
-				})
+				result.set(key, cloneHasManyState(state))
 			}
 		}
 		return result

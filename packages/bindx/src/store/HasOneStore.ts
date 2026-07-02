@@ -15,6 +15,13 @@ export interface StoredRelationState {
 	version: number
 }
 
+function cloneRelationState(state: StoredRelationState): StoredRelationState {
+	return {
+		...state,
+		placeholderData: { ...state.placeholderData },
+	}
+}
+
 /**
  * Owns has-one relation state ("parentType:parentId:fieldName" → {@link StoredRelationState}).
  *
@@ -81,14 +88,15 @@ export class HasOneStore {
 			this.writeRelation(key, { ...initial, version: 0 })
 		}
 
-		return this.relationStates.get(key)!
+		return cloneRelationState(this.relationStates.get(key)!)
 	}
 
 	/**
 	 * Gets relation state.
 	 */
 	getRelation(key: string): StoredRelationState | undefined {
-		return this.relationStates.get(key)
+		const state = this.relationStates.get(key)
+		return state ? cloneRelationState(state) : undefined
 	}
 
 	/**
@@ -241,10 +249,7 @@ export class HasOneStore {
 		for (const key of keys) {
 			const state = this.relationStates.get(key)
 			if (state) {
-				result.set(key, {
-					...state,
-					placeholderData: { ...state.placeholderData },
-				})
+				result.set(key, cloneRelationState(state))
 			}
 		}
 		return result

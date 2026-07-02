@@ -144,7 +144,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 */
 	get state(): HasOneRelationState {
 		this.ensureEntry()
-		const relation = this.store.getRelation(
+		const relation = this.store.getPresentationRelation(
 			this.entityType,
 			this.entityId,
 			this.fieldName,
@@ -158,7 +158,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 */
 	get relatedId(): string | null {
 		this.ensureEntry()
-		const relation = this.store.getRelation(
+		const relation = this.store.getPresentationRelation(
 			this.entityType,
 			this.entityId,
 			this.fieldName,

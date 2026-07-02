@@ -369,6 +369,19 @@ describe('SnapshotStore', () => {
 
 				expect(state2.serverIds).toEqual(new Set(['t-1']))
 			})
+
+			test('returned state mutations do not bypass the store write path', () => {
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
+				const state = store.getHasMany('Article', 'a-1', 'tags')
+				if (!state) throw new Error('Expected has-many state')
+
+				state.serverIds.add('leaked')
+				state.plannedAdditions.set('leaked', 'connected')
+				state.plannedRemovals.set('t-1', 'disconnect')
+
+				expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags')).toEqual(['t-1'])
+				expect(store.getHasMany('Article', 'a-1', 'tags')?.plannedRemovals.size).toBe(0)
+			})
 		})
 
 		describe('setHasManyServerIds', () => {
@@ -386,6 +399,16 @@ describe('SnapshotStore', () => {
 
 				const newState = store.getHasMany('Article', 'a-1', 'tags')
 				expect(newState?.orderedIds).toBeNull()
+			})
+
+			test('ordered id reads cannot mutate the stored explicit order', () => {
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2'])
+				store.moveInHasMany('Article', 'a-1', 'tags', 0, 1)
+				const orderedIds = store.getHasManyOrderedIds('Article', 'a-1', 'tags')
+
+				orderedIds.push('leaked')
+
+				expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags')).toEqual(['t-2', 't-1'])
 			})
 		})
 
@@ -680,6 +703,25 @@ describe('SnapshotStore', () => {
 				const state = store.getRelation('Article', 'a-1', 'author')
 				expect(state?.currentId).toBe('auth-2')
 				expect(state?.serverId).toBe('auth-1')
+			})
+
+			test('returned relation state mutations do not bypass the store write path', () => {
+				store.getOrCreateRelation('Article', 'a-1', 'author', {
+					currentId: 'auth-1',
+					serverId: 'auth-1',
+					state: 'connected',
+					serverState: 'connected',
+					placeholderData: {},
+				})
+				const state = store.getRelation('Article', 'a-1', 'author')
+				if (!state) throw new Error('Expected relation state')
+
+				state.currentId = 'leaked'
+				state.placeholderData['name'] = 'Leaked'
+
+				const fresh = store.getRelation('Article', 'a-1', 'author')
+				expect(fresh?.currentId).toBe('auth-1')
+				expect(fresh?.placeholderData).toEqual({})
 			})
 		})
 

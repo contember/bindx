@@ -295,6 +295,39 @@ describe('HasOneHandle', () => {
 		})
 	})
 
+	// ==================== Pessimistic Presentation ====================
+
+	describe('Pessimistic Presentation', () => {
+		test('local connect is hidden behind the server baseline while pessimistically in-flight', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				author: { id: 'auth-1', name: 'John' },
+			}, true)
+			const handle = createHasOneHandleRaw()
+			expect(handle.relatedId).toBe('auth-1')
+
+			store.setRelation('Article', 'a-1', 'author', {
+				currentId: 'auth-2',
+				state: 'connected',
+			})
+			expect(handle.relatedId).toBe('auth-2')
+			expect(handle.isDirty).toBe(true)
+
+			store.setPersisting('Article', 'a-1', true, true)
+			expect(handle.relatedId).toBe('auth-1')
+			expect(handle.state).toBe('connected')
+			expect(handle.isDirty).toBe(true)
+
+			const canonical = store.getRelation('Article', 'a-1', 'author')
+			expect(canonical?.currentId).toBe('auth-2')
+
+			store.setPersisting('Article', 'a-1', false)
+			expect(handle.relatedId).toBe('auth-2')
+			expect(handle.isDirty).toBe(true)
+		})
+	})
+
 	// ==================== Connect / Disconnect / Delete ====================
 
 	describe('Connect / Disconnect / Delete', () => {

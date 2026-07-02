@@ -561,6 +561,21 @@ export class SnapshotStore implements SnapshotVersionBumper {
 		return this.relations.getHasManyOrderedIds(key)
 	}
 
+	getPresentationHasManyOrderedIds(
+		parentType: string,
+		parentId: string,
+		fieldName: string,
+		alias?: string,
+	): string[] {
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		if (!this.meta.isPessimisticInFlight(this.getEntityKey(parentType, parentId))) {
+			return this.relations.getHasManyOrderedIds(key)
+		}
+
+		const state = this.relations.getHasMany(key)
+		return state ? [...state.serverIds] : []
+	}
+
 	isHasManyItemCreated(
 		parentType: string,
 		parentId: string,
@@ -771,6 +786,24 @@ export class SnapshotStore implements SnapshotVersionBumper {
 	): StoredRelationState | undefined {
 		const key = this.getRelationKey(parentType, parentId, fieldName)
 		return this.relations.getRelation(key)
+	}
+
+	getPresentationRelation(
+		parentType: string,
+		parentId: string,
+		fieldName: string,
+	): StoredRelationState | undefined {
+		const relation = this.getRelation(parentType, parentId, fieldName)
+		if (!relation || !this.meta.isPessimisticInFlight(this.getEntityKey(parentType, parentId))) {
+			return relation
+		}
+
+		return {
+			...relation,
+			currentId: relation.serverId,
+			state: relation.serverState,
+			placeholderData: {},
+		}
 	}
 
 	setRelation(
