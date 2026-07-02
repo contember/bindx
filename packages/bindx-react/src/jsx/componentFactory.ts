@@ -101,8 +101,10 @@ export function buildComponent<TProps extends object>(
 	schemaRegistry: SchemaRegistry<Record<string, object>> | null,
 	conditionFn: ((props: TProps) => Condition) | null,
 	slotNames: readonly string[],
+	useFns: readonly ((props: TProps) => object)[],
 ): unknown {
 	const selectionsMap = new Map<string, SelectionPropMeta>()
+	const componentDisplayName = `BindxComponent(${[...entityConfigs.keys()].join(', ')})`
 
 	// Generate unique brand for this component
 	const componentBrand = new ComponentBrand(`component_${Math.random().toString(36).slice(2)}`)
@@ -128,27 +130,47 @@ export function buildComponent<TProps extends object>(
 
 	// 2. Implicit entities - collect lazily to avoid TDZ errors
 	const implicitConfigs = [...entityConfigs.entries()].filter(([_, c]) => !c.selector)
-	let implicitCollected = false
+	// Tri-state: 'collecting' terminates self-recursive components
+	let collectionState: 'idle' | 'collecting' | 'done' = 'idle'
 
+	// Runs only from the static-analysis surface (getSelection, $propName fragment
+	// getters) — never from render. Render bodies stay pure runtime code.
 	function ensureImplicitCollected(): void {
 		// In interfaces mode, we also need to collect even if no explicit implicit configs exist
 		// (because interface props may be discovered dynamically)
 		// Also collect if there's a conditionFn (it may access entity fields)
-		if (implicitCollected || (implicitConfigs.length === 0 && !hasInterfacesMode && !conditionFn)) {
+		if (collectionState !== 'idle' || (implicitConfigs.length === 0 && !hasInterfacesMode && !conditionFn)) {
 			return
 		}
-		implicitCollected = true
-		collectImplicitSelections(implicitConfigs, renderFn, selectionsMap, componentBrand, roles, hasInterfacesMode, schemaRegistry, conditionFn)
+		collectionState = 'collecting'
+		try {
+			collectImplicitSelections(implicitConfigs, renderFn, selectionsMap, componentBrand, roles, hasInterfacesMode, schemaRegistry, conditionFn)
+		} catch (error) {
+			// Analysis is deterministic, so retrying is pointless — degrade loudly
+			// to the fields captured before the throw (scopes record eagerly).
+			console.error(
+				`[bindx] Implicit selection analysis of <${componentDisplayName}> failed — `
+				+ 'only fields accessed before the error were collected; fields used after it may be missing from queries.',
+				error,
+			)
+		} finally {
+			collectionState = 'done'
+		}
 	}
 
 	// 3. Create React component
 	function ComponentImpl(props: TProps): ReactNode {
-		ensureImplicitCollected()
-
 		// Convert explicit entity refs to accessors (stable hook count — explicitEntityPropNames is fixed)
-		const renderProps = explicitEntityPropNames.length > 0
+		let renderProps = explicitEntityPropNames.length > 0
 			? useRenderProps(props, explicitEntityPropNames)
 			: props
+
+		// Runtime-only values from .use() — hooks are allowed here; static analysis
+		// never executes these (their outputs are mocked in the collection pass).
+		for (const useFn of useFns) {
+			// eslint-disable-next-line react-hooks/rules-of-hooks -- stable iteration count (useFns is fixed at build time)
+			renderProps = { ...renderProps, ...useFn(renderProps) }
+		}
 
 		// Evaluate condition at runtime
 		if (conditionFn) {
@@ -161,6 +183,8 @@ export function buildComponent<TProps extends object>(
 	}
 
 	const MemoizedComponent = memo(ComponentImpl)
+	// Names for selection-analysis error attribution; users can override
+	MemoizedComponent.displayName = componentDisplayName
 
 	// 4. Attach metadata
 	const comp = MemoizedComponent as unknown as Record<symbol | string, unknown>
@@ -263,6 +287,34 @@ function createExplicitPropMock(): unknown {
 }
 
 /**
+ * Creates a tolerant stand-in for scalar (non-entity) props during collection.
+ * Render bodies may call it (`t('key')`), read nested properties
+ * (`labels.heading`) or coerce it to a primitive — all are no-ops so the
+ * collection pass keeps capturing entity field accesses (see issue #57).
+ */
+function createScalarPropMock(): unknown {
+	const mock: unknown = new Proxy(function () {}, {
+		get(_target, prop): unknown {
+			if (prop === Symbol.toPrimitive || prop === 'toString' || prop === 'valueOf') {
+				return (): string => ''
+			}
+			if (prop === Symbol.iterator) {
+				return function* (): Generator<never> {}
+			}
+			// undefined keeps JSON.stringify from recursing via a callable toJSON
+			if (prop === 'toJSON') {
+				return undefined
+			}
+			return mock
+		},
+		apply(): unknown {
+			return mock
+		},
+	})
+	return mock
+}
+
+/**
  * Collects selections from JSX for implicit entity props.
  *
  * In interfaces mode (hasInterfacesMode=true), any prop that is accessed
@@ -327,18 +379,38 @@ function collectImplicitSelections<TProps extends object>(
 				return createCollectorProxy(scope, null, schemaRegistry)
 			}
 
-			// Scalar prop - return undefined
-			return undefined
+			// Scalar prop — tolerant stand-in so render bodies using it survive
+			return createScalarPropMock()
 		},
 	})
 
-	// Execute conditionFn to capture field accesses from the condition
-	if (conditionFn) {
-		conditionFn(propsProxy)
+	// Create fragments for captured entities
+	const finalizeScopes = (): void => {
+		for (const [propName, scope] of propScopes) {
+			if (scope.hasFields()) {
+				const selection = scope.toSelectionMeta()
+
+				selectionsMap.set(propName, {
+					selection,
+					fragment: createFragment(selection, componentBrand, roles),
+				})
+			}
+		}
 	}
 
-	// Execute render to capture field accesses
-	const jsx = renderFn(propsProxy)
+	let jsx: ReactNode
+	try {
+		// Execute conditionFn + render to capture field accesses
+		if (conditionFn) {
+			conditionFn(propsProxy)
+		}
+		jsx = renderFn(propsProxy)
+	} catch (error) {
+		// Scopes capture accesses eagerly, so a throw mid-render still leaves a
+		// usable partial selection — keep it, then let the caller report the error.
+		finalizeScopes()
+		throw error
+	}
 
 	// Analyze JSX tree for component-level selections (handles nested createComponent)
 	try {
@@ -349,17 +421,7 @@ function collectImplicitSelections<TProps extends object>(
 		// Field accesses are still captured in the scope tree via proxy.
 	}
 
-	// Create fragments for captured entities
-	for (const [propName, scope] of propScopes) {
-		if (scope.hasFields()) {
-			const selection = scope.toSelectionMeta()
-
-			selectionsMap.set(propName, {
-				selection,
-				fragment: createFragment(selection, componentBrand, roles),
-			})
-		}
-	}
+	finalizeScopes()
 }
 
 // ============================================================================
