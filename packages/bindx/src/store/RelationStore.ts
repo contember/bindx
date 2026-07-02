@@ -157,6 +157,27 @@ export class RelationStore implements Rekeyable {
 	// ==================== Bulk Operations ====================
 
 	/**
+	 * Keys of every has-one relation owned by an entity (owner prefix
+	 * "parentType:parentId:"). Used by the journal's entry-closure to enumerate a
+	 * detached created entity's own relation cells.
+	 */
+	getOwnedRelationKeys(keyPrefix: string): string[] {
+		const keys: string[] = []
+		this.hasOne.collectOwnedKeys(keyPrefix, keys)
+		return keys
+	}
+
+	/**
+	 * Keys of every has-many list owned by an entity (owner prefix
+	 * "parentType:parentId:"). Counterpart of {@link getOwnedRelationKeys}.
+	 */
+	getOwnedHasManyKeys(keyPrefix: string): string[] {
+		const keys: string[] = []
+		this.hasMany.collectOwnedKeys(keyPrefix, keys)
+		return keys
+	}
+
+	/**
 	 * Removes a single has-one relation state by key (undo restore of an
 	 * absent-before-the-gesture relation).
 	 */
