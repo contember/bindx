@@ -1064,6 +1064,50 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	}
 
 	/**
+	 * Entry-closure export: starting from the given seed ids, walks and exports the
+	 * entity + owned-relation cell images of every created, currently-unreachable
+	 * subtree — the exact `!existsOnServer && !reachable` set {@link sweepUnreachableCreated}
+	 * may reclaim. Referenced children (has-one currentId, has-many members / planned
+	 * additions) are pushed back on the worklist, so nested created grandchildren are
+	 * captured transitively. Lets an undo restore a detached create even after a sweep.
+	 */
+	exportUnreachableCreatedSubgraph(seedIds: ReadonlySet<string>): JournalCellImage[] {
+		const reachable = this.reachability.computeReachableCreated()
+		const images: JournalCellImage[] = []
+		const visited = new Set<string>()
+		const worklist: string[] = [...seedIds]
+
+		while (worklist.length > 0) {
+			const id = worklist.pop()!
+			const key = this.entitySnapshots.keyForId(id)
+			if (!key || visited.has(key)) continue
+			visited.add(key)
+			// The sweep gate: only created, currently-unreachable entities are reclaimed.
+			if (this.meta.existsOnServer(key) || reachable.has(key)) continue
+			if (!this.entitySnapshots.has(key)) continue // placeholder-only: nothing to restore
+
+			images.push(this.exportEntityCell(key))
+
+			const ownerPrefix = `${key}:`
+			for (const relationKey of this.relations.getOwnedRelationKeys(ownerPrefix)) {
+				const image = this.exportRelationCell(relationKey)
+				images.push(image)
+				if (image.state?.currentId) worklist.push(image.state.currentId)
+			}
+			for (const hasManyKey of this.relations.getOwnedHasManyKeys(ownerPrefix)) {
+				const image = this.exportHasManyCell(hasManyKey)
+				images.push(image)
+				if (image.state) {
+					if (image.state.orderedIds) worklist.push(...image.state.orderedIds)
+					for (const additionId of image.state.plannedAdditions.keys()) worklist.push(additionId)
+				}
+			}
+		}
+
+		return images
+	}
+
+	/**
 	 * Restores a set of cell pre-images through the write paths (so the edge index
 	 * reconciles and the reachability cache invalidates). Order matters: present
 	 * entities are restored/recreated first so relations can reference live targets,

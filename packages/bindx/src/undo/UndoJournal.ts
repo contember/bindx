@@ -18,6 +18,11 @@ import type { RekeyContext } from '../store/RekeyOrchestrator.js'
  * / existsOnServer) is spliced back from the LIVE state on restore, so undoing an
  * already-persisted edit re-dirties it against the current server view instead of
  * resurrecting a stale baseline.
+ *
+ * Entry-closure invariant: on commit each entry is closed over the created,
+ * currently-unreachable subgraph its relation/has-many pre-images detach, so undo
+ * works no matter what memory sweep reclaims that subgraph in between (see
+ * {@link JournalTarget.exportUnreachableCreatedSubgraph}).
  */
 
 /** A captured cell, keyed by kind + composite store key. */
@@ -62,11 +67,36 @@ export interface JournalTarget {
 	exportEntityCell(key: string): EntityCellImage
 	exportRelationCell(key: string): RelationCellImage
 	exportHasManyCell(key: string): HasManyCellImage
+	/**
+	 * Images of every created, currently-unreachable entity (and its owned relation
+	 * cells) reachable from the seed ids — the subgraph a memory sweep may reclaim
+	 * before an undo needs it. Backs the journal's entry-closure invariant.
+	 */
+	exportUnreachableCreatedSubgraph(seedIds: ReadonlySet<string>): JournalCellImage[]
 	applyJournalImages(images: JournalCellImage[]): void
 }
 
 function cellRefKey(image: JournalCellImage): string {
 	return `${image.kind}:${image.key}`
+}
+
+/**
+ * Ids referenced by an entry's relation/has-many PRE-images — the roots of any
+ * created subgraph the gesture may have detached (has-one currentId; has-many
+ * members / planned add/remove). The unreachable-created gate filters the rest.
+ */
+function collectDetachedSeedIds(active: Map<string, JournalCellImage>): Set<string> {
+	const ids = new Set<string>()
+	for (const image of active.values()) {
+		if (image.kind === 'relation') {
+			if (image.state?.currentId) ids.add(image.state.currentId)
+		} else if (image.kind === 'hasMany' && image.state) {
+			if (image.state.orderedIds) for (const id of image.state.orderedIds) ids.add(id)
+			for (const id of image.state.plannedAdditions.keys()) ids.add(id)
+			for (const id of image.state.plannedRemovals.keys()) ids.add(id)
+		}
+	}
+	return ids
 }
 
 export class UndoJournal {
@@ -98,7 +128,22 @@ export class UndoJournal {
 		const active = this.active
 		this.active = null
 		if (active && active.size > 0) {
+			this.closeOverUnreachableCreated(active)
 			this.onCommit({ cells: [...active.values()] })
+		}
+	}
+
+	/**
+	 * Folds the detached created subgraph into the entry (first-writer-wins) so undo
+	 * survives a later sweep of that subgraph. Runs before onCommit so the manager's
+	 * debounce/group merge already sees the enriched cells.
+	 */
+	private closeOverUnreachableCreated(active: Map<string, JournalCellImage>): void {
+		const seedIds = collectDetachedSeedIds(active)
+		if (seedIds.size === 0) return
+		for (const image of this.target.exportUnreachableCreatedSubgraph(seedIds)) {
+			const refKey = cellRefKey(image)
+			if (!active.has(refKey)) active.set(refKey, image)
 		}
 	}
 

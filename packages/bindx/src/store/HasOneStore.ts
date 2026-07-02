@@ -182,6 +182,16 @@ export class HasOneStore {
 	}
 
 	/**
+	 * Collects the keys of every has-one relation owned by an entity (keys under the
+	 * given owner prefix). Mirrors {@link removeOwnedRelations} but only enumerates.
+	 */
+	collectOwnedKeys(keyPrefix: string, keys: string[]): void {
+		for (const key of this.relationStates.keys()) {
+			if (key.startsWith(keyPrefix)) keys.push(key)
+		}
+	}
+
+	/**
 	 * Removes a single has-one relation state (and its live edge). Used by undo
 	 * restore to drop a relation that did not exist before the gesture.
 	 */

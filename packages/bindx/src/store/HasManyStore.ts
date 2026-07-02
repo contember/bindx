@@ -456,6 +456,16 @@ export class HasManyStore {
 	}
 
 	/**
+	 * Collects the keys of every has-many list owned by an entity (keys under the
+	 * given owner prefix). Mirrors {@link removeOwnedRelations} but only enumerates.
+	 */
+	collectOwnedKeys(keyPrefix: string, keys: string[]): void {
+		for (const key of this.hasManyStates.keys()) {
+			if (key.startsWith(keyPrefix)) keys.push(key)
+		}
+	}
+
+	/**
 	 * Removes a single has-many list state (and its live edges). Used by undo
 	 * restore to drop a list that did not exist before the gesture.
 	 */
