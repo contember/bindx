@@ -4,11 +4,13 @@
  * end-to-end equivalence (compiled fields + resolved holes vs runtime oracle) is
  * integration-gated — see the skipped block at the bottom.
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { transformSync } from '@babel/core'
 import { analyzeSource, bindxCompilerPlugin, isBailed, type AnalyzedChain, type BailoutReason } from '../src/index.js'
+import { runtimePlain } from './harness.js'
+import * as oracleModule from './fixtures/holes.js'
 
 const DIR = import.meta.dir
 const PRELUDE = `import { createComponent, Field, HasOne } from '@contember/bindx-react'\n`
@@ -179,11 +181,67 @@ describe('hole emit (Babel plugin thunk)', () => {
 	})
 })
 
-// INTEGRATION: enable after runtime hole resolution lands. The runtime proxy oracle
-// resolves nested getSelection/staticRender targets, so compiled (fields + resolved
-// holes) must equal the oracle for these fixtures. Needs the v2 runtime consumer.
-describe.skip('hole equivalence vs runtime oracle', () => {
-	test('createComponent / withCollector / plain targets agree with the oracle', () => {
-		// INTEGRATION: enable after runtime hole resolution lands.
+// Full end-to-end equivalence: the COMPILED path (Babel plugin → v2 runtime, holes
+// resolved by applyCompiledSelection) must produce the same field tree as the ORACLE
+// (untransformed module, runtime proxy pass resolves nested targets). Both sides replay
+// `article.author` gets on collector proxies, so equality holds by construction —
+// createComponent/withCollector targets resolve, plain targets are blind on both sides.
+describe('hole equivalence vs runtime oracle', () => {
+	// Fixture exports in source order (all use the `article` implicit prop).
+	const EXPORTS = [
+		'ToCreateComponent',
+		'ToWithCollector',
+		'ToPlainWithSibling',
+		'ToPlainNoSibling',
+		'MultipleEntityProps',
+		'DerivedPathViaCallback',
+		'LiteralAndNonLiteralProps',
+		'ToLaterDefined',
+	] as const
+
+	// Compiled temp module lives beside the fixture so its `./_targets`/`./_schema`
+	// relative imports resolve to the same singletons the oracle uses.
+	const tmpPath = join(DIR, 'fixtures', '.holes-compiled.tsx')
+	let compiledModule: Record<string, unknown> = {}
+	const oracle = oracleModule as unknown as Record<string, unknown>
+
+	beforeAll(async () => {
+		const source = readFileSync(join(DIR, 'fixtures', 'holes.tsx'), 'utf8')
+		const out = transformSync(source, { filename: 'holes.tsx', plugins: [bindxCompilerPlugin], configFile: false, babelrc: false })
+		if (!out?.code) {
+			throw new Error('transform produced no output')
+		}
+		writeFileSync(tmpPath, out.code)
+		compiledModule = (await import(tmpPath)) as Record<string, unknown>
 	})
+
+	afterAll(() => {
+		rmSync(tmpPath, { force: true })
+	})
+
+	// Sanity: the meaningful targets must actually collect through the hole, otherwise
+	// the equality checks below could pass trivially with both sides empty.
+	test('createComponent target collects author.name through the hole', () => {
+		expect(runtimePlain(oracle.ToCreateComponent, 'article')).toMatchObject({ author: { name: true } })
+		expect(runtimePlain(compiledModule.ToCreateComponent, 'article')).toMatchObject({ author: { name: true } })
+	})
+
+	test('withCollector target collects author.name through the hole', () => {
+		expect(runtimePlain(compiledModule.ToWithCollector, 'article')).toMatchObject({ author: { name: true } })
+	})
+
+	test('plain target with a sibling <Field> keeps the sibling selection; blind target still touches author', () => {
+		// PlainAuthor never reads a field, but the bare `article.author` get registers a
+		// touched leaf on BOTH sides — the sibling <Field> adds title. Symmetric over-fetch.
+		expect(runtimePlain(compiledModule.ToPlainWithSibling, 'article')).toEqual({ author: true, title: true })
+		expect(runtimePlain(oracle.ToPlainWithSibling, 'article')).toEqual({ author: true, title: true })
+	})
+
+	for (const name of EXPORTS) {
+		test(`${name} — compiled field tree equals the runtime oracle`, () => {
+			const compiled = runtimePlain(compiledModule[name], 'article')
+			const reference = runtimePlain(oracle[name], 'article')
+			expect(compiled).toEqual(reference)
+		})
+	}
 })
