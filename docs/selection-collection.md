@@ -354,6 +354,31 @@ const SelectField = withCollector(
 )
 ```
 
+### Collector contracts — declare invocation, skip the hand-written staticRender
+
+When a `withCollector` component invokes a callback prop over a relation prop, you can declare that
+contract instead of hand-writing a `staticRender`. Declare it once — it drives **both** runtime
+collection (the staticRender is derived automatically) **and** the compiler (which then treats the
+callback exactly like a `<HasMany>`/`<HasOne>` child, so no build-time hole or lift is needed):
+
+```tsx
+import { itemOf, entityOf, withCollector } from '@contember/bindx-react'
+
+// `children` is invoked with each item of the has-many `field`.
+export const Repeater = withCollector(
+  function RepeaterRuntime({ field, children }) { /* … render … */ },
+  { children: itemOf('field') },   // vs. entityOf('field') for a has-one callback
+)
+```
+
+The contract is `Record<callbackPropName, itemOf(field) | entityOf(field)>` (`children` allowed as a
+key), also exposed on the component under the `COLLECTOR_CONTRACT` symbol for introspection. This
+solves the case a hole cannot: a callback that both uses its item param **and** captures a host-root
+field (e.g. `{item => <Row item={item} parentColumns={footer.linkColumns} />}`) — under a contract the
+host capture is an ordinary root path, and non-contract function props on the element are dropped
+safely (the derived staticRender never invokes them). The compiler discovers contracts declared
+locally or imported via a **relative** specifier (see docs/compiler-plan.md, Phase 2.2).
+
 ### `getSelection` — for framework primitives
 
 Low-level API for precise control over reported fields. Used by Field, HasOne, HasMany, Attribute.

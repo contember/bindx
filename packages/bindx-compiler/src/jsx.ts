@@ -10,6 +10,7 @@ import {
 	entityPathOf, evaluateLiteral, referencesRoot, resolve,
 } from './resolve.js'
 import { type Closure, type HoleClosureProp, type HoleIdentifierProp, resolveHoleExtraProps } from './holeProps.js'
+import type { CollectorContract, ContractLookup } from './contracts.js'
 import type { AnalyzedHole, HoleEntityProp, StaticHasManyParams } from './types.js'
 
 function asClosure(node: t.Node | null): Closure | null {
@@ -30,6 +31,7 @@ export class JsxAnalyzer {
 		private readonly host: JsxHost,
 		private readonly bindings: ImportBindings,
 		private readonly moduleBindings: ReadonlySet<string>,
+		private readonly contracts: ContractLookup,
 	) {}
 
 	walk(node: t.JSXElement | t.JSXFragment, scope: Scope): void {
@@ -88,6 +90,12 @@ export class JsxAnalyzer {
 	 * into the hole's `extraProps` so compiled ≡ oracle by construction.
 	 */
 	private walkComponentElement(tag: string, node: t.JSXElement, scope: Scope): void {
+		const contract = this.contracts(tag)
+		if (contract) {
+			this.walkContractComponent(tag, node, contract, scope)
+			return
+		}
+
 		const entityProps: Record<string, HoleEntityProp> = {}
 		const literalProps: Record<string, unknown> = {}
 		const closureProps: HoleClosureProp[] = []
@@ -134,6 +142,70 @@ export class JsxAnalyzer {
 		}
 
 		this.walkChildren(node.children, scope) // the `children` slot is analyzed at runtime
+	}
+
+	/**
+	 * A component whose tag declares a collector contract (`withCollector(_, { cb: itemOf('field') })`).
+	 * It forms NO hole: each contract entry's callback is analyzed exactly like a <HasMany>/<HasOne>
+	 * child — its first param becomes a root at the relation, host captures inside it are ordinary
+	 * paths. The contract's derived staticRender provably never invokes non-contract function props,
+	 * so those are dropped with no safety bail (removing FUNCTION_PROP_ON_HOLE for contract targets).
+	 */
+	private walkContractComponent(_tag: string, node: t.JSXElement, contract: CollectorContract, scope: Scope): void {
+		const fieldProps = new Set<string>()
+		const callbackProps = new Set<string>()
+		for (const [cbName, entry] of Object.entries(contract)) {
+			callbackProps.add(cbName)
+			fieldProps.add(entry.field)
+		}
+
+		for (const [cbName, entry] of Object.entries(contract)) {
+			const fieldExpr = getAttr(node, entry.field)
+			const res = fieldExpr ? resolve(fieldExpr, scope) : { kind: 'none' as const }
+			if (res.kind !== 'ref') {
+				continue // relation not resolvable → derived staticRender collects nothing for this entry
+			}
+			const item = entry.kind === 'itemOf' ? consumeMany(res.ref) : consumeRelation(res.ref)
+			const cb = this.contractCallback(node, cbName)
+			if (cb) {
+				this.host.walkCallbackWithItem(cb, { node: item, path: [], source: res.ref.source, absPath: res.ref.absPath }, scope)
+			}
+			// Missing callback → relation only (already recorded by consume*), mirroring the runtime guard.
+		}
+
+		for (const attr of node.openingElement.attributes) {
+			if (t.isJSXSpreadAttribute(attr)) {
+				this.guardSpread(attr, scope, 'contract component')
+				continue
+			}
+			if (!t.isJSXIdentifier(attr.name)) {
+				continue
+			}
+			const name = attr.name.name
+			if (name === 'children' || fieldProps.has(name) || callbackProps.has(name)) {
+				continue // contract field / callback props handled above
+			}
+			if (asClosure(jsxAttrInner(attr.value))) {
+				continue // non-contract function prop: the derived staticRender never invokes it → safe drop
+			}
+			const expr = attrExpr(attr)
+			if (expr) {
+				this.host.walkValue(expr, scope) // entity props not referenced by the contract → touched leaves
+			}
+		}
+
+		if (!callbackProps.has('children')) {
+			this.walkChildren(node.children, scope) // plain children (not a contract callback)
+		}
+	}
+
+	/** The inline closure a contract entry is invoked with (`children` closure or a named callback prop). */
+	private contractCallback(node: t.JSXElement, cbName: string): t.ArrowFunctionExpression | t.FunctionExpression | null {
+		if (cbName === 'children') {
+			return childrenCallback(node.children)
+		}
+		const attr = findAttr(node, cbName)
+		return attr ? asClosure(jsxAttrInner(attr.value)) : null
 	}
 
 	/** Namespaced / member-expression tags (`<Ns.Comp/>`) cannot be referenced by a thunk → bail on entity props. */

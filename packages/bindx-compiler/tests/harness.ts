@@ -9,8 +9,9 @@ import { COMPONENT_SELECTIONS, convertToQuerySelection, type SelectionMeta } fro
 import { analyzeSource, isBailed, selectionToPlain, type ChainResult } from '../src/index.js'
 
 export function analyzeFixture(dir: string, file: string): ChainResult[] {
-	const code = readFileSync(join(dir, 'fixtures', file), 'utf8')
-	return analyzeSource(code, file)
+	const path = join(dir, 'fixtures', file)
+	// Pass the real path so relative cross-file contract specifiers resolve on disk.
+	return analyzeSource(readFileSync(path, 'utf8'), path)
 }
 
 /** Runtime oracle: trigger `$prop` collection, normalize to the plain field tree. */

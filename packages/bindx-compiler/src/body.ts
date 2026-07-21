@@ -11,6 +11,7 @@ import {
 	paramNamesOf, referencesRoot, resolve, type RootRef,
 } from './resolve.js'
 import { JsxAnalyzer } from './jsx.js'
+import type { ContractLookup } from './contracts.js'
 import type { AnalyzedHole } from './types.js'
 
 export class BodyAnalyzer {
@@ -18,8 +19,12 @@ export class BodyAnalyzer {
 	/** Nested-component holes collected across the render + condition functions (phase 2). */
 	readonly holes: AnalyzedHole[] = []
 
-	constructor(private readonly bindings: ImportBindings, private readonly moduleBindings: ReadonlySet<string>) {
-		this.jsx = new JsxAnalyzer(this, bindings, moduleBindings)
+	constructor(
+		private readonly bindings: ImportBindings,
+		private readonly moduleBindings: ReadonlySet<string>,
+		contracts: ContractLookup,
+	) {
+		this.jsx = new JsxAnalyzer(this, bindings, moduleBindings, contracts)
 	}
 
 	/** Public so JsxAnalyzer can register a hole it discovered. */

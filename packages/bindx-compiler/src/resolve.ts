@@ -67,7 +67,8 @@ export type Resolution =
 	| { kind: 'opaque' }
 	| { kind: 'none' }
 
-function unwrap(node: t.Node): t.Node {
+/** Strip parentheses and TS type wrappers (`x as T`, `x!`, `x satisfies T`). */
+export function unwrap(node: t.Node): t.Node {
 	if (t.isParenthesizedExpression(node) || t.isTSNonNullExpression(node) || t.isTSAsExpression(node) || t.isTSSatisfiesExpression(node)) {
 		return unwrap(node.expression)
 	}

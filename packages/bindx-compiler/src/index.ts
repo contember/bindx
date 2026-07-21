@@ -1,5 +1,12 @@
-export { analyzeSource, analyzeProgram, parseProgram, type InternalChainResult } from './analyze.js'
-export { bindxCompilerPlugin, default } from './babelPlugin.js'
+export { analyzeSource, analyzeProgram, parseProgram, type AnalyzeOptions, type InternalChainResult } from './analyze.js'
+export { bindxCompilerPlugin, default, type BindxCompilerOptions } from './babelPlugin.js'
+export {
+	ContractFileCache,
+	ContractResolver,
+	type CallbackContract,
+	type CollectorContract,
+	type ContractLookup,
+} from './contracts.js'
 export { selectionToAst } from './emit.js'
 export { fieldMapToPlain, selectionToPlain } from './selectionTree.js'
 export type {
