@@ -31,6 +31,18 @@ export interface Scope {
 	readonly propsParams: Set<string>
 	/** entity prop name → its root SelNode (shared across render + condition fns). */
 	readonly propRoots: ReadonlyMap<string, SelNode>
+	/**
+	 * Non-entity param bindings (top render props / callback indices). At oracle
+	 * collection these are inert scalar mocks, so an identifier resolving here is
+	 * SAFE to drop from a hole (invoking it cannot reach a selection scope).
+	 */
+	readonly scalarParams: Set<string>
+	/**
+	 * Render-scope local bindings (const/let in the body, generic nested-fn params).
+	 * An identifier resolving here is render-local — NOT liftable (no module-scope
+	 * emit site) and NOT a proven-inert mock — so a hole prop referencing it bails.
+	 */
+	readonly locals: Set<string>
 }
 
 export function childScope(scope: Scope): Scope {
@@ -38,7 +50,16 @@ export function childScope(scope: Scope): Scope {
 		roots: new Map(scope.roots),
 		propsParams: new Set(scope.propsParams),
 		propRoots: scope.propRoots,
+		scalarParams: new Set(scope.scalarParams),
+		locals: new Set(scope.locals),
 	}
+}
+
+/** Names bound by a function-parameter pattern (public wrapper over collectParamNames). */
+export function paramNamesOf(param: t.Node): Set<string> {
+	const out = new Set<string>()
+	collectParamNames(param, out)
+	return out
 }
 
 export type Resolution =
@@ -214,22 +235,38 @@ function collectParamNames(node: t.Node, out: Set<string>): void {
 }
 
 /**
- * Can this closure be safely OMITTED from a phase-2 hole? The hole target's `staticRender`
- * may invoke a dropped function prop / render-prop child with a collector proxy during
- * collection, so the closure is safe to drop only when invoking it cannot reach a selection
- * scope. The gateways are the closure's OWN parameters (a proxy would flow in there — a
- * transitive reference in the body is unsafe) and captured entity roots. No gateway → safe.
- * Nested inner functions' own params are theirs, not ours (see docs/compiler-plan.md, Phase 2).
+ * How to treat an inline closure (function prop / render-prop child) of a phase-2 hole.
+ * The hole target's `staticRender` may INVOKE it with a collector proxy during collection.
+ *
+ * - `drop`: invoking it cannot reach a selection scope — no reference to its OWN parameters
+ *   (a proxy would flow in there) and no captured entity roots. Safe to omit (`() => save()`).
+ * - `lift`: it uses its own params (so dropping would under-fetch) but captures NOTHING from
+ *   render scope — only its params, module-scope bindings, and globals. Emitted verbatim into
+ *   `extraProps`; replayed into the target so collection proceeds (`it => <Field field={it.name}/>`).
+ * - `bail`: captures an entity root, or captures a render-scope binding (`.use()` value, local)
+ *   that cannot be reproduced at the module-scope emit site. Default deny.
+ *
+ * Nested inner functions' own params are theirs, not ours (see docs/compiler-plan.md, Phase 2/2.1).
  */
-export function isHoleClosureSafe(fn: t.ArrowFunctionExpression | t.FunctionExpression, scope: Scope): boolean {
+export type HoleClosureClass = 'drop' | 'lift' | 'bail'
+
+export function classifyHoleClosure(fn: t.ArrowFunctionExpression | t.FunctionExpression, scope: Scope): HoleClosureClass {
 	if (referencesRoot(fn, scope)) {
-		return false // captured entity root reachable when invoked
+		return 'bail' // captured entity root reachable when invoked
 	}
 	const ownParams = new Set<string>()
 	for (const param of fn.params) {
 		collectParamNames(param, ownParams)
 	}
-	return !anyIdentifier(fn.body, name => ownParams.has(name))
+	if (!anyIdentifier(fn.body, name => ownParams.has(name))) {
+		return 'drop' // no proxy gateway — invoking it collects nothing
+	}
+	// Uses own params → must be preserved; liftable only if it captures no render binding
+	// (roots already excluded above). Over-approximates via property names → default deny.
+	const capturesRender = anyIdentifier(fn, name =>
+		!ownParams.has(name) && (scope.scalarParams.has(name) || scope.locals.has(name) || scope.propsParams.has(name)),
+	)
+	return capturesRender ? 'bail' : 'lift'
 }
 
 /**

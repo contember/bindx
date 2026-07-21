@@ -10,6 +10,8 @@ import * as ternary from './fixtures/ternary.js'
 import * as mapHasMany from './fixtures/mapHasMany.js'
 import * as constAlias from './fixtures/constAlias.js'
 import * as condition from './fixtures/condition.js'
+import * as condProps from './fixtures/condProps.js'
+import * as jsxProps from './fixtures/jsxProps.js'
 import * as irrelevantChain from './fixtures/irrelevantChain.js'
 import * as bails from './fixtures/bails.js'
 
@@ -25,6 +27,8 @@ const FIXTURES: ReadonlyArray<readonly [string, FixtureModule]> = [
 	['mapHasMany.tsx', mapHasMany],
 	['constAlias.tsx', constAlias],
 	['condition.tsx', condition],
+	['condProps.tsx', condProps],
+	['jsxProps.tsx', jsxProps],
 	['irrelevantChain.tsx', irrelevantChain],
 	['bails.tsx', bails],
 ]

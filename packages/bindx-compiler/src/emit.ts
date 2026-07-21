@@ -50,6 +50,13 @@ function holeToAst(hole: AnalyzedHole): t.ObjectExpression {
 	if (hole.literalProps && Object.keys(hole.literalProps).length > 0) {
 		properties.push(t.objectProperty(t.identifier('literalProps'), t.valueToNode(hole.literalProps)))
 	}
+	if (hole.extraProps && Object.keys(hole.extraProps).length > 0) {
+		// Each lifted value is wrapped in an arrow thunk (TDZ-safe, resolved at collection time).
+		const entries = Object.entries(hole.extraProps).map(
+			([name, expr]) => t.objectProperty(key(name), t.arrowFunctionExpression([], expr)),
+		)
+		properties.push(t.objectProperty(t.identifier('extraProps'), t.objectExpression(entries)))
+	}
 	return t.objectExpression(properties)
 }
 

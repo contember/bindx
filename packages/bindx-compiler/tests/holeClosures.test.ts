@@ -1,8 +1,9 @@
 /**
- * Phase-2 under-fetch guard (FUNCTION_PROP_ON_HOLE). A function prop / render-prop child of
- * a hole element is dropped from the emitted hole, but the target's staticRender may invoke
- * it with a collector proxy during collection. Unsafe closures (own params / captured roots)
- * must bail the chain; param-less, root-free closures stay safe to omit and keep compiling.
+ * Phase-2.1 closure lifting. A render-prop child of a hole element is dropped from the emitted
+ * hole by default, but the target's staticRender may invoke it with a collector proxy during
+ * collection. A child capturing nothing from render scope (own params + module bindings only) is
+ * LIFTED verbatim into `extraProps` so collection proceeds oracle-equal; one capturing a render
+ * value (`.use()` output, entity root) BAILS; a param-less, root-free extra prop stays safe to drop.
  */
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -19,30 +20,42 @@ describe('hole closure safety (fixtures/holeClosures.tsx)', () => {
 	const code = readFileSync(FIXTURE, 'utf8')
 	const results = analyzeSource(code, 'holeClosures.tsx')
 
-	test('two host chains: unsafe render-prop bails, safe closures compile', () => {
-		expect(results.length).toBe(2)
+	test('three host chains recognized (lift, bail, drop)', () => {
+		expect(results.length).toBe(3)
 	})
 
-	test('#0 UnsafeRenderProp bails FUNCTION_PROP_ON_HOLE', () => {
+	test('#0 LiftedRenderProp compiles with the render-prop child lifted into extraProps', () => {
 		const result = results[0]!
+		expect(isBailed(result)).toBe(false)
+		if (!isBailed(result)) {
+			const hole = result.holes[0]!
+			expect(hole.component).toBe('SelectField')
+			expect(hole.entityProps).toEqual({ field: { source: 'article', path: ['author'] } })
+			expect(Object.keys(hole.extraProps ?? {})).toEqual(['children'])
+		}
+	})
+
+	test('#1 CapturingRenderProp bails FUNCTION_PROP_ON_HOLE (captures a .use() value)', () => {
+		const result = results[1]!
 		expect(isBailed(result)).toBe(true)
 		if (isBailed(result)) {
 			expect(result.bailout.code).toBe('FUNCTION_PROP_ON_HOLE')
 		}
 	})
 
-	test('#1 SafeHoleClosures compiles with the AuthorSummary hole (safe props omitted)', () => {
-		const result = results[1]!
+	test('#2 SafeHoleClosures compiles with the AuthorSummary hole (safe props omitted)', () => {
+		const result = results[2]!
 		expect(isBailed(result)).toBe(false)
 		if (!isBailed(result)) {
-			expect(result.holes).toEqual([
-				{ component: 'AuthorSummary', entityProps: { author: { source: 'article', path: ['author'] } }, literalProps: undefined },
-			])
+			const hole = result.holes[0]!
+			expect(hole.component).toBe('AuthorSummary')
+			expect(hole.entityProps).toEqual({ author: { source: 'article', path: ['author'] } })
+			expect(hole.extraProps).toBeUndefined() // both function props dropped as safe
 		}
 	})
 })
 
-describe('hole closure safety — plugin injection', () => {
+describe('hole closure lifting — plugin injection', () => {
 	function transform(code: string): string {
 		const out = transformSync(code, { filename: 'inline.tsx', plugins: [bindxCompilerPlugin], configFile: false, babelrc: false })
 		if (!out?.code) {
@@ -51,8 +64,8 @@ describe('hole closure safety — plugin injection', () => {
 		return out.code
 	}
 
-	// Isolated unsafe chain — mirrors the SelectField render-prop shape.
-	const UNSAFE = `
+	// Non-capturing render-prop child — lifted verbatim into the hole.
+	const LIFT = `
 import { createComponent, Field, HasOne, withCollector, entityDef } from '@contember/bindx-react'
 const ArticleDef = entityDef('Article')
 const Select = withCollector((props) => null, (props) => (
@@ -63,17 +76,36 @@ export const Host = createComponent().entity('article', ArticleDef).render(({ ar
 ))
 `
 
-	test('bailed unsafe chain gets no injected 2nd argument (runtime fallback)', () => {
-		const out = transform(UNSAFE)
+	// Render-prop child capturing a render root — cannot be lifted, chain bails.
+	const BAIL = `
+import { createComponent, Field, HasOne, withCollector, entityDef } from '@contember/bindx-react'
+const ArticleDef = entityDef('Article')
+const Select = withCollector((props) => null, (props) => (
+	<HasOne field={props.field}>{entity => props.children(entity)}</HasOne>
+))
+export const Host = createComponent().entity('article', ArticleDef).render(({ article }) => (
+	<Select field={article.author}>{it => <Field field={it.name} format={() => article.title} />}</Select>
+))
+`
+
+	test('lifted chain emits extraProps with the closure verbatim', () => {
+		const out = transform(LIFT).replace(/\s+/g, ' ')
+		expect(out).toContain('holes:')
+		expect(out).toContain('extraProps:')
+		expect(out).toContain('children: () => it => <Field field={it.name} />')
+	})
+
+	test('bailed capturing chain gets no injected 2nd argument (runtime fallback)', () => {
+		const out = transform(BAIL)
 		expect(out).not.toContain('props:')
 		expect(out).not.toContain('holes:')
 	})
 })
 
-// End-to-end: the COMPILED module must produce the same field tree as the ORACLE. The unsafe
-// chain bails → no injection → runtime proxy fallback (trivially equal). The safe chain compiles
-// with the hole, resolved through AuthorSummary's staticRender → author.name.
-describe('hole closure safety — equivalence vs runtime oracle', () => {
+// End-to-end: the COMPILED module must produce the same field tree as the ORACLE. The lifted chain
+// resolves the render-prop child through SelectField's staticRender; the capturing chain bails →
+// runtime proxy fallback (trivially equal); the safe chain drops its extra props.
+describe('hole closure lifting — equivalence vs runtime oracle', () => {
 	const tmpPath = join(DIR, 'fixtures', '.holeClosures-compiled.tsx')
 	let compiled: Record<string, unknown> = {}
 	const oracle = oracleModule as unknown as Record<string, unknown>
@@ -92,10 +124,16 @@ describe('hole closure safety — equivalence vs runtime oracle', () => {
 		rmSync(tmpPath, { force: true })
 	})
 
-	test('UnsafeRenderProp — bailed compiled path equals the oracle (both collect author.name)', () => {
-		const reference = runtimePlain(oracle.UnsafeRenderProp, 'article')
+	test('LiftedRenderProp — compiled (lifted closure) equals the oracle (both collect author.name)', () => {
+		const reference = runtimePlain(oracle.LiftedRenderProp, 'article')
 		expect(reference).toMatchObject({ author: { name: true } })
-		expect(runtimePlain(compiled.UnsafeRenderProp, 'article')).toEqual(reference)
+		expect(runtimePlain(compiled.LiftedRenderProp, 'article')).toEqual(reference)
+	})
+
+	test('CapturingRenderProp — bailed compiled path equals the oracle (both collect author.name)', () => {
+		const reference = runtimePlain(oracle.CapturingRenderProp, 'article')
+		expect(reference).toMatchObject({ author: { name: true } })
+		expect(runtimePlain(compiled.CapturingRenderProp, 'article')).toEqual(reference)
 	})
 
 	test('SafeHoleClosures — compiled hole equals the oracle (both collect author.name)', () => {

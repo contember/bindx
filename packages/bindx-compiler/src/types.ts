@@ -2,6 +2,7 @@
  * Static selection format — the ONLY coupling between the compiler (deliverable B)
  * and the runtime consumer (deliverable A). Mirror of docs/compiler-plan.md.
  */
+import type * as t from '@babel/types'
 
 /** Has-many parameters; only statically-literal values are emitted. */
 export interface StaticHasManyParams {
@@ -45,6 +46,12 @@ export interface AnalyzedHole {
 	readonly entityProps: Record<string, HoleEntityProp>
 	/** Statically-literal non-entity props of the element; non-literal ones are omitted. */
 	readonly literalProps?: Record<string, unknown>
+	/**
+	 * Non-entity props lifted verbatim into the hole (phase 2.1): the value expression
+	 * (module-scope identifier or render-scope-free closure), emitted as an arrow thunk.
+	 * The target may invoke these during collection, so they must reach it unchanged.
+	 */
+	readonly extraProps?: Record<string, t.Expression>
 }
 
 /**
@@ -59,6 +66,7 @@ export type BailoutReason =
 	| 'ENTITY_ESCAPES_TO_COMPONENT'
 	| 'ENTITY_IN_EXPRESSION_PROP'
 	| 'FUNCTION_PROP_ON_HOLE'
+	| 'RENDER_LOCAL_ON_HOLE'
 	| 'MEMBER_COMPONENT_TAG'
 	| 'ENTITY_SPREAD'
 	| 'COMPUTED_MEMBER'

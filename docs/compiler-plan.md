@@ -226,11 +226,9 @@ danger. Function **children of non-hole** elements stay statically walked (sound
 ignores the closure or collects a subset of the analyzed union). Implemented in
 `jsx.ts` (`walkComponentElement` → `assertHoleClosuresSafe`) + `resolve.ts` (`isHoleClosureSafe`).
 
-**Phase 2.1 candidate (not implemented): closure lifting.** A param-only closure that captures
-nothing from the render scope could be *emitted into the hole literal* (lifted verbatim) instead of
-dropped, so the runtime replays it into the target's `staticRender` and collection proceeds — most of
-the `FUNCTION_PROP_ON_HOLE` bails (render-prop children like npi's `SelectField`) would recover the
-rate back toward 98 % while staying sound. Deferred.
+**Phase 2.1 (implemented): lifting via `extraProps`.** Rather than dropping (and bailing on)
+non-entity values that a target may invoke during collection, phase 2.1 *lifts* them into the hole.
+See the dedicated section below.
 
 Motivation: phase 1 compiled 216/257 chains (84 %); 40 of 41 bails were `ENTITY_ESCAPES_TO_COMPONENT`.
 Phase 2 turns those escapes into **holes**: statically-emitted references to the nested component,
@@ -330,6 +328,79 @@ runtime fallback, so an app could work compiled and under-fetch uncompiled — b
 progressive-enhancement equivalence guarantee. The path for that blind spot is diagnostics
 (validate-mode warn now, eslint rule later), or a future runtime analyzer improvement — not a
 compiler-only fix.
+
+## Phase 2.1 — lifting non-entity hole props via `extraProps` — IMPLEMENTED
+
+Phase 2 dropped a hole element's function props / render-prop children and identifier-valued props,
+bailing (`FUNCTION_PROP_ON_HOLE`) when that drop could under-fetch. Phase 2.1 closes the gap by
+**lifting** the value into the hole instead of dropping it: module-scope values and render-scope-free
+closures are in scope at the emit site, so they can be passed INTO the hole and handed to the target
+at resolution — making compiled ≡ oracle by construction, function or not.
+
+### Contract addition
+
+`CompiledHole` gains `extraProps?: Record<string, () => unknown>` — thunked (TDZ-safe, same reason as
+`component`). Hole resolution resolves each thunk and merges the value into the assembled props
+(before the entity proxies, which win on collision). A target's `staticRender` that *invokes* a
+lifted closure (`props.children(entity)`) therefore collects the same fields the oracle would.
+
+### The taint lattice (default deny)
+
+A non-entity value passed to a hole element is classified by where it resolves:
+
+- **module-scope binding** (import OR top-level const/function — both module scope) → **lift**
+  `extraProps: { prop: () => Identifier }`. The real value reaches the target at resolution →
+  oracle-equal regardless of whether it is a function.
+- **destructured render param that is a non-entity prop** (a scalar / `.use()` value) → **drop**.
+  Invariant: at oracle collection these are inert scalar mocks (`createScalarPropMock`) that cannot
+  reach a selection scope, so dropping is exactly what the oracle contributes.
+- **anything else** (render-local `const`/`let`, generic nested-fn params, call results,
+  unresolvable free identifiers) → **bail** `RENDER_LOCAL_ON_HOLE`. The value may be a real
+  field-collecting function at oracle time whose invocation with a proxy we cannot see.
+
+The compiler tracks `scalarParams` (safe-drop) and `locals` (bail) per scope; `locals` is checked
+first so a render-local shadowing a module name bails rather than lifting.
+
+### Inline closure lifting (recovers `FUNCTION_PROP_ON_HOLE`)
+
+An inline closure prop / render-prop child of a hole element is classified `drop` / `lift` / `bail`
+(`classifyHoleClosure`):
+
+- captures an entity root → **bail** (invoking it reaches the host scope).
+- uses no own parameter → **drop** (no proxy gateway; `onClick={() => save()}`).
+- uses own parameters and captures **nothing from render scope** (only its params, module bindings,
+  globals) → **lift** verbatim into `extraProps` — the closure is emittable as-is at module scope, and
+  the target replays it with a collector proxy (`{it => <Field field={it.name}/>}` → the field lands).
+- uses own parameters but captures a render-scope value (`t` from `.use()`, an entity root) → **bail**
+  (not reproducible at the module emit site).
+
+### `cond.*` DSL in JSX prop positions
+
+`<Case if={cond.eq(cell.kind, 'promo')}>` — the recognized `cond.*` call in a prop has its FieldRef
+arguments recorded as touched leaves (via the body analyzer's existing `cond` handling), then the
+prop is dropped. **Soundness (verified against `Case.getSelection`)**: a condition object's only
+selection surface is `collectConditionFields` = the FieldRef args; the literal comparison value and
+the condition wrapper carry nothing else. The runtime `Switch`/`Case`/`Default` `getSelection`
+collects exactly those FieldRefs plus the (separately analyzed) children — so compiler and oracle are
+**strictly equal**, not merely a superset.
+
+### JSX-element / fragment prop values
+
+`draftSlot={<X ... />}` — the JSX is analyzed statically exactly like children (recurse; entity
+references form paths / nested holes as usual) and the prop itself is not emitted. Soundness: the
+oracle walks such JSX via the target's slot-walk / `staticRender` collector proxies, so static
+analysis yields an equal-or-superset union (under-fetch impossible; over-fetch acceptable). Where the
+target renders the slot as children (`withCollector` returning `<>{props.slot}{props.children}</>`)
+the two are exactly equal.
+
+### Result (re-measured on `~/projects/external/npi`, packages/admin, 257 chains)
+
+**254/257 compiled = 99 %** (phase 2 was 242/257 = 94 %). 38 chains carry 112 holes. The 3 remaining
+bails are all genuine: 1 `ENTITY_IN_EXPRESSION_PROP` (a root-capturing event handler on a non-hole
+element — the runtime cannot see it either), 1 `FUNCTION_PROP_ON_HOLE` (a render-prop child that
+captures the host entity root `footer.linkColumns` — not liftable), 1 `ENTITY_REASSIGNMENT`
+(out of scope). The `FUNCTION_PROP_ON_HOLE` class that dominated phase 2's residue is essentially
+gone (9 → 1); the navigation-editor `cond`-in-props and publish.tsx `draftSlot` bails disappeared.
 
 ## Future (explicitly out of scope now)
 

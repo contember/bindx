@@ -8,7 +8,7 @@ import type { SelNode } from './selectionTree.js'
 import type { ImportBindings } from './imports.js'
 import {
 	BailError, type Scope, childScope, consumeLeaf, consumeMany, consumeRelation,
-	referencesRoot, resolve, type RootRef,
+	paramNamesOf, referencesRoot, resolve, type RootRef,
 } from './resolve.js'
 import { JsxAnalyzer } from './jsx.js'
 import type { AnalyzedHole } from './types.js'
@@ -29,7 +29,7 @@ export class BodyAnalyzer {
 
 	/** Register a function's params against the shared prop roots, then walk its body. */
 	analyzeFunction(fn: t.ArrowFunctionExpression | t.FunctionExpression, propRoots: ReadonlyMap<string, SelNode>): void {
-		const scope: Scope = { roots: new Map(), propsParams: new Set(), propRoots }
+		const scope: Scope = { roots: new Map(), propsParams: new Set(), propRoots, scalarParams: new Set(), locals: new Set() }
 		const param = fn.params[0]
 		if (param) {
 			this.registerTopParam(param, scope)
@@ -57,7 +57,12 @@ export class BodyAnalyzer {
 				}
 				const propRoot = scope.propRoots.get(prop.key.name)
 				if (!propRoot) {
-					continue // scalar prop
+					// Non-entity render prop (scalar / .use() value) — an inert scalar mock at
+					// oracle collection, so it is safe to drop when used as a hole prop.
+					for (const name of paramNamesOf(prop.value)) {
+						scope.scalarParams.add(name)
+					}
+					continue
 				}
 				this.bindPattern(prop.value, { node: propRoot, path: [], source: prop.key.name, absPath: [] }, scope)
 			}
@@ -147,6 +152,10 @@ export class BodyAnalyzer {
 			}
 			this.bindPattern(decl.id, res.ref, scope)
 			return
+		}
+		// Render-local binding — not liftable if later used as a hole prop (default deny).
+		for (const name of Object.keys(t.getBindingIdentifiers(decl.id))) {
+			scope.locals.add(name)
 		}
 		if (res.kind === 'opaque') {
 			return
@@ -295,11 +304,14 @@ export class BodyAnalyzer {
 	}
 
 	private shadowBindings(pattern: t.Node, scope: Scope): void {
-		if (t.isIdentifier(pattern)) {
-			scope.roots.delete(pattern.name)
-			scope.propsParams.delete(pattern.name)
+		// A generic nested-fn param shadows any outer binding and is render-local (bail if
+		// used as a hole prop): it is neither module-scope nor a proven-inert render prop.
+		for (const name of paramNamesOf(pattern)) {
+			scope.roots.delete(name)
+			scope.propsParams.delete(name)
+			scope.scalarParams.delete(name)
+			scope.locals.add(name)
 		}
-		// Nested-pattern params of arbitrary functions never introduce entity roots.
 	}
 
 	private walkCall(node: t.CallExpression | t.OptionalCallExpression, scope: Scope): void {
@@ -366,6 +378,13 @@ export class BodyAnalyzer {
 		if (param) {
 			const p = t.isAssignmentPattern(param) ? param.left : param
 			this.bindPattern(p, itemRef, child)
+		}
+		// Secondary callback params (index, methods) are inert non-entity values — safe to drop.
+		for (const extra of fn.params.slice(1)) {
+			const p = t.isAssignmentPattern(extra) ? extra.left : extra
+			for (const name of paramNamesOf(p)) {
+				child.scalarParams.add(name)
+			}
 		}
 		if (t.isBlockStatement(fn.body)) {
 			this.walkStatements(fn.body.body, child)
