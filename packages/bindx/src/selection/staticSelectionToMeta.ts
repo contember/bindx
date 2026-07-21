@@ -31,10 +31,12 @@ export type StaticFieldNode =
 export type StaticSelection = Record<string, StaticFieldMap>
 
 /**
- * Populates a scope from a static field map, mirroring the runtime collector's
- * scope operations: nested access ⇒ relation (and `child()` seeds `id`).
+ * Drives a caller-provided (open) scope from a static field map, mirroring the
+ * runtime collector's scope operations: nested access ⇒ relation (and `child()`
+ * seeds `id`). Keeping the scope open lets callers (e.g. hole resolution) merge
+ * additional selection into the same scope before snapshotting.
  */
-function populateScope(scope: SelectionScope, map: StaticFieldMap): void {
+export function driveSelectionScope(scope: SelectionScope, map: StaticFieldMap): void {
 	for (const [fieldName, node] of Object.entries(map)) {
 		if (node === true) {
 			scope.addScalar(fieldName)
@@ -49,15 +51,16 @@ function populateScope(scope: SelectionScope, map: StaticFieldMap): void {
 			const params: HasManyParams = node.params
 			scope.setHasManyParams(fieldName, params)
 		}
-		populateScope(childScope, node.fields)
+		driveSelectionScope(childScope, node.fields)
 	}
 }
 
 /**
  * Converts a static field map for a single entity prop into `SelectionMeta`.
+ * Thin wrapper over {@link driveSelectionScope}: new scope → drive → snapshot.
  */
 export function staticSelectionToMeta(map: StaticFieldMap): SelectionMeta {
 	const scope = new SelectionScope()
-	populateScope(scope, map)
+	driveSelectionScope(scope, map)
 	return scope.toSelectionMeta()
 }

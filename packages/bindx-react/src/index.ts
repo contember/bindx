@@ -279,6 +279,9 @@ export type {
 	BuildProps,
 	BuildFragmentProps,
 	InitialBuilderState,
+	// Compiled selection contract (v2)
+	CompiledSelection,
+	CompiledHole,
 } from './jsx/index.js'
 
 // ============================================================================

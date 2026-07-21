@@ -10,7 +10,6 @@ import type {
 	SchemaRegistry,
 	SelectionBuilder,
 	EntityDef,
-	StaticSelection,
 } from '@contember/bindx'
 import {
 	ComponentBrand,
@@ -20,6 +19,7 @@ import type {
 	ComponentBuilderState,
 	CreateComponentOptions,
 } from './componentBuilder.types.js'
+import type { CompiledSelection } from './compiledSelection.js'
 export type { SelectionPropMeta } from './componentBuilder.types.js'
 import type { Condition } from './conditions.js'
 import { buildComponent, type EntityConfig } from './componentFactory.js'
@@ -175,7 +175,7 @@ export class ComponentBuilderImpl<
 
 	render(
 		renderFn: (props: Record<string, unknown>) => ReactNode,
-		staticSelection?: StaticSelection,
+		compiled?: CompiledSelection,
 	): unknown {
 		return buildComponent(
 			this.entityConfigs,
@@ -187,7 +187,7 @@ export class ComponentBuilderImpl<
 			this.slotNames,
 			this.useFns,
 			this.mockValues,
-			staticSelection ?? null,
+			compiled ?? null,
 		)
 	}
 }
