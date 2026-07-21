@@ -7,6 +7,10 @@
  * entity-derived values. Holes are resolved here at collection time through the
  * target's existing runtime selection surface (`getSelection` / `staticRender`),
  * the Relay-fragment-spread equivalent, WITHOUT executing the host render body.
+ *
+ * Phase 2.1 adds {@link CompiledHole.extraProps}: non-entity values (module-scope
+ * bindings, render-scope-free closures) lifted into the hole so a target that
+ * invokes them during collection stays oracle-equal — see docs/compiler-plan.md.
  */
 import type { ReactNode } from 'react'
 import type { SelectionMeta } from '@contember/bindx'
@@ -53,6 +57,14 @@ export interface CompiledHole {
 	 * non-entity props are simply omitted.
 	 */
 	literalProps?: Record<string, unknown>
+	/**
+	 * Non-entity props lifted verbatim from the emit site: module-scope values
+	 * (imports / top-level bindings) and render-scope-free inline closures. Each
+	 * is a thunk (TDZ-safe, same reason as {@link component}) resolved to the real
+	 * value at collection time, so a target's `staticRender` that *invokes* one
+	 * (e.g. `props.children(entity)`) collects the same fields the oracle would.
+	 */
+	extraProps?: Record<string, () => unknown>
 }
 
 // ============================================================================
@@ -180,6 +192,10 @@ function collectNested(node: ReactNode): SelectionMeta {
  */
 function assembleHoleProps(hole: CompiledHole, ctx: HoleResolutionContext): Record<string, unknown> {
 	const props: Record<string, unknown> = { ...hole.literalProps }
+	// Lifted values reach the target before entity proxies (which must win on collision).
+	for (const [prop, thunk] of Object.entries(hole.extraProps ?? {})) {
+		props[prop] = thunk()
+	}
 	for (const [targetProp, origin] of Object.entries(hole.entityProps)) {
 		const proxy = createSourceProxy(origin.source, ctx)
 		props[targetProp] = replayPath(proxy, origin.path)

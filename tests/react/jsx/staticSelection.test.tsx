@@ -21,7 +21,7 @@ import {
 	type EntityRef,
 } from '@contember/bindx-react'
 import { SelectionScope } from '@contember/bindx'
-import { schema, renderWithBindx, getByTestId, type Article } from '../../shared'
+import { schema, renderWithBindx, getByTestId, type Article, type Author } from '../../shared'
 
 afterEach(() => {
 	cleanup()
@@ -490,6 +490,37 @@ describe('compiled selection v2 — nested-component holes', () => {
 		expect(fieldNames(relation(selection!, 'author'))).toContain('name')
 		expect(error).toHaveBeenCalled()
 		error.mockRestore()
+	})
+
+	test('hole extraProps: a lifted render-prop closure collects through the target staticRender', () => {
+		// Mirrors npi's SelectField (and the compiler's phase-2.1 lift): the render-prop child is
+		// passed via extraProps, and the target's staticRender INVOKES it with the relation entity.
+		interface SelectFieldProps {
+			entity: EntityRef<Author>
+			children: (entity: EntityRef<Author>) => React.ReactNode
+		}
+		const SelectField = withCollector(
+			function SelectField(_props: SelectFieldProps): React.ReactNode { return null },
+			(props: SelectFieldProps) => <>{props.children(props.entity)}</>,
+		)
+
+		const CompiledHost = createComponent()
+			.entity('article', schema.Article)
+			.render(
+				() => { throw new Error('render must not run') },
+				{
+					props: { article: {} },
+					holes: [{
+						component: () => SelectField,
+						entityProps: { entity: { source: 'article', path: ['author'] } },
+						// The lifted closure captures nothing; the target replays it with a proxy.
+						extraProps: { children: () => (entity: EntityRef<Author>) => <Field field={entity.name} /> },
+					}],
+				},
+			)
+
+		const selection = getComponentSelection(CompiledHost, 'article')
+		expect(fieldNames(relation(selection!, 'author'))).toContain('name')
 	})
 
 	test('render fn is never executed even when holes are present', () => {
