@@ -183,8 +183,103 @@ instead of strict equality — flag them explicitly in the fixture (e.g. exporte
    compiled-vs-bailed percentage and reasons — this decides what phase 2 tackles first.
 4. Docs: short section in `docs/selection-collection.md`.
 
+## Phase 2 — nested-component composition (holes)
+
+Motivation: measured on the largest real bindx app (`~/projects/external/npi`, packages/admin),
+phase 1 compiles 216/257 chains (84 %); 40 of 41 bails are `ENTITY_ESCAPES_TO_COMPONENT`.
+Phase 2 turns those escapes into **holes**: statically-emitted references to the nested component,
+resolved at collection time through the component's existing runtime selection surface
+(`getSelection` / `staticRender`) — the Relay-fragment-spread equivalent, without executing the
+host render body.
+
+### Contract v2: compiled selection shape
+
+The 2nd argument of `.render()` changes shape (breaking change within the experiment — update
+runtime, emit, fixtures, docs together):
+
+```ts
+interface CompiledSelection {
+	/** Per implicit entity prop — same StaticFieldMap as phase 1. */
+	props: Record<string, StaticFieldMap>
+	/** Nested components that received entity-derived values. */
+	holes?: CompiledHole[]
+}
+
+interface CompiledHole {
+	/** Thunk, not a direct reference — dodges TDZ for components defined later in the module
+	    (same reason runtime collection is lazy). Resolved inside ensureImplicitCollected. */
+	component: () => unknown
+	/** Target prop name → where the value comes from: host entity prop + member path.
+	    Empty path = the root itself. */
+	entityProps: Record<string, { source: string; path: string[] }>
+	/** Statically-literal non-entity props of the JSX element (strings, numbers, booleans,
+	    literal objects/arrays). Non-literal non-entity props are simply omitted. */
+	literalProps?: Record<string, unknown>
+}
+```
+
+### Runtime resolution (bindx-react)
+
+In `ensureImplicitCollected`, when a compiled selection is present:
+
+1. Build a live `SelectionScope` per entity prop and drive it from `props[name]` (refactor of the
+   phase-1 converter: keep the scope open instead of immediately snapshotting).
+2. For each hole: resolve `component()`; build the value for each `entityProps` entry by creating
+   the source prop's collector proxy and **replaying the member path via property gets**
+   (`path.reduce((o, k) => o[k], proxy)`) — identical semantics to the proxy pass by construction
+   (scalar-vs-relation deferral, `SCOPE_REF`/`FIELD_REF_META` markers all come out right).
+3. Feed the assembled props to the target's selection surface, mirroring `analyzeJsx` order:
+   `getSelection(props, collectNested)` if present, else `staticRender(props)` + `collectSelection`
+   on its result. Missing props: `getSelection` skips absent props naturally; for `staticRender`
+   wrap the props object so unknown keys fall back to the tolerant scalar mock. Errors are
+   contained per hole (same report-and-continue policy as `analyzeJsx`).
+4. Target has neither surface (plain React component): the hole contributes nothing — the runtime
+   proxy pass is equally blind there, so compiled behavior stays exactly equivalent (this is the
+   documented npi dummy-`<Field>` blind spot). In validate mode, emit a dev-only warn naming the
+   component so the blind spot becomes discoverable instead of silent.
+5. Finalize scopes → `SelectionMeta` → fragments, as today. The host render fn is still never
+   executed.
+
+### Compiler side
+
+- `ENTITY_ESCAPES_TO_COMPONENT` no longer bails when the escape is a prop on a **component-typed
+  JSX element with a resolvable identifier** (local or imported — the emit references the
+  identifier via a thunk in the same module scope). Multiple entity props on one element form one
+  hole. Children of the element keep being analyzed statically (not part of the hole).
+- Still bails: entity in a non-JSX call argument (`ENTITY_ESCAPES_TO_CALL`), entity in a
+  **non-literal expression prop that isn't a plain path** (e.g. `prop={fn(article)}`), spread onto
+  an element, member-expression/namespace component tags (v2 keeps it simple: identifier tags only).
+- Emit: object literal with thunks — no longer pure JSON; snapshot tests must cover thunk emission.
+- Measure script: report per-chain hole counts; summary gains `compiled (with holes)`.
+
+### Equivalence harness
+
+The oracle (runtime proxy pass) DOES resolve nested `getSelection`/`staticRender` components —
+so hole-carrying fixtures are directly comparable end-to-end once runtime resolution lands:
+compiled (fields + resolved holes) must equal oracle. Plain-component fixtures: both sides blind →
+equal by omission. Fixture set: createComponent target, `withCollector` target, plain component
+target (with and without sibling dummy `<Field>`s), multiple entity props on one element,
+entity-derived path (`article.author`) into a target, hole target defined later in the module (TDZ),
+literal + non-literal extra props.
+
+### Related runtime fix (in scope — npi workaround removal)
+
+`DataGridHasOneColumn`'s `collectSelection` (bindx-dataview `createRelationColumn.tsx`) discards
+the renderer's returned JSX, so nested `<HasMany>`/`<Field>` inside relation-column renderers are
+never collected (npi works around it with a `.map()` trick). Fix: run `analyzeJsx`/`collectSelection`
+on the returned JSX in addition to the proxy capture. Independent of the compiler; benefits
+uncompiled apps too.
+
+### Explicit non-goal
+
+Statically analyzing **plain React component bodies** (even same-file) to collect their
+`useField`-style reads is deliberately out: compiled selection would then be *stronger* than the
+runtime fallback, so an app could work compiled and under-fetch uncompiled — breaking the
+progressive-enhancement equivalence guarantee. The path for that blind spot is diagnostics
+(validate-mode warn now, eslint rule later), or a future runtime analyzer improvement — not a
+compiler-only fix.
+
 ## Future (explicitly out of scope now)
 
-Fragment-reference emit for nested components (`__compose` runtime holes — the Relay-spread
-equivalent), unplugin packaging, eslint plugin reusing the analyzer (bail reasons as lint
-diagnostics), oxc/SWC port if Babel cost ever matters.
+Unplugin packaging, eslint plugin reusing the analyzer (bail reasons as lint diagnostics),
+oxc/SWC port if Babel cost ever matters.
