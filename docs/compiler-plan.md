@@ -191,9 +191,46 @@ emission (`packages/bindx-compiler`), full hole-equivalence + end-to-end tests, 
 relation-column fix have all landed and are green.
 
 Result (re-measured on `~/projects/external/npi`, packages/admin, 257 chains):
-**251/257 compiled = 98 %** (phase 1 was 216/257 = 84 %). 35 chains carry 99 holes total. Only 6
-bails remain: 5 `ENTITY_IN_EXPRESSION_PROP`, 1 `ENTITY_REASSIGNMENT` — the `ENTITY_ESCAPES_TO_COMPONENT`
-class that dominated phase 1 is gone.
+**242/257 compiled = 94 %** (phase 1 was 216/257 = 84 %). 26 chains carry 82 holes total. 15 bails
+remain: 9 `FUNCTION_PROP_ON_HOLE`, 5 `ENTITY_IN_EXPRESSION_PROP`, 1 `ENTITY_REASSIGNMENT` — the
+`ENTITY_ESCAPES_TO_COMPONENT` class that dominated phase 1 is gone.
+
+> **Soundness correction (was 98 %).** An earlier measurement read 251/257 = 98 % but was
+> **unsound**: a hole element's function props / render-prop children were dropped from the emitted
+> hole (they are non-literal), yet a hole target's `staticRender` may *invoke* such a closure during
+> collection with a collector proxy — npi's `SelectField` does exactly
+> `<HasOne field={props.field}>{e => props.children(e)}</HasOne>`. The runtime oracle therefore
+> collected fields from the closure body (e.g. `it => <Field field={it.name}/>` → `author.name`) that
+> the compiled path could not → **compiled ⊂ runtime → under-fetch → `UnfetchedFieldError`** in
+> compiled apps. Emit-or-bail requires under-approximation to be impossible by construction, so these
+> chains now **bail** (`FUNCTION_PROP_ON_HOLE`). The 4-point rate drop is the honest cost of closing
+> the under-fetch class; see the phase-2.1 recovery note below.
+
+### FUNCTION_PROP_ON_HOLE — dropping a closure from a hole must be provably safe
+
+A function-valued prop (or function children) on a **hole** element is safe to omit from the hole
+**iff invoking it at collection time cannot reach a selection scope**. The only gateways are (a) the
+closure's OWN parameters — a `staticRender` may invoke it with a collector proxy, and *any* param use
+(including passing a param onward to another call) lets the proxy in — and (b) captured entity-rooted
+bindings (roots / aliases). So the compiler classifies each dropped inline closure:
+
+- Body references **no own parameters** (transitively — nested inner functions' params are *their*
+  own; what matters is whether OUR params or entity roots are reachable) and **no entity roots** →
+  **SAFE**: omit it, keep the chain compiled. Covers `onClick={() => save()}`, `format={() => null}`.
+- Otherwise → **BAIL** `FUNCTION_PROP_ON_HOLE`. Default deny: when unsure, bail.
+
+Scope: only **inline** arrow / function-expression prop values and render-prop children of hole
+elements. Closures that capture roots in a non-hole expression prop already bail as
+`ENTITY_IN_EXPRESSION_PROP` (left as is); the new code specifically covers the *param-mediated*
+danger. Function **children of non-hole** elements stay statically walked (sound: the runtime either
+ignores the closure or collects a subset of the analyzed union). Implemented in
+`jsx.ts` (`walkComponentElement` → `assertHoleClosuresSafe`) + `resolve.ts` (`isHoleClosureSafe`).
+
+**Phase 2.1 candidate (not implemented): closure lifting.** A param-only closure that captures
+nothing from the render scope could be *emitted into the hole literal* (lifted verbatim) instead of
+dropped, so the runtime replays it into the target's `staticRender` and collection proceeds — most of
+the `FUNCTION_PROP_ON_HOLE` bails (render-prop children like npi's `SelectField`) would recover the
+rate back toward 98 % while staying sound. Deferred.
 
 Motivation: phase 1 compiled 216/257 chains (84 %); 40 of 41 bails were `ENTITY_ESCAPES_TO_COMPONENT`.
 Phase 2 turns those escapes into **holes**: statically-emitted references to the nested component,
@@ -257,7 +294,9 @@ In `ensureImplicitCollected`, when a compiled selection is present:
   hole. Children of the element keep being analyzed statically (not part of the hole).
 - Still bails: entity in a non-JSX call argument (`ENTITY_ESCAPES_TO_CALL`), entity in a
   **non-literal expression prop that isn't a plain path** (e.g. `prop={fn(article)}`), spread onto
-  an element, member-expression/namespace component tags (v2 keeps it simple: identifier tags only).
+  an element, member-expression/namespace component tags (v2 keeps it simple: identifier tags only),
+  and an **unsafe function prop / render-prop child of a hole element** (`FUNCTION_PROP_ON_HOLE` — see
+  above).
 - Emit: object literal with thunks — no longer pure JSON; snapshot tests must cover thunk emission.
 - Measure script: report per-chain hole counts; summary gains `compiled (with holes)`.
 

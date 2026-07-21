@@ -150,14 +150,15 @@ export function consumeMany(ref: RootRef, params?: StaticHasManyParams): SelNode
 	return item
 }
 
-/** Conservative check: does the subtree textually reference any root binding? */
-export function referencesRoot(node: t.Node, scope: Scope): boolean {
+/** True if any identifier in the subtree satisfies `pred`. Over-approximates (visits member
+ *  property names / object keys too) — sound for default-deny bail decisions. */
+function anyIdentifier(node: t.Node, pred: (name: string) => boolean): boolean {
 	let found = false
 	const visit = (n: t.Node): void => {
 		if (found) {
 			return
 		}
-		if (t.isIdentifier(n) && (scope.roots.has(n.name) || scope.propsParams.has(n.name))) {
+		if (t.isIdentifier(n) && pred(n.name)) {
 			found = true
 			return
 		}
@@ -176,6 +177,59 @@ export function referencesRoot(node: t.Node, scope: Scope): boolean {
 	}
 	visit(node)
 	return found
+}
+
+/** Conservative check: does the subtree textually reference any root binding? */
+export function referencesRoot(node: t.Node, scope: Scope): boolean {
+	return anyIdentifier(node, name => scope.roots.has(name) || scope.propsParams.has(name))
+}
+
+/** Names bound by a function-parameter pattern (identifier / default / rest / object / array). */
+function collectParamNames(node: t.Node, out: Set<string>): void {
+	if (t.isIdentifier(node)) {
+		out.add(node.name)
+		return
+	}
+	if (t.isAssignmentPattern(node)) {
+		collectParamNames(node.left, out)
+		return
+	}
+	if (t.isRestElement(node)) {
+		collectParamNames(node.argument, out)
+		return
+	}
+	if (t.isObjectPattern(node)) {
+		for (const prop of node.properties) {
+			collectParamNames(t.isRestElement(prop) ? prop.argument : prop.value, out)
+		}
+		return
+	}
+	if (t.isArrayPattern(node)) {
+		for (const el of node.elements) {
+			if (el) {
+				collectParamNames(el, out)
+			}
+		}
+	}
+}
+
+/**
+ * Can this closure be safely OMITTED from a phase-2 hole? The hole target's `staticRender`
+ * may invoke a dropped function prop / render-prop child with a collector proxy during
+ * collection, so the closure is safe to drop only when invoking it cannot reach a selection
+ * scope. The gateways are the closure's OWN parameters (a proxy would flow in there — a
+ * transitive reference in the body is unsafe) and captured entity roots. No gateway → safe.
+ * Nested inner functions' own params are theirs, not ours (see docs/compiler-plan.md, Phase 2).
+ */
+export function isHoleClosureSafe(fn: t.ArrowFunctionExpression | t.FunctionExpression, scope: Scope): boolean {
+	if (referencesRoot(fn, scope)) {
+		return false // captured entity root reachable when invoked
+	}
+	const ownParams = new Set<string>()
+	for (const param of fn.params) {
+		collectParamNames(param, ownParams)
+	}
+	return !anyIdentifier(fn.body, name => ownParams.has(name))
 }
 
 /**
