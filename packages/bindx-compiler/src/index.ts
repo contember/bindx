@@ -1,4 +1,13 @@
-export { analyzeSource, analyzeProgram, parseProgram, type AnalyzeOptions, type InternalChainResult } from './analyze.js'
+export {
+	analyzeSource,
+	analyzeProgram,
+	analyzeEntityRoots,
+	analyzeEntityRootsInProgram,
+	parseProgram,
+	type AnalyzeOptions,
+	type InternalChainResult,
+} from './analyze.js'
+export { ENTITY_ROOT_KEY, type InternalEntityRootResult } from './entityRoots.js'
 export { bindxCompilerPlugin, default, type BindxCompilerOptions } from './babelPlugin.js'
 export {
 	ContractFileCache,
@@ -19,8 +28,11 @@ export type {
 	ChainResult,
 	AnalyzedChain,
 	BailedChain,
+	EntityRootResult,
+	AnalyzedEntityRoot,
+	BailedEntityRoot,
 	BailoutReason,
 	Bailout,
 	ChainLoc,
 } from './types.js'
-export { isBailed } from './types.js'
+export { isBailed, isEntityRootBailed } from './types.js'

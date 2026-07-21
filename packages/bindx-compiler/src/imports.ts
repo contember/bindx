@@ -17,6 +17,8 @@ export interface ImportBindings {
 	readonly cond: ReadonlySet<string>
 	/** local component name → recognized bindx component kind. */
 	readonly components: ReadonlyMap<string, ComponentKind>
+	/** local names that refer to the `<Entity>` selection-root component (phase 3). */
+	readonly entity: ReadonlySet<string>
 }
 
 function isBindxSource(source: string): boolean {
@@ -27,6 +29,7 @@ export function collectImportBindings(program: t.Program): ImportBindings {
 	const createComponent = new Set<string>()
 	const cond = new Set<string>()
 	const components = new Map<string, ComponentKind>()
+	const entity = new Set<string>()
 
 	for (const node of program.body) {
 		if (!t.isImportDeclaration(node) || !isBindxSource(node.source.value)) {
@@ -42,13 +45,18 @@ export function collectImportBindings(program: t.Program): ImportBindings {
 				createComponent.add(local)
 			} else if (imported === 'cond') {
 				cond.add(local)
+			} else if (imported === 'Entity') {
+				// Kept separate from `components` so it never becomes a "recognized bindx
+				// component" in the per-chain JSX walk — a nested <Entity> must stay an opaque
+				// element to the host chain (its children closure is walked as a nested fn).
+				entity.add(local)
 			} else if (COMPONENT_NAMES.has(imported)) {
 				components.set(local, imported as ComponentKind)
 			}
 		}
 	}
 
-	return { createComponent, cond, components }
+	return { createComponent, cond, components, entity }
 }
 
 /**

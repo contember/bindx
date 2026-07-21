@@ -72,6 +72,7 @@ export type BailoutReason =
 	| 'COMPUTED_MEMBER'
 	| 'NON_LITERAL_HASMANY_PARAM'
 	| 'ENTITY_REASSIGNMENT'
+	| 'ENTITY_NO_FUNCTION_CHILDREN'
 	| 'UNCLASSIFIED'
 
 /** A bail with human-readable context. */
@@ -105,5 +106,29 @@ export interface BailedChain {
 export type ChainResult = AnalyzedChain | BailedChain
 
 export function isBailed(result: ChainResult): result is BailedChain {
+	return 'bailout' in result
+}
+
+/**
+ * A `<Entity>` root the compiler proved (phase 3). Its field map lives under the fixed
+ * key `entity` (see `ENTITY_ROOT_KEY`); every hole is rooted at `entity`. Reported by
+ * `measure` separately from chains — each `<Entity>` element is its own emit-or-bail unit.
+ */
+export interface AnalyzedEntityRoot {
+	readonly loc: ChainLoc
+	/** Fields collected off the children closure's first param (the root). */
+	readonly selection: StaticFieldMap
+	readonly holes: readonly AnalyzedHole[]
+}
+
+/** A `<Entity>` root the compiler could not prove; the runtime children walk stays. */
+export interface BailedEntityRoot {
+	readonly loc: ChainLoc
+	readonly bailout: Bailout
+}
+
+export type EntityRootResult = AnalyzedEntityRoot | BailedEntityRoot
+
+export function isEntityRootBailed(result: EntityRootResult): result is BailedEntityRoot {
 	return 'bailout' in result
 }

@@ -480,6 +480,44 @@ phase 2.1 compiles **254/257 (99%)** — 38 chains carry 112 holes total — lea
 (1 `ENTITY_IN_EXPRESSION_PROP`, 1 `FUNCTION_PROP_ON_HOLE`, 1 `ENTITY_REASSIGNMENT`); phase 2 with
 holes compiled 94%, phase 1 without holes 84%.
 
+### Entity roots (phase 3)
+
+Selection ROOTS compile too. A `<Entity>` invokes its children render-prop with a
+collector proxy on every root mount — the same crash-prone, one-branch execution the
+compiler eliminated for components. The plugin scans for `<Entity>` elements (tag resolving
+to a `@contember/bindx*` import) **anywhere** in a file — plain route components, inside
+`createComponent` render bodies, at any nesting — and injects a JSX attribute
+`compiledSelection={{ props: { entity: {...} }, holes: [...] }}`. The root's field map lives
+under the fixed key `entity`; every hole is rooted at `entity`. When present the runtime
+builds the root `SelectionMeta` statically and never calls `children` with a collector
+(`useRootSelection`); validate mode still runs the contained walk for the under-fetch diff.
+
+The children closure's **first param is the root entity accessor itself** (unlike a
+`.render()` body, whose param is the props object) — so it is analyzed exactly like a
+`<HasOne>`/`<HasMany>` children callback. All existing machinery applies unchanged: member
+paths, holes + `extraProps`, collector contracts, `cond.*` in props, JSX-valued props,
+branch union. `<Entity>`'s own props (`entity`, `by`, `filter`, `create`, `onPersisted`,
+`queryKey`, `loading`, `error`, `notFound`, …) carry no selection and are never analyzed
+(`entity` receives an `entityDef` — a module value, not an entity-rooted value). Non-function
+or absent children bail `ENTITY_NO_FUNCTION_CHILDREN`; the runtime walk stays. Each `<Entity>`
+element is its own emit-or-bail unit, reported separately by `measure`
+(`entity roots: N compiled / M bailed`).
+
+An `<Entity>` nested inside a `createComponent` body is analyzed twice, independently and
+soundly: the HOST chain's full-body walk records any host-root captures inside the closure
+(the closure param **shadows** host roots), while the Entity's own emit contains ONLY paths
+rooted at its closure param. The runtime host walk cannot see into the Entity closure at all,
+so the compiler is a sound superset here.
+
+The root oracle is the `QuerySpec` the adapter receives: rendering a transformed vs
+untransformed `<Entity>` under a query-recording `MockAdapter` requests the identical root
+selection (superset for branch unions). On `npi`, `packages/admin`, the plugin compiles
+**84/105** `<Entity>` roots (114 holes; npi's dominant pattern is
+`<Entity>{e => <Body entity={e} />}</Entity>`, one delegated hole per root). The 21 bails are
+11 `RENDER_LOCAL_ON_HOLE`, 7 `ENTITY_ESCAPES_TO_CALL`, 2 `ENTITY_NO_FUNCTION_CHILDREN`,
+1 `FUNCTION_PROP_ON_HOLE` — the same reason classes as chains, since the same machinery runs.
+DataGrid/DataView roots are out of scope (different walker; phase 3.1).
+
 See [docs/compiler-plan.md](./compiler-plan.md) for the full design.
 
 ## Provider Setup

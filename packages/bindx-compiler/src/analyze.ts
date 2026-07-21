@@ -13,7 +13,8 @@ import { BailError } from './resolve.js'
 import { SelNode } from './selectionTree.js'
 import { parseProgram } from './parse.js'
 import { ContractFileCache, ContractResolver, type ContractLookup } from './contracts.js'
-import type { ChainLoc, ChainResult, StaticSelection } from './types.js'
+import { analyzeEntityRoot, findEntityElements, type InternalEntityRootResult } from './entityRoots.js'
+import type { ChainLoc, ChainResult, EntityRootResult, StaticSelection } from './types.js'
 
 export { parseProgram }
 
@@ -35,18 +36,39 @@ export interface AnalyzeOptions {
 // Shared across analyzeProgram/plugin invocations, keyed internally by path+mtime.
 const defaultContractCache = new ContractFileCache()
 
-/** Analyze an already-parsed program; retains Babel node refs for the plugin. */
-export function analyzeProgram(program: t.Program, options: AnalyzeOptions = {}): InternalChainResult[] {
-	const bindings = collectImportBindings(program)
-	const moduleBindings = collectModuleBindings(program)
+interface ProgramContext {
+	readonly bindings: ImportBindings
+	readonly moduleBindings: ReadonlySet<string>
+	readonly lookup: ContractLookup
+}
+
+function programContext(program: t.Program, options: AnalyzeOptions): ProgramContext {
 	const resolver = new ContractResolver(program, {
 		filename: options.filename,
 		alias: options.alias ?? {},
 		cache: options.cache ?? defaultContractCache,
 	})
-	const lookup: ContractLookup = tag => resolver.resolve(tag)
+	return {
+		bindings: collectImportBindings(program),
+		moduleBindings: collectModuleBindings(program),
+		lookup: tag => resolver.resolve(tag),
+	}
+}
+
+/** Analyze an already-parsed program; retains Babel node refs for the plugin. */
+export function analyzeProgram(program: t.Program, options: AnalyzeOptions = {}): InternalChainResult[] {
+	const { bindings, moduleBindings, lookup } = programContext(program, options)
 	const chains = findChains(program, bindings)
 	return chains.map(chain => ({ chain, result: analyzeChain(chain, bindings, moduleBindings, lookup) }))
+}
+
+/** Analyze every top-level `<Entity>` selection root in a program (phase 3). */
+export function analyzeEntityRootsInProgram(program: t.Program, options: AnalyzeOptions = {}): InternalEntityRootResult[] {
+	const { bindings, moduleBindings, lookup } = programContext(program, options)
+	return findEntityElements(program, bindings).map(element => ({
+		element,
+		result: analyzeEntityRoot(element, bindings, moduleBindings, lookup),
+	}))
 }
 
 function analyzeChain(chain: Chain, bindings: ImportBindings, moduleBindings: ReadonlySet<string>, lookup: ContractLookup): ChainResult {
@@ -90,4 +112,9 @@ function chainLoc(call: t.CallExpression): ChainLoc {
 
 export function analyzeSource(code: string, filename: string, options: Omit<AnalyzeOptions, 'filename'> = {}): ChainResult[] {
 	return analyzeProgram(parseProgram(code, filename), { ...options, filename }).map(r => r.result)
+}
+
+/** Convenience source-level entry for `<Entity>` root analysis (measure / tests). */
+export function analyzeEntityRoots(code: string, filename: string, options: Omit<AnalyzeOptions, 'filename'> = {}): EntityRootResult[] {
+	return analyzeEntityRootsInProgram(parseProgram(code, filename), { ...options, filename }).map(r => r.result)
 }
