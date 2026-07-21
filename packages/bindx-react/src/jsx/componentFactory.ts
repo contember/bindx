@@ -16,7 +16,6 @@ import type {
 	SelectionBuilder,
 	AnyBrand,
 	SchemaDefinition,
-	StaticSelection,
 } from '@contember/bindx'
 import {
 	SchemaRegistry,
@@ -24,7 +23,6 @@ import {
 	ComponentBrand,
 	createSelectionBuilder,
 	SelectionScope,
-	staticSelectionToMeta,
 } from '@contember/bindx'
 import type {
 	SelectionPropMeta,
@@ -33,6 +31,8 @@ import type { SelectionProvider, SelectionFieldMeta } from './types.js'
 import { FIELD_REF_META, BINDX_COMPONENT, SCOPE_REF } from './types.js'
 import { createCollectorProxy } from './proxy.js'
 import { collectSelection } from './analyzer.js'
+import { createFragment, createScalarPropMock } from './collectionHelpers.js'
+import { applyCompiledSelection, type CompiledSelection } from './compiledSelection.js'
 import { type Condition, evaluateCondition } from './conditions.js'
 import { useRefSubscription } from '../hooks/useFields.js'
 
@@ -124,7 +124,7 @@ export function buildComponent<TProps extends object>(
 	slotNames: readonly string[],
 	useFns: readonly ((props: TProps) => object)[],
 	mockValues: Record<string, unknown>,
-	staticSelection: StaticSelection | null,
+	compiled: CompiledSelection | null,
 ): unknown {
 	const selectionsMap = new Map<string, SelectionPropMeta>()
 	const componentDisplayName = `BindxComponent(${[...entityConfigs.keys()].join(', ')})`
@@ -168,11 +168,20 @@ export function buildComponent<TProps extends object>(
 		collectionState = 'collecting'
 		try {
 			// Precompiled selection present ⇒ build entries from it, skip the proxy pass.
-			if (staticSelection) {
-				applyStaticSelections(staticSelection, selectionsMap, componentBrand, roles)
+			if (compiled) {
+				applyCompiledSelection({
+					compiled,
+					selectionsMap,
+					componentBrand,
+					roles,
+					implicitConfigs,
+					schemaRegistry,
+					componentDisplayName,
+					validateMode: staticSelectionValidationEnabled,
+				})
 				if (staticSelectionValidationEnabled) {
-					validateStaticSelections(
-						staticSelection, selectionsMap, componentDisplayName,
+					validateCompiledSelection(
+						selectionsMap, componentDisplayName,
 						implicitConfigs, renderFn, componentBrand, roles,
 						hasInterfacesMode, schemaRegistry, conditionFn, mockValues,
 					)
@@ -326,34 +335,6 @@ function createExplicitPropMock(): unknown {
 }
 
 /**
- * Creates a tolerant stand-in for scalar (non-entity) props during collection.
- * Render bodies may call it (`t('key')`), read nested properties
- * (`labels.heading`) or coerce it to a primitive — all are no-ops so the
- * collection pass keeps capturing entity field accesses (see issue #57).
- */
-function createScalarPropMock(): unknown {
-	const mock: unknown = new Proxy(function () {}, {
-		get(_target, prop): unknown {
-			if (prop === Symbol.toPrimitive || prop === 'toString' || prop === 'valueOf') {
-				return (): string => ''
-			}
-			if (prop === Symbol.iterator) {
-				return function* (): Generator<never> {}
-			}
-			// undefined keeps JSON.stringify from recursing via a callable toJSON
-			if (prop === 'toJSON') {
-				return undefined
-			}
-			return mock
-		},
-		apply(): unknown {
-			return mock
-		},
-	})
-	return mock
-}
-
-/**
  * Collects selections from JSX for implicit entity props.
  *
  * In interfaces mode (hasInterfacesMode=true), any prop that is accessed
@@ -475,31 +456,13 @@ function collectImplicitSelections<TProps extends object>(
 // ============================================================================
 
 /**
- * Builds selectionsMap entries from a precompiled static selection — one per
- * entity prop present in the static object. Replaces the proxy pass entirely.
+ * Validate mode: also run the proxy pass (which resolves nested holes by
+ * rendering them inline) and warn (once) when the compiled selection
+ * under-fetches relative to what runtime collection would produce. Diffs over
+ * the runtime props so hole-derived entity props are covered too.
  */
-function applyStaticSelections(
-	staticSelection: StaticSelection,
-	selectionsMap: Map<string, SelectionPropMeta>,
-	componentBrand: ComponentBrand,
-	roles: readonly string[],
-): void {
-	for (const [propName, fieldMap] of Object.entries(staticSelection)) {
-		const selection = staticSelectionToMeta(fieldMap)
-		selectionsMap.set(propName, {
-			selection,
-			fragment: createFragment(selection, componentBrand, roles),
-		})
-	}
-}
-
-/**
- * Validate mode: also run the proxy pass and warn (once) when the precompiled
- * selection disagrees with what runtime collection would produce.
- */
-function validateStaticSelections<TProps extends object>(
-	staticSelection: StaticSelection,
-	staticMap: Map<string, SelectionPropMeta>,
+function validateCompiledSelection<TProps extends object>(
+	compiledMap: Map<string, SelectionPropMeta>,
 	componentDisplayName: string,
 	implicitConfigs: [string, EntityConfig][],
 	renderFn: (props: TProps) => ReactNode,
@@ -514,15 +477,15 @@ function validateStaticSelections<TProps extends object>(
 	try {
 		collectImplicitSelections(implicitConfigs, renderFn, runtimeMap, componentBrand, roles, hasInterfacesMode, schemaRegistry, conditionFn, mockValues)
 	} catch {
-		// Proxy pass crashed — the static selection already stands; nothing to compare.
+		// Proxy pass crashed — the compiled selection already stands; nothing to compare.
 		return
 	}
 
 	const lines: string[] = []
-	for (const propName of Object.keys(staticSelection)) {
-		const staticSelectionMeta = staticMap.get(propName)?.selection
+	for (const propName of runtimeMap.keys()) {
+		const compiledSelectionMeta = compiledMap.get(propName)?.selection
 		const runtimeSelectionMeta = runtimeMap.get(propName)?.selection
-		diffUnderfetchedFields(staticSelectionMeta, runtimeSelectionMeta, [propName], lines)
+		diffUnderfetchedFields(compiledSelectionMeta, runtimeSelectionMeta, [propName], lines)
 	}
 
 	if (lines.length > 0) {
@@ -572,29 +535,6 @@ function indexByFieldName(meta: SelectionMeta | undefined): Map<string, Selectio
 		}
 	}
 	return byField
-}
-
-// ============================================================================
-// Fragment Creation
-// ============================================================================
-
-/**
- * Creates a FluentFragment from selection metadata.
- */
-function createFragment(
-	selection: SelectionMeta,
-	componentBrand: ComponentBrand,
-	roles: readonly string[],
-): FluentFragment<unknown, object, AnyBrand> {
-	return {
-		__meta: selection,
-		__resultType: {} as object,
-		__modelType: undefined as unknown,
-		__isFragment: true,
-		__brand: componentBrand,
-		__brands: new Set([componentBrand.brandSymbol]),
-		__roles: roles.length > 0 ? roles : undefined,
-	}
 }
 
 // ============================================================================

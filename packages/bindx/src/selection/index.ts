@@ -31,6 +31,7 @@ export { SelectionMetaCollector, mergeSelections, createEmptySelection } from '.
 export { SelectionScope, type HasManyParams } from './SelectionScope.js'
 export {
 	staticSelectionToMeta,
+	driveSelectionScope,
 	type StaticSelection,
 	type StaticFieldMap,
 	type StaticFieldNode,

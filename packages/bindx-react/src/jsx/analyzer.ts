@@ -114,12 +114,20 @@ export function analyzeJsx(node: ReactNode, selection: SelectionMetaCollector): 
 }
 
 /**
+ * Resolves a human-readable name for a component for error/warn attribution,
+ * falling back to 'anonymous' when nothing usable is present.
+ */
+export function resolveComponentName(component: unknown): string {
+	const c = component as { displayName?: string; name?: string; type?: { displayName?: string; name?: string } }
+	return c.displayName ?? c.type?.displayName ?? (c.name || c.type?.name) ?? 'anonymous'
+}
+
+/**
  * Reports a selection-analysis failure of a single component with attribution,
  * so one broken component doesn't silently cost its siblings their selection.
  */
 function reportAnalysisError(component: unknown, error: unknown): void {
-	const c = component as { displayName?: string; name?: string; type?: { displayName?: string; name?: string } }
-	const name = c.displayName ?? c.type?.displayName ?? (c.name || c.type?.name) ?? 'anonymous'
+	const name = resolveComponentName(component)
 	console.error(
 		`[bindx] Selection analysis of <${name}> failed — its fields were NOT added to the fetch plan. `
 		+ 'Fix the error below; fields it uses may be missing from queries until then.',
