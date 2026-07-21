@@ -103,6 +103,7 @@ export function buildComponent<TProps extends object>(
 	conditionFn: ((props: TProps) => Condition) | null,
 	slotNames: readonly string[],
 	useFns: readonly ((props: TProps) => object)[],
+	mockValues: Record<string, unknown>,
 ): unknown {
 	const selectionsMap = new Map<string, SelectionPropMeta>()
 	const componentDisplayName = `BindxComponent(${[...entityConfigs.keys()].join(', ')})`
@@ -145,7 +146,7 @@ export function buildComponent<TProps extends object>(
 		}
 		collectionState = 'collecting'
 		try {
-			collectImplicitSelections(implicitConfigs, renderFn, selectionsMap, componentBrand, roles, hasInterfacesMode, schemaRegistry, conditionFn)
+			collectImplicitSelections(implicitConfigs, renderFn, selectionsMap, componentBrand, roles, hasInterfacesMode, schemaRegistry, conditionFn, mockValues)
 		} catch (error) {
 			// Analysis is deterministic, so retrying is pointless — degrade loudly
 			// to the fields captured before the throw (scopes record eagerly).
@@ -334,6 +335,7 @@ function collectImplicitSelections<TProps extends object>(
 	hasInterfacesMode: boolean,
 	schemaRegistry: SchemaRegistry<Record<string, object>> | null,
 	conditionFn: ((props: TProps) => Condition) | null,
+	mockValues: Record<string, unknown>,
 ): void {
 	const propScopes = new Map<string, SelectionScope>()
 	const implicitConfigsMap = new Map(implicitConfigs)
@@ -371,6 +373,12 @@ function collectImplicitSelections<TProps extends object>(
 					? new SchemaRegistry(config.schema)
 					: schemaRegistry
 				return createCollectorProxy(scope, entityName, resolvedRegistry)
+			}
+
+			// Deterministic analysis-time value; must win over the interfaces-mode
+			// branch so a mocked scalar is never mistaken for an interface entity prop.
+			if (propName in mockValues) {
+				return mockValues[propName]
 			}
 
 			// In interfaces mode, any unknown prop could be an interface entity prop
