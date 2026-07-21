@@ -183,10 +183,19 @@ instead of strict equality — flag them explicitly in the fixture (e.g. exporte
    compiled-vs-bailed percentage and reasons — this decides what phase 2 tackles first.
 4. Docs: short section in `docs/selection-collection.md`.
 
-## Phase 2 — nested-component composition (holes)
+## Phase 2 — nested-component composition (holes) — IMPLEMENTED
 
-Motivation: measured on the largest real bindx app (`~/projects/external/npi`, packages/admin),
-phase 1 compiles 216/257 chains (84 %); 40 of 41 bails are `ENTITY_ESCAPES_TO_COMPONENT`.
+Status: **implemented** on `experiment/selection-compiler`. Runtime resolution
+(`applyCompiledSelection`, `packages/bindx-react/src/jsx/compiledSelection.ts`), compiler hole
+emission (`packages/bindx-compiler`), full hole-equivalence + end-to-end tests, and the dataview
+relation-column fix have all landed and are green.
+
+Result (re-measured on `~/projects/external/npi`, packages/admin, 257 chains):
+**251/257 compiled = 98 %** (phase 1 was 216/257 = 84 %). 35 chains carry 99 holes total. Only 6
+bails remain: 5 `ENTITY_IN_EXPRESSION_PROP`, 1 `ENTITY_REASSIGNMENT` — the `ENTITY_ESCAPES_TO_COMPONENT`
+class that dominated phase 1 is gone.
+
+Motivation: phase 1 compiled 216/257 chains (84 %); 40 of 41 bails were `ENTITY_ESCAPES_TO_COMPONENT`.
 Phase 2 turns those escapes into **holes**: statically-emitted references to the nested component,
 resolved at collection time through the component's existing runtime selection surface
 (`getSelection` / `staticRender`) — the Relay-fragment-spread equivalent, without executing the
@@ -262,13 +271,17 @@ target (with and without sibling dummy `<Field>`s), multiple entity props on one
 entity-derived path (`article.author`) into a target, hole target defined later in the module (TDZ),
 literal + non-literal extra props.
 
-### Related runtime fix (in scope — npi workaround removal)
+### Related runtime fix (in scope — npi workaround removal) — DONE
 
-`DataGridHasOneColumn`'s `collectSelection` (bindx-dataview `createRelationColumn.tsx`) discards
-the renderer's returned JSX, so nested `<HasMany>`/`<Field>` inside relation-column renderers are
-never collected (npi works around it with a `.map()` trick). Fix: run `analyzeJsx`/`collectSelection`
-on the returned JSX in addition to the proxy capture. Independent of the compiler; benefits
-uncompiled apps too.
+`DataGridHasOneColumn`'s `collectSelection` (bindx-dataview `createRelationColumn.tsx`) discarded
+the renderer's returned JSX, so nested `<HasMany>`/`<Field>` inside relation-column renderers were
+never collected (npi worked around it with a `.map()` trick). Fixed: `walkRendererJsx` now runs
+`collectSelection` on the renderer's returned JSX in addition to the proxy capture, in both the
+`buildLeaf` `relatedSelection` computation and the hasOne/hasMany cell configs. The JSX walk drives
+the collector proxy (via `HasMany.getSelection`'s `map`), registering nested fields into the parent
+scope — mirroring `collectImplicitSelections`. Errors are contained per column. Independent of the
+compiler; benefits uncompiled apps too. Regression test: `tests/react/dataview/createRelationColumn.test.tsx`
+("nested declarative selection (npi regression)").
 
 ### Explicit non-goal
 

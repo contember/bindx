@@ -363,12 +363,41 @@ Low-level API for precise control over reported fields. Used by Field, HasOne, H
 By default, an implicit `createComponent()` discovers its selection at runtime by
 executing the render body against collector proxies. The `@contember/bindx-compiler`
 Babel plugin can instead prove that selection at build time and emit it as the 2nd
-argument of `.render(fn, staticSelection)`. When present, the runtime uses it directly
+argument of `.render(fn, compiledSelection)`. When present, the runtime uses it directly
 and **skips the proxy pass entirely** — no user code runs during collection, so the
 crash-and-degrade machinery becomes irrelevant.
 
+The emitted object has the shape `{ props, holes? }`: `props` is the per-entity-prop
+static field map; `holes` describe nested components that received entity-derived values
+(see below).
+
 This is progressive enhancement: a compiled app behaves identically to an uncompiled
 one. It is never mandatory.
+
+### Nested components (holes)
+
+A host render body often passes an entity-derived value to another component:
+`<AuthorCard author={article.author} />`. The compiler cannot inline that component's
+selection (it lives in another module, may be defined later, etc.), so it emits a
+**hole**: a thunk to the target plus a map of which prop comes from which host entity
+prop and member path. At collection time the runtime resolves each hole through the
+target's own selection surface — `getSelection` (createComponent) or `staticRender`
+(`withCollector`) — replaying the member path on collector proxies. This is the
+Relay-fragment-spread equivalent: the target's fields are folded into the host's fetch
+**without executing the host render body**.
+
+Because both the runtime proxy pass and the compiled path drive the *same* collector
+proxies for the escaping value, a hole and a runtime-collected escape produce identical
+selections.
+
+**Shared blind spot — plain components.** If the target is a plain React component (no
+`getSelection`/`staticRender`), neither the compiler nor the runtime proxy pass can see
+the fields it reads (e.g. via `useField`). This is a blind spot on *both* paths, so
+compiled and uncompiled behavior stay equivalent. In validate mode the runtime emits a
+dev-only warning naming the component so the blind spot is discoverable rather than
+silent. The fix is to give the component a selection surface (wrap it with
+`withCollector`) or mount sibling `<Field>`s — not a compiler-only change (that would
+make the compiled app fetch more than the uncompiled one, breaking equivalence).
 
 ### Enabling in Vite
 
@@ -404,13 +433,17 @@ params/many-ness (the runtime never records these in implicit collection).
 The compiler emits a selection only when it can prove it. Over-approximation (extra
 fields) is acceptable; under-approximation is impossible by construction (default
 deny). Anything it cannot classify makes the whole component **bail** with a
-machine-readable reason (e.g. `ENTITY_ESCAPES_TO_CALL`, `ENTITY_SPREAD`,
-`COMPUTED_MEMBER`, `NON_LITERAL_HASMANY_PARAM`, `INTERFACES_MODE`, `UNCLASSIFIED`).
-Bailed chains are left untouched and fall back to the runtime proxy pass.
+machine-readable reason (e.g. `ENTITY_ESCAPES_TO_CALL`, `ENTITY_IN_EXPRESSION_PROP`,
+`ENTITY_REASSIGNMENT`, `ENTITY_SPREAD`, `COMPUTED_MEMBER`, `MEMBER_COMPONENT_TAG`,
+`NON_LITERAL_HASMANY_PARAM`, `INTERFACES_MODE`, `UNCLASSIFIED`). Bailed chains are left
+untouched and fall back to the runtime proxy pass.
 
-Measure the compiled-vs-bailed rate over a source tree with
+Measure the compiled-vs-bailed rate (and hole counts) over a source tree with
 `bun run packages/bindx-compiler/scripts/measure.ts <dir>` (default
-`packages/example`).
+`packages/example`). On the largest real bindx app (`npi`, `packages/admin`, 257 chains)
+phase 2 with holes compiles **251/257 (98%)** — 35 chains carry 99 holes total — leaving
+only 6 bails (5 `ENTITY_IN_EXPRESSION_PROP`, 1 `ENTITY_REASSIGNMENT`); phase 1 without
+holes compiled 84%.
 
 See [docs/compiler-plan.md](./compiler-plan.md) for the full design.
 

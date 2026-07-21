@@ -23,6 +23,7 @@ import {
 	Entity,
 	defineSchema,
 	scalar,
+	hasOne,
 	entityDef,
 	setStaticSelectionValidation,
 } from '@contember/bindx-react'
@@ -31,6 +32,11 @@ import { bindxCompilerPlugin } from '../src/index.js'
 interface FixtureModule {
 	readonly Card: unknown
 	readonly getRenderCalls: () => number
+}
+
+interface HoleFixtureModule {
+	readonly Host: unknown
+	readonly getHostRenderCalls: () => number
 }
 
 // A createComponent used implicitly: the render fn increments a module-level
@@ -56,7 +62,7 @@ const tmpFiles: string[] = []
 let counter = 0
 
 /** Transform with the plugin, write to a fresh temp module, and import it. */
-async function loadTransformed(source: string): Promise<FixtureModule> {
+async function loadTransformed<T>(source: string): Promise<T> {
 	const out = transformSync(source, {
 		filename: 'card.tsx',
 		plugins: [bindxCompilerPlugin],
@@ -69,14 +75,18 @@ async function loadTransformed(source: string): Promise<FixtureModule> {
 	const path = join(TMP_DIR, `.e2e-${counter++}.tsx`)
 	writeFileSync(path, out.code)
 	tmpFiles.push(path)
-	return import(path) as Promise<FixtureModule>
+	return import(path) as Promise<T>
 }
 
 interface Schema {
-	Article: { id: string; title: string }
+	Article: { id: string; title: string; author: { id: string; name: string } }
+	Author: { id: string; name: string }
 }
 const schema = defineSchema<Schema>({
-	entities: { Article: { fields: { id: scalar(), title: scalar() } } },
+	entities: {
+		Article: { fields: { id: scalar(), title: scalar(), author: hasOne('Author') } },
+		Author: { fields: { id: scalar(), name: scalar() } },
+	},
 })
 const articleDef = entityDef<Schema['Article']>('Article')
 
@@ -104,7 +114,7 @@ describe('end-to-end: transformed module runs the static path', () => {
 	})
 
 	test('collection skips the render fn, then <Entity> fetches and renders the field', async () => {
-		const mod = await loadTransformed(SOURCE)
+		const mod = await loadTransformed<FixtureModule>(SOURCE)
 
 		// Trigger static collection via the fragment getter — the proxy pass would
 		// have executed the render fn; the injected static selection must not.
@@ -135,9 +145,79 @@ describe('end-to-end: transformed module runs the static path', () => {
 		setStaticSelectionValidation(true)
 		const warn = spyOn(console, 'warn').mockImplementation(() => {})
 
-		const mod = await loadTransformed(SOURCE)
+		const mod = await loadTransformed<FixtureModule>(SOURCE)
 		// Collection now also runs the proxy pass and diffs — must agree.
 		void (mod.Card as Record<string, unknown>).$article
+
+		expect(warn).not.toHaveBeenCalled()
+		warn.mockRestore()
+	})
+})
+
+// A host whose render passes an entity-derived value (`article.author`) to a nested
+// createComponent target. The compiler emits a hole; runtime resolution must fetch the
+// target's field WITHOUT executing the host render fn during collection.
+const SOURCE_HOLE = `
+import { createComponent, Field, entityDef } from '@contember/bindx-react'
+
+let hostRenderCalls = 0
+export const getHostRenderCalls = () => hostRenderCalls
+
+const ArticleDef = entityDef('Article')
+const AuthorDef = entityDef('Author')
+
+const AuthorName = createComponent()
+	.entity('author', AuthorDef)
+	.render(({ author }) => <span data-testid="author"><Field field={author.name} /></span>)
+
+export const Host = createComponent()
+	.entity('article', ArticleDef)
+	.render(({ article }) => {
+		hostRenderCalls++
+		return <div data-testid="host"><AuthorName author={article.author} /></div>
+	})
+`
+
+describe('end-to-end: transformed module resolves a hole', () => {
+	test('collection skips the host render fn, then the nested target field fetches and renders', async () => {
+		const mod = await loadTransformed<HoleFixtureModule>(SOURCE_HOLE)
+
+		// (a) Static collection resolves the hole via AuthorName's selection surface —
+		// the host render fn must not run (proxy pass would have incremented the counter).
+		void (mod.Host as Record<string, unknown>).$article
+		expect(mod.getHostRenderCalls()).toBe(0)
+
+		const adapter = new MockAdapter(
+			{
+				Article: { 'article-1': { id: 'article-1', title: 'Hello World', author: { id: 'author-1', name: 'John' } } },
+				Author: { 'author-1': { id: 'author-1', name: 'John' } },
+			},
+			{ delay: 0 },
+		)
+		const Host = mod.Host as React.ComponentType<{ article: unknown }>
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={schema}>
+				<Entity entity={articleDef} by={{ id: 'article-1' }}>
+					{article => <Host article={article} />}
+				</Entity>
+			</BindxProvider>,
+		)
+
+		// (b) The hole put author.name into the fetch plan, so the nested field renders.
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="author"]')?.textContent).toBe('John')
+		})
+		expect(mod.getHostRenderCalls()).toBeGreaterThan(0)
+	})
+
+	test('validate mode raises no warning for the hole-carrying component', async () => {
+		setStaticSelectionValidation(true)
+		const warn = spyOn(console, 'warn').mockImplementation(() => {})
+
+		const mod = await loadTransformed<HoleFixtureModule>(SOURCE_HOLE)
+		// The diff of compiled-vs-proxy selection must agree; createComponent target is
+		// not a blind spot, so no blind-spot warn either.
+		void (mod.Host as Record<string, unknown>).$article
 
 		expect(warn).not.toHaveBeenCalled()
 		warn.mockRestore()
