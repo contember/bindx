@@ -364,6 +364,11 @@ export {
 	// Component (unified API)
 	createComponent,
 	withCollector,
+	COLLECTOR_CONTRACT,
+	itemOf,
+	entityOf,
+	type CallbackContract,
+	type CollectorContract,
 	isBindxComponent,
 	mergeFragments,
 	COMPONENT_MARKER,
