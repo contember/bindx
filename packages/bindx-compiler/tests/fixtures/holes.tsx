@@ -48,7 +48,8 @@ export const DerivedPathViaCallback = createComponent()
 		</HasOne>
 	))
 
-// 6. literal + non-literal extra props (literals kept, non-literals dropped)
+// 6. literal + module-scope extra props (literals kept; module-scope identifiers `cb`/`dyn`
+//    lifted into extraProps so the real values reach the target — phase 2.1)
 export const LiteralAndNonLiteralProps = createComponent()
 	.entity('article', schema.Article)
 	.render(({ article }) => (

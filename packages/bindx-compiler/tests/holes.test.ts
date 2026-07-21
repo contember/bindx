@@ -98,10 +98,12 @@ describe('hole analyzer (fixtures/holes.tsx)', () => {
 		expect(holesAt(5)[0]?.entityProps).toEqual({ author: { source: 'article', path: ['author'] } })
 	})
 
-	test('#6 literal props kept, non-literal props dropped', () => {
+	test('#6 literal props kept; module-scope identifier props lifted into extraProps', () => {
 		const hole = holesAt(6)[0]!
 		expect(hole.entityProps).toEqual({ author: { source: 'article', path: ['author'] } })
 		expect(hole.literalProps).toEqual({ label: 'hi', count: 5, obj: { a: 1 } })
+		// `cb={handler}` and `dyn={someVar}` are module-scope bindings → lifted (real value reaches target).
+		expect(Object.keys(hole.extraProps ?? {}).sort()).toEqual(['cb', 'dyn'])
 	})
 
 	test('#7 target defined later in the module still forms a hole', () => {

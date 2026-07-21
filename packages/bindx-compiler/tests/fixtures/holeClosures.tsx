@@ -2,9 +2,12 @@ import type { ReactNode } from 'react'
 import { createComponent, Field, HasOne, withCollector, type EntityRef } from '@contember/bindx-react'
 import { schema, type Author } from './_schema.js'
 
-// Phase-2 under-fetch guard: function props / render-prop children of a HOLE element are
-// dropped from the emitted hole, but the target's staticRender may INVOKE them with a
-// collector proxy during collection. See docs/compiler-plan.md (FUNCTION_PROP_ON_HOLE).
+// Phase-2.1 closure lifting: an inline render-prop child of a HOLE element that captures nothing
+// from render scope (only its own params + module bindings) is LIFTED verbatim into the hole's
+// extraProps — the target's staticRender replays it with a collector proxy, so collection proceeds
+// and stays oracle-equal. A child that captures a render-scope value (a `.use()` output, an entity
+// root) cannot be reproduced at the module emit site → it BAILS (FUNCTION_PROP_ON_HOLE, runtime
+// fallback). See docs/compiler-plan.md (Phase 2.1).
 
 interface SelectFieldProps {
 	field: EntityRef<Author>
@@ -12,7 +15,7 @@ interface SelectFieldProps {
 }
 
 // Mirrors npi's SelectField: a withCollector primitive whose staticRender reaches the field
-// ONLY through the render-prop child. Dropping that child under-fetches unless the chain bails.
+// ONLY through the render-prop child (it INVOKES it with a collector proxy).
 export const SelectField = withCollector(
 	(_props: SelectFieldProps): ReactNode => null,
 	(props: SelectFieldProps): ReactNode => (
@@ -37,10 +40,10 @@ export const AuthorSummary = withCollector(
 
 const sideEffect = (): void => {}
 
-// UNSAFE — the render-prop child reads a field off its OWN param. The hole drops it, yet
-// SelectField.staticRender invokes it with a collector proxy → compiled would under-fetch.
-// The chain BAILS with FUNCTION_PROP_ON_HOLE.
-export const UnsafeRenderProp = createComponent()
+// LIFTED — the render-prop child uses only its OWN param `it` + module scope (no render capture),
+// so it is emitted verbatim into the hole's extraProps. SelectField.staticRender replays it with a
+// collector proxy → author.name is collected. The chain COMPILES and is ORACLE-EQUAL end-to-end.
+export const LiftedRenderProp = createComponent()
 	.entity('article', schema.Article)
 	.render(({ article }) => (
 		<SelectField field={article.author}>
@@ -48,9 +51,20 @@ export const UnsafeRenderProp = createComponent()
 		</SelectField>
 	))
 
-// SAFE — the hole's extra function props take no params and capture no entity roots, so
-// invoking them at collection time cannot reach a selection scope. The chain still COMPILES
-// with the hole, which resolves author.name through AuthorSummary's own staticRender.
+// BAILS — the render-prop child captures `t` (a `.use()` value) from render scope, which cannot be
+// reproduced at the module-scope emit site. Default deny → FUNCTION_PROP_ON_HOLE (runtime fallback).
+export const CapturingRenderProp = createComponent()
+	.entity('article', schema.Article)
+	.use(() => ({ t: (): string => 'x' }))
+	.render(({ article, t }) => (
+		<SelectField field={article.author}>
+			{it => <Field field={it.name} format={() => t()} />}
+		</SelectField>
+	))
+
+// SAFE (drop) — the hole's extra function props take no params and capture no entity roots, so
+// invoking them at collection time cannot reach a selection scope. The chain still COMPILES with
+// the hole, which resolves author.name through AuthorSummary's own staticRender.
 export const SafeHoleClosures = createComponent()
 	.entity('article', schema.Article)
 	.render(({ article }) => (

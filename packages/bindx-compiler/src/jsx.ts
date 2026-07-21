@@ -7,9 +7,14 @@ import * as t from '@babel/types'
 import type { ComponentKind, ImportBindings } from './imports.js'
 import {
 	BailError, type RootRef, type Scope, consumeLeaf, consumeMany, consumeRelation,
-	entityPathOf, evaluateLiteral, isHoleClosureSafe, referencesRoot, resolve,
+	entityPathOf, evaluateLiteral, referencesRoot, resolve,
 } from './resolve.js'
+import { type Closure, type HoleClosureProp, type HoleIdentifierProp, resolveHoleExtraProps } from './holeProps.js'
 import type { AnalyzedHole, HoleEntityProp, StaticHasManyParams } from './types.js'
+
+function asClosure(node: t.Node | null): Closure | null {
+	return node && (t.isArrowFunctionExpression(node) || t.isFunctionExpression(node)) ? node : null
+}
 
 const HASMANY_PARAM_KEYS = ['filter', 'orderBy', 'limit', 'offset', 'totalCount'] as const
 
@@ -78,12 +83,15 @@ export class JsxAnalyzer {
 	/**
 	 * A component-typed JSX element (`<Card .../>`). Entity-rooted props become a phase-2
 	 * hole resolved through the target's runtime selection surface; children stay statically
-	 * analyzed (not part of the hole).
+	 * analyzed (not part of the hole). Non-entity props that a target could invoke with a
+	 * collector proxy (module-scope values, render-scope-free closures) are lifted verbatim
+	 * into the hole's `extraProps` so compiled ≡ oracle by construction.
 	 */
 	private walkComponentElement(tag: string, node: t.JSXElement, scope: Scope): void {
 		const entityProps: Record<string, HoleEntityProp> = {}
 		const literalProps: Record<string, unknown> = {}
-		const functionProps: Array<t.ArrowFunctionExpression | t.FunctionExpression> = []
+		const closureProps: HoleClosureProp[] = []
+		const identifierProps: HoleIdentifierProp[] = []
 
 		for (const attr of node.openingElement.attributes) {
 			if (t.isJSXSpreadAttribute(attr)) {
@@ -93,50 +101,39 @@ export class JsxAnalyzer {
 			if (!t.isJSXIdentifier(attr.name) || attr.name.name === 'children') {
 				continue
 			}
-			const inner = jsxAttrInner(attr.value)
-			if (inner && (t.isArrowFunctionExpression(inner) || t.isFunctionExpression(inner))) {
-				functionProps.push(inner) // dropped from the hole — must be proven safe if this is a hole
+			const fn = asClosure(jsxAttrInner(attr.value))
+			if (fn) {
+				closureProps.push({ name: attr.name.name, fn }) // hole-classified below (lift/drop/bail)
+				continue
 			}
-			this.collectComponentProp(attr.name.name, attr.value, scope, entityProps, literalProps)
+			this.collectComponentProp(attr.name.name, attr.value, scope, entityProps, literalProps, identifierProps)
 		}
 
+		const childClosure = childrenCallback(node.children)
+
 		if (Object.keys(entityProps).length > 0) {
-			// A hole drops the element's function props/children; if the target may invoke one
-			// with a collector proxy during collection, dropping it under-fetches → bail.
-			this.assertHoleClosuresSafe(tag, functionProps, node.children, scope)
 			if (!this.moduleBindings.has(tag)) {
 				// Tag isn't resolvable at module scope → no thunk can reference it.
 				throw new BailError({ code: 'ENTITY_ESCAPES_TO_COMPONENT', message: `component <${tag}> does not resolve to a module binding` })
 			}
+			const extraProps = resolveHoleExtraProps({ tag, closureProps, identifierProps, childClosure, scope, moduleBindings: this.moduleBindings })
 			this.host.addHole({
 				component: tag,
 				entityProps,
 				literalProps: Object.keys(literalProps).length > 0 ? literalProps : undefined,
+				extraProps: Object.keys(extraProps).length > 0 ? extraProps : undefined,
 			})
+		} else {
+			// Not a hole: a closure prop capturing an entity root would escape into the element
+			// (the runtime cannot see it either) — preserve the conservative bail.
+			for (const { fn } of closureProps) {
+				if (referencesRoot(fn, scope)) {
+					throw new BailError({ code: 'ENTITY_IN_EXPRESSION_PROP', message: `entity value inside a function prop of <${tag}>` })
+				}
+			}
 		}
 
 		this.walkChildren(node.children, scope) // the `children` slot is analyzed at runtime
-	}
-
-	/** Bail if any dropped function prop / render-prop child of a hole element is unsafe to omit. */
-	private assertHoleClosuresSafe(
-		tag: string,
-		functionProps: ReadonlyArray<t.ArrowFunctionExpression | t.FunctionExpression>,
-		children: t.JSXElement['children'],
-		scope: Scope,
-	): void {
-		for (const fn of functionProps) {
-			if (!isHoleClosureSafe(fn, scope)) {
-				throw new BailError({ code: 'FUNCTION_PROP_ON_HOLE', message: `function prop on hole element <${tag}> may be invoked with an entity during collection` })
-			}
-		}
-		for (const child of children) {
-			if (t.isJSXExpressionContainer(child)
-				&& (t.isArrowFunctionExpression(child.expression) || t.isFunctionExpression(child.expression))
-				&& !isHoleClosureSafe(child.expression, scope)) {
-				throw new BailError({ code: 'FUNCTION_PROP_ON_HOLE', message: `render-prop children of hole element <${tag}> may be invoked with an entity during collection` })
-			}
-		}
 	}
 
 	/** Namespaced / member-expression tags (`<Ns.Comp/>`) cannot be referenced by a thunk → bail on entity props. */
@@ -160,6 +157,7 @@ export class JsxAnalyzer {
 		scope: Scope,
 		entityProps: Record<string, HoleEntityProp>,
 		literalProps: Record<string, unknown>,
+		identifierProps: Array<{ name: string; ident: t.Identifier }>,
 	): void {
 		if (value === null || value === undefined) {
 			literalProps[propName] = true // boolean shorthand `<Card flag/>`
@@ -173,9 +171,26 @@ export class JsxAnalyzer {
 		if (!inner) {
 			return
 		}
+		// JSX-element/fragment prop (`draftSlot={<X ... />}`): analyze like children, emit nothing.
+		// The oracle walks it via the target's slot/staticRender proxies → this yields an equal-or-superset union.
+		if (t.isJSXElement(inner) || t.isJSXFragment(inner)) {
+			this.host.walkValue(inner, scope)
+			return
+		}
+		// `cond.*` DSL in a prop (`if={cond.eq(cell.kind, 'promo')}`): the only selection it carries
+		// is the FieldRefs in its args (verified against Case/If getSelection). Record them, emit nothing.
+		if (this.isCondCall(inner)) {
+			this.host.walkValue(inner, scope)
+			return
+		}
 		const ep = entityPathOf(inner, scope) // may throw COMPUTED_MEMBER
 		if (ep.kind === 'path') {
 			entityProps[propName] = { source: ep.source, path: [...ep.path] }
+			return
+		}
+		// Bare identifier — deferred to hole classification (module-scope lift / scalar drop / bail).
+		if (t.isIdentifier(inner)) {
+			identifierProps.push({ name: propName, ident: inner })
 			return
 		}
 		if (referencesRoot(inner, scope)) {
@@ -186,6 +201,16 @@ export class JsxAnalyzer {
 			literalProps[propName] = lit.value
 		}
 		// Non-literal non-entity props are silently omitted (recovered at runtime if needed).
+	}
+
+	/** True for a recognized `cond.method(...)` call (condition DSL) in a prop position. */
+	private isCondCall(node: t.Node): boolean {
+		if (!t.isCallExpression(node) && !t.isOptionalCallExpression(node)) {
+			return false
+		}
+		const callee = node.callee
+		return t.isMemberExpression(callee) && !callee.computed
+			&& t.isIdentifier(callee.object) && this.bindings.cond.has(callee.object.name)
 	}
 
 	private walkBindxComponent(kind: ComponentKind, node: t.JSXElement, scope: Scope): void {

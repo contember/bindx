@@ -434,27 +434,26 @@ The compiler emits a selection only when it can prove it. Over-approximation (ex
 fields) is acceptable; under-approximation is impossible by construction (default
 deny). Anything it cannot classify makes the whole component **bail** with a
 machine-readable reason (e.g. `ENTITY_ESCAPES_TO_CALL`, `ENTITY_IN_EXPRESSION_PROP`,
-`FUNCTION_PROP_ON_HOLE`, `ENTITY_REASSIGNMENT`, `ENTITY_SPREAD`, `COMPUTED_MEMBER`,
-`MEMBER_COMPONENT_TAG`, `NON_LITERAL_HASMANY_PARAM`, `INTERFACES_MODE`, `UNCLASSIFIED`).
-Bailed chains are left untouched and fall back to the runtime proxy pass.
+`FUNCTION_PROP_ON_HOLE`, `RENDER_LOCAL_ON_HOLE`, `ENTITY_REASSIGNMENT`, `ENTITY_SPREAD`,
+`COMPUTED_MEMBER`, `MEMBER_COMPONENT_TAG`, `NON_LITERAL_HASMANY_PARAM`, `INTERFACES_MODE`,
+`UNCLASSIFIED`). Bailed chains are left untouched and fall back to the runtime proxy pass.
 
-`FUNCTION_PROP_ON_HOLE` closes an under-fetch class: a hole element's function props /
-render-prop children are dropped from the emitted hole, but a hole target's `staticRender`
-may *invoke* such a closure with a collector proxy during collection (npi's `SelectField`
-does `<HasOne field={props.field}>{e => props.children(e)}</HasOne>`), collecting fields
-the compiled path never sees. A dropped inline closure is safe to omit **only** when
-invoking it cannot reach a scope — no reference to its OWN parameters (transitively) and no
-captured entity roots (`onClick={() => save()}` is safe; `it => <Field field={it.name}/>` is
-not). Otherwise the chain bails. (Lifting param-only closures into the hole literal is a
-future recovery — see compiler-plan.md, phase 2.1.)
+`FUNCTION_PROP_ON_HOLE` / `RENDER_LOCAL_ON_HOLE` guard an under-fetch class: a hole element's
+function props / render-prop children / identifier-valued props are non-entity, but a hole target's
+`staticRender` may *invoke* them with a collector proxy during collection (npi's `SelectField` does
+`<HasOne field={props.field}>{e => props.children(e)}</HasOne>`), collecting fields the compiled path
+would otherwise miss. **Phase 2.1** resolves most of these by *lifting* the value into the hole's
+`extraProps` instead of dropping it: module-scope bindings and render-scope-free closures are in scope
+at the emit site, so the real value reaches the target at resolution (`it => <Field field={it.name}/>`
+lifts; `onClick={() => save()}` drops as inert; a closure capturing `t` from `.use()` or an entity
+root bails, as does a render-local const passed onward). See docs/compiler-plan.md, phase 2.1.
 
 Measure the compiled-vs-bailed rate (and hole counts) over a source tree with
 `bun run packages/bindx-compiler/scripts/measure.ts <dir>` (default
 `packages/example`). On the largest real bindx app (`npi`, `packages/admin`, 257 chains)
-phase 2 with holes compiles **242/257 (94%)** — 26 chains carry 82 holes total — leaving
-15 bails (9 `FUNCTION_PROP_ON_HOLE`, 5 `ENTITY_IN_EXPRESSION_PROP`, 1 `ENTITY_REASSIGNMENT`);
-phase 1 without holes compiled 84%. (An earlier 98% reading was unsound — it counted the
-now-bailed `FUNCTION_PROP_ON_HOLE` chains as compiled.)
+phase 2.1 compiles **254/257 (99%)** — 38 chains carry 112 holes total — leaving 3 genuine bails
+(1 `ENTITY_IN_EXPRESSION_PROP`, 1 `FUNCTION_PROP_ON_HOLE`, 1 `ENTITY_REASSIGNMENT`); phase 2 with
+holes compiled 94%, phase 1 without holes 84%.
 
 See [docs/compiler-plan.md](./compiler-plan.md) for the full design.
 
