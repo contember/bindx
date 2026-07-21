@@ -73,6 +73,11 @@ export function setStaticSelectionValidation(enabled: boolean): void {
 	staticSelectionValidationEnabled = enabled
 }
 
+/** Reads the module-level validate-mode flag (used by <Entity>'s root compilation). */
+export function isStaticSelectionValidationEnabled(): boolean {
+	return staticSelectionValidationEnabled
+}
+
 // ============================================================================
 // Entity Config (Runtime)
 // ============================================================================
@@ -491,6 +496,25 @@ function validateCompiledSelection<TProps extends object>(
 	if (lines.length > 0) {
 		console.warn(
 			`[bindx] static selection under-fetches for <${componentDisplayName}>:\n${lines.join('\n')}`,
+		)
+	}
+}
+
+/**
+ * Validate mode for a compiled <Entity> root: warn (once per collection) on fields
+ * the runtime children-collector walk requests but the compiled root omits. Reuses
+ * the same under-fetch-only diff as createComponent; the warn names the entity type.
+ */
+export function validateCompiledRootSelection(
+	compiledSelection: SelectionMeta,
+	runtimeSelection: SelectionMeta,
+	entityType: string,
+): void {
+	const lines: string[] = []
+	diffUnderfetchedFields(compiledSelection, runtimeSelection, [entityType], lines)
+	if (lines.length > 0) {
+		console.warn(
+			`[bindx] static selection under-fetches for <Entity ${entityType}>:\n${lines.join('\n')}`,
 		)
 	}
 }
