@@ -545,8 +545,62 @@ now-unused `HasMany` JSX import:
  ) as <TEntity extends object>(props: InitializingRepeaterProps<TEntity>) => React.ReactNode
 ```
 
+## Phase 3 — Entity root compilation
+
+Motivation: after phase 2.2 the compiler covers `createComponent()` chains, but selection
+ROOTS still collect at runtime: `<Entity>` invokes its children render-prop with a collector
+proxy on every root mount (`useSelectionCollection` → `collect: collector => children(collector)`)
+— the same crash-prone, one-branch execution the compiler eliminated for components. npi has 147
+`<Entity>` usages vs 65 definer-based hooks (already static by construction — nothing to compile
+there). DataGrid/DataView roots are explicitly OUT of scope for phase 3 (different walker/marker
+system; phase 3.1 candidate).
+
+### Contract — pinned, both implementation steps code against this exactly
+
+- `<Entity>` (both by-mode and create-mode) gains an optional compiler-facing prop
+  `compiledSelection?: CompiledSelection` (same type as `.render()`'s 2nd arg). The root's
+  field map lives under the FIXED key `entity` in `compiledSelection.props`; every hole's
+  `entityProps[*].source` must be `'entity'`.
+- Runtime: when the prop is present, Entity does NOT invoke `children(collector)` — the
+  selection is built from the compiled fields + resolved holes (reuse/extract the shared
+  resolution used by `applyCompiledSelection`; no fragments needed, just the root
+  `SelectionMeta`). Validate mode (existing `setStaticSelectionValidation` flag): also run the
+  runtime walk and apply the same under-fetch-only diff.
+- Emit: the babel plugin injects the JSX attribute
+  `compiledSelection={{ props: { entity: {...} }, holes: [...] }}` on the `<Entity>` element.
+  Idempotence: skip elements that already carry the attribute.
+
+### Compiler side
+
+- New top-level scan: `<Entity>` JSX elements (tag resolving to an import from
+  `@contember/bindx*`) anywhere in the file — including inside plain function components
+  (routes) and inside `createComponent` render bodies. Each element is its own emit-or-bail
+  unit, reported separately by measure (`entity roots: N compiled / M bailed`).
+- Children must be a single function expression → its first param becomes the root; the entire
+  existing machinery applies unchanged (paths, holes + extraProps, collector contracts,
+  cond-in-props, JSX props). Non-function or absent children → no emit (runtime walk stays).
+- Captures inside the Entity closure that reference an OUTER host root (Entity nested in a
+  createComponent body) belong to the HOST chain — the host's full-body union walk already
+  records them; the Entity emit contains only paths rooted at the closure param. (This makes
+  the compiler a sound superset of the runtime here — the runtime walk of the host cannot see
+  into the Entity closure at all.)
+- `entity`/`by`/`filter`/`create`/`onPersisted` and other Entity props carry no selection;
+  they are left untouched and impose no bail (they are not entity-rooted values — `entity`
+  receives an entityDef, a module value).
+
+### Validation
+
+- Oracle for roots = the QuerySpec the adapter receives: render the transformed vs untransformed
+  module under MockAdapter and compare the requested selection strictly (plus render-works and
+  validate-mode-silent assertions). Fixture set: scalar fields; nested relations; compiled
+  createComponent used inside the Entity closure (fragment composition still merges); a hole
+  (entity-derived value into a nested component); a collector-contract target; branch union
+  (superset assertion); create-mode Entity.
+- Full npi measure re-run with root counts.
+
 ## Future (explicitly out of scope now)
 
 Unplugin packaging, eslint plugin reusing the analyzer (bail reasons as lint diagnostics),
 oxc/SWC port if Babel cost ever matters, closure lifting with entity-path capture substitution
-(phase-2.2 alternative — superseded by contracts unless a non-contract case demands it).
+(phase-2.2 alternative — superseded by contracts unless a non-contract case demands it),
+DataGrid/DataView root compilation (phase 3.1).
