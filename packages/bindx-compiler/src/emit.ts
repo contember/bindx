@@ -69,3 +69,17 @@ export function selectionToAst(selection: StaticSelection, holes: readonly Analy
 	}
 	return t.objectExpression(properties)
 }
+
+/**
+ * Emits the `compiledSelection={{ props: { entity: {...} }, holes: [...] }}` JSX attribute
+ * the Babel plugin injects onto a proven `<Entity>` element (phase 3). The root field map
+ * lives under the fixed `rootKey`; holes are the same thunk-carrying shape as chains.
+ */
+export function entitySelectionAttr(
+	rootKey: string,
+	selection: StaticFieldMap,
+	holes: readonly AnalyzedHole[],
+): t.JSXAttribute {
+	const obj = selectionToAst({ [rootKey]: selection }, holes)
+	return t.jsxAttribute(t.jsxIdentifier('compiledSelection'), t.jsxExpressionContainer(obj))
+}

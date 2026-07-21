@@ -46,6 +46,18 @@ export class BodyAnalyzer {
 		}
 	}
 
+	/**
+	 * Analyze a `<Entity>` children closure (phase 3). Unlike a `.render()` body — whose
+	 * param is the props object and entity props are its members — the closure's FIRST param
+	 * IS the root entity accessor itself, exactly like a `<HasOne>` children callback. So it
+	 * binds directly at `rootNode` (source `sourceKey`); all downstream machinery (paths,
+	 * holes, contracts, cond-in-props) applies unchanged.
+	 */
+	analyzeRootChildren(fn: t.ArrowFunctionExpression | t.FunctionExpression, rootNode: SelNode, sourceKey: string): void {
+		const scope: Scope = { roots: new Map(), propsParams: new Set(), propRoots: new Map([[sourceKey, rootNode]]), scalarParams: new Set(), locals: new Set() }
+		this.walkCallbackWithItem(fn, { node: rootNode, path: [], source: sourceKey, absPath: [] }, scope)
+	}
+
 	private registerTopParam(param: t.Node, scope: Scope): void {
 		const p = t.isAssignmentPattern(param) ? param.left : param
 		if (t.isIdentifier(p)) {

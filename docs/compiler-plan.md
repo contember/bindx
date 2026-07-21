@@ -545,7 +545,61 @@ now-unused `HasMany` JSX import:
  ) as <TEntity extends object>(props: InitializingRepeaterProps<TEntity>) => React.ReactNode
 ```
 
-## Phase 3 — Entity root compilation
+## Phase 3 — Entity root compilation — IMPLEMENTED
+
+Status: **implemented** on `experiment/selection-compiler`. Runtime side
+(`compiledSelection?` prop on `<Entity>`, `useRootSelection`, `resolveCompiledRootSelection`,
+`COMPILED_ROOT_KEY`) landed in `32d2927`. Compiler side — top-level `<Entity>` scan
+(`packages/bindx-compiler/src/entityRoots.ts`), `BodyAnalyzer.analyzeRootChildren`, attribute
+emit (`emit.ts` `entitySelectionAttr` + `babelPlugin.ts`), `EntityRootResult` public API,
+measure entity-root reporting — plus adapter-oracle equivalence tests
+(`tests/entityRoots.test.tsx`) are green.
+
+### Implemented — scan, analysis, emit
+
+- **Scan** (`entityRoots.ts`): `findEntityElements` walks the whole program for `<Entity>` JSX
+  elements whose tag is a bindx `Entity` import binding (tracked in `ImportBindings.entity`,
+  kept **separate** from the recognized-component map so a nested `<Entity>` stays opaque to the
+  host chain's per-chain walk). `analyzeEntityRootsInProgram` / `analyzeEntityRoots` mirror
+  `analyzeProgram` / `analyzeSource`; each element is an independent `EntityRootResult`.
+- **Analysis**: the children closure's FIRST param is the root itself, so it is analyzed via
+  `BodyAnalyzer.analyzeRootChildren` — a thin wrapper over `walkCallbackWithItem` (the same entry
+  `<HasOne>`/`<HasMany>` callbacks use) binding the param at a fresh root SelNode with
+  `source = 'entity'`. ALL existing machinery (paths, holes + `extraProps` + taint lattice,
+  collector contracts incl. cross-module discovery, `cond.*` in props, JSX-valued props,
+  `FUNCTION_PROP_ON_HOLE` / `RENDER_LOCAL_ON_HOLE`) applies unchanged. `<Entity>`'s own props are
+  never analyzed. Non-function / absent children → `ENTITY_NO_FUNCTION_CHILDREN` bail (no emit;
+  runtime walk stays).
+- **Nested-in-component soundness**: an `<Entity>` inside a `createComponent` body is analyzed
+  twice, independently. The host chain's full-body walk sees `<Entity>` as an unknown component
+  and walks its children as a nested function — the closure param shadows host roots, so only
+  OUTER host-root captures are recorded there; the Entity's own emit contains only paths rooted at
+  its closure param. Verified: host chain selection and Entity root selection are disjoint and
+  correct.
+- **Emit** (`babelPlugin.ts`): both surfaces are analyzed before any mutation; for each proven
+  root the plugin pushes `compiledSelection={{ props: { entity: {...} }, holes: [...] }}` onto the
+  element (idempotent — skips elements already carrying the attribute).
+
+### Result (measured on `~/projects/external/npi`, packages/admin)
+
+Chains unchanged: **254/257 (99%)**, 3 bails (host analysis untouched). Entity roots:
+**84/105 compiled** (114 holes — every compiled root carries ≥1 hole: npi's dominant pattern is
+`<Entity>{e => <Body entity={e} />}</Entity>`, one delegated hole per root). 21 bails:
+11 `RENDER_LOCAL_ON_HOLE`, 7 `ENTITY_ESCAPES_TO_CALL`, 2 `ENTITY_NO_FUNCTION_CHILDREN`,
+1 `FUNCTION_PROP_ON_HOLE` — the same reason classes as chains.
+
+### Validation — adapter oracle
+
+`tests/entityRoots.test.tsx`: the root oracle is the `QuerySpec` the adapter receives. A
+`RecordingMockAdapter extends MockAdapter` (test-local, bindx unmodified) captures incoming
+queries; each fixture renders the transformed vs untransformed `<Entity>` and compares the
+requested root selection strictly (superset for branch unions). Fixtures: scalars; nested has-one;
+compiled `createComponent` inside the closure (fragment merges); a hole (entity-derived value);
+collector-contract target; branch union (runtime ⊆ compiled); create-mode; `<Entity>` nested in a
+`createComponent` body (host chain unaffected + Entity emit correct); bail (non-function children →
+no attribute). Plus children-not-invoked-during-collection (SCOPE_REF counter) and emit/idempotence.
+
+### Original plan
 
 Motivation: after phase 2.2 the compiler covers `createComponent()` chains, but selection
 ROOTS still collect at runtime: `<Entity>` invokes its children render-prop with a collector

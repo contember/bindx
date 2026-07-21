@@ -7,9 +7,10 @@
  * emits the argument and never imports anything from bindx-react.
  */
 import type { PluginObj, PluginPass } from '@babel/core'
-import { analyzeProgram } from './analyze.js'
-import { selectionToAst } from './emit.js'
-import { isBailed } from './types.js'
+import { analyzeEntityRootsInProgram, analyzeProgram } from './analyze.js'
+import { entitySelectionAttr, selectionToAst } from './emit.js'
+import { ENTITY_ROOT_KEY, hasCompiledSelectionAttr } from './entityRoots.js'
+import { isBailed, isEntityRootBailed } from './types.js'
 
 /** Plugin options: `alias` maps non-relative import prefixes to paths for cross-file contract discovery. */
 export interface BindxCompilerOptions {
@@ -26,7 +27,12 @@ export function bindxCompilerPlugin(_api?: unknown, options?: BindxCompilerOptio
 		visitor: {
 			Program(path, state: PluginPass): void {
 				const filename = state.file.opts.filename ?? undefined
-				for (const { chain, result } of analyzeProgram(path.node, { filename, alias })) {
+				// Analyze both surfaces before mutating: chain injection and Entity-attribute
+				// injection are independent, but reading the whole AST first keeps them so.
+				const chainResults = analyzeProgram(path.node, { filename, alias })
+				const entityResults = analyzeEntityRootsInProgram(path.node, { filename, alias })
+
+				for (const { chain, result } of chainResults) {
 					if (isBailed(result)) {
 						continue
 					}
@@ -35,6 +41,17 @@ export function bindxCompilerPlugin(_api?: unknown, options?: BindxCompilerOptio
 						continue
 					}
 					chain.renderCall.arguments.push(selectionToAst(result.selection, result.holes))
+				}
+
+				for (const { element, result } of entityResults) {
+					if (isEntityRootBailed(result)) {
+						continue
+					}
+					// Idempotence: skip elements already carrying a compiledSelection attribute.
+					if (hasCompiledSelectionAttr(element)) {
+						continue
+					}
+					element.openingElement.attributes.push(entitySelectionAttr(ENTITY_ROOT_KEY, result.selection, result.holes))
 				}
 				path.skip()
 			},
