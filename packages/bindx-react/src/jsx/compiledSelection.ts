@@ -83,13 +83,43 @@ export interface ApplyCompiledSelectionParams {
 }
 
 /**
- * Builds `selectionsMap` entries from a compiled selection — seeding one live
- * scope per entity prop from its static field map, resolving every hole into the
- * same scopes, then snapshotting. Replaces the proxy pass entirely; the host
- * render function is never executed.
+ * Builds `selectionsMap` entries from a compiled selection — resolving the
+ * per-prop SelectionMeta (fields + holes) then wrapping each in a fragment.
+ * Replaces the proxy pass entirely; the host render function is never executed.
  */
 export function applyCompiledSelection(params: ApplyCompiledSelectionParams): void {
-	const { compiled, selectionsMap, componentBrand, roles } = params
+	const { selectionsMap, componentBrand, roles } = params
+	const metas = resolveCompiledSelection({
+		compiled: params.compiled,
+		implicitConfigs: params.implicitConfigs,
+		schemaRegistry: params.schemaRegistry,
+		componentDisplayName: params.componentDisplayName,
+		validateMode: params.validateMode,
+	})
+	for (const [propName, selection] of metas) {
+		selectionsMap.set(propName, {
+			selection,
+			fragment: createFragment(selection, componentBrand, roles),
+		})
+	}
+}
+
+export interface ResolveCompiledSelectionParams {
+	readonly compiled: CompiledSelection
+	readonly implicitConfigs: readonly [string, EntityConfig][]
+	readonly schemaRegistry: SchemaRegistry<Record<string, object>> | null
+	readonly componentDisplayName: string
+	readonly validateMode: boolean
+}
+
+/**
+ * Core resolution shared by createComponent (fragments) and <Entity> (root
+ * selection): seeds one live scope per entity prop from the static field maps,
+ * resolves every hole into the matching scope, and returns the snapshotted
+ * SelectionMeta per prop that captured fields. The host render fn is never run.
+ */
+export function resolveCompiledSelection(params: ResolveCompiledSelectionParams): Map<string, SelectionMeta> {
+	const { compiled } = params
 	const propScopes = new Map<string, SelectionScope>()
 
 	const scopeFor = (propName: string): SelectionScope => {
@@ -120,15 +150,39 @@ export function applyCompiledSelection(params: ApplyCompiledSelectionParams): vo
 	}
 
 	// 3. Snapshot every scope that captured fields.
+	const metas = new Map<string, SelectionMeta>()
 	for (const [propName, scope] of propScopes) {
 		if (scope.hasFields()) {
-			const selection = scope.toSelectionMeta()
-			selectionsMap.set(propName, {
-				selection,
-				fragment: createFragment(selection, componentBrand, roles),
-			})
+			metas.set(propName, scope.toSelectionMeta())
 		}
 	}
+	return metas
+}
+
+/** Fixed key under which <Entity> stores its compiled root field map + hole sources. */
+export const COMPILED_ROOT_KEY = 'entity'
+
+export interface ResolveCompiledRootSelectionParams {
+	readonly compiled: CompiledSelection
+	readonly entityType: string
+	readonly schemaRegistry: SchemaRegistry<Record<string, object>> | null
+	readonly validateMode: boolean
+}
+
+/**
+ * Builds the single root SelectionMeta for a compiled <Entity>: fields under the
+ * fixed `entity` key plus every hole (all rooted at `entity`). No fragments —
+ * <Entity> is a selection root, not a composable component.
+ */
+export function resolveCompiledRootSelection(params: ResolveCompiledRootSelectionParams): SelectionMeta {
+	const metas = resolveCompiledSelection({
+		compiled: params.compiled,
+		implicitConfigs: [[COMPILED_ROOT_KEY, { entityName: params.entityType }]],
+		schemaRegistry: params.schemaRegistry,
+		componentDisplayName: `Entity(${params.entityType})`,
+		validateMode: params.validateMode,
+	})
+	return metas.get(COMPILED_ROOT_KEY) ?? { fields: new Map() }
 }
 
 interface HoleResolutionContext {
