@@ -16,6 +16,7 @@ import type {
 	SelectionMeta,
 	EntityDef,
 	ResolveEntity,
+	StaticSelection,
 } from '@contember/bindx'
 import type { SelectionProvider } from './types.js'
 import type { Condition } from './conditions.js'
@@ -559,9 +560,16 @@ export interface ComponentBuilder<
 	 * Build the component with the render function.
 	 *
 	 * @param renderFn - React render function receiving typed props
+	 * @param staticSelection - Precompiled selection injected by the selection
+	 *   compiler. Compiler-facing only — do NOT hand-write it. When present, the
+	 *   runtime skips the proxy collection pass and uses this instead; enable
+	 *   {@link setStaticSelectionValidation} in dev/CI to cross-check it.
 	 * @returns Bindx component with fragment properties
 	 */
-	render(renderFn: (props: BuildRenderProps<TState>) => ReactNode): BindxComponent<TState>
+	render(
+		renderFn: (props: BuildRenderProps<TState>) => ReactNode,
+		staticSelection?: StaticSelection,
+	): BindxComponent<TState>
 }
 
 // ============================================================================

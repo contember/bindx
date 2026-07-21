@@ -29,3 +29,9 @@ export { createFragment } from './createFragment.js'
 export { buildQueryFromSelection, collectPaths, type QuerySpec, type QueryFieldSpec } from './buildQuery.js'
 export { SelectionMetaCollector, mergeSelections, createEmptySelection } from './SelectionMetaCollector.js'
 export { SelectionScope, type HasManyParams } from './SelectionScope.js'
+export {
+	staticSelectionToMeta,
+	type StaticSelection,
+	type StaticFieldMap,
+	type StaticFieldNode,
+} from './staticSelectionToMeta.js'

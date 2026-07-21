@@ -16,6 +16,7 @@ import type {
 	SelectionBuilder,
 	AnyBrand,
 	SchemaDefinition,
+	StaticSelection,
 } from '@contember/bindx'
 import {
 	SchemaRegistry,
@@ -23,6 +24,7 @@ import {
 	ComponentBrand,
 	createSelectionBuilder,
 	SelectionScope,
+	staticSelectionToMeta,
 } from '@contember/bindx'
 import type {
 	SelectionPropMeta,
@@ -52,6 +54,24 @@ export const COMPONENT_BRAND = Symbol('COMPONENT_BRAND')
  * Symbol for stored selection metadata
  */
 export const COMPONENT_SELECTIONS = Symbol('COMPONENT_SELECTIONS')
+
+// ============================================================================
+// Static Selection Validation
+// ============================================================================
+
+/**
+ * When enabled, components carrying a precompiled static selection ALSO run the
+ * runtime proxy pass and warn on any per-prop mismatch. Trust-building mode for
+ * dev/CI; off by default so production skips the proxy pass entirely.
+ */
+let staticSelectionValidationEnabled = false
+
+/**
+ * Enables or disables static-selection validate mode (module-level flag).
+ */
+export function setStaticSelectionValidation(enabled: boolean): void {
+	staticSelectionValidationEnabled = enabled
+}
 
 // ============================================================================
 // Entity Config (Runtime)
@@ -104,6 +124,7 @@ export function buildComponent<TProps extends object>(
 	slotNames: readonly string[],
 	useFns: readonly ((props: TProps) => object)[],
 	mockValues: Record<string, unknown>,
+	staticSelection: StaticSelection | null,
 ): unknown {
 	const selectionsMap = new Map<string, SelectionPropMeta>()
 	const componentDisplayName = `BindxComponent(${[...entityConfigs.keys()].join(', ')})`
@@ -146,6 +167,18 @@ export function buildComponent<TProps extends object>(
 		}
 		collectionState = 'collecting'
 		try {
+			// Precompiled selection present ⇒ build entries from it, skip the proxy pass.
+			if (staticSelection) {
+				applyStaticSelections(staticSelection, selectionsMap, componentBrand, roles)
+				if (staticSelectionValidationEnabled) {
+					validateStaticSelections(
+						staticSelection, selectionsMap, componentDisplayName,
+						implicitConfigs, renderFn, componentBrand, roles,
+						hasInterfacesMode, schemaRegistry, conditionFn, mockValues,
+					)
+				}
+				return
+			}
 			collectImplicitSelections(implicitConfigs, renderFn, selectionsMap, componentBrand, roles, hasInterfacesMode, schemaRegistry, conditionFn, mockValues)
 		} catch (error) {
 			// Analysis is deterministic, so retrying is pointless — degrade loudly
@@ -435,6 +468,99 @@ function collectImplicitSelections<TProps extends object>(
 	}
 
 	finalizeScopes()
+}
+
+// ============================================================================
+// Static Selection Application & Validation
+// ============================================================================
+
+/**
+ * Builds selectionsMap entries from a precompiled static selection — one per
+ * entity prop present in the static object. Replaces the proxy pass entirely.
+ */
+function applyStaticSelections(
+	staticSelection: StaticSelection,
+	selectionsMap: Map<string, SelectionPropMeta>,
+	componentBrand: ComponentBrand,
+	roles: readonly string[],
+): void {
+	for (const [propName, fieldMap] of Object.entries(staticSelection)) {
+		const selection = staticSelectionToMeta(fieldMap)
+		selectionsMap.set(propName, {
+			selection,
+			fragment: createFragment(selection, componentBrand, roles),
+		})
+	}
+}
+
+/**
+ * Validate mode: also run the proxy pass and warn (once) when the precompiled
+ * selection disagrees with what runtime collection would produce.
+ */
+function validateStaticSelections<TProps extends object>(
+	staticSelection: StaticSelection,
+	staticMap: Map<string, SelectionPropMeta>,
+	componentDisplayName: string,
+	implicitConfigs: [string, EntityConfig][],
+	renderFn: (props: TProps) => ReactNode,
+	componentBrand: ComponentBrand,
+	roles: readonly string[],
+	hasInterfacesMode: boolean,
+	schemaRegistry: SchemaRegistry<Record<string, object>> | null,
+	conditionFn: ((props: TProps) => Condition) | null,
+	mockValues: Record<string, unknown>,
+): void {
+	const runtimeMap = new Map<string, SelectionPropMeta>()
+	try {
+		collectImplicitSelections(implicitConfigs, renderFn, runtimeMap, componentBrand, roles, hasInterfacesMode, schemaRegistry, conditionFn, mockValues)
+	} catch {
+		// Proxy pass crashed — the static selection already stands; nothing to compare.
+		return
+	}
+
+	const lines: string[] = []
+	for (const propName of Object.keys(staticSelection)) {
+		const staticSelectionMeta = staticMap.get(propName)?.selection
+		const runtimeSelectionMeta = runtimeMap.get(propName)?.selection
+		diffSelectionMeta(staticSelectionMeta, runtimeSelectionMeta, [propName], lines)
+	}
+
+	if (lines.length > 0) {
+		console.warn(
+			`[bindx] static selection mismatch for <${componentDisplayName}>:\n${lines.join('\n')}`,
+		)
+	}
+}
+
+/**
+ * Recursively diffs two selections by field alias, appending human-readable
+ * lines for fields present on only one side (dotted paths for nested relations).
+ */
+function diffSelectionMeta(
+	staticMeta: SelectionMeta | undefined,
+	runtimeMeta: SelectionMeta | undefined,
+	path: string[],
+	lines: string[],
+): void {
+	const staticFields = staticMeta?.fields ?? new Map<string, SelectionFieldMeta>()
+	const runtimeFields = runtimeMeta?.fields ?? new Map<string, SelectionFieldMeta>()
+
+	for (const alias of staticFields.keys()) {
+		if (!runtimeFields.has(alias)) {
+			lines.push(`  only in static: ${[...path, alias].join('.')}`)
+		}
+	}
+	for (const [alias, runtimeField] of runtimeFields) {
+		const staticField = staticFields.get(alias)
+		if (!staticField) {
+			lines.push(`  only in runtime: ${[...path, alias].join('.')}`)
+			continue
+		}
+		// Both sides have this relation — recurse into nested selections.
+		if (staticField.nested || runtimeField.nested) {
+			diffSelectionMeta(staticField.nested, runtimeField.nested, [...path, alias], lines)
+		}
+	}
 }
 
 // ============================================================================
