@@ -1,0 +1,216 @@
+/**
+ * Root tracking, member-chain resolution and consumption. A "root" is a binding
+ * that points at an entity level in the selection tree (an entity prop, a relation
+ * callback param, or a const alias). Resolution mirrors the collector proxy's
+ * skip-list (see packages/bindx-react/src/jsx/proxyShared.ts + collectorProxy.ts).
+ */
+import * as t from '@babel/types'
+import { SelNode } from './selectionTree.js'
+import type { Bailout, StaticHasManyParams } from './types.js'
+
+export class BailError extends Error {
+	constructor(public readonly bailout: Bailout) {
+		super(bailout.message)
+	}
+}
+
+/** A binding that resolves to `node` reached via `path` of not-yet-materialized segments. */
+export interface RootRef {
+	readonly node: SelNode
+	readonly path: readonly string[]
+}
+
+export interface Scope {
+	readonly roots: Map<string, RootRef>
+	readonly propsParams: Set<string>
+	/** entity prop name → its root SelNode (shared across render + condition fns). */
+	readonly propRoots: ReadonlyMap<string, SelNode>
+}
+
+export function childScope(scope: Scope): Scope {
+	return {
+		roots: new Map(scope.roots),
+		propsParams: new Set(scope.propsParams),
+		propRoots: scope.propRoots,
+	}
+}
+
+export type Resolution =
+	| { kind: 'ref'; ref: RootRef }
+	| { kind: 'opaque' }
+	| { kind: 'none' }
+
+function unwrap(node: t.Node): t.Node {
+	if (t.isParenthesizedExpression(node) || t.isTSNonNullExpression(node) || t.isTSAsExpression(node) || t.isTSSatisfiesExpression(node)) {
+		return unwrap(node.expression)
+	}
+	return node
+}
+
+/**
+ * Classify an expression relative to the current roots. `opaque` = resolves to a
+ * meta/non-entity value (e.g. `entity.$data`, `entity.id`). Throws BailError on
+ * computed access off a root.
+ */
+export function resolve(nodeIn: t.Node, scope: Scope): Resolution {
+	const node = unwrap(nodeIn)
+
+	if (t.isIdentifier(node)) {
+		const ref = scope.roots.get(node.name)
+		return ref ? { kind: 'ref', ref } : { kind: 'none' }
+	}
+
+	if (t.isMemberExpression(node) || t.isOptionalMemberExpression(node)) {
+		if (node.computed) {
+			// `entity[x]` off a root cannot be statically classified.
+			if (referencesRoot(node.object, scope)) {
+				throw new BailError({ code: 'COMPUTED_MEMBER', message: 'computed member access on an entity value' })
+			}
+			return { kind: 'none' }
+		}
+		if (!t.isIdentifier(node.property)) {
+			return { kind: 'none' }
+		}
+		const propName = node.property.name
+
+		// props identifier param: `props.article`
+		if (t.isIdentifier(node.object) && scope.propsParams.has(node.object.name)) {
+			const propRoot = scope.propRoots.get(propName)
+			return propRoot ? { kind: 'ref', ref: { node: propRoot, path: [] } } : { kind: 'none' }
+		}
+
+		const objRes = resolve(node.object, scope)
+		if (objRes.kind !== 'ref') {
+			return objRes.kind === 'opaque' ? { kind: 'opaque' } : { kind: 'none' }
+		}
+		// `$fields`/`$entity` are transparent passthroughs to the same entity.
+		if (propName === '$fields' || propName === '$entity') {
+			return objRes
+		}
+		// `id`, `$*`, `__*` are accessor/meta props — never recorded as fields.
+		if (propName === 'id' || propName.startsWith('$') || propName.startsWith('__')) {
+			return { kind: 'opaque' }
+		}
+		return { kind: 'ref', ref: { node: objRes.ref.node, path: [...objRes.ref.path, propName] } }
+	}
+
+	return { kind: 'none' }
+}
+
+/** Record a member chain terminal as a scalar leaf (intermediate segments → relations). */
+export function consumeLeaf(ref: RootRef): void {
+	if (ref.path.length === 0) {
+		return
+	}
+	let node = ref.node
+	for (let i = 0; i < ref.path.length - 1; i++) {
+		node = node.child(ref.path[i]!)
+	}
+	node.addScalar(ref.path[ref.path.length - 1]!)
+}
+
+/** Materialize a chain fully as relations; returns the entity node it points at. */
+export function consumeRelation(ref: RootRef): SelNode {
+	let node = ref.node
+	for (const seg of ref.path) {
+		node = node.child(seg)
+	}
+	return node
+}
+
+/** Materialize a has-many relation; marks the field array + params, returns the item node. */
+export function consumeMany(ref: RootRef, params?: StaticHasManyParams): SelNode {
+	if (ref.path.length === 0) {
+		return ref.node
+	}
+	let parent = ref.node
+	for (let i = 0; i < ref.path.length - 1; i++) {
+		parent = parent.child(ref.path[i]!)
+	}
+	const field = ref.path[ref.path.length - 1]!
+	const item = parent.child(field)
+	parent.markMany(field)
+	if (params && Object.keys(params).length > 0) {
+		parent.setParams(field, params)
+	}
+	return item
+}
+
+/** Conservative check: does the subtree textually reference any root binding? */
+export function referencesRoot(node: t.Node, scope: Scope): boolean {
+	let found = false
+	const visit = (n: t.Node): void => {
+		if (found) {
+			return
+		}
+		if (t.isIdentifier(n) && (scope.roots.has(n.name) || scope.propsParams.has(n.name))) {
+			found = true
+			return
+		}
+		for (const key of t.VISITOR_KEYS[n.type] ?? []) {
+			const child: unknown = (n as unknown as Record<string, unknown>)[key]
+			if (Array.isArray(child)) {
+				for (const item of child) {
+					if (item && typeof item === 'object' && typeof (item as { type?: unknown }).type === 'string') {
+						visit(item as t.Node)
+					}
+				}
+			} else if (child && typeof child === 'object' && typeof (child as { type?: unknown }).type === 'string') {
+				visit(child as t.Node)
+			}
+		}
+	}
+	visit(node)
+	return found
+}
+
+export type LiteralResult = { ok: true; value: unknown } | { ok: false }
+
+/** Evaluate an expression to a static literal value, or fail. Used for HasMany params. */
+export function evaluateLiteral(node: t.Node): LiteralResult {
+	if (t.isStringLiteral(node) || t.isNumericLiteral(node) || t.isBooleanLiteral(node)) {
+		return { ok: true, value: node.value }
+	}
+	if (t.isNullLiteral(node)) {
+		return { ok: true, value: null }
+	}
+	if (t.isUnaryExpression(node) && node.operator === '-' && t.isNumericLiteral(node.argument)) {
+		return { ok: true, value: -node.argument.value }
+	}
+	if (t.isTemplateLiteral(node) && node.expressions.length === 0) {
+		return { ok: true, value: node.quasis.map(q => q.value.cooked ?? '').join('') }
+	}
+	if (t.isArrayExpression(node)) {
+		const out: unknown[] = []
+		for (const el of node.elements) {
+			if (el === null || t.isSpreadElement(el)) {
+				return { ok: false }
+			}
+			const r = evaluateLiteral(el)
+			if (!r.ok) {
+				return { ok: false }
+			}
+			out.push(r.value)
+		}
+		return { ok: true, value: out }
+	}
+	if (t.isObjectExpression(node)) {
+		const out: Record<string, unknown> = {}
+		for (const prop of node.properties) {
+			if (!t.isObjectProperty(prop) || prop.computed) {
+				return { ok: false }
+			}
+			const key = t.isIdentifier(prop.key) ? prop.key.name : t.isStringLiteral(prop.key) ? prop.key.value : null
+			if (key === null || !t.isExpression(prop.value)) {
+				return { ok: false }
+			}
+			const r = evaluateLiteral(prop.value)
+			if (!r.ok) {
+				return { ok: false }
+			}
+			out[key] = r.value
+		}
+		return { ok: true, value: out }
+	}
+	return { ok: false }
+}

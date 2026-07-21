@@ -1,0 +1,37 @@
+{
+	"name": "@contember/bindx-compiler",
+	"version": "0.1.46",
+	"private": true,
+	"description": "Experimental build-time analyzer + Babel plugin for bindx implicit selections",
+	"type": "module",
+	"main": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"build": "tsc --build",
+		"typecheck": "tsc --build",
+		"test": "bun test tests/"
+	},
+	"dependencies": {
+		"@babel/core": "^7.28.0",
+		"@babel/parser": "^7.28.0",
+		"@babel/traverse": "^7.28.0",
+		"@babel/types": "^7.28.0"
+	},
+	"devDependencies": {
+		"@contember/bindx-react": "workspace:*",
+		"@types/babel__core": "^7.20.5",
+		"@types/babel__traverse": "^7.20.6"
+	},
+	"files": [
+		"dist",
+		"src"
+	],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/contember/bindx.git",
+		"directory": "packages/bindx-compiler"
+	}
+}
