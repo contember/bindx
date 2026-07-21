@@ -101,6 +101,9 @@ export {
 // Standalone createComponent function
 export { createComponent } from './standaloneCreateComponent.js'
 
+// Static (precompiled) selection validate-mode toggle
+export { setStaticSelectionValidation } from './componentFactory.js'
+
 // withCollector — attach staticRender to a component for selection collection
 export { withCollector } from './withCollector.js'
 

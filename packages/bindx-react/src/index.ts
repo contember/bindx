@@ -37,6 +37,10 @@ export type {
 	FluentDefiner,
 	HasManyOptions,
 	InferSelection,
+	// Static (precompiled) selection
+	StaticSelection,
+	StaticFieldMap,
+	StaticFieldNode,
 	QuerySpec,
 	QueryFieldSpec,
 	// Query types (typed filter/orderBy)
@@ -150,6 +154,7 @@ export {
 	// Selection utilities
 	createFragment,
 	buildQueryFromSelection,
+	staticSelectionToMeta,
 	// Handles
 	EntityHandle,
 	HasOneHandle,
@@ -365,6 +370,7 @@ export {
 	getComponentBrand,
 	setBrandValidation,
 	validateBrand,
+	setStaticSelectionValidation,
 } from './jsx/index.js'
 
 // Entity Scope

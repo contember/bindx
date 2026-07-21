@@ -10,6 +10,7 @@ import type {
 	SchemaRegistry,
 	SelectionBuilder,
 	EntityDef,
+	StaticSelection,
 } from '@contember/bindx'
 import {
 	ComponentBrand,
@@ -172,7 +173,10 @@ export class ComponentBuilderImpl<
 		)
 	}
 
-	render(renderFn: (props: Record<string, unknown>) => ReactNode): unknown {
+	render(
+		renderFn: (props: Record<string, unknown>) => ReactNode,
+		staticSelection?: StaticSelection,
+	): unknown {
 		return buildComponent(
 			this.entityConfigs,
 			this.roles,
@@ -183,6 +187,7 @@ export class ComponentBuilderImpl<
 			this.slotNames,
 			this.useFns,
 			this.mockValues,
+			staticSelection ?? null,
 		)
 	}
 }
