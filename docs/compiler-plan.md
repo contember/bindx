@@ -402,7 +402,13 @@ captures the host entity root `footer.linkColumns` — not liftable), 1 `ENTITY_
 (out of scope). The `FUNCTION_PROP_ON_HOLE` class that dominated phase 2's residue is essentially
 gone (9 → 1); the navigation-editor `cond`-in-props and publish.tsx `draftSlot` bails disappeared.
 
-## Phase 2.2 — collector contracts (declarative invocation contracts for withCollector)
+## Phase 2.2 — collector contracts (declarative invocation contracts for withCollector) — IMPLEMENTED
+
+Status: **implemented** on `experiment/selection-compiler`. Runtime side (`itemOf`/`entityOf`/
+`CollectorContract`/`COLLECTOR_CONTRACT`, `deriveContractStaticRender`, the `withCollector`
+contract overload) landed in `012b321`. Compiler side — contract discovery
+(`packages/bindx-compiler/src/contracts.ts`) and contract-aware hole formation
+(`jsx.ts` `walkContractComponent`) — plus fixtures + oracle-equivalence tests are green.
 
 Motivation: the last real npi bail (footer-editor `LinksSection`) is a render-prop child that
 both uses its own param AND captures a host-root path (`footer.linkColumns`) — not droppable
@@ -466,6 +472,78 @@ withCollector(runtime, contract: CollectorContract)
 - npi: validated on a patched TEMP COPY (scratchpad) of `footer-editor.tsx` + `_shared.tsx` with
   `InitializingRepeater` declaring `{ children: itemOf('field') }` — the npi repo itself is NOT
   modified; the suggested npi patch ships in the report/docs instead.
+
+### Implemented — discovery mechanics
+
+`packages/bindx-compiler/src/contracts.ts` (`ContractResolver` + `ContractFileCache`), threaded
+through `analyzeProgram(program, { filename, alias, cache })` → `BodyAnalyzer` → `JsxAnalyzer` as a
+`ContractLookup = (tag) => CollectorContract | null`. In `jsx.ts`, `walkComponentElement` calls the
+lookup first; a hit routes to `walkContractComponent` (no hole), a miss keeps the phase-2/2.1 rules.
+
+Resolution for a component tag:
+1. **Local** `const Tag = withCollector(_, contract)` at module scope (TS wrappers unwrapped, incl.
+   `... as <T>(...) => ReactNode`) → extract directly.
+2. **Imported** binding (`import { Tag } from '...'`, or `Tag as default`): resolve the specifier —
+   **relative only** (`./x` → `x.tsx|ts|jsx|js` / `x/index.*`, and the ESM `./x.js` → `x.tsx|ts|jsx`
+   convention this repo uses), plus an optional `alias` (prefix→path) map for non-relative specifiers
+   (default empty). PARSE the target (no execution, no type checker), find its exported binding
+   (`export const`, `export { local as Tag }`; re-exports with a `from` source are unfollowable →
+   null), and extract.
+
+A **contract literal** is an object literal whose every value is `itemOf('…')` / `entityOf('…')` with
+a single string-literal arg, the combinators imported from `@contember/bindx*` **in that module**; a
+module-level `const` identifier resolving to such a literal is also accepted. Any deviation (spread,
+computed/method key, non-literal or missing arg, unknown combinator, unfollowable re-export,
+non-relative unaliased import) → **no contract** → existing hole/bail rules (sound: a fallback hole
+still resolves at runtime through the derived staticRender). Parsed sibling modules are cached by
+**path + mtime** in a `ContractFileCache` shared across `analyzeProgram`/plugin invocations; the
+resolver additionally memoizes per tag within a run.
+
+Contract-aware analysis (`walkContractComponent`): the element forms **no hole**. Per contract entry
+`cb → {kind, field}`, the `field` prop is resolved to a relation (`itemOf` ⇒ `consumeMany`/`many`,
+`entityOf` ⇒ `consumeRelation`) and the matching callback closure is analyzed with its **first param
+as a root at that relation** (extra params inert, mirroring `<HasMany>` index handling); host-root
+captures inside the closure are ordinary paths. Entity props **not** referenced by the contract →
+touched leaves (matching the oracle's host-eval touch). **Non-contract function props are dropped with
+no safety bail** — the derived staticRender provably never invokes them (this removes the
+`FUNCTION_PROP_ON_HOLE`/`RENDER_LOCAL_ON_HOLE` class for contract components). A missing callback for
+an entry records the relation only.
+
+### Implemented — npi temp-copy validation
+
+Copied `footer-editor.tsx` + `_shared.tsx` into the scratchpad (relative `./_shared` import
+preserved) and patched only the COPY's `InitializingRepeater` to `{ children: itemOf('field') }`
+(importing `itemOf`). `measure.ts` on that directory:
+
+- **Before** (hand-written staticRender, contract not discoverable): `footer-editor.tsx` **L112**
+  `LinksSection` → `BAIL FUNCTION_PROP_ON_HOLE` (7/8 compiled). The render-prop child both uses its
+  item param and captures the host root `footer.linkColumns` — not droppable, not liftable.
+- **After** (contract declared): **L112 → `OK [footer] (1 hole)`** — no more `FUNCTION_PROP_ON_HOLE`
+  (8/8 compiled). The outer repeater is now a contract callback; the inner
+  `<FooterLinkRow link={link} parentColumns={footer.linkColumns} />` remains a legitimate hole
+  resolved through `FooterLinkRow`'s own staticRender.
+
+Full `~/projects/external/npi/packages/admin` re-measure is **unchanged** — 254/257 (99%), 3 bails
+(1 `ENTITY_IN_EXPRESSION_PROP`, 1 `FUNCTION_PROP_ON_HOLE`, 1 `ENTITY_REASSIGNMENT`) — because npi has
+not adopted contracts. Adopting the suggested patch would clear the remaining `FUNCTION_PROP_ON_HOLE`.
+
+Suggested npi patch (`packages/admin/app/components/web-builder/forms/_shared.tsx`) — also drop the
+now-unused `HasMany` JSX import:
+
+```diff
+-import { Field, HasMany, HasOne, useEntityList, useField, useHasMany, useHasOne, withCollector } from '@contember/bindx-react'
++import { Field, HasOne, itemOf, useEntityList, useField, useHasMany, useHasOne, withCollector } from '@contember/bindx-react'
+@@
+ export const InitializingRepeater = withCollector(
+ 	InitializingRepeaterRuntime,
+-	(props: InitializingRepeaterProps<object>) => (
+-		<HasMany field={props.field}>
+-			{item => props.children(item, { remove: () => {} })}
+-		</HasMany>
+-	),
++	{ children: itemOf('field') },
+ ) as <TEntity extends object>(props: InitializingRepeaterProps<TEntity>) => React.ReactNode
+```
 
 ## Future (explicitly out of scope now)
 
