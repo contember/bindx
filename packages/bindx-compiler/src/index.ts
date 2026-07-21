@@ -7,6 +7,8 @@ export type {
 	StaticFieldMap,
 	StaticFieldNode,
 	StaticHasManyParams,
+	AnalyzedHole,
+	HoleEntityProp,
 	ChainResult,
 	AnalyzedChain,
 	BailedChain,

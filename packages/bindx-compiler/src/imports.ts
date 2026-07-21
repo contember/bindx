@@ -50,3 +50,47 @@ export function collectImportBindings(program: t.Program): ImportBindings {
 
 	return { createComponent, cond, components }
 }
+
+/**
+ * Names bound at module scope (imports + top-level declarations). A hole's component
+ * thunk (`() => Identifier`) is emitted as a sibling of the `.render()` call, so its tag
+ * must resolve in module scope; unresolved tags bail instead of forming a hole.
+ */
+export function collectModuleBindings(program: t.Program): Set<string> {
+	const names = new Set<string>()
+
+	const addDeclaration = (decl: t.Node): void => {
+		if (t.isImportDeclaration(decl)) {
+			for (const spec of decl.specifiers) {
+				names.add(spec.local.name)
+			}
+			return
+		}
+		if (t.isVariableDeclaration(decl)) {
+			for (const d of decl.declarations) {
+				for (const name of Object.keys(t.getBindingIdentifiers(d.id))) {
+					names.add(name)
+				}
+			}
+			return
+		}
+		if ((t.isFunctionDeclaration(decl) || t.isClassDeclaration(decl)) && decl.id) {
+			names.add(decl.id.name)
+		}
+	}
+
+	for (const node of program.body) {
+		addDeclaration(node)
+		if (t.isExportNamedDeclaration(node) && node.declaration) {
+			addDeclaration(node.declaration)
+		}
+		if (t.isExportDefaultDeclaration(node)) {
+			const d = node.declaration
+			if ((t.isFunctionDeclaration(d) || t.isClassDeclaration(d)) && d.id) {
+				names.add(d.id.name)
+			}
+		}
+	}
+
+	return names
+}

@@ -4,23 +4,28 @@
  * and unknown components (children analyzed; entity-rooted non-children props bail).
  */
 import * as t from '@babel/types'
-import type { SelNode } from './selectionTree.js'
 import type { ComponentKind, ImportBindings } from './imports.js'
 import {
-	BailError, type Scope, consumeLeaf, consumeMany, consumeRelation, evaluateLiteral, referencesRoot, resolve,
+	BailError, type RootRef, type Scope, consumeLeaf, consumeMany, consumeRelation,
+	entityPathOf, evaluateLiteral, referencesRoot, resolve,
 } from './resolve.js'
-import type { StaticHasManyParams } from './types.js'
+import type { AnalyzedHole, HoleEntityProp, StaticHasManyParams } from './types.js'
 
 const HASMANY_PARAM_KEYS = ['filter', 'orderBy', 'limit', 'offset', 'totalCount'] as const
 
 /** The value/callback walkers the JSX analyzer defers back into (BodyAnalyzer). */
 export interface JsxHost {
 	walkValue(node: t.Node, scope: Scope): void
-	walkCallbackWithItem(fn: t.ArrowFunctionExpression | t.FunctionExpression, item: SelNode, scope: Scope): void
+	walkCallbackWithItem(fn: t.ArrowFunctionExpression | t.FunctionExpression, itemRef: RootRef, scope: Scope): void
+	addHole(hole: AnalyzedHole): void
 }
 
 export class JsxAnalyzer {
-	constructor(private readonly host: JsxHost, private readonly bindings: ImportBindings) {}
+	constructor(
+		private readonly host: JsxHost,
+		private readonly bindings: ImportBindings,
+		private readonly moduleBindings: ReadonlySet<string>,
+	) {}
 
 	walk(node: t.JSXElement | t.JSXFragment, scope: Scope): void {
 		if (t.isJSXFragment(node)) {
@@ -32,25 +37,28 @@ export class JsxAnalyzer {
 			this.walkBindxComponent(kind.kind, node, scope)
 		} else if (kind.type === 'host') {
 			this.walkHostElement(node, scope)
+		} else if (kind.type === 'component') {
+			this.walkComponentElement(kind.tag, node, scope)
 		} else {
-			this.walkUnknownComponent(node, scope)
+			this.walkMemberTagElement(node, scope)
 		}
 	}
 
 	private componentKind(name: t.JSXOpeningElement['name']):
-		{ type: 'bindx'; kind: ComponentKind } | { type: 'host' } | { type: 'unknown' } {
+		{ type: 'bindx'; kind: ComponentKind } | { type: 'host' } | { type: 'component'; tag: string } | { type: 'memberTag' } {
 		if (t.isJSXIdentifier(name)) {
 			const kind = this.bindings.components.get(name.name)
 			if (kind) {
 				return { type: 'bindx', kind }
 			}
 			const first = name.name[0] ?? ''
-			return first === first.toLowerCase() && first !== first.toUpperCase() ? { type: 'host' } : { type: 'unknown' }
+			const isHost = first === first.toLowerCase() && first !== first.toUpperCase()
+			return isHost ? { type: 'host' } : { type: 'component', tag: name.name }
 		}
 		if (t.isJSXMemberExpression(name) && t.isJSXIdentifier(name.property) && name.property.name === 'Fragment') {
 			return { type: 'host' }
 		}
-		return { type: 'unknown' }
+		return { type: 'memberTag' } // `<Ns.Comp/>` / namespaced tags — not a simple identifier
 	}
 
 	private walkHostElement(node: t.JSXElement, scope: Scope): void {
@@ -67,19 +75,88 @@ export class JsxAnalyzer {
 		this.walkChildren(node.children, scope)
 	}
 
-	private walkUnknownComponent(node: t.JSXElement, scope: Scope): void {
+	/**
+	 * A component-typed JSX element (`<Card .../>`). Entity-rooted props become a phase-2
+	 * hole resolved through the target's runtime selection surface; children stay statically
+	 * analyzed (not part of the hole).
+	 */
+	private walkComponentElement(tag: string, node: t.JSXElement, scope: Scope): void {
+		const entityProps: Record<string, HoleEntityProp> = {}
+		const literalProps: Record<string, unknown> = {}
+
 		for (const attr of node.openingElement.attributes) {
 			if (t.isJSXSpreadAttribute(attr)) {
 				this.guardSpread(attr, scope, 'component')
 				continue
 			}
-			// Non-children props are not walked by the runtime; a root here is unprovable.
+			if (!t.isJSXIdentifier(attr.name) || attr.name.name === 'children') {
+				continue
+			}
+			this.collectComponentProp(attr.name.name, attr.value, scope, entityProps, literalProps)
+		}
+
+		if (Object.keys(entityProps).length > 0) {
+			if (!this.moduleBindings.has(tag)) {
+				// Tag isn't resolvable at module scope → no thunk can reference it.
+				throw new BailError({ code: 'ENTITY_ESCAPES_TO_COMPONENT', message: `component <${tag}> does not resolve to a module binding` })
+			}
+			this.host.addHole({
+				component: tag,
+				entityProps,
+				literalProps: Object.keys(literalProps).length > 0 ? literalProps : undefined,
+			})
+		}
+
+		this.walkChildren(node.children, scope) // the `children` slot is analyzed at runtime
+	}
+
+	/** Namespaced / member-expression tags (`<Ns.Comp/>`) cannot be referenced by a thunk → bail on entity props. */
+	private walkMemberTagElement(node: t.JSXElement, scope: Scope): void {
+		for (const attr of node.openingElement.attributes) {
+			if (t.isJSXSpreadAttribute(attr)) {
+				this.guardSpread(attr, scope, 'component')
+				continue
+			}
 			const expr = attrExpr(attr)
 			if (expr && referencesRoot(expr, scope)) {
-				throw new BailError({ code: 'ENTITY_ESCAPES_TO_COMPONENT', message: 'entity value passed to an unrecognized component' })
+				throw new BailError({ code: 'MEMBER_COMPONENT_TAG', message: 'entity value passed to a member-expression component tag' })
 			}
 		}
-		this.walkChildren(node.children, scope) // the `children` slot is analyzed at runtime
+		this.walkChildren(node.children, scope)
+	}
+
+	private collectComponentProp(
+		propName: string,
+		value: t.JSXAttribute['value'],
+		scope: Scope,
+		entityProps: Record<string, HoleEntityProp>,
+		literalProps: Record<string, unknown>,
+	): void {
+		if (value === null || value === undefined) {
+			literalProps[propName] = true // boolean shorthand `<Card flag/>`
+			return
+		}
+		if (t.isStringLiteral(value)) {
+			literalProps[propName] = value.value
+			return
+		}
+		const inner = jsxAttrInner(value)
+		if (!inner) {
+			return
+		}
+		const ep = entityPathOf(inner, scope) // may throw COMPUTED_MEMBER
+		if (ep.kind === 'path') {
+			entityProps[propName] = { source: ep.source, path: [...ep.path] }
+			return
+		}
+		if (referencesRoot(inner, scope)) {
+			throw new BailError({ code: 'ENTITY_IN_EXPRESSION_PROP', message: `entity value inside a non-path expression prop \`${propName}\`` })
+		}
+		const lit = evaluateLiteral(inner)
+		if (lit.ok) {
+			literalProps[propName] = lit.value
+		}
+		// Non-literal non-entity props are silently omitted (recovered at runtime if needed).
 	}
 
 	private walkBindxComponent(kind: ComponentKind, node: t.JSXElement, scope: Scope): void {
@@ -136,7 +213,7 @@ export class JsxAnalyzer {
 		const item = many ? consumeMany(res.ref, params) : consumeRelation(res.ref)
 		const cb = childrenCallback(node.children)
 		if (cb) {
-			this.host.walkCallbackWithItem(cb, item, scope)
+			this.host.walkCallbackWithItem(cb, { node: item, path: [], source: res.ref.source, absPath: res.ref.absPath }, scope)
 		}
 		this.walkOtherAttrs(node, new Set(['field', 'children', ...(many ? HASMANY_PARAM_KEYS : [])]), scope)
 	}
@@ -251,6 +328,17 @@ function attrExpr(attr: t.JSXAttribute | t.JSXSpreadAttribute): t.Expression | n
 	}
 	if (t.isJSXExpressionContainer(attr.value) && t.isExpression(attr.value.expression)) {
 		return attr.value.expression
+	}
+	return null
+}
+
+/** Underlying value node of a JSX attribute (container expression or nested JSX), or null. */
+function jsxAttrInner(value: t.JSXAttribute['value']): t.Node | null {
+	if (t.isJSXExpressionContainer(value)) {
+		return t.isExpression(value.expression) ? value.expression : null
+	}
+	if (t.isJSXElement(value) || t.isJSXFragment(value)) {
+		return value
 	}
 	return null
 }
