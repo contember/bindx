@@ -402,7 +402,73 @@ captures the host entity root `footer.linkColumns` — not liftable), 1 `ENTITY_
 (out of scope). The `FUNCTION_PROP_ON_HOLE` class that dominated phase 2's residue is essentially
 gone (9 → 1); the navigation-editor `cond`-in-props and publish.tsx `draftSlot` bails disappeared.
 
+## Phase 2.2 — collector contracts (declarative invocation contracts for withCollector)
+
+Motivation: the last real npi bail (footer-editor `LinksSection`) is a render-prop child that
+both uses its own param AND captures a host-root path (`footer.linkColumns`) — not droppable
+(target invokes it at collection), not liftable (render-scope capture). The root cause is that
+the analyzer cannot know an unknown component's invocation contract; `HasMany` works only because
+that knowledge is hardcoded. A declared contract solves the CLASS: the analyzer treats the
+callback exactly like a `HasMany` children callback — param becomes a root, host captures become
+ordinary paths, no hole and no lift needed.
+
+### API (bindx-react) — pinned, both implementation steps code against this exactly
+
+```ts
+interface CallbackContract { readonly kind: 'itemOf' | 'entityOf'; readonly field: string }
+/** Key = callback prop name ('children' included). */
+type CollectorContract = Record<string, CallbackContract>
+
+function itemOf(field: string): CallbackContract    // invoked with each item of the has-many relation prop `field`
+function entityOf(field: string): CallbackContract  // invoked with the entity of the has-one relation prop `field`
+
+// New overload — contract object instead of a staticRender function:
+withCollector(runtime, contract: CollectorContract)
+```
+
+- From a contract, withCollector **derives the staticRender automatically**: a fragment of
+  `<HasMany field={props[field]}>{v => props[cb](v)}</HasMany>` (resp. `<HasOne>`) per entry,
+  guarding `typeof props[cb] === 'function'`. Uncompiled runtime collection therefore works
+  unchanged through all existing machinery (analyzeJsx walk, hole resolution) with zero
+  duplication — the contract IS the selection surface, declared once.
+- The contract is also attached to the component under an exported symbol `COLLECTOR_CONTRACT`
+  (introspection; not needed by the compiled path).
+
+### Compiler side
+
+- **Contract discovery**: hole-candidate tag binding → if local `withCollector(_, <object literal>)`,
+  read it directly; if imported, resolve the module specifier (**relative specifiers only** in v1,
+  plus an optional `alias` option on the plugin/analyzer) and PARSE the target module (cached per
+  file) to find the exported `withCollector(_, contract)` and extract the literal. Contract
+  literals are object literals whose values are `itemOf(...)`/`entityOf(...)` calls imported from
+  `@contember/bindx*` (string-literal args only). Anything else → no contract → existing
+  hole/bail rules apply. This is a deliberate, bounded exception to the purely-local principle:
+  parse-only, no execution, no type checker, cache-keyed.
+- **With a contract, the element forms NO hole.** Per entity prop: referenced as a contract
+  `field` → record the relation at its path (`many` for itemOf); the matching callback prop's
+  closure is analyzed with its FIRST param as a root at that relation (additional params ignored,
+  mirroring HasMany index handling). Host-root captures inside the closure are ordinary paths.
+  Entity props not referenced by the contract → recorded as touched leaves (matches the oracle:
+  the derived staticRender ignores them; only the evaluation touch registers).
+- **Non-contract function props on a contract element are droppable without safety checks**: the
+  derived staticRender provably never invokes them at collection. (This removes the
+  FUNCTION_PROP_ON_HOLE/RENDER_LOCAL_ON_HOLE class entirely for contract components.)
+- Missing callback for a contract entry → relation recorded, no nested (mirrors the guard).
+
+### Validation
+
+- Runtime: contract-derived staticRender produces identical collection to an equivalent
+  hand-written staticRender function (oracle comparison); runtime rendering unaffected.
+- Compiler fixtures: same-file contract target; **cross-file** contract target (fixture imports
+  the component from a sibling fixture module); footer-editor replica (item callback capturing a
+  host-root field → STRICT oracle equality); entityOf; non-contract function prop dropped;
+  contract entry with missing callback.
+- npi: validated on a patched TEMP COPY (scratchpad) of `footer-editor.tsx` + `_shared.tsx` with
+  `InitializingRepeater` declaring `{ children: itemOf('field') }` — the npi repo itself is NOT
+  modified; the suggested npi patch ships in the report/docs instead.
+
 ## Future (explicitly out of scope now)
 
 Unplugin packaging, eslint plugin reusing the analyzer (bail reasons as lint diagnostics),
-oxc/SWC port if Babel cost ever matters.
+oxc/SWC port if Babel cost ever matters, closure lifting with entity-path capture substitution
+(phase-2.2 alternative — superseded by contracts unless a non-contract case demands it).
