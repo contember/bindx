@@ -522,45 +522,56 @@ function validateStaticSelections<TProps extends object>(
 	for (const propName of Object.keys(staticSelection)) {
 		const staticSelectionMeta = staticMap.get(propName)?.selection
 		const runtimeSelectionMeta = runtimeMap.get(propName)?.selection
-		diffSelectionMeta(staticSelectionMeta, runtimeSelectionMeta, [propName], lines)
+		diffUnderfetchedFields(staticSelectionMeta, runtimeSelectionMeta, [propName], lines)
 	}
 
 	if (lines.length > 0) {
 		console.warn(
-			`[bindx] static selection mismatch for <${componentDisplayName}>:\n${lines.join('\n')}`,
+			`[bindx] static selection under-fetches for <${componentDisplayName}>:\n${lines.join('\n')}`,
 		)
 	}
 }
 
 /**
- * Recursively diffs two selections by field alias, appending human-readable
- * lines for fields present on only one side (dotted paths for nested relations).
+ * Under-fetch diff: warn only for fields the runtime (proxy) selection requests
+ * that the static selection omits — the sole mismatch class that is a fetch bug.
+ * Fields present only in static (branch unions) and params/alias/isArray-only
+ * differences are intentionally NOT reported: the compiler unions all branches
+ * and the runtime never records has-many params in implicit collection. Keyed by
+ * `fieldName` (not alias) so a params-driven alias never reads as a missing field.
  */
-function diffSelectionMeta(
+function diffUnderfetchedFields(
 	staticMeta: SelectionMeta | undefined,
 	runtimeMeta: SelectionMeta | undefined,
 	path: string[],
 	lines: string[],
 ): void {
-	const staticFields = staticMeta?.fields ?? new Map<string, SelectionFieldMeta>()
-	const runtimeFields = runtimeMeta?.fields ?? new Map<string, SelectionFieldMeta>()
-
-	for (const alias of staticFields.keys()) {
-		if (!runtimeFields.has(alias)) {
-			lines.push(`  only in static: ${[...path, alias].join('.')}`)
-		}
+	if (!runtimeMeta) {
+		return
 	}
-	for (const [alias, runtimeField] of runtimeFields) {
-		const staticField = staticFields.get(alias)
+	const staticByField = indexByFieldName(staticMeta)
+	for (const runtimeField of runtimeMeta.fields.values()) {
+		const staticField = staticByField.get(runtimeField.fieldName)
 		if (!staticField) {
-			lines.push(`  only in runtime: ${[...path, alias].join('.')}`)
+			lines.push(`  missing from static (under-fetch): ${[...path, runtimeField.fieldName].join('.')}`)
 			continue
 		}
-		// Both sides have this relation — recurse into nested selections.
-		if (staticField.nested || runtimeField.nested) {
-			diffSelectionMeta(staticField.nested, runtimeField.nested, [...path, alias], lines)
+		// Both sides fetch this relation — recurse into what the runtime nests.
+		if (runtimeField.nested) {
+			diffUnderfetchedFields(staticField.nested, runtimeField.nested, [...path, runtimeField.fieldName], lines)
 		}
 	}
+}
+
+/** Index a selection's top-level fields by field name (aliases collapse). */
+function indexByFieldName(meta: SelectionMeta | undefined): Map<string, SelectionFieldMeta> {
+	const byField = new Map<string, SelectionFieldMeta>()
+	if (meta) {
+		for (const field of meta.fields.values()) {
+			byField.set(field.fieldName, field)
+		}
+	}
+	return byField
 }
 
 // ============================================================================

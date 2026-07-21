@@ -154,6 +154,42 @@ describe('validate mode', () => {
 		warn.mockRestore()
 	})
 
+	test('static superset (extra fields, e.g. branch union) emits no warning', () => {
+		setStaticSelectionValidation(true)
+		const warn = spyOn(console, 'warn').mockImplementation(() => {})
+
+		// Static declares more than the render body reads (as branch unions do).
+		// Over-fetch is acceptable — only under-fetch warns.
+		const Comp = createComponent()
+			.entity('article', schema.Article)
+			.render(
+				({ article }) => <Field field={article.title} />,
+				{ article: { title: true, content: true, status: true } },
+			)
+
+		getComponentSelection(Comp, 'article')
+		expect(warn).not.toHaveBeenCalled()
+		warn.mockRestore()
+	})
+
+	test('has-many params/many-ness only in static (divergence 1) emits no warning', () => {
+		setStaticSelectionValidation(true)
+		const warn = spyOn(console, 'warn').mockImplementation(() => {})
+
+		// Runtime `.map()` collection records neither params nor many-ness; the
+		// compiler emits both. Same fields, so this must not warn.
+		const Comp = createComponent()
+			.entity('article', schema.Article)
+			.render(
+				({ article }) => <div>{article.tags.map(t => <Field key={t.id} field={t.name} />)}</div>,
+				{ article: { tags: { fields: { name: true }, many: true, params: { limit: 5 } } } },
+			)
+
+		getComponentSelection(Comp, 'article')
+		expect(warn).not.toHaveBeenCalled()
+		warn.mockRestore()
+	})
+
 	test('disagreeing selections emit one warning naming the missing field', () => {
 		setStaticSelectionValidation(true)
 		const warn = spyOn(console, 'warn').mockImplementation(() => {})
