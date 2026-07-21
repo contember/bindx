@@ -26,6 +26,9 @@ import {
 	hasOne,
 	hasMany,
 	createCollectorProxy,
+	convertToQuerySelection,
+	HasMany,
+	Field,
 } from '@contember/bindx-react'
 import { SelectionScope, SchemaRegistry } from '@contember/bindx'
 
@@ -36,11 +39,13 @@ import { SelectionScope, SchemaRegistry } from '@contember/bindx'
 interface Organization {
 	id: string
 	name: string
+	tags: Tag[]
 }
 
 interface Tag {
 	id: string
 	label: string
+	type: string
 }
 
 interface Project {
@@ -70,12 +75,14 @@ const testSchema = defineSchema<TestSchema>({
 			fields: {
 				id: scalar(),
 				name: scalar(),
+				tags: hasMany('Tag'),
 			},
 		},
 		Tag: {
 			fields: {
 				id: scalar(),
 				label: scalar(),
+				type: scalar(),
 			},
 		},
 	},
@@ -249,5 +256,78 @@ describe('createRelationColumn — hasMany', () => {
 		)
 		const leaf = extractColumnLeaves(jsx)[0]!
 		expect(leaf.renderFilter).toBeTypeOf('function')
+	})
+})
+
+// ============================================================================
+// Nested declarative selection inside a relation renderer (npi regression)
+// ============================================================================
+
+// Repro of the npi workaround: a relation-column renderer that returns declarative
+// <HasMany>/<Field> JSX. Before the JSX-walk fix, collectSelection discarded the
+// returned JSX, so nested fields never reached the query (only the .map() proxy trick
+// worked). The renderer's returned JSX must now be walked and merged into the scope.
+describe('createRelationColumn — nested declarative selection (npi regression)', () => {
+	const HasOneColumn = createRelationColumn(hasOneColumnDef, hasOneCellConfig)
+	const HasManyColumn = createRelationColumn(hasManyColumnDef, hasManyCellConfig)
+
+	test('hasOne renderer returning <HasMany><Field/> lands nested fields in the query selection', () => {
+		const scope = new SelectionScope()
+		const proxy = createCollectorProxy<Project>(scope, 'Project', schemaRegistry)
+		const jsx = (
+			<HasOneColumn field={proxy.organization}>
+				{(org: any) => (
+					<HasMany field={org.tags}>
+						{(tag: any) => <Field field={tag.label} />}
+					</HasMany>
+				)}
+			</HasOneColumn>
+		)
+
+		// Drive the leaf's collection into the parent scope (as useDataGridSetup does).
+		const leaf = extractColumnLeaves(jsx)[0]!
+		leaf.collectSelection?.(proxy)
+
+		const query = convertToQuerySelection(scope.toSelectionMeta())
+		const organization = query['organization'] as Record<string, unknown> | undefined
+		const tags = organization?.['tags'] as Record<string, unknown> | undefined
+		expect(tags?.['label']).toBe(true)
+	})
+
+	test('nested fields also populate the leaf relatedSelection (filter fetch)', () => {
+		const scope = new SelectionScope()
+		const proxy = createCollectorProxy<Project>(scope, 'Project', schemaRegistry)
+		const jsx = (
+			<HasOneColumn field={proxy.organization}>
+				{(org: any) => (
+					<HasMany field={org.tags}>
+						{(tag: any) => <><Field field={tag.label} /><Field field={tag.type} /></>}
+					</HasMany>
+				)}
+			</HasOneColumn>
+		)
+
+		const leaf = extractColumnLeaves(jsx)[0]!
+		const related = convertToQuerySelection(leaf.relatedSelection!)
+		const tags = related['tags'] as Record<string, unknown> | undefined
+		expect(tags?.['label']).toBe(true)
+		expect(tags?.['type']).toBe(true)
+	})
+
+	test('hasMany renderer returning nested <HasMany><Field/> lands nested fields in the query selection', () => {
+		const scope = new SelectionScope()
+		const proxy = createCollectorProxy<Project>(scope, 'Project', schemaRegistry)
+		const jsx = (
+			<HasManyColumn field={proxy.tags}>
+				{(_tag: any) => <Field field={_tag.type} />}
+			</HasManyColumn>
+		)
+
+		const leaf = extractColumnLeaves(jsx)[0]!
+		leaf.collectSelection?.(proxy)
+
+		const query = convertToQuerySelection(scope.toSelectionMeta())
+		const tags = query['tags'] as Record<string, unknown> | undefined
+		expect(tags?.['type']).toBe(true)
 	})
 })
