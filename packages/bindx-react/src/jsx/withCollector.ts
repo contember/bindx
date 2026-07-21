@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import type { CollectorContract } from './collectorContract.js'
+import { COLLECTOR_CONTRACT, deriveContractStaticRender } from './collectorContract.js'
 
 /**
  * Attaches a static render function to a component for selection collection.
@@ -25,21 +27,40 @@ import type { ReactNode } from 'react'
  *   )
  * )
  *
- * // Programmatic field access (no JSX needed)
- * export const Uploader = withCollector(
- *   function Uploader({ field, fileType }) { ... },
- *   (props) => {
- *     const entity = props.field.$entity
- *     for (const ext of props.fileType.extractors) entity[ext.fieldName]
- *     return null
- *   }
+ * // Declarative contract instead of a hand-written staticRender: `children` is invoked
+ * // per item of the `field` has-many relation. The staticRender is derived automatically.
+ * export const InitializingRepeater = withCollector(
+ *   function InitializingRepeater({ field, children, ... }) { ... },
+ *   { children: itemOf('field') }
  * )
  * ```
  */
 export function withCollector<TComponent extends (...args: never[]) => ReactNode>(
 	component: TComponent,
 	staticRender: (props: Parameters<TComponent>[0]) => ReactNode,
+): TComponent
+export function withCollector<TComponent extends (...args: never[]) => ReactNode>(
+	component: TComponent,
+	contract: CollectorContract,
+): TComponent
+export function withCollector<TComponent extends (...args: never[]) => ReactNode>(
+	component: TComponent,
+	contractOrStaticRender: ((props: Parameters<TComponent>[0]) => ReactNode) | CollectorContract,
 ): TComponent {
-	(component as TComponent & { staticRender: typeof staticRender }).staticRender = staticRender
+	// A function is a staticRender; a plain object is a declarative contract.
+	if (typeof contractOrStaticRender === 'function') {
+		const staticRender = contractOrStaticRender
+		;(component as TComponent & { staticRender: typeof staticRender }).staticRender = staticRender
+		return component
+	}
+
+	const contract = contractOrStaticRender
+	const staticRender = deriveContractStaticRender(contract)
+	const target = component as TComponent & {
+		staticRender: typeof staticRender
+		[COLLECTOR_CONTRACT]: CollectorContract
+	}
+	target.staticRender = staticRender
+	target[COLLECTOR_CONTRACT] = contract
 	return component
 }

@@ -110,6 +110,15 @@ export type { CompiledSelection, CompiledHole } from './compiledSelection.js'
 // withCollector — attach staticRender to a component for selection collection
 export { withCollector } from './withCollector.js'
 
+// Declarative collector contracts — an alternative to a hand-written staticRender
+export {
+	COLLECTOR_CONTRACT,
+	itemOf,
+	entityOf,
+	type CallbackContract,
+	type CollectorContract,
+} from './collectorContract.js'
+
 export type {
 	SelectionPropMeta,
 	BindxComponentBase,
