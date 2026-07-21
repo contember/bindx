@@ -39,6 +39,21 @@
         "@contember/schema": "^2.1.0-beta.1",
       },
     },
+    "packages/bindx-compiler": {
+      "name": "@contember/bindx-compiler",
+      "version": "0.1.46",
+      "dependencies": {
+        "@babel/core": "^7.28.0",
+        "@babel/parser": "^7.28.0",
+        "@babel/traverse": "^7.28.0",
+        "@babel/types": "^7.28.0",
+      },
+      "devDependencies": {
+        "@contember/bindx-react": "workspace:*",
+        "@types/babel__core": "^7.20.5",
+        "@types/babel__traverse": "^7.20.6",
+      },
+    },
     "packages/bindx-dataview": {
       "name": "@contember/bindx-dataview",
       "version": "0.1.49",
@@ -245,6 +260,8 @@
     "@contember/bindx": ["@contember/bindx@workspace:packages/bindx"],
 
     "@contember/bindx-client": ["@contember/bindx-client@workspace:packages/bindx-client"],
+
+    "@contember/bindx-compiler": ["@contember/bindx-compiler@workspace:packages/bindx-compiler"],
 
     "@contember/bindx-dataview": ["@contember/bindx-dataview@workspace:packages/bindx-dataview"],
 
