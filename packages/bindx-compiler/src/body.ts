@@ -11,12 +11,20 @@ import {
 	referencesRoot, resolve, type RootRef,
 } from './resolve.js'
 import { JsxAnalyzer } from './jsx.js'
+import type { AnalyzedHole } from './types.js'
 
 export class BodyAnalyzer {
 	private readonly jsx: JsxAnalyzer
+	/** Nested-component holes collected across the render + condition functions (phase 2). */
+	readonly holes: AnalyzedHole[] = []
 
-	constructor(private readonly bindings: ImportBindings) {
-		this.jsx = new JsxAnalyzer(this, bindings)
+	constructor(private readonly bindings: ImportBindings, private readonly moduleBindings: ReadonlySet<string>) {
+		this.jsx = new JsxAnalyzer(this, bindings, moduleBindings)
+	}
+
+	/** Public so JsxAnalyzer can register a hole it discovered. */
+	addHole(hole: AnalyzedHole): void {
+		this.holes.push(hole)
 	}
 
 	/** Register a function's params against the shared prop roots, then walk its body. */
@@ -51,7 +59,7 @@ export class BodyAnalyzer {
 				if (!propRoot) {
 					continue // scalar prop
 				}
-				this.bindPattern(prop.value, { node: propRoot, path: [] }, scope)
+				this.bindPattern(prop.value, { node: propRoot, path: [], source: prop.key.name, absPath: [] }, scope)
 			}
 		}
 	}
@@ -71,7 +79,11 @@ export class BodyAnalyzer {
 				if (!t.isObjectProperty(prop) || prop.computed || !t.isIdentifier(prop.key)) {
 					throw new BailError({ code: 'UNCLASSIFIED', message: 'unsupported entity destructuring' })
 				}
-				this.bindPattern(prop.value, { node, path: [prop.key.name] }, scope)
+				this.bindPattern(
+					prop.value,
+					{ node, path: [prop.key.name], source: ref.source, absPath: [...ref.absPath, prop.key.name] },
+					scope,
+				)
 			}
 			return
 		}
@@ -340,20 +352,20 @@ export class BodyAnalyzer {
 		const item = consumeMany(ref)
 		const cb = node.arguments[0]
 		if (cb && (t.isArrowFunctionExpression(cb) || t.isFunctionExpression(cb))) {
-			this.walkCallbackWithItem(cb, item, scope)
+			this.walkCallbackWithItem(cb, { node: item, path: [], source: ref.source, absPath: ref.absPath }, scope)
 			return
 		}
 		// Non-inline map callback: its field access is invisible → bail.
 		throw new BailError({ code: 'UNCLASSIFIED', message: '.map() callback is not an inline function' })
 	}
 
-	/** Public so JsxAnalyzer can drive HasOne/HasMany children callbacks. */
-	walkCallbackWithItem(fn: t.ArrowFunctionExpression | t.FunctionExpression, item: SelNode, scope: Scope): void {
+	/** Public so JsxAnalyzer can drive HasOne/HasMany children callbacks; itemRef carries the item's origin. */
+	walkCallbackWithItem(fn: t.ArrowFunctionExpression | t.FunctionExpression, itemRef: RootRef, scope: Scope): void {
 		const child = childScope(scope)
 		const param = fn.params[0]
 		if (param) {
 			const p = t.isAssignmentPattern(param) ? param.left : param
-			this.bindPattern(p, { node: item, path: [] }, child)
+			this.bindPattern(p, itemRef, child)
 		}
 		if (t.isBlockStatement(fn.body)) {
 			this.walkStatements(fn.body.body, child)

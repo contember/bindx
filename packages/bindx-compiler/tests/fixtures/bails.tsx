@@ -29,24 +29,30 @@ export const BailEntityCall = createComponent()
 	.entity('article', schema.Article)
 	.render(({ article }) => <span>{formatAuthor(article.author)}</span>)
 
-// 5. ENTITY_ESCAPES_TO_COMPONENT — entity value to a non-children prop of an unknown component
-const Unknown = (props: { data: unknown }): ReactNode => <span>{String(props.data)}</span>
-export const BailEntityComponent = createComponent()
+// 5. ENTITY_IN_EXPRESSION_PROP — entity inside a non-path expression prop of a component
+const InfoCard = (props: { data: unknown }): ReactNode => <span>{String(props.data)}</span>
+export const BailExpressionProp = createComponent()
 	.entity('article', schema.Article)
-	.render(({ article }) => <Unknown data={article.author} />)
+	.render(({ article }) => <InfoCard data={formatAuthor(article.author)} />)
 
-// 6. ENTITY_SPREAD — spread of an entity root
+// 6. MEMBER_COMPONENT_TAG — entity value on a member-expression component tag
+const Ns = { Card: InfoCard }
+export const BailMemberTag = createComponent()
+	.entity('article', schema.Article)
+	.render(({ article }) => <Ns.Card data={article.author} />)
+
+// 7. ENTITY_SPREAD — spread of an entity root
 export const BailSpread = createComponent()
 	.entity('article', schema.Article)
 	.render(({ article }) => <div {...article} />)
 
-// 7. COMPUTED_MEMBER — computed member access off a root
+// 8. COMPUTED_MEMBER — computed member access off a root
 const key: string = 'title'
 export const BailComputedMember = createComponent()
 	.entity('article', schema.Article)
 	.render(({ article }) => <Field field={article[key]} />)
 
-// 8. NON_LITERAL_HASMANY_PARAM — a HasMany param that is not a static literal
+// 9. NON_LITERAL_HASMANY_PARAM — a HasMany param that is not a static literal
 const dynamicLimit = 3
 export const BailNonLiteralParam = createComponent()
 	.entity('article', schema.Article)
@@ -56,7 +62,7 @@ export const BailNonLiteralParam = createComponent()
 		</HasMany>
 	))
 
-// 9. ENTITY_REASSIGNMENT — entity-rooted binding is not const
+// 10. ENTITY_REASSIGNMENT — entity-rooted binding is not const
 export const BailReassignment = createComponent()
 	.entity('article', schema.Article)
 	.render(({ article }) => {
@@ -70,7 +76,8 @@ export const cases: FixtureCase[] = [
 	{ expect: 'bail', code: 'EXPLICIT_RENDER_FN' },
 	{ expect: 'bail', code: 'DYNAMIC_ENTITY_NAME' },
 	{ expect: 'bail', code: 'ENTITY_ESCAPES_TO_CALL' },
-	{ expect: 'bail', code: 'ENTITY_ESCAPES_TO_COMPONENT' },
+	{ expect: 'bail', code: 'ENTITY_IN_EXPRESSION_PROP' },
+	{ expect: 'bail', code: 'MEMBER_COMPONENT_TAG' },
 	{ expect: 'bail', code: 'ENTITY_SPREAD' },
 	{ expect: 'bail', code: 'COMPUTED_MEMBER' },
 	{ expect: 'bail', code: 'NON_LITERAL_HASMANY_PARAM' },

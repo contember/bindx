@@ -27,7 +27,7 @@ export function bindxCompilerPlugin(): PluginObj {
 					if (chain.renderCall.arguments.length >= 2) {
 						continue
 					}
-					chain.renderCall.arguments.push(selectionToAst(result.selection))
+					chain.renderCall.arguments.push(selectionToAst(result.selection, result.holes))
 				}
 				path.skip()
 			},

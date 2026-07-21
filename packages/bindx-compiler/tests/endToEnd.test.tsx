@@ -98,6 +98,8 @@ describe('end-to-end: transformed module runs the static path', () => {
 			configFile: false,
 			babelrc: false,
 		})
+		// v2 shape: the injected literal wraps the props map in `props`.
+		expect(out?.code).toContain('props:')
 		expect(out?.code).toContain('title: true')
 	})
 

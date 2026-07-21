@@ -7,7 +7,7 @@
  */
 import { parse } from '@babel/parser'
 import * as t from '@babel/types'
-import { collectImportBindings, type ImportBindings } from './imports.js'
+import { collectImportBindings, collectModuleBindings, type ImportBindings } from './imports.js'
 import { findChains, type Chain } from './chain.js'
 import { BodyAnalyzer } from './body.js'
 import { BailError } from './resolve.js'
@@ -30,17 +30,18 @@ export function parseProgram(code: string, _filename: string): t.Program {
 /** Analyze an already-parsed program; retains Babel node refs for the plugin. */
 export function analyzeProgram(program: t.Program): InternalChainResult[] {
 	const bindings = collectImportBindings(program)
+	const moduleBindings = collectModuleBindings(program)
 	const chains = findChains(program, bindings)
-	return chains.map(chain => ({ chain, result: analyzeChain(chain, bindings) }))
+	return chains.map(chain => ({ chain, result: analyzeChain(chain, bindings, moduleBindings) }))
 }
 
-function analyzeChain(chain: Chain, bindings: ImportBindings): ChainResult {
+function analyzeChain(chain: Chain, bindings: ImportBindings, moduleBindings: ReadonlySet<string>): ChainResult {
 	const loc = chainLoc(chain.renderCall)
 	if (chain.earlyBail) {
 		return { loc, bailout: chain.earlyBail }
 	}
 	const propRoots = new Map<string, SelNode>(chain.entityProps.map(prop => [prop, new SelNode()]))
-	const analyzer = new BodyAnalyzer(bindings)
+	const analyzer = new BodyAnalyzer(bindings, moduleBindings)
 	try {
 		if (chain.conditionFn) {
 			analyzer.analyzeFunction(chain.conditionFn, propRoots)
@@ -61,7 +62,7 @@ function analyzeChain(chain: Chain, bindings: ImportBindings): ChainResult {
 			selection[prop] = node.toFieldMap()
 		}
 	}
-	return { loc, entityProps: chain.entityProps, selection }
+	return { loc, entityProps: chain.entityProps, selection, holes: analyzer.holes }
 }
 
 function chainLoc(call: t.CallExpression): ChainLoc {

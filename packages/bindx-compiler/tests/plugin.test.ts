@@ -31,15 +31,18 @@ export const Card = createComponent()
 `
 
 describe('babel plugin injection', () => {
-	test('injects the StaticSelection as the 2nd argument of .render()', () => {
+	test('injects the CompiledSelection (v2 { props }) as the 2nd argument of .render()', () => {
 		const output = transform(SOURCE)
-		// The emitted literal is the render call's 2nd argument.
+		// The emitted literal is the render call's 2nd argument, now wrapped in `props`.
+		expect(output).toContain('props:')
 		expect(output).toContain('title: true')
 		expect(output).toContain('author: {')
 		expect(output).toContain('fields: {')
 		expect(output).toContain('many: true')
 		expect(output).toContain('params: {')
 		expect(output).toContain('limit: 5')
+		// This chain has no holes → the holes key is omitted.
+		expect(output).not.toContain('holes:')
 	})
 
 	test('bailed chains are left untouched (no 2nd argument)', () => {
@@ -52,8 +55,8 @@ export const C = createComponent()
 `
 		const output = transform(bailSource)
 		// No static object was injected — the spread bails the whole chain.
+		expect(output).not.toContain('props:')
 		expect(output).not.toContain('title: true')
-		expect(output).not.toContain('fields: {')
 	})
 
 	test('re-running the plugin does not double-inject', () => {

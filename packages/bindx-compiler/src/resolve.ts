@@ -14,10 +14,16 @@ export class BailError extends Error {
 	}
 }
 
-/** A binding that resolves to `node` reached via `path` of not-yet-materialized segments. */
+/**
+ * A binding that resolves to `node` reached via `path` of not-yet-materialized segments.
+ * `source`/`absPath` track the origin entity prop and the absolute path from it — needed to
+ * build phase-2 holes (they survive relation-callback roots, where `node`/`path` reset).
+ */
 export interface RootRef {
 	readonly node: SelNode
 	readonly path: readonly string[]
+	readonly source: string
+	readonly absPath: readonly string[]
 }
 
 export interface Scope {
@@ -76,7 +82,7 @@ export function resolve(nodeIn: t.Node, scope: Scope): Resolution {
 		// props identifier param: `props.article`
 		if (t.isIdentifier(node.object) && scope.propsParams.has(node.object.name)) {
 			const propRoot = scope.propRoots.get(propName)
-			return propRoot ? { kind: 'ref', ref: { node: propRoot, path: [] } } : { kind: 'none' }
+			return propRoot ? { kind: 'ref', ref: { node: propRoot, path: [], source: propName, absPath: [] } } : { kind: 'none' }
 		}
 
 		const objRes = resolve(node.object, scope)
@@ -91,7 +97,15 @@ export function resolve(nodeIn: t.Node, scope: Scope): Resolution {
 		if (propName === 'id' || propName.startsWith('$') || propName.startsWith('__')) {
 			return { kind: 'opaque' }
 		}
-		return { kind: 'ref', ref: { node: objRes.ref.node, path: [...objRes.ref.path, propName] } }
+		return {
+			kind: 'ref',
+			ref: {
+				node: objRes.ref.node,
+				path: [...objRes.ref.path, propName],
+				source: objRes.ref.source,
+				absPath: [...objRes.ref.absPath, propName],
+			},
+		}
 	}
 
 	return { kind: 'none' }
@@ -162,6 +176,53 @@ export function referencesRoot(node: t.Node, scope: Scope): boolean {
 	}
 	visit(node)
 	return found
+}
+
+/**
+ * Classify a JSX prop value against the roots for phase-2 hole building:
+ * `path` = a clean entity-rooted identifier/member chain (empty path = the root itself);
+ * `expr` = references a root but is not a plain path (e.g. `fn(article)`); `none` = no root.
+ * Throws COMPUTED_MEMBER on `article[x]`. Member segments are recorded literally so the
+ * runtime's property-get replay reproduces the exact value (id/meta segments included).
+ */
+export type EntityPath =
+	| { kind: 'path'; source: string; path: readonly string[] }
+	| { kind: 'expr' }
+	| { kind: 'none' }
+
+export function entityPathOf(nodeIn: t.Node, scope: Scope): EntityPath {
+	const node = unwrap(nodeIn)
+
+	if (t.isIdentifier(node)) {
+		const ref = scope.roots.get(node.name)
+		if (ref) {
+			return { kind: 'path', source: ref.source, path: [...ref.absPath] }
+		}
+		return scope.propsParams.has(node.name) ? { kind: 'expr' } : { kind: 'none' }
+	}
+
+	if (t.isMemberExpression(node) || t.isOptionalMemberExpression(node)) {
+		if (node.computed) {
+			if (referencesRoot(node.object, scope)) {
+				throw new BailError({ code: 'COMPUTED_MEMBER', message: 'computed member access on an entity value' })
+			}
+			return { kind: 'none' }
+		}
+		if (!t.isIdentifier(node.property)) {
+			return { kind: 'none' }
+		}
+		const propName = node.property.name
+		if (t.isIdentifier(node.object) && scope.propsParams.has(node.object.name)) {
+			return scope.propRoots.has(propName) ? { kind: 'path', source: propName, path: [] } : { kind: 'none' }
+		}
+		const objPath = entityPathOf(node.object, scope)
+		if (objPath.kind !== 'path') {
+			return objPath
+		}
+		return { kind: 'path', source: objPath.source, path: [...objPath.path, propName] }
+	}
+
+	return { kind: 'none' }
 }
 
 export type LiteralResult = { ok: true; value: unknown } | { ok: false }
