@@ -176,12 +176,12 @@ describe('validate mode', () => {
 		setStaticSelectionValidation(true)
 		const warn = spyOn(console, 'warn').mockImplementation(() => {})
 
-		// Runtime `.map()` collection records neither params nor many-ness; the
-		// compiler emits both. Same fields, so this must not warn.
+		// The compiler emits has-many params; the runtime does not record them in
+		// implicit collection. Same fields, so a params-only difference must not warn.
 		const Comp = createComponent()
 			.entity('article', schema.Article)
 			.render(
-				({ article }) => <div>{article.tags.map(t => <Field key={t.id} field={t.name} />)}</div>,
+				({ article }) => <HasMany field={article.tags}>{t => <Field field={t.name} />}</HasMany>,
 				{ article: { tags: { fields: { name: true }, many: true, params: { limit: 5 } } } },
 			)
 

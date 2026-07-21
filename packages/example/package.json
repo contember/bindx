@@ -30,6 +30,7 @@
 		"tailwindcss": "^4.2.1"
 	},
 	"devDependencies": {
+		"@contember/bindx-compiler": "workspace:*",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
 		"@vitejs/plugin-react": "^5.1.2",
