@@ -434,16 +434,27 @@ The compiler emits a selection only when it can prove it. Over-approximation (ex
 fields) is acceptable; under-approximation is impossible by construction (default
 deny). Anything it cannot classify makes the whole component **bail** with a
 machine-readable reason (e.g. `ENTITY_ESCAPES_TO_CALL`, `ENTITY_IN_EXPRESSION_PROP`,
-`ENTITY_REASSIGNMENT`, `ENTITY_SPREAD`, `COMPUTED_MEMBER`, `MEMBER_COMPONENT_TAG`,
-`NON_LITERAL_HASMANY_PARAM`, `INTERFACES_MODE`, `UNCLASSIFIED`). Bailed chains are left
-untouched and fall back to the runtime proxy pass.
+`FUNCTION_PROP_ON_HOLE`, `ENTITY_REASSIGNMENT`, `ENTITY_SPREAD`, `COMPUTED_MEMBER`,
+`MEMBER_COMPONENT_TAG`, `NON_LITERAL_HASMANY_PARAM`, `INTERFACES_MODE`, `UNCLASSIFIED`).
+Bailed chains are left untouched and fall back to the runtime proxy pass.
+
+`FUNCTION_PROP_ON_HOLE` closes an under-fetch class: a hole element's function props /
+render-prop children are dropped from the emitted hole, but a hole target's `staticRender`
+may *invoke* such a closure with a collector proxy during collection (npi's `SelectField`
+does `<HasOne field={props.field}>{e => props.children(e)}</HasOne>`), collecting fields
+the compiled path never sees. A dropped inline closure is safe to omit **only** when
+invoking it cannot reach a scope — no reference to its OWN parameters (transitively) and no
+captured entity roots (`onClick={() => save()}` is safe; `it => <Field field={it.name}/>` is
+not). Otherwise the chain bails. (Lifting param-only closures into the hole literal is a
+future recovery — see compiler-plan.md, phase 2.1.)
 
 Measure the compiled-vs-bailed rate (and hole counts) over a source tree with
 `bun run packages/bindx-compiler/scripts/measure.ts <dir>` (default
 `packages/example`). On the largest real bindx app (`npi`, `packages/admin`, 257 chains)
-phase 2 with holes compiles **251/257 (98%)** — 35 chains carry 99 holes total — leaving
-only 6 bails (5 `ENTITY_IN_EXPRESSION_PROP`, 1 `ENTITY_REASSIGNMENT`); phase 1 without
-holes compiled 84%.
+phase 2 with holes compiles **242/257 (94%)** — 26 chains carry 82 holes total — leaving
+15 bails (9 `FUNCTION_PROP_ON_HOLE`, 5 `ENTITY_IN_EXPRESSION_PROP`, 1 `ENTITY_REASSIGNMENT`);
+phase 1 without holes compiled 84%. (An earlier 98% reading was unsound — it counted the
+now-bailed `FUNCTION_PROP_ON_HOLE` chains as compiled.)
 
 See [docs/compiler-plan.md](./compiler-plan.md) for the full design.
 

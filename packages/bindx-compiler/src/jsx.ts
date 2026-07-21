@@ -7,7 +7,7 @@ import * as t from '@babel/types'
 import type { ComponentKind, ImportBindings } from './imports.js'
 import {
 	BailError, type RootRef, type Scope, consumeLeaf, consumeMany, consumeRelation,
-	entityPathOf, evaluateLiteral, referencesRoot, resolve,
+	entityPathOf, evaluateLiteral, isHoleClosureSafe, referencesRoot, resolve,
 } from './resolve.js'
 import type { AnalyzedHole, HoleEntityProp, StaticHasManyParams } from './types.js'
 
@@ -83,6 +83,7 @@ export class JsxAnalyzer {
 	private walkComponentElement(tag: string, node: t.JSXElement, scope: Scope): void {
 		const entityProps: Record<string, HoleEntityProp> = {}
 		const literalProps: Record<string, unknown> = {}
+		const functionProps: Array<t.ArrowFunctionExpression | t.FunctionExpression> = []
 
 		for (const attr of node.openingElement.attributes) {
 			if (t.isJSXSpreadAttribute(attr)) {
@@ -92,10 +93,17 @@ export class JsxAnalyzer {
 			if (!t.isJSXIdentifier(attr.name) || attr.name.name === 'children') {
 				continue
 			}
+			const inner = jsxAttrInner(attr.value)
+			if (inner && (t.isArrowFunctionExpression(inner) || t.isFunctionExpression(inner))) {
+				functionProps.push(inner) // dropped from the hole — must be proven safe if this is a hole
+			}
 			this.collectComponentProp(attr.name.name, attr.value, scope, entityProps, literalProps)
 		}
 
 		if (Object.keys(entityProps).length > 0) {
+			// A hole drops the element's function props/children; if the target may invoke one
+			// with a collector proxy during collection, dropping it under-fetches → bail.
+			this.assertHoleClosuresSafe(tag, functionProps, node.children, scope)
 			if (!this.moduleBindings.has(tag)) {
 				// Tag isn't resolvable at module scope → no thunk can reference it.
 				throw new BailError({ code: 'ENTITY_ESCAPES_TO_COMPONENT', message: `component <${tag}> does not resolve to a module binding` })
@@ -108,6 +116,27 @@ export class JsxAnalyzer {
 		}
 
 		this.walkChildren(node.children, scope) // the `children` slot is analyzed at runtime
+	}
+
+	/** Bail if any dropped function prop / render-prop child of a hole element is unsafe to omit. */
+	private assertHoleClosuresSafe(
+		tag: string,
+		functionProps: ReadonlyArray<t.ArrowFunctionExpression | t.FunctionExpression>,
+		children: t.JSXElement['children'],
+		scope: Scope,
+	): void {
+		for (const fn of functionProps) {
+			if (!isHoleClosureSafe(fn, scope)) {
+				throw new BailError({ code: 'FUNCTION_PROP_ON_HOLE', message: `function prop on hole element <${tag}> may be invoked with an entity during collection` })
+			}
+		}
+		for (const child of children) {
+			if (t.isJSXExpressionContainer(child)
+				&& (t.isArrowFunctionExpression(child.expression) || t.isFunctionExpression(child.expression))
+				&& !isHoleClosureSafe(child.expression, scope)) {
+				throw new BailError({ code: 'FUNCTION_PROP_ON_HOLE', message: `render-prop children of hole element <${tag}> may be invoked with an entity during collection` })
+			}
+		}
 	}
 
 	/** Namespaced / member-expression tags (`<Ns.Comp/>`) cannot be referenced by a thunk → bail on entity props. */
