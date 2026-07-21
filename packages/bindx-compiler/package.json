@@ -11,7 +11,8 @@
 	"scripts": {
 		"build": "tsc --build",
 		"typecheck": "tsc --build",
-		"test": "bun test tests/"
+		"test": "bun test tests/",
+		"measure": "bun run scripts/measure.ts"
 	},
 	"dependencies": {
 		"@babel/core": "^7.28.0",

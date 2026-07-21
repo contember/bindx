@@ -1,37 +1,39 @@
 // Regression: rendering a raw ref as a JSX child (`{article.title}` instead of
-// <Field field={article.title}/>) must not pollute the collected selection.
-// React's isValidElement probes `$$typeof` on the collector proxy; that probe
-// used to upgrade the scalar to a bogus relation `{ id, $$typeof }`.
+// <Field field={article.title}/>) makes React probe `$$typeof` on the collector
+// proxy via isValidElement. That probe used to upgrade the scalar to a bogus
+// relation `{ id, $$typeof }` (invalid GraphQL). Reproduced here at the collector
+// level to keep the misuse fully typed.
 import '../../setup'
 import { describe, test, expect } from 'bun:test'
-import React from 'react'
-import { createComponent, Field, COMPONENT_SELECTIONS, type SelectionMeta } from '@contember/bindx-react'
-import { schema } from '../../shared'
+import { isValidElement } from 'react'
+import { createCollectorProxy } from '@contember/bindx-react'
+import { SelectionScope } from '@contember/bindx'
 
-function collect(component: unknown, prop: string): SelectionMeta | undefined {
-	void (component as Record<string, unknown>)[`$${prop}`]
-	const selections = (component as Record<symbol, Map<string, { selection: SelectionMeta }>>)[COMPONENT_SELECTIONS]
-	return selections?.get(prop)?.selection
+interface Author {
+	id: string
+	name: string
+}
+interface Article {
+	id: string
+	title: string
+	author: Author
 }
 
 describe('collector proxy React probe keys', () => {
-	test('a raw scalar ref rendered as a child stays a scalar (no $$typeof relation)', () => {
-		const Comp = createComponent()
-			.entity('article', schema.Article)
-			.render(({ article }) => (
-				<div>
-					<Field field={article.title} />
-					{article.status}
-				</div>
-			))
+	test('isValidElement probe on a scalar ref does not upgrade it to a relation', () => {
+		const scope = new SelectionScope()
+		const entity = createCollectorProxy<Article>(scope, 'Article', null)
 
-		const selection = collect(Comp, 'article')!
-		const status = selection.fields.get('status')
-		expect(status).toBeDefined()
-		// The probe must not have turned `status` into a relation.
-		expect(status!.isRelation).toBe(false)
-		expect(status!.nested).toBeUndefined()
-		// No bogus `$$typeof` field anywhere in the selection.
-		expect([...selection.fields.keys()]).not.toContain('$$typeof')
+		// Accessing the scalar registers it; the probe must not change that.
+		const titleRef = entity.$fields.title
+		expect(isValidElement(titleRef)).toBe(false)
+
+		const meta = scope.toSelectionMeta()
+		const title = meta.fields.get('title')
+		expect(title).toBeDefined()
+		expect(title!.isRelation).toBe(false)
+		expect(title!.nested).toBeUndefined()
+		// No bogus `$$typeof` field leaked into the selection.
+		expect([...meta.fields.keys()]).not.toContain('$$typeof')
 	})
 })
