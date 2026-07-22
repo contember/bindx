@@ -16,6 +16,7 @@
  */
 import { transformAsync, type BabelFileResult } from '@babel/core'
 import { bindxCompilerPlugin } from './babelPlugin.js'
+import { ModuleCache } from './moduleResolve.js'
 import { reportTotals, type DiagnosticsMode, type DiagnosticTotals } from './diagnostics.js'
 
 /** Config for {@link bindxCompiler}; mirrors the babel plugin options plus file filtering. */
@@ -68,6 +69,9 @@ function mayCompile(code: string): boolean {
  */
 export function bindxCompiler(options: BindxCompilerViteOptions = {}): BindxCompilerVitePlugin {
 	const { alias, entityLike, include, exclude, diagnostics = 'off' } = options
+	// One parsed-sibling-module cache per plugin instance: bounds dev-server memory per build and
+	// isolates test runs, while still sharing sibling parses across every file of this build.
+	const cache = new ModuleCache()
 	// Per-instance accumulator (no module-level state) for the buildEnd grand total.
 	const totals: { compiled: number; bailed: number } = { compiled: 0, bailed: 0 }
 	const accumulate = (t: DiagnosticTotals): void => {
@@ -98,7 +102,7 @@ export function bindxCompiler(options: BindxCompilerViteOptions = {}): BindxComp
 				babelrc: false,
 				sourceMaps: true,
 				parserOpts: { plugins: ['typescript', 'jsx'] },
-				plugins: [[bindxCompilerPlugin, { alias, entityLike, diagnostics, onReport: accumulate, onDependency: (dep: string) => deps.add(dep) }]],
+				plugins: [[bindxCompilerPlugin, { alias, entityLike, diagnostics, cache, onReport: accumulate, onDependency: (dep: string) => deps.add(dep) }]],
 			})
 			if (!result?.code) {
 				return null

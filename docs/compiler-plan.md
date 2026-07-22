@@ -814,6 +814,33 @@ validate-mode to re-warn) each render; a hoisted const is stable. Chains keep th
 (`hasCompiledSelectionAttr`) matches on the attribute NAME, so an identifier-valued attribute from a
 prior hoist still skips a re-transform.
 
+### Cleanup pass (post-audit) — IMPLEMENTED
+
+Type-hygiene and surface-area cleanup with no behavior change:
+
+- **No casts anywhere.** The three hand-rolled read-only AST walkers (`resolve.ts` `anyIdentifier`,
+  `targetKind.ts` `referencedMembersOf`, and the inline visitor in `chain.ts`/`entityRoots.ts`) now
+  share the single `astWalk.ts` `walkAst`, extended with a `'skip' | 'stop'` `WalkControl` return
+  (skip children / abort the whole walk). Child access uses `Reflect.get` (cast-free) and the node
+  guard uses `'type' in value`, so the `as unknown as Record<…>` casts are gone. `imports.ts` resolves
+  component kinds via a `ReadonlyMap<string, ComponentKind>` instead of a `Set` + `as ComponentKind`.
+- **Contract type dedup.** `CallbackContract`/`CollectorContract` are imported (`import type`) from
+  `@contember/bindx-react` — the runtime derives them, the compiler parses what they describe, so they
+  are declared once. A project reference to `../bindx-react` makes `tsc --build` resolve them; both
+  declarations cross-reference each other.
+- **Public API trimmed.** `src/index.ts` now exports only `bindxCompilerPlugin`/`bindxCompiler`, the
+  `analyze*` entries + `isBailed`/`isEntityRootBailed`, and the public result/option types. Internals
+  (`ContractResolver`, `TargetKindResolver`, `ModuleCache`, `selectionToAst`, `selectionToPlain`,
+  `ContractFileCache` alias, …) are reached from their source modules; tests that needed them import
+  directly (`../src/emit.js`, `../src/selectionTree.js`).
+- **Per-instance module cache.** `bindxCompiler` creates one `ModuleCache` per plugin instance and
+  threads it through the babel plugin (`BindxCompilerOptions.cache`) into analysis, so dev-server
+  memory is bounded per build and test runs are isolated. The process-lifetime singleton stays the
+  default for bare babel-plugin usage.
+- **Coverage.** Added `optionsPlumbing.test.ts` (alias + entityLike actually take effect through the
+  babel plugins-with-options tuple) and plugin tests for a hand-written `.render(fn, literal)` second
+  arg (preserved, not injected over) and the `EXPLICIT_RENDER_FN` bail on a non-inline render arg.
+
 ## Future (explicitly out of scope now)
 
 Unplugin packaging, eslint plugin reusing the analyzer (bail reasons as lint diagnostics),

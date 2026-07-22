@@ -6,8 +6,14 @@ import * as t from '@babel/types'
 
 export type ComponentKind = 'Field' | 'Attribute' | 'Show' | 'HasOne' | 'HasMany' | 'If'
 
-const COMPONENT_NAMES: ReadonlySet<string> = new Set<ComponentKind>([
-	'Field', 'Attribute', 'Show', 'HasOne', 'HasMany', 'If',
+/** Imported name → component kind. A Map lookup returns `ComponentKind | undefined` — no cast needed. */
+const COMPONENT_KINDS: ReadonlyMap<string, ComponentKind> = new Map<string, ComponentKind>([
+	['Field', 'Field'],
+	['Attribute', 'Attribute'],
+	['Show', 'Show'],
+	['HasOne', 'HasOne'],
+	['HasMany', 'HasMany'],
+	['If', 'If'],
 ])
 
 export interface ImportBindings {
@@ -41,6 +47,7 @@ export function collectImportBindings(program: t.Program): ImportBindings {
 			}
 			const imported = t.isIdentifier(spec.imported) ? spec.imported.name : spec.imported.value
 			const local = spec.local.name
+			const kind = COMPONENT_KINDS.get(imported)
 			if (imported === 'createComponent') {
 				createComponent.add(local)
 			} else if (imported === 'cond') {
@@ -50,8 +57,8 @@ export function collectImportBindings(program: t.Program): ImportBindings {
 				// component" in the per-chain JSX walk — a nested <Entity> must stay an opaque
 				// element to the host chain (its children closure is walked as a nested fn).
 				entity.add(local)
-			} else if (COMPONENT_NAMES.has(imported)) {
-				components.set(local, imported as ComponentKind)
+			} else if (kind) {
+				components.set(local, kind)
 			}
 		}
 	}

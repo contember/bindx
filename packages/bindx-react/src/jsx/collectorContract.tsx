@@ -3,7 +3,11 @@ import type { EntityRef, HasManyRef, HasOneRef } from './types.js'
 import { HasMany } from './components/HasMany.js'
 import { HasOne } from './components/HasOne.js'
 
-/** Declares how a callback prop is invoked, so the analyzer can treat it like a HasMany/HasOne child. */
+/**
+ * Declares how a callback prop is invoked, so the analyzer can treat it like a HasMany/HasOne child.
+ * Source of truth: the build-time compiler imports these types (see
+ * packages/bindx-compiler/src/contracts.ts) to parse what this module derives.
+ */
 export interface CallbackContract {
 	readonly kind: 'itemOf' | 'entityOf'
 	readonly field: string

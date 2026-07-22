@@ -12,6 +12,7 @@
 import type { NodePath, PluginObj, PluginPass } from '@babel/core'
 import * as t from '@babel/types'
 import { analyzeEntityRootsInProgram, analyzeProgram } from './analyze.js'
+import type { ModuleCache } from './moduleResolve.js'
 import { compiledSelectionAttr, entitySelectionObject, selectionToAst } from './emit.js'
 import { ENTITY_ROOT_KEY, hasCompiledSelectionAttr } from './entityRoots.js'
 import { messageOf } from './resolve.js'
@@ -36,6 +37,11 @@ export interface BindxCompilerOptions {
 	readonly diagnostics?: DiagnosticsMode
 	/** Called once per transformed file with its compile/bail totals. */
 	readonly onReport?: (totals: DiagnosticTotals) => void
+	/**
+	 * Shared parsed-sibling-module cache. The Vite plugin injects ONE per instance so dev-server
+	 * memory stays bounded per build; bare babel-plugin usage falls back to the module-level default.
+	 */
+	readonly cache?: ModuleCache
 }
 
 export function bindxCompilerPlugin(_api?: unknown, options?: BindxCompilerOptions): PluginObj {
@@ -44,6 +50,7 @@ export function bindxCompilerPlugin(_api?: unknown, options?: BindxCompilerOptio
 	const onDependency = options?.onDependency
 	const diagnostics = options?.diagnostics ?? 'off'
 	const onReport = options?.onReport
+	const cache = options?.cache
 	return {
 		name: 'bindx-selection-compiler',
 		manipulateOptions(_opts, parserOpts: { plugins: unknown[] }): void {
@@ -56,8 +63,8 @@ export function bindxCompilerPlugin(_api?: unknown, options?: BindxCompilerOptio
 
 				// Discovery is wrapped: reading the whole AST first keeps chain and Entity injection
 				// independent, and a crash here degrades the file to the proxy fallback (never fatal).
-				const chainResults = discover(() => analyzeProgram(path.node, { filename, alias, onDependency }), entries)
-				const entityResults = discover(() => analyzeEntityRootsInProgram(path.node, { filename, alias, entityLike, onDependency }), entries)
+				const chainResults = discover(() => analyzeProgram(path.node, { filename, alias, onDependency, cache }), entries)
+				const entityResults = discover(() => analyzeEntityRootsInProgram(path.node, { filename, alias, entityLike, onDependency, cache }), entries)
 
 				for (const { chain, result } of chainResults) {
 					if (isBailed(result)) {

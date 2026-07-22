@@ -22,7 +22,8 @@ import type { File } from '@babel/types'
 import { writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { COMPONENT_SELECTIONS, convertToQuerySelection, type SelectionMeta } from '@contember/bindx-react'
-import { bindxCompilerPlugin, selectionToAst, type AnalyzedHole } from '../src/index.js'
+import { bindxCompilerPlugin, type AnalyzedHole } from '../src/index.js'
+import { selectionToAst } from '../src/emit.js'
 
 // A hole whose target INVOKES its render-prop child (SelectField.staticRender calls props.children),
 // so the child `it => <Field field={it.name} />` is LIFTED verbatim into the hole's extraProps.

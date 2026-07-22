@@ -10,20 +10,15 @@
  */
 import * as t from '@babel/types'
 import {
-	BindingResolver, ModuleCache, type BindingResolverOptions, type ModuleView,
+	BindingResolver, type BindingResolverOptions, type ModuleView,
 	findTopLevelVarInit,
 } from './moduleResolve.js'
 import { unwrap } from './resolve.js'
 
-export { ModuleCache as ContractFileCache } from './moduleResolve.js'
-
-export interface CallbackContract {
-	readonly kind: 'itemOf' | 'entityOf'
-	readonly field: string
-}
-
-/** Key = callback prop name (`children` included) → the relation it is invoked over. */
-export type CollectorContract = Record<string, CallbackContract>
+// The runtime derives these shapes; the compiler parses what the runtime declares, so reuse the
+// single source of truth (packages/bindx-react/src/jsx/collectorContract.tsx) — type-only, erased.
+import type { CallbackContract, CollectorContract } from '@contember/bindx-react'
+export type { CallbackContract, CollectorContract }
 
 /** Resolves a component tag to its declared contract, or null (→ existing hole/bail rules). */
 export type ContractLookup = (tag: string) => CollectorContract | null
