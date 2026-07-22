@@ -40,6 +40,13 @@ export interface AnalyzeOptions {
 	 * change). Only affects entity-root analysis, not `createComponent` chains.
 	 */
 	readonly entityLike?: readonly string[]
+	/**
+	 * Reports the absolute path of every OTHER file consulted during this run (contract discovery,
+	 * hole-target classification, re-export chases). A bundler feeds these to its watcher so a later
+	 * edit to a contract/target module re-transforms the entry file and its injected literal never
+	 * goes stale (a stale literal could otherwise flip into an under-fetch).
+	 */
+	readonly onDependency?: (absPath: string) => void
 }
 
 // Shared across analyzeProgram/plugin invocations, keyed internally by path+mtime.
@@ -57,6 +64,7 @@ function programContext(program: t.Program, options: AnalyzeOptions): ProgramCon
 		filename: options.filename,
 		alias: options.alias ?? {},
 		cache: options.cache ?? defaultModuleCache,
+		onDependency: options.onDependency,
 	}
 	const contracts = new ContractResolver(program, resolverOptions)
 	const targets = new TargetKindResolver(program, resolverOptions)

@@ -730,6 +730,31 @@ adapter-oracle-equal; plain target; collector-static referenced vs unreferenced 
 conservative; entityLike forwarding-wrapper root end-to-end). npi re-measure with
 `--entity-like=RefreshableEntity` — expected: root bails 21 → ~9, plus ~82 newly visible roots.
 
+## Prod hardening
+
+### First-class Vite plugin + cross-module watch invalidation — IMPLEMENTED
+
+`bindxCompiler(options?)` (`src/vitePlugin.ts`, exported from `src/index.ts`) replaces injecting the
+babel plugin into `@vitejs/plugin-react`'s babel options. It is a real Vite plugin (`enforce: 'pre'`,
+so it runs before react's JSX transform; it only injects, never transforms JSX) whose `transform`
+runs `@babel/core` with ONLY `bindxCompilerPlugin` + `typescript`/`jsx` parser plugins
+(`configFile:false`, `babelrc:false`, `sourceMaps:true`). Cheap gate: `.tsx`/`.jsx` only, skip
+`node_modules`, `include`/`exclude` (string-substring or RegExp), and a source pre-filter (must
+contain `createComponent` or `<Entity`). Zero new runtime deps; the plugin return type is structural
+(assignable to `import('vite').Plugin`) so vite stays an optional peer.
+
+Why it matters: cross-file analysis (collector contracts, hole target-kind, re-export/barrel chases
+in `moduleResolve.ts`) reads OTHER files to decide file A's emit. The analyzer now reports every
+consulted path via a threaded `onDependency(absPath)` callback (`AnalyzeOptions` →
+`BindingResolverOptions`, reported in `BindingResolver` for both the entry import and every re-export
+hop, including files that fail to parse). The Vite plugin feeds each reported path to
+`this.addWatchFile`, so editing a contract/target module re-transforms A. Without it, Vite never
+re-transforms A when B changes and A's injected literal keeps a stale contract/target decision — in
+dev that can flip a correct emit into an under-fetch, violating the soundness invariant.
+
+Example wiring: `packages/example/vite.config.ts` places `bindxCompiler()` before `react()` under
+the existing `BINDX_COMPILER=1` gate.
+
 ## Future (explicitly out of scope now)
 
 Unplugin packaging, eslint plugin reusing the analyzer (bail reasons as lint diagnostics),
