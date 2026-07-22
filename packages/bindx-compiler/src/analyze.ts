@@ -9,7 +9,7 @@ import * as t from '@babel/types'
 import { collectImportBindings, collectModuleBindings, type ImportBindings } from './imports.js'
 import { findChains, type Chain } from './chain.js'
 import { BodyAnalyzer } from './body.js'
-import { BailError } from './resolve.js'
+import { BailError, internalErrorBail } from './resolve.js'
 import { SelNode } from './selectionTree.js'
 import { parseProgram } from './parse.js'
 import { ModuleCache } from './moduleResolve.js'
@@ -117,7 +117,8 @@ function analyzeChain(
 		if (error instanceof BailError) {
 			return { loc, bailout: error.bailout }
 		}
-		throw error
+		// Contain an unexpected compiler bug per chain: bail (proxy fallback is sound), never crash the build.
+		return { loc, bailout: internalErrorBail(error) }
 	}
 
 	const selection: StaticSelection = {}

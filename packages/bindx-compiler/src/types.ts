@@ -74,6 +74,9 @@ export type BailoutReason =
 	| 'ENTITY_REASSIGNMENT'
 	| 'ENTITY_NO_FUNCTION_CHILDREN'
 	| 'UNCLASSIFIED'
+	// Synthetic: an unexpected (non-BailError) crash inside analysis, contained as a bail so
+	// the runtime proxy pass (always sound) takes over instead of failing the build.
+	| 'INTERNAL_ERROR'
 
 /** A bail with human-readable context. */
 export interface Bailout {

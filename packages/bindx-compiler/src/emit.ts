@@ -52,8 +52,10 @@ function holeToAst(hole: AnalyzedHole): t.ObjectExpression {
 	}
 	if (hole.extraProps && Object.keys(hole.extraProps).length > 0) {
 		// Each lifted value is wrapped in an arrow thunk (TDZ-safe, resolved at collection time).
+		// Deep-clone: the same expression still sits in the original render body — sharing one node
+		// object at two tree positions is fragile against later passes (react-refresh, JSX transform).
 		const entries = Object.entries(hole.extraProps).map(
-			([name, expr]) => t.objectProperty(key(name), t.arrowFunctionExpression([], expr)),
+			([name, expr]) => t.objectProperty(key(name), t.arrowFunctionExpression([], t.cloneNode(expr, true))),
 		)
 		properties.push(t.objectProperty(t.identifier('extraProps'), t.objectExpression(entries)))
 	}
@@ -73,15 +75,20 @@ export function selectionToAst(selection: StaticSelection, holes: readonly Analy
 }
 
 /**
- * Emits the `compiledSelection={{ props: { entity: {...} }, holes: [...] }}` JSX attribute
- * the Babel plugin injects onto a proven `<Entity>` element (phase 3). The root field map
- * lives under the fixed `rootKey`; holes are the same thunk-carrying shape as chains.
+ * Builds the CompiledSelection object literal for a proven `<Entity>` root (phase 3): the root
+ * field map lives under the fixed `rootKey`; holes are the same thunk-carrying shape as chains.
+ * Emitted separately from the attribute so the plugin can hoist it to a module-scope const —
+ * keeping a stable identity across parent renders (inline object literals re-resolve every render).
  */
-export function entitySelectionAttr(
+export function entitySelectionObject(
 	rootKey: string,
 	selection: StaticFieldMap,
 	holes: readonly AnalyzedHole[],
-): t.JSXAttribute {
-	const obj = selectionToAst({ [rootKey]: selection }, holes)
-	return t.jsxAttribute(t.jsxIdentifier('compiledSelection'), t.jsxExpressionContainer(obj))
+): t.ObjectExpression {
+	return selectionToAst({ [rootKey]: selection }, holes)
+}
+
+/** Builds the `compiledSelection={<value>}` JSX attribute referencing the given expression. */
+export function compiledSelectionAttr(value: t.Expression): t.JSXAttribute {
+	return t.jsxAttribute(t.jsxIdentifier('compiledSelection'), t.jsxExpressionContainer(value))
 }

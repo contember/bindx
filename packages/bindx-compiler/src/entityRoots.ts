@@ -12,7 +12,7 @@
 import * as t from '@babel/types'
 import { walkAst } from './astWalk.js'
 import { BodyAnalyzer } from './body.js'
-import { BailError } from './resolve.js'
+import { BailError, internalErrorBail } from './resolve.js'
 import { SelNode } from './selectionTree.js'
 import type { ImportBindings } from './imports.js'
 import type { ContractLookup } from './contracts.js'
@@ -119,7 +119,8 @@ export function analyzeEntityRoot(
 		if (error instanceof BailError) {
 			return { loc, bailout: error.bailout }
 		}
-		throw error
+		// Contain an unexpected compiler bug per root: bail (proxy fallback is sound), never crash the build.
+		return { loc, bailout: internalErrorBail(error) }
 	}
 
 	return { loc, selection: rootNode.toFieldMap(), holes: analyzer.holes }

@@ -16,6 +16,7 @@
  */
 import { transformAsync, type BabelFileResult } from '@babel/core'
 import { bindxCompilerPlugin } from './babelPlugin.js'
+import { reportTotals, type DiagnosticsMode, type DiagnosticTotals } from './diagnostics.js'
 
 /** Config for {@link bindxCompiler}; mirrors the babel plugin options plus file filtering. */
 export interface BindxCompilerViteOptions {
@@ -27,6 +28,8 @@ export interface BindxCompilerViteOptions {
 	readonly include?: readonly (string | RegExp)[]
 	/** Skip ids matching one of these (substring or regex). Applied after `include`. */
 	readonly exclude?: readonly (string | RegExp)[]
+	/** Per-file console reporting verbosity; also prints a grand total in `buildEnd`. Default 'off'. */
+	readonly diagnostics?: DiagnosticsMode
 }
 
 /** Minimal Vite/Rollup transform-context surface this plugin needs (kept tiny so tests can mock it). */
@@ -45,6 +48,7 @@ export interface BindxCompilerVitePlugin {
 	readonly name: string
 	readonly enforce: 'pre'
 	transform(this: BindxTransformContext, code: string, id: string): Promise<BindxTransformResult | null>
+	buildEnd(): void
 }
 
 const JSX_FILE = /\.[jt]sx$/
@@ -63,7 +67,13 @@ function mayCompile(code: string): boolean {
  * `enforce: 'pre'` ordering is what guarantees it runs first regardless of array position.
  */
 export function bindxCompiler(options: BindxCompilerViteOptions = {}): BindxCompilerVitePlugin {
-	const { alias, entityLike, include, exclude } = options
+	const { alias, entityLike, include, exclude, diagnostics = 'off' } = options
+	// Per-instance accumulator (no module-level state) for the buildEnd grand total.
+	const totals: { compiled: number; bailed: number } = { compiled: 0, bailed: 0 }
+	const accumulate = (t: DiagnosticTotals): void => {
+		totals.compiled += t.compiled
+		totals.bailed += t.bailed
+	}
 	return {
 		name: 'bindx-compiler',
 		enforce: 'pre',
@@ -88,7 +98,7 @@ export function bindxCompiler(options: BindxCompilerViteOptions = {}): BindxComp
 				babelrc: false,
 				sourceMaps: true,
 				parserOpts: { plugins: ['typescript', 'jsx'] },
-				plugins: [[bindxCompilerPlugin, { alias, entityLike, onDependency: (dep: string) => deps.add(dep) }]],
+				plugins: [[bindxCompilerPlugin, { alias, entityLike, diagnostics, onReport: accumulate, onDependency: (dep: string) => deps.add(dep) }]],
 			})
 			if (!result?.code) {
 				return null
@@ -98,6 +108,11 @@ export function bindxCompiler(options: BindxCompilerViteOptions = {}): BindxComp
 				this.addWatchFile(dep)
 			}
 			return { code: result.code, map: result.map }
+		},
+		buildEnd(): void {
+			if (diagnostics !== 'off') {
+				reportTotals(totals)
+			}
 		},
 	}
 }

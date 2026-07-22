@@ -25,7 +25,8 @@ export {
 } from './contracts.js'
 export { ModuleCache } from './moduleResolve.js'
 export { TargetKindResolver, type TargetKind, type TargetKindLookup } from './targetKind.js'
-export { selectionToAst } from './emit.js'
+export { selectionToAst, entitySelectionObject, compiledSelectionAttr } from './emit.js'
+export { reportFile, reportTotals, type DiagnosticsMode, type DiagnosticEntry, type DiagnosticTotals } from './diagnostics.js'
 export { fieldMapToPlain, selectionToPlain } from './selectionTree.js'
 export type {
 	StaticSelection,
