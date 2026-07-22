@@ -377,7 +377,8 @@ solves the case a hole cannot: a callback that both uses its item param **and** 
 field (e.g. `{item => <Row item={item} parentColumns={footer.linkColumns} />}`) — under a contract the
 host capture is an ordinary root path, and non-contract function props on the element are dropped
 safely (the derived staticRender never invokes them). The compiler discovers contracts declared
-locally or imported via a **relative** specifier (see docs/compiler-plan.md, Phase 2.2).
+locally or imported via a **relative** (or aliased) specifier, following `from`-source re-export
+chains through barrel index files (depth-limited, cycle-guarded) — see docs/compiler-plan.md, Phase 2.2.
 
 ### `getSelection` — for framework primitives
 

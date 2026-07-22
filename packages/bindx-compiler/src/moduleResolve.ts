@@ -3,8 +3,10 @@
  * both collector-contract discovery (contracts.ts) and hole-target-kind classification
  * (targetKind.ts). Given a component tag it locates the binding's initializer expression and
  * the module view it lives in, following LOCAL top-level declarations and RELATIVE imports
- * (plus an optional `alias` map). Parse-only, no execution, no type checker; cached per
- * path+mtime so sibling modules are read at most once per run.
+ * (plus an optional `alias` map). Re-export chains through a `from` source — `export { X } from`,
+ * `export { X as Y } from`, `export * from` (barrel index files) — are followed too, depth-limited
+ * and cycle-guarded. Parse-only, no execution, no type checker; cached per path+mtime so sibling
+ * modules are read at most once per run.
  */
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, resolve as resolvePath } from 'node:path'
@@ -101,6 +103,8 @@ export interface ResolvedBinding {
  * Local top-level `const/function` first, then a relative (or alias-mapped) import's export.
  */
 export class BindingResolver {
+	/** Max re-export follows after the entry import — guards runaway/pathological barrel graphs. */
+	private static readonly MAX_HOPS = 5
 	private readonly self: ModuleView
 	private readonly memo = new Map<string, ResolvedBinding | null>()
 
@@ -127,7 +131,7 @@ export class BindingResolver {
 		if (!imp) {
 			return null
 		}
-		const path = this.resolveModulePath(imp.source)
+		const path = this.resolveModulePath(imp.source, this.options.filename)
 		if (!path) {
 			return null
 		}
@@ -135,19 +139,66 @@ export class BindingResolver {
 		if (!view) {
 			return null
 		}
-		const init = resolveExportedBinding(view.program, imp.importedName)
-		return init ? { init, view } : null
+		return this.chaseExport(view, path, imp.importedName, new Set([path]), BindingResolver.MAX_HOPS)
 	}
 
-	/** Resolve an import specifier to an existing absolute file (relative or alias-mapped only). */
-	private resolveModulePath(source: string): string | null {
-		const base = this.toAbsoluteBase(source)
+	/**
+	 * Resolve `importedName` within `view` (living at `fromFile`), following `from`-source re-exports.
+	 * `visited` (module paths) breaks cycles and, for `export *`, dedupes diamond re-exports so a single
+	 * leaf reached twice is not mistaken for an ambiguity. Returns null on depth/cycle limit → the
+	 * caller's conservative fallback stands.
+	 */
+	private chaseExport(view: ModuleView, fromFile: string, importedName: string, visited: Set<string>, depth: number): ResolvedBinding | null {
+		const lookup = lookupExport(view.program, importedName)
+		if (!lookup) {
+			return null
+		}
+		if (lookup.kind === 'local') {
+			return { init: lookup.node, view }
+		}
+		if (depth <= 0) {
+			return null // depth limit → unfollowable
+		}
+		if (lookup.kind === 'reexport') {
+			return this.followSource(lookup.source, fromFile, lookup.importedName, visited, depth)
+		}
+		// `export *`: search each target; first match wins, a second distinct match → ambiguous → unfollowable.
+		let found: ResolvedBinding | null = null
+		for (const source of lookup.sources) {
+			const hit = this.followSource(source, fromFile, importedName, visited, depth)
+			if (hit) {
+				if (found) {
+					return null
+				}
+				found = hit
+			}
+		}
+		return found
+	}
+
+	/** Load the module `source` resolves to (relative to `fromFile`) and continue the chase there. */
+	private followSource(source: string, fromFile: string | undefined, importedName: string, visited: Set<string>, depth: number): ResolvedBinding | null {
+		const path = this.resolveModulePath(source, fromFile)
+		if (!path || visited.has(path)) {
+			return null // unresolvable specifier or a cycle → stop
+		}
+		const view = this.options.cache.get(path)
+		if (!view) {
+			return null
+		}
+		visited.add(path)
+		return this.chaseExport(view, path, importedName, visited, depth - 1)
+	}
+
+	/** Resolve an import/re-export specifier to an existing absolute file (relative or alias-mapped only). */
+	private resolveModulePath(source: string, fromFile: string | undefined): string | null {
+		const base = this.toAbsoluteBase(source, fromFile)
 		return base ? firstExisting(base) : null
 	}
 
-	private toAbsoluteBase(source: string): string | null {
+	private toAbsoluteBase(source: string, fromFile: string | undefined): string | null {
 		if (source.startsWith('.')) {
-			return this.options.filename ? resolvePath(dirname(this.options.filename), source) : null
+			return fromFile ? resolvePath(dirname(fromFile), source) : null
 		}
 		for (const [prefix, target] of Object.entries(this.options.alias)) {
 			if (source === prefix || source.startsWith(`${prefix}/`)) {
@@ -216,48 +267,93 @@ export function findTopLevelBinding(program: t.Program, name: string): t.Node | 
 	return null
 }
 
-/** Binding exported under `importedName`, following `export const/function/class` and `export { local as X }`. */
-export function resolveExportedBinding(program: t.Program, importedName: string): t.Node | null {
+/**
+ * How `program` provides `importedName`, for the binding-resolution chase:
+ * - `local`  — a declaration in this module (the resolved node).
+ * - `reexport` — `export { orig as importedName } from source`, or a passthrough of an import
+ *   (`import { orig } from source; export { orig }`); follow `orig` in `source`.
+ * - `star` — the `export * from` sources to search (used only when no explicit export matches).
+ */
+export type ExportLookup =
+	| { readonly kind: 'local'; readonly node: t.Node }
+	| { readonly kind: 'reexport'; readonly source: string; readonly importedName: string }
+	| { readonly kind: 'star'; readonly sources: readonly string[] }
+
+/** Classify how `importedName` is exported from `program`; null when it is not exported here at all. */
+export function lookupExport(program: t.Program, importedName: string): ExportLookup | null {
 	if (importedName === 'default') {
 		for (const node of program.body) {
 			if (t.isExportDefaultDeclaration(node)) {
 				const d = node.declaration
 				if (t.isFunctionDeclaration(d) || t.isClassDeclaration(d)) {
-					return d
+					return { kind: 'local', node: d }
 				}
 				if (t.isExpression(d)) {
-					return unwrap(d)
+					return { kind: 'local', node: unwrap(d) }
 				}
 			}
 		}
 		return null
 	}
+	const starSources: string[] = []
 	for (const node of program.body) {
+		// `export * from` — a namespace re-export (`export * as ns from`) parses as a named export
+		// with an ExportNamespaceSpecifier, so a bare ExportAllDeclaration is always the star form.
+		if (t.isExportAllDeclaration(node)) {
+			starSources.push(node.source.value)
+			continue
+		}
 		if (!t.isExportNamedDeclaration(node)) {
 			continue
 		}
 		if (node.declaration) {
-			if (t.isVariableDeclaration(node.declaration)) {
-				const init = varInit(node.declaration, importedName)
-				if (init) {
-					return init
-				}
+			const local = localFromDeclaration(node.declaration, importedName)
+			if (local) {
+				return { kind: 'local', node: local }
 			}
-			if ((t.isFunctionDeclaration(node.declaration) || t.isClassDeclaration(node.declaration)) && node.declaration.id?.name === importedName) {
-				return node.declaration
-			}
+			continue
 		}
-		if (!node.source) {
-			// `export { local as X }` — follow to the local declaration (re-exports with a source are unfollowable).
-			for (const spec of node.specifiers) {
-				if (t.isExportSpecifier(spec)) {
-					const exported = t.isIdentifier(spec.exported) ? spec.exported.name : spec.exported.value
-					if (exported === importedName) {
-						return findTopLevelBinding(program, spec.local.name)
-					}
-				}
-			}
+		const reexport = namedReexport(program, node, importedName)
+		if (reexport) {
+			return reexport
 		}
+	}
+	// Explicit exports take precedence over star re-exports (ES semantics); star is the fallback.
+	return starSources.length > 0 ? { kind: 'star', sources: starSources } : null
+}
+
+/** A `export const/function/class name` declaration node, or null. */
+function localFromDeclaration(declaration: t.Declaration, name: string): t.Node | null {
+	if (t.isVariableDeclaration(declaration)) {
+		return varInit(declaration, name)
+	}
+	if ((t.isFunctionDeclaration(declaration) || t.isClassDeclaration(declaration)) && declaration.id?.name === name) {
+		return declaration
+	}
+	return null
+}
+
+/** Resolve `export { ... }` specifiers (with or without a `from` source) for `importedName`. */
+function namedReexport(program: t.Program, node: t.ExportNamedDeclaration, importedName: string): ExportLookup | null {
+	for (const spec of node.specifiers) {
+		if (!t.isExportSpecifier(spec)) {
+			continue
+		}
+		const exported = t.isIdentifier(spec.exported) ? spec.exported.name : spec.exported.value
+		if (exported !== importedName) {
+			continue
+		}
+		const orig = spec.local.name
+		if (node.source) {
+			return { kind: 'reexport', source: node.source.value, importedName: orig }
+		}
+		// No source: a local declaration, or a passthrough of an import (`import { orig }; export { orig }`).
+		const local = findTopLevelBinding(program, orig)
+		if (local) {
+			return { kind: 'local', node: local }
+		}
+		const imp = findImport(program, orig)
+		return imp ? { kind: 'reexport', source: imp.source, importedName: imp.importedName } : null
 	}
 	return null
 }

@@ -487,8 +487,10 @@ Resolution for a component tag:
    **relative only** (`./x` → `x.tsx|ts|jsx|js` / `x/index.*`, and the ESM `./x.js` → `x.tsx|ts|jsx`
    convention this repo uses), plus an optional `alias` (prefix→path) map for non-relative specifiers
    (default empty). PARSE the target (no execution, no type checker), find its exported binding
-   (`export const`, `export { local as Tag }`; re-exports with a `from` source are unfollowable →
-   null), and extract.
+   (`export const`, `export { local as Tag }`, and `from`-source re-export chains — `export { X }
+   from`, `export { X as Y } from`, `export * from` barrel index files — followed depth-limited
+   (5 hops) with a cycle guard; a star ambiguity or an exhausted budget stays unfollowable → null),
+   and extract.
 
 A **contract literal** is an object literal whose every value is `itemOf('…')` / `entityOf('…')` with
 a single string-literal arg, the combinators imported from `@contember/bindx*` **in that module**; a
@@ -695,7 +697,9 @@ npi's `RefreshableEntity` forwarding wrapper hides 82 Entity roots from the root
 
 ### A) Target-kind classification (compiler-only; reuses the contract-discovery parse cache)
 
-For a hole-candidate tag (local or relative import, same resolution as contracts), classify:
+For a hole-candidate tag (local or relative import, same resolution as contracts — including
+`from`-source re-export chains through barrel index files, followed depth-limited (5 hops) with a
+cycle guard), classify:
 
 - **`createComponent` chain** → non-entity props (render-locals, identifiers, call results) and
   function props/children are droppable with NO safety bail; slot names are extracted from
