@@ -1,6 +1,6 @@
 /**
  * Emits a CompiledSelection (v2) as a Babel object-literal AST — the 2nd argument the
- * Babel plugin injects into `.render(fn, <here>)`. Shape: `{ props: {...}, holes?: [...] }`.
+ * Babel plugin injects into `.render(fn, <here>)`. Shape: `{ v: 2, props: {...}, holes?: [...] }`.
  * Unlike phase 1 this is no longer pure JSON: each hole's `component` is an arrow thunk
  * referencing the target's module-scope identifier.
  */
@@ -62,6 +62,8 @@ function holeToAst(hole: AnalyzedHole): t.ObjectExpression {
 
 export function selectionToAst(selection: StaticSelection, holes: readonly AnalyzedHole[]): t.ObjectExpression {
 	const properties: t.ObjectProperty[] = [
+		// Version marker: the runtime rejects a literal without `v === 2` and falls back to the proxy pass.
+		t.objectProperty(t.identifier('v'), t.numericLiteral(2)),
 		t.objectProperty(t.identifier('props'), propsToAst(selection)),
 	]
 	if (holes.length > 0) {

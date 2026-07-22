@@ -34,6 +34,8 @@ describe('babel plugin injection', () => {
 	test('injects the CompiledSelection (v2 { props }) as the 2nd argument of .render()', () => {
 		const output = transform(SOURCE)
 		// The emitted literal is the render call's 2nd argument, now wrapped in `props`.
+		// Version marker first — the runtime rejects any literal without `v: 2`.
+		expect(output).toContain('v: 2')
 		expect(output).toContain('props:')
 		expect(output).toContain('title: true')
 		expect(output).toContain('author: {')
