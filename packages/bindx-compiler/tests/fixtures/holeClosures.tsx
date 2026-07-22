@@ -14,7 +14,7 @@ interface SelectFieldProps {
 	children: (entity: EntityRef<Author>) => ReactNode
 }
 
-// Mirrors npi's SelectField: a withCollector primitive whose staticRender reaches the field
+// Mirrors a real-world SelectField: a withCollector primitive whose staticRender reaches the field
 // ONLY through the render-prop child (it INVOKES it with a collector proxy).
 export const SelectField = withCollector(
 	(_props: SelectFieldProps): ReactNode => null,
