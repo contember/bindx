@@ -16,17 +16,20 @@ import {
 	COMPONENT_SELECTIONS,
 	staticSelectionToMeta,
 	setStaticSelectionValidation,
+	setCompiledSelectionsEnabled,
 	type SelectionMeta,
 	type StaticFieldMap,
 	type EntityRef,
+	type CompiledSelection,
 } from '@contember/bindx-react'
 import { SelectionScope } from '@contember/bindx'
 import { schema, renderWithBindx, getByTestId, type Article, type Author } from '../../shared'
 
 afterEach(() => {
 	cleanup()
-	// Validate mode is a module-level flag — never leak it into other tests.
+	// Module-level flags — never leak them into other tests.
 	setStaticSelectionValidation(false)
+	setCompiledSelectionsEnabled(true)
 })
 
 // Triggers static collection via the `$<propName>` fragment getter, then reads
@@ -114,7 +117,7 @@ describe('compiled build path (props only)', () => {
 					renderCalls++
 					return <Field field={article.title} />
 				},
-				{ props: { article: { title: true } } },
+				{ v: 2, props: { article: { title: true } } },
 			)
 
 		const selection = getComponentSelection(Comp, 'article')
@@ -137,7 +140,7 @@ describe('compiled build path (props only)', () => {
 			.entity('article', schema.Article)
 			.render(
 				({ article }) => <span data-testid="title"><Field field={article.title} /></span>,
-				{ props: { article: { title: true } } },
+				{ v: 2, props: { article: { title: true } } },
 			)
 
 		const { container } = renderWithBindx(
@@ -160,7 +163,7 @@ describe('validate mode', () => {
 			.entity('article', schema.Article)
 			.render(
 				({ article }) => <Field field={article.title} />,
-				{ props: { article: { title: true } } },
+				{ v: 2, props: { article: { title: true } } },
 			)
 
 		getComponentSelection(Comp, 'article')
@@ -178,7 +181,7 @@ describe('validate mode', () => {
 			.entity('article', schema.Article)
 			.render(
 				({ article }) => <Field field={article.title} />,
-				{ props: { article: { title: true, content: true, status: true } } },
+				{ v: 2, props: { article: { title: true, content: true, status: true } } },
 			)
 
 		getComponentSelection(Comp, 'article')
@@ -196,7 +199,7 @@ describe('validate mode', () => {
 			.entity('article', schema.Article)
 			.render(
 				({ article }) => <HasMany field={article.tags}>{t => <Field field={t.name} />}</HasMany>,
-				{ props: { article: { tags: { fields: { name: true }, many: true, params: { limit: 5 } } } } },
+				{ v: 2, props: { article: { tags: { fields: { name: true }, many: true, params: { limit: 5 } } } } },
 			)
 
 		getComponentSelection(Comp, 'article')
@@ -218,7 +221,7 @@ describe('validate mode', () => {
 						<Field field={article.content} />
 					</div>
 				),
-				{ props: { article: { title: true } } },
+				{ v: 2, props: { article: { title: true } } },
 			)
 
 		getComponentSelection(Comp, 'article')
@@ -244,6 +247,7 @@ describe('validate mode', () => {
 			.render(
 				({ article }) => <AuthorCard author={article.author} />,
 				{
+					v: 2,
 					props: { article: {} },
 					holes: [{
 						component: () => AuthorCard,
@@ -282,6 +286,7 @@ describe('compiled selection v2 — nested-component holes', () => {
 			.render(
 				() => { throw new Error('render must not run on the compiled path') },
 				{
+					v: 2,
 					props: { article: {} },
 					holes: [{
 						component: () => AuthorCard,
@@ -306,6 +311,7 @@ describe('compiled selection v2 — nested-component holes', () => {
 			.render(
 				() => { throw new Error('render must not run') },
 				{
+					v: 2,
 					props: { article: {} },
 					holes: [{
 						component: () => Summary,
@@ -335,6 +341,7 @@ describe('compiled selection v2 — nested-component holes', () => {
 			.render(
 				() => { throw new Error('render must not run') },
 				{
+					v: 2,
 					props: { article: {} },
 					holes: [{
 						component: () => TitleCollector,
@@ -356,6 +363,7 @@ describe('compiled selection v2 — nested-component holes', () => {
 			.render(
 				() => { throw new Error('render must not run') },
 				{
+					v: 2,
 					props: { article: { title: true } },
 					holes: [{
 						component: () => AuthorName,
@@ -375,6 +383,7 @@ describe('compiled selection v2 — nested-component holes', () => {
 			.render(
 				() => { throw new Error('render must not run') },
 				{
+					v: 2,
 					props: { article: {} },
 					holes: [{
 						// LateAuthorCard is declared below — the thunk defers resolution
@@ -409,6 +418,7 @@ describe('compiled selection v2 — nested-component holes', () => {
 			.render(
 				() => { throw new Error('render must not run') },
 				{
+					v: 2,
 					props: { article: {} },
 					holes: [{
 						component: () => Pair,
@@ -432,6 +442,7 @@ describe('compiled selection v2 — nested-component holes', () => {
 			.render(
 				() => null,
 				{
+					v: 2,
 					props: { article: { title: true } },
 					holes: [{
 						component: () => PlainThing,
@@ -470,6 +481,7 @@ describe('compiled selection v2 — nested-component holes', () => {
 			.render(
 				() => { throw new Error('render must not run') },
 				{
+					v: 2,
 					props: { article: { title: true } },
 					holes: [
 						{
@@ -509,6 +521,7 @@ describe('compiled selection v2 — nested-component holes', () => {
 			.render(
 				() => { throw new Error('render must not run') },
 				{
+					v: 2,
 					props: { article: {} },
 					holes: [{
 						component: () => SelectField,
@@ -537,6 +550,7 @@ describe('compiled selection v2 — nested-component holes', () => {
 					return <AuthorCard author={article.author} />
 				},
 				{
+					v: 2,
 					props: { article: { title: true } },
 					holes: [{
 						component: () => AuthorCard,
@@ -547,5 +561,93 @@ describe('compiled selection v2 — nested-component holes', () => {
 
 		getComponentSelection(CompiledHost, 'article')
 		expect(renderCalls).toBe(0)
+	})
+})
+
+describe('compiled selection — runtime hardening (validation, containment, killswitch)', () => {
+	test('malformed compiled literal warns and falls back to the proxy collection pass', () => {
+		const warn = spyOn(console, 'warn').mockImplementation(() => {})
+		let renderCalls = 0
+		const Comp = createComponent()
+			.entity('article', schema.Article)
+			.render(
+				({ article }) => {
+					renderCalls++
+					return <Field field={article.content} />
+				},
+				// Stale/corrupt emit — wrong version. Runtime must reject it and re-run the proxy pass.
+				{ v: 1, props: { article: { title: true } } } as unknown as CompiledSelection,
+			)
+
+		const selection = getComponentSelection(Comp, 'article')
+		expect(warn).toHaveBeenCalled()
+		// The fallback ran the render fn and collected what IT read (content), not the literal's `title`.
+		expect(renderCalls).toBeGreaterThan(0)
+		expect(fieldNames(selection!)).toEqual(['content'])
+		warn.mockRestore()
+	})
+
+	test('a throwing extraProps thunk is contained — its hole degrades, siblings and own props survive', () => {
+		const error = spyOn(console, 'error').mockImplementation(() => {})
+
+		interface SelectFieldProps {
+			entity: EntityRef<Author>
+			children: (entity: EntityRef<Author>) => React.ReactNode
+		}
+		const SelectField = withCollector(
+			function SelectField(_props: SelectFieldProps): React.ReactNode { return null },
+			(props: SelectFieldProps) => <>{props.children(props.entity)}</>,
+		)
+		const AuthorCard = createComponent()
+			.entity('author', schema.Author)
+			.render(({ author }) => <Field field={author.name} />)
+
+		const CompiledHost = createComponent()
+			.entity('article', schema.Article)
+			.render(
+				() => { throw new Error('render must not run') },
+				{
+					v: 2,
+					props: { article: { title: true } },
+					holes: [
+						{
+							component: () => SelectField,
+							entityProps: { entity: { source: 'article', path: ['author'] } },
+							// TDZ / module-init failure: the thunk throws while the hole's props are assembled.
+							extraProps: { children: () => { throw new Error('thunk boom') } },
+						},
+						{
+							component: () => AuthorCard,
+							entityProps: { author: { source: 'article', path: ['author'] } },
+						},
+					],
+				},
+			)
+
+		const selection = getComponentSelection(CompiledHost, 'article')
+		// Own static prop and the sibling hole both survived the throwing thunk.
+		expect(fieldNames(selection!)).toContain('title')
+		expect(fieldNames(relation(selection!, 'author'))).toContain('name')
+		expect(error).toHaveBeenCalled()
+		error.mockRestore()
+	})
+
+	test('killswitch: setCompiledSelectionsEnabled(false) forces the proxy pass', () => {
+		setCompiledSelectionsEnabled(false)
+		let renderCalls = 0
+		const Comp = createComponent()
+			.entity('article', schema.Article)
+			.render(
+				({ article }) => {
+					renderCalls++
+					return <Field field={article.content} />
+				},
+				{ v: 2, props: { article: { title: true } } },
+			)
+
+		const selection = getComponentSelection(Comp, 'article')
+		// Compiled path disabled ⇒ the render fn ran and its field (content) was collected, not the literal's `title`.
+		expect(renderCalls).toBeGreaterThan(0)
+		expect(fieldNames(selection!)).toEqual(['content'])
 	})
 })

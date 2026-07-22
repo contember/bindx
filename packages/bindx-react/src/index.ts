@@ -379,6 +379,7 @@ export {
 	setBrandValidation,
 	validateBrand,
 	setStaticSelectionValidation,
+	setCompiledSelectionsEnabled,
 } from './jsx/index.js'
 
 // Entity Scope

@@ -32,7 +32,7 @@ import { FIELD_REF_META, BINDX_COMPONENT, SCOPE_REF } from './types.js'
 import { createCollectorProxy } from './proxy.js'
 import { collectSelection } from './analyzer.js'
 import { createFragment, createScalarPropMock } from './collectionHelpers.js'
-import { applyCompiledSelection, type CompiledSelection } from './compiledSelection.js'
+import { applyCompiledSelection, isValidCompiledSelection, type CompiledSelection } from './compiledSelection.js'
 import { type Condition, evaluateCondition } from './conditions.js'
 import { useRefSubscription } from '../hooks/useFields.js'
 
@@ -76,6 +76,19 @@ export function setStaticSelectionValidation(enabled: boolean): void {
 /** Reads the module-level validate-mode flag (used by <Entity>'s root compilation). */
 export function isStaticSelectionValidationEnabled(): boolean {
 	return staticSelectionValidationEnabled
+}
+
+/** Killswitch: when off, all consumers ignore compiled literals and use the runtime proxy path. */
+let compiledSelectionsEnabled = true
+
+/** Disables compiled selections at runtime — incident mitigation without a rebuild. */
+export function setCompiledSelectionsEnabled(enabled: boolean): void {
+	compiledSelectionsEnabled = enabled
+}
+
+/** Reads the module-level compiled-selections killswitch (used by both consumers). */
+export function isCompiledSelectionsEnabled(): boolean {
+	return compiledSelectionsEnabled
 }
 
 // ============================================================================
@@ -161,6 +174,55 @@ export function buildComponent<TProps extends object>(
 	// Tri-state: 'collecting' terminates self-recursive components
 	let collectionState: 'idle' | 'collecting' | 'done' = 'idle'
 
+	// Drops any implicit/hole-derived entries so a partial compiled pass can't leak into the fallback.
+	function resetToExplicitSelections(): void {
+		for (const key of [...selectionsMap.keys()]) {
+			if (!explicitEntityPropNames.includes(key)) {
+				selectionsMap.delete(key)
+			}
+		}
+	}
+
+	// Applies the compiled literal; returns false (⇒ caller falls back to the proxy pass) on a
+	// malformed literal or a top-level throw. Per-hole failures stay contained inside applyCompiledSelection.
+	function tryApplyCompiled(): boolean {
+		if (!isValidCompiledSelection(compiled)) {
+			console.warn(
+				`[bindx] compiled selection for <${componentDisplayName}> is malformed (version/shape check failed) — `
+				+ 'falling back to runtime collection.',
+			)
+			return false
+		}
+		try {
+			applyCompiledSelection({
+				compiled,
+				selectionsMap,
+				componentBrand,
+				roles,
+				implicitConfigs,
+				schemaRegistry,
+				componentDisplayName,
+				validateMode: staticSelectionValidationEnabled,
+			})
+		} catch (error) {
+			resetToExplicitSelections()
+			console.warn(
+				`[bindx] compiled selection for <${componentDisplayName}> failed to resolve — `
+				+ 'falling back to runtime collection.',
+				error,
+			)
+			return false
+		}
+		if (staticSelectionValidationEnabled) {
+			validateCompiledSelection(
+				selectionsMap, componentDisplayName,
+				implicitConfigs, renderFn, componentBrand, roles,
+				hasInterfacesMode, schemaRegistry, conditionFn, mockValues,
+			)
+		}
+		return true
+	}
+
 	// Runs only from the static-analysis surface (getSelection, $propName fragment
 	// getters) — never from render. Render bodies stay pure runtime code.
 	function ensureImplicitCollected(): void {
@@ -173,24 +235,8 @@ export function buildComponent<TProps extends object>(
 		collectionState = 'collecting'
 		try {
 			// Precompiled selection present ⇒ build entries from it, skip the proxy pass.
-			if (compiled) {
-				applyCompiledSelection({
-					compiled,
-					selectionsMap,
-					componentBrand,
-					roles,
-					implicitConfigs,
-					schemaRegistry,
-					componentDisplayName,
-					validateMode: staticSelectionValidationEnabled,
-				})
-				if (staticSelectionValidationEnabled) {
-					validateCompiledSelection(
-						selectionsMap, componentDisplayName,
-						implicitConfigs, renderFn, componentBrand, roles,
-						hasInterfacesMode, schemaRegistry, conditionFn, mockValues,
-					)
-				}
+			// Killswitch off or a malformed/throwing literal falls back to the proxy pass wholesale (never under-fetch).
+			if (compiled && isCompiledSelectionsEnabled() && tryApplyCompiled()) {
 				return
 			}
 			collectImplicitSelections(implicitConfigs, renderFn, selectionsMap, componentBrand, roles, hasInterfacesMode, schemaRegistry, conditionFn, mockValues)

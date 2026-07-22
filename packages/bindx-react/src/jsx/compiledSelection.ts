@@ -31,10 +31,33 @@ import type { EntityConfig } from './componentFactory.js'
  * shape within the experiment — hand-write only in tests that simulate emit.
  */
 export interface CompiledSelection {
+	/** Contract version marker — the runtime falls back to the proxy pass unless this is exactly 2. */
+	v: 2
 	/** Per implicit entity prop — same {@link StaticFieldMap} as phase 1. */
 	props: Record<string, StaticFieldMap>
 	/** Nested components that received entity-derived values. */
 	holes?: CompiledHole[]
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Defensive runtime shape check for a compiler-emitted literal. A stale or corrupt
+ * literal (wrong version, non-object props, malformed holes) must never be half-read
+ * into the fetch plan — consumers fall back to the runtime proxy pass when this fails.
+ */
+export function isValidCompiledSelection(value: unknown): value is CompiledSelection {
+	if (!isPlainObject(value) || value['v'] !== 2 || !isPlainObject(value['props'])) {
+		return false
+	}
+	for (const propValue of Object.values(value['props'])) {
+		if (!isPlainObject(propValue)) {
+			return false
+		}
+	}
+	return value['holes'] === undefined || Array.isArray(value['holes'])
 }
 
 /**
@@ -210,9 +233,9 @@ function resolveHole(hole: CompiledHole, ctx: HoleResolutionContext): void {
 		return
 	}
 
-	const props = assembleHoleProps(hole, ctx)
-
 	try {
+		// Inside the try: a throwing extraProps thunk (module-init/TDZ) degrades this one hole, not the whole resolution.
+		const props = assembleHoleProps(hole, ctx)
 		if (hasGetSelection(target)) {
 			// Entity values carry SCOPE_REF, so getSelection merges into the source
 			// scopes as a side effect; the returned fields are irrelevant here.

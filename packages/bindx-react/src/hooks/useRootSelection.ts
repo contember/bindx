@@ -3,8 +3,8 @@ import { buildQueryFromSelection } from '@contember/bindx'
 import type { EntityAccessor } from '../jsx/types.js'
 import { useSchemaRegistry } from './BackendAdapterContext.js'
 import { useSelectionCollection, type SelectionCollectionResult } from './useSelectionCollection.js'
-import { resolveCompiledRootSelection, type CompiledSelection } from '../jsx/compiledSelection.js'
-import { isStaticSelectionValidationEnabled, validateCompiledRootSelection } from '../jsx/componentFactory.js'
+import { isValidCompiledSelection, resolveCompiledRootSelection, type CompiledSelection } from '../jsx/compiledSelection.js'
+import { isCompiledSelectionsEnabled, isStaticSelectionValidationEnabled, validateCompiledRootSelection } from '../jsx/componentFactory.js'
 
 /**
  * Params for {@link useRootSelection}.
@@ -27,20 +27,39 @@ export function useRootSelection(params: UseRootSelectionParams): SelectionColle
 	const { entityType, depsKey, children, compiledSelection } = params
 	const schemaRegistry = useSchemaRegistry()
 	const validateMode = isStaticSelectionValidationEnabled()
+	const compiledEnabled = isCompiledSelectionsEnabled()
 
 	// Compiled root selection — present ⇒ skip the children(collector) walk (unless validating).
+	// Killswitch off or a malformed/throwing literal yields null ⇒ the runtime walk runs. Decided
+	// INSIDE the memo so the hook sequence below stays identical across the compiled/uncompiled path.
 	const compiledResult = useMemo((): SelectionCollectionResult | null => {
-		if (!compiledSelection) {
+		if (!compiledSelection || !compiledEnabled) {
 			return null
 		}
-		const selection = resolveCompiledRootSelection({
-			compiled: compiledSelection,
-			entityType,
-			schemaRegistry,
-			validateMode,
-		})
-		return { selection, queryKey: JSON.stringify(buildQueryFromSelection(selection)) }
-	}, [compiledSelection, entityType, schemaRegistry, validateMode])
+		if (!isValidCompiledSelection(compiledSelection)) {
+			console.warn(
+				`[bindx] compiled selection for <Entity ${entityType}> is malformed (version/shape check failed) — `
+				+ 'falling back to the runtime children walk.',
+			)
+			return null
+		}
+		try {
+			const selection = resolveCompiledRootSelection({
+				compiled: compiledSelection,
+				entityType,
+				schemaRegistry,
+				validateMode,
+			})
+			return { selection, queryKey: JSON.stringify(buildQueryFromSelection(selection)) }
+		} catch (error) {
+			console.warn(
+				`[bindx] compiled selection for <Entity ${entityType}> failed to resolve — `
+				+ 'falling back to the runtime children walk.',
+				error,
+			)
+			return null
+		}
+	}, [compiledSelection, compiledEnabled, entityType, schemaRegistry, validateMode])
 
 	// Runtime walk. Its collect no-ops when compiled & not validating, so children is
 	// never called with a collector. In validate mode the walk runs to feed the diff;

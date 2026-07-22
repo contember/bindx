@@ -1,5 +1,5 @@
 // Runtime side of Phase 3 — compiled <Entity> root selection. The compiler injects
-// `compiledSelection={{ props: { entity: {...} }, holes: [...] }}`; here those literals
+// `compiledSelection={{ v: 2, props: { entity: {...} }, holes: [...] }}`; here those literals
 // are hand-written to simulate the emit. See docs/compiler-plan.md (Phase 3).
 import '../../setup'
 import { describe, test, expect, afterEach, spyOn } from 'bun:test'
@@ -39,7 +39,7 @@ function isCollector(value: unknown): boolean {
 describe('compiled <Entity> — collection is skipped', () => {
 	test('renders WITHOUT ever invoking children with a collector', async () => {
 		let collectorCalls = 0
-		const compiledSelection: CompiledSelection = { props: { entity: { title: true } } }
+		const compiledSelection: CompiledSelection = { v: 2, props: { entity: { title: true } } }
 
 		const { container } = renderWithBindx(
 			<Entity entity={schema.Article} by={{ id: 'article-1' }} compiledSelection={compiledSelection}>
@@ -83,7 +83,7 @@ describe('compiled <Entity> — collection is skipped', () => {
 
 describe('compiled <Entity> — fetch + render under MockAdapter', () => {
 	test('scalar fields', async () => {
-		const compiledSelection: CompiledSelection = { props: { entity: { title: true, content: true } } }
+		const compiledSelection: CompiledSelection = { v: 2, props: { entity: { title: true, content: true } } }
 
 		const { container } = renderWithBindx(
 			<Entity entity={schema.Article} by={{ id: 'article-1' }} compiledSelection={compiledSelection}>
@@ -104,6 +104,7 @@ describe('compiled <Entity> — fetch + render under MockAdapter', () => {
 
 	test('nested has-one', async () => {
 		const compiledSelection: CompiledSelection = {
+			v: 2,
 			props: { entity: { title: true, author: { fields: { name: true } } } },
 		}
 
@@ -128,6 +129,7 @@ describe('compiled <Entity> — fetch + render under MockAdapter', () => {
 			.render(({ author }) => <span data-testid="author-name"><Field field={author.name} /></span>)
 
 		const compiledSelection: CompiledSelection = {
+			v: 2,
 			props: { entity: { title: true } },
 			holes: [{
 				component: () => AuthorCard,
@@ -156,7 +158,7 @@ describe('compiled <Entity> — fetch + render under MockAdapter', () => {
 
 	test('create-mode Entity', async () => {
 		let collectorCalls = 0
-		const compiledSelection: CompiledSelection = { props: { entity: { title: true } } }
+		const compiledSelection: CompiledSelection = { v: 2, props: { entity: { title: true } } }
 
 		const { container } = renderWithBindx(
 			// Create mode does not fetch; assert it renders and skips the collector walk.
@@ -183,7 +185,7 @@ describe('compiled <Entity> — validate mode', () => {
 		setStaticSelectionValidation(true)
 		const warn = spyOn(console, 'warn').mockImplementation(() => {})
 
-		const compiledSelection: CompiledSelection = { props: { entity: { title: true } } }
+		const compiledSelection: CompiledSelection = { v: 2, props: { entity: { title: true } } }
 
 		const { container } = renderWithBindx(
 			<Entity entity={schema.Article} by={{ id: 'article-1' }} compiledSelection={compiledSelection}>
@@ -212,7 +214,7 @@ describe('compiled <Entity> — validate mode', () => {
 			(props: ContentProbeProps) => <Field field={props.item.content} />,
 		)
 
-		const compiledSelection: CompiledSelection = { props: { entity: { title: true } } }
+		const compiledSelection: CompiledSelection = { v: 2, props: { entity: { title: true } } }
 
 		const { container } = renderWithBindx(
 			<Entity entity={schema.Article} by={{ id: 'article-1' }} compiledSelection={compiledSelection}>
@@ -255,5 +257,33 @@ describe('<Entity> — no compiledSelection is unchanged (sanity)', () => {
 		await waitFor(() => {
 			expect(getByTestId(container, 'author-name').textContent).toBe('John Doe')
 		})
+	})
+})
+
+describe('compiled <Entity> — malformed literal falls back to the runtime walk', () => {
+	test('warns and renders via the children collector walk, no crash', async () => {
+		const warn = spyOn(console, 'warn').mockImplementation(() => {})
+		let collectorCalls = 0
+		// Stale/corrupt emit — wrong version. Must be rejected; the runtime walk collects instead.
+		const malformed = { v: 1, props: { entity: { title: true } } } as unknown as CompiledSelection
+
+		const { container } = renderWithBindx(
+			<Entity entity={schema.Article} by={{ id: 'article-1' }} compiledSelection={malformed}>
+				{article => {
+					if (isCollector(article)) {
+						collectorCalls++
+					}
+					return <span data-testid="title"><Field field={article.title} /></span>
+				}}
+			</Entity>,
+		)
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'title').textContent).toBe('Hello World')
+		})
+		expect(warn).toHaveBeenCalled()
+		// Fallback ran: children was invoked with a collector (the pass the compiled path skips).
+		expect(collectorCalls).toBeGreaterThan(0)
+		warn.mockRestore()
 	})
 })
