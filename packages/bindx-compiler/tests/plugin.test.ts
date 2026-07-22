@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { transformSync } from '@babel/core'
-import { bindxCompilerPlugin } from '../src/index.js'
+import { analyzeSource, bindxCompilerPlugin, isBailed } from '../src/index.js'
 
 function transform(code: string): string {
 	const out = transformSync(code, {
@@ -66,5 +66,34 @@ export const C = createComponent()
 		const twice = transform(once)
 		const count = (s: string): number => s.split('title: true').length - 1
 		expect(count(twice)).toBe(count(once))
+	})
+
+	test('a hand-written 2nd argument to .render() is preserved and not injected over', () => {
+		const handWritten = `
+import { createComponent, Field } from '@contember/bindx-react'
+import { schema } from './s'
+export const C = createComponent()
+  .entity('article', schema.Article)
+  .render(({ article }) => <Field field={article.title} />, { handWritten: true })
+`
+		const output = transform(handWritten)
+		// A present 2nd arg (arguments.length >= 2) suppresses injection — the hand value stands, no v:2 literal.
+		expect(output).toContain('handWritten: true')
+		expect(output).not.toContain('v: 2')
+	})
+
+	test('.render() with a non-inline-function argument bails EXPLICIT_RENDER_FN (no injection)', () => {
+		const src = `
+import { createComponent, Field } from '@contember/bindx-react'
+import { schema } from './s'
+const renderFn = ({ article }) => <Field field={article.title} />
+export const C = createComponent().entity('article', schema.Article).render(renderFn)
+`
+		const [result] = analyzeSource(src, 'input.tsx')
+		expect(result && isBailed(result)).toBe(true)
+		if (result && isBailed(result)) {
+			expect(result.bailout.code).toBe('EXPLICIT_RENDER_FN')
+		}
+		expect(transform(src)).not.toContain('v: 2')
 	})
 })
