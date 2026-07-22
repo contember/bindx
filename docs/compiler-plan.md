@@ -652,9 +652,51 @@ system; phase 3.1 candidate).
   (superset assertion); create-mode Entity.
 - Full npi measure re-run with root counts.
 
+## Phase 3.1 — hole-target classification + entity-like roots
+
+Motivation (npi entity-root bail audit): 12 of 21 root bails are render-locals / function children
+on hole elements whose targets provably ignore them — `createComponent` targets (getSelection never
+reads scalar props and never invokes function children; the slot walk ignores non-JSX), plain
+function components (no surface at all), and `withCollector` staticRenders that reference only
+`props.entity`. The taint lattice bails only because the TARGET KIND is unknown. Separately,
+npi's `RefreshableEntity` forwarding wrapper hides 82 Entity roots from the root scan entirely.
+
+### A) Target-kind classification (compiler-only; reuses the contract-discovery parse cache)
+
+For a hole-candidate tag (local or relative import, same resolution as contracts), classify:
+
+- **`createComponent` chain** → non-entity props (render-locals, identifiers, call results) and
+  function props/children are droppable with NO safety bail; slot names are extracted from
+  `.slots([...])` (default `['children']`) — slot-valued JSX props keep being analyzed statically.
+  Entity props keep forming the hole.
+- **plain function component** (not wrapped by withCollector/createComponent) → no selection
+  surface; everything non-entity droppable; the hole is still emitted (harmless — matches runtime
+  blindness and keeps the validate-mode blind-spot warn).
+- **`withCollector(runtime, staticRenderFn)`** → parse the staticRender body and collect the set
+  of referenced prop names (destructured params, `props.x` members; rest/spread or aliasing of the
+  props object → conservative "references everything"). A dropped prop NOT in the referenced set
+  is safe; referenced render-locals/function props keep the existing bails.
+- **withCollector + contract** → already handled (phase 2.2). **Unresolvable/unknown** → existing
+  conservative rules unchanged.
+
+### B) `entityLike` option (roots hidden behind forwarding wrappers)
+
+Analyzer/plugin/measure option `entityLike?: string[]`: component names treated as `<Entity>` for
+root scanning AND emission. The `compiledSelection` attribute is injected on the wrapper element;
+it reaches the real `<Entity>` via the wrapper's `{...props}` spread — that props forwarding is the
+opt-in requirement, documented (no runtime change needed). Measure gains a CLI flag
+(`--entity-like=Name,...`).
+
+### Validation
+
+Fixtures per kind (createComponent target with render-local + function children now compiles and is
+adapter-oracle-equal; plain target; collector-static referenced vs unreferenced prop; rest-spread →
+conservative; entityLike forwarding-wrapper root end-to-end). npi re-measure with
+`--entity-like=RefreshableEntity` — expected: root bails 21 → ~9, plus ~82 newly visible roots.
+
 ## Future (explicitly out of scope now)
 
 Unplugin packaging, eslint plugin reusing the analyzer (bail reasons as lint diagnostics),
 oxc/SWC port if Babel cost ever matters, closure lifting with entity-path capture substitution
 (phase-2.2 alternative — superseded by contracts unless a non-contract case demands it),
-DataGrid/DataView root compilation (phase 3.1).
+DataGrid/DataView root compilation.
