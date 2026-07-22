@@ -24,7 +24,8 @@ browserTest('Article Editor', () => {
 		// Type in the search input to filter, then click the filtered option
 		waitFor(() => el('[role="dialog"] input').exists)
 		el('[role="dialog"] input').fill('Jane')
-		waitFor(() => el('[role="dialog"] button[class]').exists)
+		// Wait for the FILTERED option — the stale pre-filter list also has buttons
+		waitFor(() => el('[role="dialog"] button[class]').text.includes('Jane'))
 		el('[role="dialog"] button[class]').click()
 
 		waitFor(() => !el('article-save-button').isDisabled)
@@ -46,7 +47,8 @@ browserTest('Article Editor', () => {
 		// Search for the tag and click it
 		waitFor(() => el('[role="dialog"] input').exists)
 		el('[role="dialog"] input').fill('TypeScript')
-		waitFor(() => el('[role="dialog"] button[class]').exists)
+		// Wait for the FILTERED option — the stale pre-filter list also has buttons
+		waitFor(() => el('[role="dialog"] button[class]').text.includes('TypeScript'))
 		el('[role="dialog"] button[class]').click()
 
 		waitFor(() => el('tag-badge-TypeScript').exists)

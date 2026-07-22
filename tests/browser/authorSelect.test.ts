@@ -21,7 +21,8 @@ browserTest('Article with Author Select', () => {
 		// Type to filter and click an option
 		waitFor(() => el('[role="dialog"] input').exists)
 		el('[role="dialog"] input').fill('Bob')
-		waitFor(() => el('[role="dialog"] button[class]').exists)
+		// Wait for the FILTERED option — the stale pre-filter list also has buttons
+		waitFor(() => el('[role="dialog"] button[class]').text.includes('Bob'))
 		el('[role="dialog"] button[class]').click()
 
 		waitFor(() => !el('author-select-save-button').isDisabled)
