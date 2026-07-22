@@ -8,6 +8,7 @@
  * Default deny: any uncertainty → 'unknown' (the existing conservative hole rules stand).
  */
 import * as t from '@babel/types'
+import { walkAst } from './astWalk.js'
 import {
 	BindingResolver, type BindingResolverOptions, type ModuleView,
 } from './moduleResolve.js'
@@ -171,44 +172,21 @@ function referencedMembersOf(root: t.Node, paramName: string): ReadonlySet<strin
 	const names = new Set<string>()
 	let escaped = false
 
-	const visit = (node: t.Node, asMemberObject: boolean): void => {
-		if (escaped) {
-			return
-		}
-		if (t.isIdentifier(node)) {
-			// A bare reference to the props identifier that is NOT the object of a `.x` access escapes.
-			if (node.name === paramName && !asMemberObject) {
-				escaped = true
-			}
-			return
-		}
+	walkAst(root, node => {
 		if ((t.isMemberExpression(node) || t.isOptionalMemberExpression(node))
 			&& t.isIdentifier(node.object) && node.object.name === paramName) {
 			if (!node.computed && t.isIdentifier(node.property)) {
 				names.add(node.property.name) // `p.x` — a clean referenced prop
-			} else {
-				escaped = true // `p[x]` — cannot know which prop
+				return 'skip' // handled `p.x` wholesale; don't descend into the `p` object identifier
 			}
-			return // do not descend into the object identifier
+			escaped = true // `p[x]` — cannot know which prop
+			return 'stop'
 		}
-		for (const key of t.VISITOR_KEYS[node.type] ?? []) {
-			const child: unknown = (node as unknown as Record<string, unknown>)[key]
-			if (Array.isArray(child)) {
-				for (const item of child) {
-					if (isNode(item)) {
-						visit(item, false)
-					}
-				}
-			} else if (isNode(child)) {
-				visit(child, false)
-			}
+		if (t.isIdentifier(node) && node.name === paramName) {
+			escaped = true // a bare reference to props not used as a clean `.x` access
+			return 'stop'
 		}
-	}
+	})
 
-	visit(root, false)
 	return escaped ? 'all' : names
-}
-
-function isNode(value: unknown): value is t.Node {
-	return typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string'
 }

@@ -5,6 +5,7 @@
  * skip-list (see packages/bindx-react/src/jsx/proxyShared.ts + collectorProxy.ts).
  */
 import * as t from '@babel/types'
+import { walkAst } from './astWalk.js'
 import { SelNode } from './selectionTree.js'
 import type { Bailout, StaticHasManyParams } from './types.js'
 
@@ -186,28 +187,12 @@ export function consumeMany(ref: RootRef, params?: StaticHasManyParams): SelNode
  *  property names / object keys too) — sound for default-deny bail decisions. */
 function anyIdentifier(node: t.Node, pred: (name: string) => boolean): boolean {
 	let found = false
-	const visit = (n: t.Node): void => {
-		if (found) {
-			return
-		}
+	walkAst(node, n => {
 		if (t.isIdentifier(n) && pred(n.name)) {
 			found = true
-			return
+			return 'stop'
 		}
-		for (const key of t.VISITOR_KEYS[n.type] ?? []) {
-			const child: unknown = (n as unknown as Record<string, unknown>)[key]
-			if (Array.isArray(child)) {
-				for (const item of child) {
-					if (item && typeof item === 'object' && typeof (item as { type?: unknown }).type === 'string') {
-						visit(item as t.Node)
-					}
-				}
-			} else if (child && typeof child === 'object' && typeof (child as { type?: unknown }).type === 'string') {
-				visit(child as t.Node)
-			}
-		}
-	}
-	visit(node)
+	})
 	return found
 }
 

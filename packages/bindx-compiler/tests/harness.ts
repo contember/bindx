@@ -6,7 +6,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { COMPONENT_SELECTIONS, convertToQuerySelection, type SelectionMeta } from '@contember/bindx-react'
-import { analyzeSource, isBailed, selectionToPlain, type ChainResult } from '../src/index.js'
+import { analyzeSource, isBailed, type ChainResult } from '../src/index.js'
+import { selectionToPlain } from '../src/selectionTree.js'
 
 export function analyzeFixture(dir: string, file: string): ChainResult[] {
 	const path = join(dir, 'fixtures', file)
