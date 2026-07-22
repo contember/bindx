@@ -779,6 +779,41 @@ literal (e.g. a schema change that predates a re-transform, or a version skew) m
 read into the fetch plan — the version marker + guard + wholesale fallback guarantee that a rejected
 literal reproduces exactly what runtime collection would have fetched.
 
+### Crash containment, diagnostics, and Entity literal hoisting — IMPLEMENTED
+
+**Crash containment.** An unexpected (non-`BailError`) throw inside analysis is contained per unit as
+a new `INTERNAL_ERROR` bail (`resolve.ts` `internalErrorBail`, applied in `analyze.ts` `analyzeChain`
+and `entityRoots.ts` `analyzeEntityRoot`) — the runtime proxy pass (always sound) takes over instead
+of failing the build. The plugin (`babelPlugin.ts`) additionally wraps discovery and EACH emit: a
+crash in `analyzeProgram`/`analyzeEntityRootsInProgram` degrades the whole file to the fallback, and a
+crash while injecting one chain/root loses only that injection. `INTERNAL_ERROR` always surfaces one
+`console.warn` (file + loc + message), regardless of the diagnostics setting. `BailError` semantics
+are untouched — normal bails still flow as before.
+
+**Diagnostics.** `diagnostics?: 'off' | 'summary' | 'verbose'` (default `'off'`) on both the babel
+plugin options and `bindxCompiler` Vite options. A single reporter (`diagnostics.ts` `reportFile`)
+decides all console output: `'verbose'` prints one `[bindx-compiler] <file>:<line> BAIL <CODE>` per
+bail plus a per-file `N compiled, M bailed` line; `'summary'` prints one file line only when the file
+has a bail; `INTERNAL_ERROR` always warns (deduped — no extra `BAIL` info line on top of its warn).
+The Vite plugin accumulates per-file totals (per-instance, no module-level state, via the babel
+plugin's `onReport` callback) and prints one `[bindx-compiler] total: N compiled, M bailed` in
+`buildEnd` when diagnostics is not `'off'`.
+
+**Emit AST-reuse fix.** `emit.ts` deep-clones (`t.cloneNode(expr, true)`) every expression copied out
+of the original render tree into a hole's `extraProps` thunk — the same node no longer sits at two
+tree positions (fragile against later passes: react-refresh, JSX transform, source maps). `valueToNode`
+outputs (`entityProps`/`literalProps`/`params`) are freshly built from plain data, so they need no
+clone.
+
+**Entity literal hoisting.** A proven `<Entity>`'s CompiledSelection is hoisted to a module-scope
+`const _bindxCompiledSelection…` (inserted after the last import) and referenced by the
+`compiledSelection={…}` attribute, instead of an inline object literal. Inline literals get a new
+identity every parent render, forcing `useRootSelection`'s memo to re-resolve all holes (and
+validate-mode to re-warn) each render; a hoisted const is stable. Chains keep their inline
+`.render(fn, literal)` second argument (evaluated once at module scope already). The idempotence guard
+(`hasCompiledSelectionAttr`) matches on the attribute NAME, so an identifier-valued attribute from a
+prior hoist still skips a re-transform.
+
 ## Future (explicitly out of scope now)
 
 Unplugin packaging, eslint plugin reusing the analyzer (bail reasons as lint diagnostics),

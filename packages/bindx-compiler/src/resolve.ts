@@ -14,6 +14,16 @@ export class BailError extends Error {
 	}
 }
 
+/** Human-readable message for any thrown value. */
+export function messageOf(error: unknown): string {
+	return error instanceof Error ? error.message : String(error)
+}
+
+/** Wrap an unexpected (non-BailError) crash as a contained INTERNAL_ERROR bail — proxy fallback stays sound. */
+export function internalErrorBail(error: unknown): Bailout {
+	return { code: 'INTERNAL_ERROR', message: messageOf(error) }
+}
+
 /**
  * A binding that resolves to `node` reached via `path` of not-yet-materialized segments.
  * `source`/`absPath` track the origin entity prop and the absolute path from it — needed to
