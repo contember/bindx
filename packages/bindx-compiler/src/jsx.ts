@@ -9,8 +9,9 @@ import {
 	BailError, type RootRef, type Scope, consumeLeaf, consumeMany, consumeRelation,
 	entityPathOf, evaluateLiteral, referencesRoot, resolve,
 } from './resolve.js'
-import { type Closure, type HoleClosureProp, type HoleIdentifierProp, resolveHoleExtraProps } from './holeProps.js'
+import { type Closure, type HoleClosureProp, type HoleIdentifierProp, holePolicyFor, resolveHoleExtraProps } from './holeProps.js'
 import type { CollectorContract, ContractLookup } from './contracts.js'
+import type { TargetKindLookup } from './targetKind.js'
 import type { AnalyzedHole, HoleEntityProp, StaticHasManyParams } from './types.js'
 
 function asClosure(node: t.Node | null): Closure | null {
@@ -32,6 +33,7 @@ export class JsxAnalyzer {
 		private readonly bindings: ImportBindings,
 		private readonly moduleBindings: ReadonlySet<string>,
 		private readonly contracts: ContractLookup,
+		private readonly targetKinds: TargetKindLookup,
 	) {}
 
 	walk(node: t.JSXElement | t.JSXFragment, scope: Scope): void {
@@ -124,7 +126,10 @@ export class JsxAnalyzer {
 				// Tag isn't resolvable at module scope → no thunk can reference it.
 				throw new BailError({ code: 'ENTITY_ESCAPES_TO_COMPONENT', message: `component <${tag}> does not resolve to a module binding` })
 			}
-			const extraProps = resolveHoleExtraProps({ tag, closureProps, identifierProps, childClosure, scope, moduleBindings: this.moduleBindings })
+			// Classify the target so provably-inert props (render-locals, function children on a
+			// createComponent/plain target, unreferenced staticRender props) drop without bailing.
+			const policy = holePolicyFor(this.targetKinds(tag))
+			const extraProps = resolveHoleExtraProps({ tag, closureProps, identifierProps, childClosure, scope, moduleBindings: this.moduleBindings, policy })
 			this.host.addHole({
 				component: tag,
 				entityProps,

@@ -652,7 +652,39 @@ system; phase 3.1 candidate).
   (superset assertion); create-mode Entity.
 - Full npi measure re-run with root counts.
 
-## Phase 3.1 — hole-target classification + entity-like roots
+## Phase 3.1 — hole-target classification + entity-like roots — IMPLEMENTED
+
+Status: **implemented** on `experiment/selection-compiler`. Compiler-only — no runtime change
+(the `entityLike` attribute rides the wrapper's `{...props}` spread into the real `<Entity>`, which
+already consumes `compiledSelection` from phase 3). Binding resolution shared with contract
+discovery was extracted to `src/moduleResolve.ts` (`BindingResolver` + `ModuleCache`, now resolving
+plain `function`/`class` declarations too); target classification lives in `src/targetKind.ts`
+(`TargetKindResolver`), feeds `src/holeProps.ts` (`holePolicyFor`), and threads through
+`analyzeProgram`/`analyzeEntityRootsInProgram`/`BodyAnalyzer`/`JsxAnalyzer`. `entityLike` is an
+option on `analyzeSource`/`analyzeProgram`/`analyzeEntityRoots`/the Babel plugin, plus a
+`--entity-like=Name,...` measure flag.
+
+### Result (re-measured on `~/projects/external/npi/packages/admin`)
+
+- **Chains unchanged: 254/257 (99%)**, 3 bails (host analysis untouched) — as required.
+- **Entity roots (no flag): 93/105 compiled** (was 84/105 in phase 3). 12 bails:
+  7 `ENTITY_ESCAPES_TO_CALL` (genuine, out of scope), 2 `RENDER_LOCAL_ON_HOLE`
+  (both `~/`-aliased imports the measure run cannot resolve → default-deny `unknown`),
+  2 `ENTITY_NO_FUNCTION_CHILDREN`, 1 `ENTITY_IN_EXPRESSION_PROP`. The classification cleared
+  the phase-3 residue of 11 `RENDER_LOCAL_ON_HOLE` → 2 and 1 `FUNCTION_PROP_ON_HOLE` → 0.
+- **Entity roots (`--entity-like=RefreshableEntity`): 124/140 compiled**. The flag surfaces
+  **35 new roots** (105 → 140) hidden behind the `RefreshableEntity` forwarding wrapper; 31 of
+  them compile. 16 bails (the extra 4 vs no-flag are new `RefreshableEntity` roots passing
+  render-locals to `~/`-aliased unresolvable targets — same default-deny class).
+
+Classification (`TargetKind`): the collector-CONTRACT case is handled separately by
+`ContractResolver` (checked first in `jsx.ts`); target-kind covers `createComponent` /
+`plain` / `collectorStatic` / `unknown`. `collectorStatic` referenced-prop extraction: an
+object-pattern staticRender param yields its destructured keys (rest → `'all'`); an identifier
+param `p` yields the `p.x` accesses, with any other use (`p[x]`, `{...p}`, `f(p)`, aliasing) →
+`'all'`; a param-less staticRender references nothing. Shadowing is ignored (over-counts → sound).
+`entityLike` matching prefers an import's ORIGINAL exported name over its local alias, else the
+local declaration name; default/namespace imports carry no matchable name and are skipped.
 
 Motivation (npi entity-root bail audit): 12 of 21 root bails are render-locals / function children
 on hole elements whose targets provably ignore them — `createComponent` targets (getSelection never

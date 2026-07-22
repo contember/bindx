@@ -16,6 +16,8 @@ export {
 	type CollectorContract,
 	type ContractLookup,
 } from './contracts.js'
+export { ModuleCache } from './moduleResolve.js'
+export { TargetKindResolver, type TargetKind, type TargetKindLookup } from './targetKind.js'
 export { selectionToAst } from './emit.js'
 export { fieldMapToPlain, selectionToPlain } from './selectionTree.js'
 export type {

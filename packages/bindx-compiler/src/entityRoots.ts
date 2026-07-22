@@ -16,6 +16,7 @@ import { BailError } from './resolve.js'
 import { SelNode } from './selectionTree.js'
 import type { ImportBindings } from './imports.js'
 import type { ContractLookup } from './contracts.js'
+import type { TargetKindLookup } from './targetKind.js'
 import type { ChainLoc, EntityRootResult } from './types.js'
 
 /** Fixed key under which a compiled `<Entity>` stores its root field map + hole sources. */
@@ -27,19 +28,73 @@ export interface InternalEntityRootResult {
 	readonly result: EntityRootResult
 }
 
-/** Collect every `<Entity>` JSX element whose tag is a bindx `Entity` import binding. */
-export function findEntityElements(program: t.Program, bindings: ImportBindings): t.JSXElement[] {
+/**
+ * Collect every `<Entity>` JSX element whose tag is a bindx `Entity` import binding, plus any
+ * `entityLike` forwarding-wrapper elements (see `resolveEntityLikeLocals`). The two are treated
+ * identically — the wrapper must forward the injected `compiledSelection` to its inner `<Entity>`
+ * via `{...props}`.
+ */
+export function findEntityElements(
+	program: t.Program,
+	bindings: ImportBindings,
+	entityLikeLocals: ReadonlySet<string> = new Set(),
+): t.JSXElement[] {
 	const elements: t.JSXElement[] = []
 	walkAst(program, node => {
-		if (t.isJSXElement(node) && isEntityTag(node.openingElement.name, bindings)) {
+		if (t.isJSXElement(node) && isEntityTag(node.openingElement.name, bindings, entityLikeLocals)) {
 			elements.push(node)
 		}
 	})
 	return elements
 }
 
-function isEntityTag(name: t.JSXOpeningElement['name'], bindings: ImportBindings): boolean {
-	return t.isJSXIdentifier(name) && bindings.entity.has(name.name)
+function isEntityTag(name: t.JSXOpeningElement['name'], bindings: ImportBindings, entityLikeLocals: ReadonlySet<string>): boolean {
+	return t.isJSXIdentifier(name) && (bindings.entity.has(name.name) || entityLikeLocals.has(name.name))
+}
+
+/**
+ * Resolve which LOCAL tag names in `program` correspond to the configured `entityLike` component
+ * names. Matching prefers an import's ORIGINAL exported name over its local alias (so
+ * `import { RefreshableEntity as RE }` still matches when `RefreshableEntity` is configured); a
+ * locally-declared component (const/function/class) matches by its declared name. Default/namespace
+ * imports carry no matchable exported name and are skipped.
+ */
+export function resolveEntityLikeLocals(program: t.Program, entityLike: ReadonlySet<string>): Set<string> {
+	const locals = new Set<string>()
+	if (entityLike.size === 0) {
+		return locals
+	}
+	// Match imports by original exported name, and top-level declarations by declared name.
+	for (const node of program.body) {
+		if (t.isImportDeclaration(node)) {
+			for (const spec of node.specifiers) {
+				if (t.isImportSpecifier(spec)) {
+					const imported = t.isIdentifier(spec.imported) ? spec.imported.name : spec.imported.value
+					if (entityLike.has(imported)) {
+						locals.add(spec.local.name)
+					}
+				}
+			}
+			continue
+		}
+		collectLocalDeclNames(node, entityLike, locals)
+	}
+	return locals
+}
+
+function collectLocalDeclNames(node: t.Statement, entityLike: ReadonlySet<string>, locals: Set<string>): void {
+	const decl = t.isExportNamedDeclaration(node) ? node.declaration : node
+	if (decl && t.isVariableDeclaration(decl)) {
+		for (const d of decl.declarations) {
+			if (t.isIdentifier(d.id) && entityLike.has(d.id.name)) {
+				locals.add(d.id.name)
+			}
+		}
+		return
+	}
+	if (decl && (t.isFunctionDeclaration(decl) || t.isClassDeclaration(decl)) && decl.id && entityLike.has(decl.id.name)) {
+		locals.add(decl.id.name)
+	}
 }
 
 export function analyzeEntityRoot(
@@ -47,6 +102,7 @@ export function analyzeEntityRoot(
 	bindings: ImportBindings,
 	moduleBindings: ReadonlySet<string>,
 	lookup: ContractLookup,
+	targetKinds: TargetKindLookup,
 ): EntityRootResult {
 	const loc = elementLoc(element)
 	const childrenFn = entityChildrenFn(element)
@@ -56,7 +112,7 @@ export function analyzeEntityRoot(
 	}
 
 	const rootNode = new SelNode()
-	const analyzer = new BodyAnalyzer(bindings, moduleBindings, lookup)
+	const analyzer = new BodyAnalyzer(bindings, moduleBindings, lookup, targetKinds)
 	try {
 		analyzer.analyzeRootChildren(childrenFn, rootNode, ENTITY_ROOT_KEY)
 	} catch (error) {

@@ -12,8 +12,10 @@ import { BodyAnalyzer } from './body.js'
 import { BailError } from './resolve.js'
 import { SelNode } from './selectionTree.js'
 import { parseProgram } from './parse.js'
-import { ContractFileCache, ContractResolver, type ContractLookup } from './contracts.js'
-import { analyzeEntityRoot, findEntityElements, type InternalEntityRootResult } from './entityRoots.js'
+import { ModuleCache } from './moduleResolve.js'
+import { ContractResolver, type ContractLookup } from './contracts.js'
+import { TargetKindResolver, type TargetKindLookup } from './targetKind.js'
+import { analyzeEntityRoot, findEntityElements, resolveEntityLikeLocals, type InternalEntityRootResult } from './entityRoots.js'
 import type { ChainLoc, ChainResult, EntityRootResult, StaticSelection } from './types.js'
 
 export { parseProgram }
@@ -30,54 +32,72 @@ export interface AnalyzeOptions {
 	/** Prefix→path map for non-relative import specifiers (e.g. `{ '~': '/abs/app' }`). */
 	readonly alias?: Record<string, string>
 	/** Shared parsed-file cache; defaults to a module-level singleton across plugin instances. */
-	readonly cache?: ContractFileCache
+	readonly cache?: ModuleCache
+	/**
+	 * Component names treated as `<Entity>` for root scanning AND emission (phase 3.1). The
+	 * `compiledSelection` attribute is injected on the wrapper element; it must reach the real
+	 * `<Entity>` inside via the wrapper's `{...props}` spread (the opt-in requirement — no runtime
+	 * change). Only affects entity-root analysis, not `createComponent` chains.
+	 */
+	readonly entityLike?: readonly string[]
 }
 
 // Shared across analyzeProgram/plugin invocations, keyed internally by path+mtime.
-const defaultContractCache = new ContractFileCache()
+const defaultModuleCache = new ModuleCache()
 
 interface ProgramContext {
 	readonly bindings: ImportBindings
 	readonly moduleBindings: ReadonlySet<string>
 	readonly lookup: ContractLookup
+	readonly targetKinds: TargetKindLookup
 }
 
 function programContext(program: t.Program, options: AnalyzeOptions): ProgramContext {
-	const resolver = new ContractResolver(program, {
+	const resolverOptions = {
 		filename: options.filename,
 		alias: options.alias ?? {},
-		cache: options.cache ?? defaultContractCache,
-	})
+		cache: options.cache ?? defaultModuleCache,
+	}
+	const contracts = new ContractResolver(program, resolverOptions)
+	const targets = new TargetKindResolver(program, resolverOptions)
 	return {
 		bindings: collectImportBindings(program),
 		moduleBindings: collectModuleBindings(program),
-		lookup: tag => resolver.resolve(tag),
+		lookup: tag => contracts.resolve(tag),
+		targetKinds: tag => targets.resolve(tag),
 	}
 }
 
 /** Analyze an already-parsed program; retains Babel node refs for the plugin. */
 export function analyzeProgram(program: t.Program, options: AnalyzeOptions = {}): InternalChainResult[] {
-	const { bindings, moduleBindings, lookup } = programContext(program, options)
+	const { bindings, moduleBindings, lookup, targetKinds } = programContext(program, options)
 	const chains = findChains(program, bindings)
-	return chains.map(chain => ({ chain, result: analyzeChain(chain, bindings, moduleBindings, lookup) }))
+	return chains.map(chain => ({ chain, result: analyzeChain(chain, bindings, moduleBindings, lookup, targetKinds) }))
 }
 
-/** Analyze every top-level `<Entity>` selection root in a program (phase 3). */
+/** Analyze every top-level `<Entity>` (+ `entityLike`) selection root in a program (phase 3 / 3.1). */
 export function analyzeEntityRootsInProgram(program: t.Program, options: AnalyzeOptions = {}): InternalEntityRootResult[] {
-	const { bindings, moduleBindings, lookup } = programContext(program, options)
-	return findEntityElements(program, bindings).map(element => ({
+	const { bindings, moduleBindings, lookup, targetKinds } = programContext(program, options)
+	const entityLikeLocals = resolveEntityLikeLocals(program, new Set(options.entityLike ?? []))
+	return findEntityElements(program, bindings, entityLikeLocals).map(element => ({
 		element,
-		result: analyzeEntityRoot(element, bindings, moduleBindings, lookup),
+		result: analyzeEntityRoot(element, bindings, moduleBindings, lookup, targetKinds),
 	}))
 }
 
-function analyzeChain(chain: Chain, bindings: ImportBindings, moduleBindings: ReadonlySet<string>, lookup: ContractLookup): ChainResult {
+function analyzeChain(
+	chain: Chain,
+	bindings: ImportBindings,
+	moduleBindings: ReadonlySet<string>,
+	lookup: ContractLookup,
+	targetKinds: TargetKindLookup,
+): ChainResult {
 	const loc = chainLoc(chain.renderCall)
 	if (chain.earlyBail) {
 		return { loc, bailout: chain.earlyBail }
 	}
 	const propRoots = new Map<string, SelNode>(chain.entityProps.map(prop => [prop, new SelNode()]))
-	const analyzer = new BodyAnalyzer(bindings, moduleBindings, lookup)
+	const analyzer = new BodyAnalyzer(bindings, moduleBindings, lookup, targetKinds)
 	try {
 		if (chain.conditionFn) {
 			analyzer.analyzeFunction(chain.conditionFn, propRoots)
