@@ -755,6 +755,30 @@ dev that can flip a correct emit into an under-fetch, violating the soundness in
 Example wiring: `packages/example/vite.config.ts` places `bindxCompiler()` before `react()` under
 the existing `BINDX_COMPILER=1` gate.
 
+### Version marker + runtime validation, fallback, and killswitch — IMPLEMENTED
+
+The emitted `CompiledSelection` now carries `v: 2` as its first property (`emit.ts` `selectionToAst`,
+covering both the chain second-arg and the `<Entity>` `compiledSelection=` attribute). The runtime
+type in `compiledSelection.ts` requires `v: 2`, and an exported guard `isValidCompiledSelection`
+defensively checks shape (object, `v === 2`, `props` a plain object of objects, `holes` an array if
+present). Both consumers validate before use and, on an invalid literal OR a top-level throw from
+resolution, warn once with attribution and fall back to the runtime proxy pass — never crash, never
+proceed with a half-read literal. In `componentFactory.ts` `ensureImplicitCollected` this means
+falling back to `collectImplicitSelections` (partial compiled entries are cleared first); in
+`useRootSelection.ts` the compiled memo returns `null`, driving the children-collector walk (decided
+inside the memo so hook order is stable). Per-hole containment inside `applyCompiledSelection` is
+unchanged — a single bad hole (including a throwing `extraProps` thunk, now assembled inside the
+per-hole try) degrades only that hole, not the whole selection.
+
+Killswitch: `setCompiledSelectionsEnabled(false)` (module-level in `componentFactory.ts`, exported
+from the `bindx-react` public index alongside `setStaticSelectionValidation`) makes both consumers
+ignore compiled literals and use the runtime path — incident mitigation without a rebuild.
+
+Why it matters: the soundness invariant tolerates over-fetch but never under-fetch. A stale/corrupt
+literal (e.g. a schema change that predates a re-transform, or a version skew) must not be partially
+read into the fetch plan — the version marker + guard + wholesale fallback guarantee that a rejected
+literal reproduces exactly what runtime collection would have fetched.
+
 ## Future (explicitly out of scope now)
 
 Unplugin packaging, eslint plugin reusing the analyzer (bail reasons as lint diagnostics),
