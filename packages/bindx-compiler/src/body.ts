@@ -12,6 +12,7 @@ import {
 } from './resolve.js'
 import { JsxAnalyzer } from './jsx.js'
 import type { ContractLookup } from './contracts.js'
+import type { TargetKindLookup } from './targetKind.js'
 import type { AnalyzedHole } from './types.js'
 
 export class BodyAnalyzer {
@@ -23,8 +24,9 @@ export class BodyAnalyzer {
 		private readonly bindings: ImportBindings,
 		private readonly moduleBindings: ReadonlySet<string>,
 		contracts: ContractLookup,
+		targetKinds: TargetKindLookup,
 	) {
-		this.jsx = new JsxAnalyzer(this, bindings, moduleBindings, contracts)
+		this.jsx = new JsxAnalyzer(this, bindings, moduleBindings, contracts, targetKinds)
 	}
 
 	/** Public so JsxAnalyzer can register a hole it discovered. */

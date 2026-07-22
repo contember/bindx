@@ -1,11 +1,15 @@
 /**
- * Phase-2.1 lifting: classify a hole element's non-entity props (closures, identifiers) into
- * `extraProps` (lifted verbatim) or a bail. A hole target's `staticRender` may INVOKE such a value
- * with a collector proxy during collection, so dropping it can under-fetch — lift when the value is
- * reproducible at the module-scope emit site, bail otherwise (default deny). See docs/compiler-plan.md.
+ * Phase-2.1 lifting + phase-3.1 target-kind policy: classify a hole element's non-entity props
+ * (closures, identifiers) into `extraProps` (lifted verbatim), a safe drop, or a bail. A hole
+ * target's `staticRender` may INVOKE such a value with a collector proxy during collection, so
+ * dropping it can under-fetch — but only IF the target actually reads/invokes that prop. The
+ * `HolePropPolicy` (derived from the classified target kind) says which props could under-fetch;
+ * the rest are dropped with no bail. Uncertain props still go through the taint lattice (default
+ * deny). See docs/compiler-plan.md (Phase 2.1 / 3.1).
  */
 import * as t from '@babel/types'
 import { BailError, type Scope, classifyHoleClosure } from './resolve.js'
+import type { TargetKind } from './targetKind.js'
 
 export type Closure = t.ArrowFunctionExpression | t.FunctionExpression
 
@@ -19,6 +23,40 @@ export interface HoleIdentifierProp {
 	readonly ident: t.Identifier
 }
 
+/**
+ * Per-target decision surface: does dropping a given prop risk under-fetch (must run the taint
+ * lattice), or is the target provably inert for it (safe drop, no bail)?
+ */
+export interface HolePropPolicy {
+	closureNeedsCheck(name: string): boolean
+	identifierNeedsCheck(name: string): boolean
+}
+
+const CHECK_ALL: HolePropPolicy = { closureNeedsCheck: () => true, identifierNeedsCheck: () => true }
+const CHECK_NONE: HolePropPolicy = { closureNeedsCheck: () => false, identifierNeedsCheck: () => false }
+
+/** Derive the hole-prop policy for a classified target kind (default deny → check everything). */
+export function holePolicyFor(kind: TargetKind): HolePropPolicy {
+	switch (kind.kind) {
+		case 'createComponent':
+			// getSelection never invokes function slots (analyzeJsx ignores functions) → closures always
+			// safe. A slot passed a bare identifier may hold JSX → check identifiers named as slots.
+			return {
+				closureNeedsCheck: () => false,
+				identifierNeedsCheck: name => kind.slots === 'unknown' || kind.slots.has(name),
+			}
+		case 'plain':
+			return CHECK_NONE // no selection surface → runtime is blind to every non-entity prop
+		case 'collectorStatic': {
+			const referenced = kind.referenced
+			const needs = (name: string): boolean => referenced === 'all' || referenced.has(name)
+			return { closureNeedsCheck: needs, identifierNeedsCheck: needs }
+		}
+		case 'unknown':
+			return CHECK_ALL
+	}
+}
+
 export interface HolePropInputs {
 	readonly tag: string
 	readonly closureProps: ReadonlyArray<HoleClosureProp>
@@ -26,14 +64,16 @@ export interface HolePropInputs {
 	readonly childClosure: Closure | null
 	readonly scope: Scope
 	readonly moduleBindings: ReadonlySet<string>
+	readonly policy: HolePropPolicy
 }
 
 /**
  * Builds a hole's `extraProps` (target prop → value expression, emitted as an arrow thunk), lifting
- * what a target may invoke and bailing on what cannot be reproduced at the emit site.
+ * what a target may invoke, dropping what it provably ignores, and bailing on what cannot be
+ * reproduced at the emit site (default deny).
  */
 export function resolveHoleExtraProps(inputs: HolePropInputs): Record<string, t.Expression> {
-	const { tag, closureProps, identifierProps, childClosure, scope, moduleBindings } = inputs
+	const { tag, closureProps, identifierProps, childClosure, scope, moduleBindings, policy } = inputs
 	const extraProps: Record<string, t.Expression> = {}
 
 	const liftClosure = (name: string, fn: Closure): void => {
@@ -46,12 +86,18 @@ export function resolveHoleExtraProps(inputs: HolePropInputs): Record<string, t.
 	}
 
 	for (const { name, fn } of closureProps) {
-		liftClosure(name, fn)
+		if (policy.closureNeedsCheck(name)) {
+			liftClosure(name, fn) // target may invoke it → lattice decides lift/drop/bail
+		}
+		// else: target provably never invokes it → safe drop
 	}
-	if (childClosure) {
+	if (childClosure && policy.closureNeedsCheck('children')) {
 		liftClosure('children', childClosure)
 	}
 	for (const { name, ident } of identifierProps) {
+		if (!policy.identifierNeedsCheck(name)) {
+			continue // target provably ignores it → safe drop
+		}
 		switch (classifyIdentifierProp(ident.name, scope, moduleBindings)) {
 			case 'drop': break
 			case 'lift': extraProps[name] = ident; break // real module-scope value reaches the target

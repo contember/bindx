@@ -518,6 +518,42 @@ selection (superset for branch unions). On `npi`, `packages/admin`, the plugin c
 1 `FUNCTION_PROP_ON_HOLE` — the same reason classes as chains, since the same machinery runs.
 DataGrid/DataView roots are out of scope (different walker; phase 3.1).
 
+### Hole-target classification + `entityLike` roots (phase 3.1)
+
+**createComponent / plain targets no longer bail on render-locals.** A hole element's non-entity
+props (identifier render-locals, call results, function props / render-prop children) only risk
+under-fetch when the *target* actually invokes/reads them. The compiler now classifies the target
+tag — reusing the contract parse cache — into `createComponent`, `plain`, `collectorStatic`, or
+`unknown`:
+
+- **`createComponent`** target — `getSelection` never reads scalar props and never invokes
+  function slots (the slot walk ignores functions), so render-locals and function props/children
+  drop with **no bail**; the entity props still form the hole. Slot names come from `.slots([...])`
+  (default `['children']`); JSX-valued props are analyzed statically as before.
+- **`plain`** function/class component — no selection surface, so **every** non-entity prop drops;
+  the hole is still emitted (matching runtime blindness; keeps the validate-mode blind-spot warn).
+- **`collectorStatic`** (`withCollector(runtime, staticRenderFn)`) — the compiler reads the *set of
+  prop names the staticRender references*. A dropped prop **not** in that set is safe; a referenced
+  render-local still bails. A staticRender that spreads/aliases its props object (`{...props}`,
+  rest param, `f(props)`) is treated as "references everything" (conservative).
+- **`unknown`** (unresolvable, or resolvable via a non-relative unaliased import) — the existing
+  conservative taint lattice stands (default deny). Collector **contracts** are still handled by
+  their own resolver, before target-kind classification.
+
+**`entityLike` — roots behind forwarding wrappers.** Some apps wrap `<Entity>` in a thin component
+that forwards props (npi's `RefreshableEntity` = `withCollector(props => <Entity queryKey={…}
+{...props} />, props => <Entity {...props} />)`). Pass `entityLike: ['RefreshableEntity', …]` to
+the analyzer/plugin (or `--entity-like=Name,…` to `measure`) and those tags are scanned + emitted
+**exactly like `<Entity>`**: the `compiledSelection` attribute is injected on the *wrapper* element
+and reaches the inner `<Entity>` through the wrapper's `{...props}` spread — **that props
+forwarding is the opt-in requirement** (there is no runtime change; `<Entity>` already consumes
+`compiledSelection`). Matching prefers an import's original exported name over its local alias; a
+locally-declared wrapper matches by its declared name; default/namespace imports are skipped.
+
+On `npi`, `packages/admin`: chains stay **254/257**; entity roots go **84 → 93/105** from
+classification alone, and **`--entity-like=RefreshableEntity`** surfaces **35 previously-hidden
+roots** (105 → 140, 124 compiled).
+
 See [docs/compiler-plan.md](./compiler-plan.md) for the full design.
 
 ## Provider Setup

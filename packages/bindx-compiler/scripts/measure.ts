@@ -50,9 +50,24 @@ function findTsxFiles(dir: string): string[] {
 	return out
 }
 
+/** Parse CLI flags: positional dir + `--entity-like=Name1,Name2` (phase 3.1). */
+function parseArgs(argv: readonly string[]): { dir: string | undefined; entityLike: string[] } {
+	let dir: string | undefined
+	const entityLike: string[] = []
+	for (const arg of argv) {
+		if (arg.startsWith('--entity-like=')) {
+			entityLike.push(...arg.slice('--entity-like='.length).split(',').map(s => s.trim()).filter(Boolean))
+		} else if (!arg.startsWith('--') && dir === undefined) {
+			dir = arg
+		}
+	}
+	return { dir, entityLike }
+}
+
 function main(): void {
 	const root = findRepoRoot()
-	const arg = process.argv[2] ?? 'packages/example'
+	const { dir: dirArg, entityLike } = parseArgs(process.argv.slice(2))
+	const arg = dirArg ?? 'packages/example'
 	// Explicit relative paths resolve against the repo root, not the (variable) cwd.
 	const target = isAbsolute(arg) ? arg : join(root, arg)
 	if (!existsSync(target)) {
@@ -79,7 +94,7 @@ function main(): void {
 		let roots
 		try {
 			results = analyzeSource(code, file)
-			roots = analyzeEntityRoots(code, file)
+			roots = analyzeEntityRoots(code, file, { entityLike })
 		} catch (error) {
 			console.log(`${relative(root, file)}  PARSE ERROR: ${String(error)}`)
 			continue

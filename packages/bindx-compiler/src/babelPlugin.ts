@@ -12,13 +12,21 @@ import { entitySelectionAttr, selectionToAst } from './emit.js'
 import { ENTITY_ROOT_KEY, hasCompiledSelectionAttr } from './entityRoots.js'
 import { isBailed, isEntityRootBailed } from './types.js'
 
-/** Plugin options: `alias` maps non-relative import prefixes to paths for cross-file contract discovery. */
+/**
+ * Plugin options:
+ * - `alias` maps non-relative import prefixes to paths for cross-file contract/target discovery.
+ * - `entityLike` lists forwarding-wrapper component names treated as `<Entity>` for root scanning
+ *   (phase 3.1). The injected `compiledSelection` reaches the inner `<Entity>` via the wrapper's
+ *   `{...props}` spread — that forwarding is the opt-in requirement (no runtime change).
+ */
 export interface BindxCompilerOptions {
 	readonly alias?: Record<string, string>
+	readonly entityLike?: readonly string[]
 }
 
 export function bindxCompilerPlugin(_api?: unknown, options?: BindxCompilerOptions): PluginObj {
 	const alias = options?.alias ?? {}
+	const entityLike = options?.entityLike
 	return {
 		name: 'bindx-selection-compiler',
 		manipulateOptions(_opts, parserOpts: { plugins: unknown[] }): void {
@@ -30,7 +38,7 @@ export function bindxCompilerPlugin(_api?: unknown, options?: BindxCompilerOptio
 				// Analyze both surfaces before mutating: chain injection and Entity-attribute
 				// injection are independent, but reading the whole AST first keeps them so.
 				const chainResults = analyzeProgram(path.node, { filename, alias })
-				const entityResults = analyzeEntityRootsInProgram(path.node, { filename, alias })
+				const entityResults = analyzeEntityRootsInProgram(path.node, { filename, alias, entityLike })
 
 				for (const { chain, result } of chainResults) {
 					if (isBailed(result)) {
