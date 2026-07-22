@@ -86,6 +86,12 @@ export interface BindingResolverOptions {
 	readonly filename?: string
 	readonly alias: Record<string, string>
 	readonly cache: ModuleCache
+	/**
+	 * Called with the absolute path of every sibling module consulted during resolution — including
+	 * re-export hops and files that fail to parse. Lets a bundler register cross-file watch
+	 * dependencies so editing a contract/target module re-transforms the files that depend on it.
+	 */
+	readonly onDependency?: (absPath: string) => void
 }
 
 /**
@@ -135,6 +141,7 @@ export class BindingResolver {
 		if (!path) {
 			return null
 		}
+		this.options.onDependency?.(path) // cross-file read → a watch dependency of the entry file
 		const view = this.options.cache.get(path)
 		if (!view) {
 			return null
@@ -179,8 +186,12 @@ export class BindingResolver {
 	/** Load the module `source` resolves to (relative to `fromFile`) and continue the chase there. */
 	private followSource(source: string, fromFile: string | undefined, importedName: string, visited: Set<string>, depth: number): ResolvedBinding | null {
 		const path = this.resolveModulePath(source, fromFile)
-		if (!path || visited.has(path)) {
-			return null // unresolvable specifier or a cycle → stop
+		if (!path) {
+			return null // unresolvable specifier → stop
+		}
+		this.options.onDependency?.(path) // consulted during the re-export chase → a watch dependency
+		if (visited.has(path)) {
+			return null // a cycle → stop
 		}
 		const view = this.options.cache.get(path)
 		if (!view) {

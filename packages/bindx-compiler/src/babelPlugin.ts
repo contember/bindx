@@ -22,11 +22,14 @@ import { isBailed, isEntityRootBailed } from './types.js'
 export interface BindxCompilerOptions {
 	readonly alias?: Record<string, string>
 	readonly entityLike?: readonly string[]
+	/** Reports each cross-file module consulted during analysis (see AnalyzeOptions.onDependency). */
+	readonly onDependency?: (absPath: string) => void
 }
 
 export function bindxCompilerPlugin(_api?: unknown, options?: BindxCompilerOptions): PluginObj {
 	const alias = options?.alias ?? {}
 	const entityLike = options?.entityLike
+	const onDependency = options?.onDependency
 	return {
 		name: 'bindx-selection-compiler',
 		manipulateOptions(_opts, parserOpts: { plugins: unknown[] }): void {
@@ -37,8 +40,8 @@ export function bindxCompilerPlugin(_api?: unknown, options?: BindxCompilerOptio
 				const filename = state.file.opts.filename ?? undefined
 				// Analyze both surfaces before mutating: chain injection and Entity-attribute
 				// injection are independent, but reading the whole AST first keeps them so.
-				const chainResults = analyzeProgram(path.node, { filename, alias })
-				const entityResults = analyzeEntityRootsInProgram(path.node, { filename, alias, entityLike })
+				const chainResults = analyzeProgram(path.node, { filename, alias, onDependency })
+				const entityResults = analyzeEntityRootsInProgram(path.node, { filename, alias, entityLike, onDependency })
 
 				for (const { chain, result } of chainResults) {
 					if (isBailed(result)) {

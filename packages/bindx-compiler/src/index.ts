@@ -10,6 +10,13 @@ export {
 export { ENTITY_ROOT_KEY, type InternalEntityRootResult } from './entityRoots.js'
 export { bindxCompilerPlugin, default, type BindxCompilerOptions } from './babelPlugin.js'
 export {
+	bindxCompiler,
+	type BindxCompilerViteOptions,
+	type BindxCompilerVitePlugin,
+	type BindxTransformContext,
+	type BindxTransformResult,
+} from './vitePlugin.js'
+export {
 	ContractFileCache,
 	ContractResolver,
 	type CallbackContract,
