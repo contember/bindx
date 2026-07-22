@@ -2,7 +2,7 @@
  * Phase 3.1: hole-target-kind classification + entityLike roots. Static-analysis assertions cover
  * the drop-vs-bail decisions per target kind; adapter-oracle equivalence (render transformed vs
  * untransformed under a recording MockAdapter) proves the compiled root query equals the runtime
- * walk. Fixtures mirror npi shapes (createComponent + render-local, PublishedRevisionIdProvider
+ * walk. Fixtures mirror real-world shapes (createComponent + render-local, PublishedRevisionIdProvider
  * function children, withCollector staticRender, RefreshableEntity forwarding wrapper).
  */
 import { afterAll, afterEach, describe, expect, test } from 'bun:test'

@@ -190,7 +190,7 @@ Status: **implemented** on `experiment/selection-compiler`. Runtime resolution
 emission (`packages/bindx-compiler`), full hole-equivalence + end-to-end tests, and the dataview
 relation-column fix have all landed and are green.
 
-Result (re-measured on `~/projects/external/npi`, packages/admin, 257 chains):
+Result (re-measured on the reference app, 257 chains):
 **242/257 compiled = 94 %** (phase 1 was 216/257 = 84 %). 26 chains carry 82 holes total. 15 bails
 remain: 9 `FUNCTION_PROP_ON_HOLE`, 5 `ENTITY_IN_EXPRESSION_PROP`, 1 `ENTITY_REASSIGNMENT` — the
 `ENTITY_ESCAPES_TO_COMPONENT` class that dominated phase 1 is gone.
@@ -198,7 +198,7 @@ remain: 9 `FUNCTION_PROP_ON_HOLE`, 5 `ENTITY_IN_EXPRESSION_PROP`, 1 `ENTITY_REAS
 > **Soundness correction (was 98 %).** An earlier measurement read 251/257 = 98 % but was
 > **unsound**: a hole element's function props / render-prop children were dropped from the emitted
 > hole (they are non-literal), yet a hole target's `staticRender` may *invoke* such a closure during
-> collection with a collector proxy — npi's `SelectField` does exactly
+> collection with a collector proxy — the reference app's `SelectField` does exactly
 > `<HasOne field={props.field}>{e => props.children(e)}</HasOne>`. The runtime oracle therefore
 > collected fields from the closure body (e.g. `it => <Field field={it.name}/>` → `author.name`) that
 > the compiled path could not → **compiled ⊂ runtime → under-fetch → `UnfetchedFieldError`** in
@@ -279,7 +279,7 @@ In `ensureImplicitCollected`, when a compiled selection is present:
    contained per hole (same report-and-continue policy as `analyzeJsx`).
 4. Target has neither surface (plain React component): the hole contributes nothing — the runtime
    proxy pass is equally blind there, so compiled behavior stays exactly equivalent (this is the
-   documented npi dummy-`<Field>` blind spot). In validate mode, emit a dev-only warn naming the
+   documented reference-app dummy-`<Field>` blind spot). In validate mode, emit a dev-only warn naming the
    component so the blind spot becomes discoverable instead of silent.
 5. Finalize scopes → `SelectionMeta` → fragments, as today. The host render fn is still never
    executed.
@@ -308,17 +308,17 @@ target (with and without sibling dummy `<Field>`s), multiple entity props on one
 entity-derived path (`article.author`) into a target, hole target defined later in the module (TDZ),
 literal + non-literal extra props.
 
-### Related runtime fix (in scope — npi workaround removal) — DONE
+### Related runtime fix (in scope — the reference app workaround removal) — DONE
 
 `DataGridHasOneColumn`'s `collectSelection` (bindx-dataview `createRelationColumn.tsx`) discarded
 the renderer's returned JSX, so nested `<HasMany>`/`<Field>` inside relation-column renderers were
-never collected (npi worked around it with a `.map()` trick). Fixed: `walkRendererJsx` now runs
+never collected (the reference app worked around it with a `.map()` trick). Fixed: `walkRendererJsx` now runs
 `collectSelection` on the renderer's returned JSX in addition to the proxy capture, in both the
 `buildLeaf` `relatedSelection` computation and the hasOne/hasMany cell configs. The JSX walk drives
 the collector proxy (via `HasMany.getSelection`'s `map`), registering nested fields into the parent
 scope — mirroring `collectImplicitSelections`. Errors are contained per column. Independent of the
 compiler; benefits uncompiled apps too. Regression test: `tests/react/dataview/createRelationColumn.test.tsx`
-("nested declarative selection (npi regression)").
+("nested declarative selection (the reference app regression)").
 
 ### Explicit non-goal
 
@@ -393,7 +393,7 @@ analysis yields an equal-or-superset union (under-fetch impossible; over-fetch a
 target renders the slot as children (`withCollector` returning `<>{props.slot}{props.children}</>`)
 the two are exactly equal.
 
-### Result (re-measured on `~/projects/external/npi`, packages/admin, 257 chains)
+### Result (re-measured on the reference app, 257 chains)
 
 **254/257 compiled = 99 %** (phase 2 was 242/257 = 94 %). 38 chains carry 112 holes. The 3 remaining
 bails are all genuine: 1 `ENTITY_IN_EXPRESSION_PROP` (a root-capturing event handler on a non-hole
@@ -410,7 +410,7 @@ contract overload) landed in `012b321`. Compiler side — contract discovery
 (`packages/bindx-compiler/src/contracts.ts`) and contract-aware hole formation
 (`jsx.ts` `walkContractComponent`) — plus fixtures + oracle-equivalence tests are green.
 
-Motivation: the last real npi bail (footer-editor `LinksSection`) is a render-prop child that
+Motivation: the last real reference-app bail (footer-editor `LinksSection`) is a render-prop child that
 both uses its own param AND captures a host-root path (`footer.linkColumns`) — not droppable
 (target invokes it at collection), not liftable (render-scope capture). The root cause is that
 the analyzer cannot know an unknown component's invocation contract; `HasMany` works only because
@@ -469,9 +469,9 @@ withCollector(runtime, contract: CollectorContract)
   the component from a sibling fixture module); footer-editor replica (item callback capturing a
   host-root field → STRICT oracle equality); entityOf; non-contract function prop dropped;
   contract entry with missing callback.
-- npi: validated on a patched TEMP COPY (scratchpad) of `footer-editor.tsx` + `_shared.tsx` with
-  `InitializingRepeater` declaring `{ children: itemOf('field') }` — the npi repo itself is NOT
-  modified; the suggested npi patch ships in the report/docs instead.
+- the reference app: validated on a patched TEMP COPY (scratchpad) of `footer-editor.tsx` + `_shared.tsx` with
+  `InitializingRepeater` declaring `{ children: itemOf('field') }` — the reference repo itself is NOT
+  modified; the suggested reference-app patch ships in the report/docs instead.
 
 ### Implemented — discovery mechanics
 
@@ -511,7 +511,7 @@ no safety bail** — the derived staticRender provably never invokes them (this 
 `FUNCTION_PROP_ON_HOLE`/`RENDER_LOCAL_ON_HOLE` class for contract components). A missing callback for
 an entry records the relation only.
 
-### Implemented — npi temp-copy validation
+### Implemented — the reference app temp-copy validation
 
 Copied `footer-editor.tsx` + `_shared.tsx` into the scratchpad (relative `./_shared` import
 preserved) and patched only the COPY's `InitializingRepeater` to `{ children: itemOf('field') }`
@@ -525,11 +525,11 @@ preserved) and patched only the COPY's `InitializingRepeater` to `{ children: it
   `<FooterLinkRow link={link} parentColumns={footer.linkColumns} />` remains a legitimate hole
   resolved through `FooterLinkRow`'s own staticRender.
 
-Full `~/projects/external/npi/packages/admin` re-measure is **unchanged** — 254/257 (99%), 3 bails
-(1 `ENTITY_IN_EXPRESSION_PROP`, 1 `FUNCTION_PROP_ON_HOLE`, 1 `ENTITY_REASSIGNMENT`) — because npi has
+Full reference-app re-measure is **unchanged** — 254/257 (99%), 3 bails
+(1 `ENTITY_IN_EXPRESSION_PROP`, 1 `FUNCTION_PROP_ON_HOLE`, 1 `ENTITY_REASSIGNMENT`) — because the reference app has
 not adopted contracts. Adopting the suggested patch would clear the remaining `FUNCTION_PROP_ON_HOLE`.
 
-Suggested npi patch (`packages/admin/app/components/web-builder/forms/_shared.tsx`) — also drop the
+Suggested reference-app patch (`packages/admin/app/components/web-builder/forms/_shared.tsx`) — also drop the
 now-unused `HasMany` JSX import:
 
 ```diff
@@ -582,10 +582,10 @@ measure entity-root reporting — plus adapter-oracle equivalence tests
   root the plugin pushes `compiledSelection={{ props: { entity: {...} }, holes: [...] }}` onto the
   element (idempotent — skips elements already carrying the attribute).
 
-### Result (measured on `~/projects/external/npi`, packages/admin)
+### Result (measured on the reference app)
 
 Chains unchanged: **254/257 (99%)**, 3 bails (host analysis untouched). Entity roots:
-**84/105 compiled** (114 holes — every compiled root carries ≥1 hole: npi's dominant pattern is
+**84/105 compiled** (114 holes — every compiled root carries ≥1 hole: the reference app's dominant pattern is
 `<Entity>{e => <Body entity={e} />}</Entity>`, one delegated hole per root). 21 bails:
 11 `RENDER_LOCAL_ON_HOLE`, 7 `ENTITY_ESCAPES_TO_CALL`, 2 `ENTITY_NO_FUNCTION_CHILDREN`,
 1 `FUNCTION_PROP_ON_HOLE` — the same reason classes as chains.
@@ -606,7 +606,7 @@ no attribute). Plus children-not-invoked-during-collection (SCOPE_REF counter) a
 Motivation: after phase 2.2 the compiler covers `createComponent()` chains, but selection
 ROOTS still collect at runtime: `<Entity>` invokes its children render-prop with a collector
 proxy on every root mount (`useSelectionCollection` → `collect: collector => children(collector)`)
-— the same crash-prone, one-branch execution the compiler eliminated for components. npi has 147
+— the same crash-prone, one-branch execution the compiler eliminated for components. the reference app has 147
 `<Entity>` usages vs 65 definer-based hooks (already static by construction — nothing to compile
 there). DataGrid/DataView roots are explicitly OUT of scope for phase 3 (different walker/marker
 system; phase 3.1 candidate).
@@ -652,7 +652,7 @@ system; phase 3.1 candidate).
   createComponent used inside the Entity closure (fragment composition still merges); a hole
   (entity-derived value into a nested component); a collector-contract target; branch union
   (superset assertion); create-mode Entity.
-- Full npi measure re-run with root counts.
+- Full the reference app measure re-run with root counts.
 
 ## Phase 3.1 — hole-target classification + entity-like roots — IMPLEMENTED
 
@@ -666,7 +666,7 @@ plain `function`/`class` declarations too); target classification lives in `src/
 option on `analyzeSource`/`analyzeProgram`/`analyzeEntityRoots`/the Babel plugin, plus a
 `--entity-like=Name,...` measure flag.
 
-### Result (re-measured on `~/projects/external/npi/packages/admin`)
+### Result (re-measured on the reference app)
 
 - **Chains unchanged: 254/257 (99%)**, 3 bails (host analysis untouched) — as required.
 - **Entity roots (no flag): 93/105 compiled** (was 84/105 in phase 3). 12 bails:
@@ -688,12 +688,12 @@ param `p` yields the `p.x` accesses, with any other use (`p[x]`, `{...p}`, `f(p)
 `entityLike` matching prefers an import's ORIGINAL exported name over its local alias, else the
 local declaration name; default/namespace imports carry no matchable name and are skipped.
 
-Motivation (npi entity-root bail audit): 12 of 21 root bails are render-locals / function children
+Motivation (the reference app entity-root bail audit): 12 of 21 root bails are render-locals / function children
 on hole elements whose targets provably ignore them — `createComponent` targets (getSelection never
 reads scalar props and never invokes function children; the slot walk ignores non-JSX), plain
 function components (no surface at all), and `withCollector` staticRenders that reference only
 `props.entity`. The taint lattice bails only because the TARGET KIND is unknown. Separately,
-npi's `RefreshableEntity` forwarding wrapper hides 82 Entity roots from the root scan entirely.
+the reference app's `RefreshableEntity` forwarding wrapper hides 82 Entity roots from the root scan entirely.
 
 ### A) Target-kind classification (compiler-only; reuses the contract-discovery parse cache)
 
@@ -727,7 +727,7 @@ opt-in requirement, documented (no runtime change needed). Measure gains a CLI f
 
 Fixtures per kind (createComponent target with render-local + function children now compiles and is
 adapter-oracle-equal; plain target; collector-static referenced vs unreferenced prop; rest-spread →
-conservative; entityLike forwarding-wrapper root end-to-end). npi re-measure with
+conservative; entityLike forwarding-wrapper root end-to-end). the reference app re-measure with
 `--entity-like=RefreshableEntity` — expected: root bails 21 → ~9, plus ~82 newly visible roots.
 
 ## Prod hardening
