@@ -52,6 +52,18 @@ export interface BatchPersisterOptions {
 	defaultUpdateMode?: UpdateMode
 }
 
+/** One inline create operation inside a hasMany mutation, keyed by its alias (a temp ID). */
+interface NodeCreateOp {
+	readonly alias: string
+	readonly createData: Record<string, unknown>
+}
+
+/** A create operation and the response row it produced. */
+interface NodeCreatePair {
+	readonly op: NodeCreateOp
+	readonly nodeItem: Record<string, unknown>
+}
+
 /**
  * BatchPersister orchestrates multi-entity persistence with:
  * - Deduplication (same entity referenced multiple times → single mutation)
@@ -975,7 +987,7 @@ export class BatchPersister {
 
 				// Separate create ops from known IDs (connect/update)
 				const knownIds = new Set<string>()
-				const createOps: Array<{ alias: string; createData: Record<string, unknown> }> = []
+				const createOps: NodeCreateOp[] = []
 
 				for (const op of fieldValue) {
 					if (typeof op !== 'object' || op === null) continue
@@ -1004,14 +1016,11 @@ export class BatchPersister {
 				// Filter response to new items only, then content-match to create ops.
 				// Contember API does not guarantee hasMany ordering in node response,
 				// so we match by scalar field values instead of position.
-				// Unmatched creates keep their temp IDs until the next fetch.
 				const unmatchedItems = (nodeItems as Record<string, unknown>[])
 					.filter(it => typeof it === 'object' && it !== null && !knownIds.has(it['id'] as string))
 
-				for (const createOp of createOps) {
-					const idx = unmatchedItems.findIndex(it => this.isCreateDataMatchingNode(createOp.createData, it))
-					if (idx < 0) continue
-					results.push(makeResult(createOp.alias, createOp.createData, unmatchedItems.splice(idx, 1)[0]!))
+				for (const { op, nodeItem } of this.pairCreateOpsWithNodes(createOps, unmatchedItems)) {
+					results.push(makeResult(op.alias, op.createData, nodeItem))
 				}
 			} else if (typeof fieldValue === 'object') {
 				const opObj = fieldValue as Record<string, unknown>
@@ -1034,6 +1043,59 @@ export class BatchPersister {
 		}
 
 		return results
+	}
+
+	/**
+	 * Pairs inline create operations with the response rows they produced.
+	 *
+	 * An unambiguous match is taken first: an op with several candidate rows waits until
+	 * the other ops have consumed theirs, so a payload that is a subset of its sibling's
+	 * no longer steals that sibling's row. What is left falls back to first-fit, which
+	 * keeps indistinguishable siblings (identical payloads) mapped.
+	 *
+	 * A single op and row left over are paired by elimination. A server that echoes a
+	 * value back normalised (a date, a decimal) matches nothing byte-for-byte, and
+	 * discarding the pair would leave that op's whole subtree on temp IDs (issue #70).
+	 */
+	private pairCreateOpsWithNodes(
+		createOps: readonly NodeCreateOp[],
+		nodeItems: readonly Record<string, unknown>[],
+	): NodeCreatePair[] {
+		const pairs: NodeCreatePair[] = []
+		const pendingOps = [...createOps]
+		const freeItems = [...nodeItems]
+
+		const takePair = (opIndex: number, nodeItem: Record<string, unknown>): void => {
+			pairs.push({ op: pendingOps[opIndex]!, nodeItem })
+			pendingOps.splice(opIndex, 1)
+			freeItems.splice(freeItems.indexOf(nodeItem), 1)
+		}
+
+		while (pendingOps.length > 0 && freeItems.length > 0) {
+			const candidatesPerOp = pendingOps.map(
+				op => freeItems.filter(item => this.isCreateDataMatchingNode(op.createData, item)),
+			)
+
+			const unique = candidatesPerOp.findIndex(candidates => candidates.length === 1)
+			if (unique >= 0) {
+				takePair(unique, candidatesPerOp[unique]![0]!)
+				continue
+			}
+
+			const ambiguous = candidatesPerOp.findIndex(candidates => candidates.length > 1)
+			if (ambiguous >= 0) {
+				takePair(ambiguous, candidatesPerOp[ambiguous]![0]!)
+				continue
+			}
+
+			break
+		}
+
+		if (pendingOps.length === 1 && freeItems.length === 1) {
+			takePair(0, freeItems[0]!)
+		}
+
+		return pairs
 	}
 
 	/**
