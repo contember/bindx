@@ -70,14 +70,14 @@ export interface EntityConfig {
 // ============================================================================
 
 /**
- * Converts explicit entity ref props to accessors via useAccessor.
+ * Converts entity ref props to accessors via useAccessor, subscribing each one.
  * Called with a fixed list of prop names — hook count is stable across renders.
  */
-function useRenderProps<TProps extends object>(props: TProps, explicitPropNames: string[]): TProps {
+function useRenderProps<TProps extends object>(props: TProps, entityPropNames: string[]): TProps {
 	const record = props as Record<string, unknown>
 	const accessors: Record<string, unknown> = {}
-	for (const name of explicitPropNames) {
-		// eslint-disable-next-line react-hooks/rules-of-hooks -- stable iteration count (explicitPropNames is fixed at build time)
+	for (const name of entityPropNames) {
+		// eslint-disable-next-line react-hooks/rules-of-hooks -- stable iteration count (entityPropNames is fixed at build time)
 		accessors[name] = useAccessor(record[name] as EntityRef<object>)
 	}
 	return { ...props, ...accessors } as TProps
@@ -121,10 +121,10 @@ export function buildComponent<TProps extends object>(
 		}
 	}
 
-	// Collect explicit entity prop names (stable list for hooks)
-	const explicitEntityPropNames = [...entityConfigs.entries()]
-		.filter(([_, c]) => c.selector)
-		.map(([name]) => name)
+	// Every entity prop is subscribed, selector or not: accessor identity is stable, so a
+	// memo()-wrapped component only learns about its entity through its own subscription.
+	// The list is fixed at build time, which keeps the hook count in ComponentImpl stable.
+	const entityPropNames = [...entityConfigs.keys()]
 
 	// 2. Implicit entities - collect lazily to avoid TDZ errors
 	const implicitConfigs = [...entityConfigs.entries()].filter(([_, c]) => !c.selector)
@@ -145,9 +145,9 @@ export function buildComponent<TProps extends object>(
 	function ComponentImpl(props: TProps): ReactNode {
 		ensureImplicitCollected()
 
-		// Convert explicit entity refs to accessors (stable hook count — explicitEntityPropNames is fixed)
-		const renderProps = explicitEntityPropNames.length > 0
-			? useRenderProps(props, explicitEntityPropNames)
+		// Subscribe every entity ref prop (stable hook count — entityPropNames is fixed)
+		const renderProps = entityPropNames.length > 0
+			? useRenderProps(props, entityPropNames)
 			: props
 
 		// Evaluate condition at runtime

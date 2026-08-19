@@ -132,6 +132,31 @@ export class SubscriptionManager implements Rekeyable {
 		}
 	}
 
+	/**
+	 * Notifies every registered subscriber — entity, relation and global.
+	 *
+	 * For store-wide events such as clear(), where every subscription's data is gone at once and
+	 * there is no per-key change to notify from. Registrations are left intact: the subscribers
+	 * belong to mounted components that must learn their entity is no longer there.
+	 */
+	notifyAll(): void {
+		this.globalVersion++
+
+		// Snapshot first — a subscriber may unsubscribe itself or a sibling while being notified.
+		const subscribers: Subscriber[] = []
+		for (const subs of this.entitySubscribers.values()) {
+			subscribers.push(...subs)
+		}
+		for (const subs of this.relationSubscribers.values()) {
+			subscribers.push(...subs)
+		}
+		subscribers.push(...this.globalSubscribers)
+
+		for (const sub of subscribers) {
+			sub()
+		}
+	}
+
 	// ==================== Parent-Child Relationships ====================
 
 	/**
