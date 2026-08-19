@@ -139,6 +139,18 @@ export class EventEmitter {
 		return () => interceptors.delete(interceptor as Interceptor<BeforeEvent>)
 	}
 
+	/**
+	 * Whether any interceptor could receive this event for the given entity.
+	 * Lets a caller skip the (async) interceptor pipeline when nothing is listening.
+	 */
+	hasInterceptors(eventType: string, entityType: string, entityId: string): boolean {
+		const global = this.globalInterceptors.get(eventType)
+		if (global !== undefined && global.size > 0) return true
+
+		const scoped = this.scopedInterceptors.get(this.buildScopeKey(eventType, { entityType, entityId }))
+		return scoped !== undefined && scoped.size > 0
+	}
+
 	// ============================================================================
 	// Dispatch Methods
 	// ============================================================================

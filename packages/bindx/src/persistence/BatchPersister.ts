@@ -21,6 +21,7 @@ import { type ContemberMutationResult } from '../errors/pathMapper.js'
 import { resolveAllErrors } from '../errors/errorPathResolver.js'
 import { createServerError } from '../errors/types.js'
 import { MutationCollector } from './MutationCollector.js'
+import type { EntityPersistedEvent, EntityPersistFailedEvent, EntityPersistingEvent } from '../events/types.js'
 import type { EntitySnapshot } from '../store/snapshots.js'
 import type { StoredHasManyState, StoredRelationState } from '../store/SnapshotStore.js'
 import { deepEqual } from '../utils/deepEqual.js'
@@ -202,9 +203,59 @@ export class BatchPersister {
 		// Sort by dependencies (creates first)
 		const sortedEntities = this.sortByDependencies(entitiesToPersist)
 
-		// Mark all as in-flight
+		// Claim the batch before the first await, so a concurrent persist of the same
+		// entity is still skipped while the before-persist hooks run.
 		this.changeRegistry.markInFlight(sortedEntities)
 
+		// Before-persist hooks run before any mutation is built, so store writes they
+		// make (normalisation, orphan cleanup) go out in this very save. With no hook
+		// registered the pipeline is skipped, keeping a plain persist free of the extra
+		// microtask it would otherwise cost.
+		let accepted: DirtyEntity[] = sortedEntities
+		let cancelled: readonly DirtyEntity[] = []
+
+		if (this.hasPersistingInterceptors(sortedEntities)) {
+			const outcome = await this.runPersistingInterceptors(sortedEntities)
+			accepted = outcome.accepted
+			cancelled = outcome.cancelled
+
+			// A vetoed entity never entered the persisting state — just release its claim.
+			if (cancelled.length > 0) {
+				this.changeRegistry.clearInFlight(cancelled)
+			}
+		}
+
+		if (accepted.length === 0) {
+			return this.mergeCancelled(
+				{ success: true, results: [], successCount: 0, failedCount: 0, skippedCount: 0 },
+				cancelled,
+			)
+		}
+
+		let attempted: PersistenceResult
+		try {
+			attempted = await this.executePersist(accepted, scope, options, updateMode)
+		} catch (error) {
+			this.emitPersistFailed(accepted, toError(error))
+			throw error
+		}
+
+		// Emitted after the persisting flags are cleared, so listeners observe settled state.
+		this.emitPersistOutcome(attempted.results)
+
+		return this.mergeCancelled(attempted, cancelled)
+	}
+
+	/**
+	 * Runs the persist lifecycle for entities that passed the before-persist hooks.
+	 * They are already marked in-flight by the caller; this method releases them.
+	 */
+	private async executePersist(
+		sortedEntities: DirtyEntity[],
+		scope: PersistScope,
+		options: BatchPersistOptions | undefined,
+		updateMode: UpdateMode,
+	): Promise<PersistenceResult> {
 		// Set persisting state for all entities. In pessimistic mode the flag also
 		// marks the entity for server-baseline presentation while in-flight.
 		for (const entity of sortedEntities) {
@@ -261,6 +312,122 @@ export class BatchPersister {
 			if (result?.success) {
 				this.store.sweepUnreachableCreated()
 			}
+		}
+	}
+
+	/**
+	 * Whether any entity in the batch has an `entity:persisting` interceptor.
+	 */
+	private hasPersistingInterceptors(entities: readonly DirtyEntity[]): boolean {
+		const emitter = this.dispatcher.getEventEmitter()
+		return entities.some(
+			entity => emitter.hasInterceptors('entity:persisting', entity.entityType, entity.entityId),
+		)
+	}
+
+	/**
+	 * Runs `entity:persisting` interceptors for every entity in the batch.
+	 * A `null` result vetoes that one entity — mirroring how ActionDispatcher treats
+	 * a cancelling interceptor — while the rest of the batch proceeds.
+	 */
+	private async runPersistingInterceptors(
+		entities: readonly DirtyEntity[],
+	): Promise<{ accepted: DirtyEntity[]; cancelled: DirtyEntity[] }> {
+		const emitter = this.dispatcher.getEventEmitter()
+		const accepted: DirtyEntity[] = []
+		const cancelled: DirtyEntity[] = []
+
+		for (const entity of entities) {
+			const event: EntityPersistingEvent = {
+				type: 'entity:persisting',
+				timestamp: Date.now(),
+				entityType: entity.entityType,
+				entityId: entity.entityId,
+				isNew: entity.changeType === 'create',
+			}
+			const result = await emitter.runInterceptors(event)
+			if (result === null) {
+				cancelled.push(entity)
+			} else {
+				accepted.push(entity)
+			}
+		}
+
+		return { accepted, cancelled }
+	}
+
+	/**
+	 * Emits `entity:persisted` / `entity:persistFailed` for entities that were sent.
+	 */
+	private emitPersistOutcome(results: readonly EntityPersistResult[]): void {
+		const emitter = this.dispatcher.getEventEmitter()
+
+		for (const entry of results) {
+			if (entry.success) {
+				emitter.emit({
+					type: 'entity:persisted',
+					timestamp: Date.now(),
+					entityType: entry.entityType,
+					entityId: entry.entityId,
+					isNew: entry.operation === 'create',
+					// Updates keep their id; creates carry the server-assigned one.
+					persistedId: entry.persistedId ?? entry.entityId,
+				} satisfies EntityPersistedEvent)
+			} else {
+				emitter.emit({
+					type: 'entity:persistFailed',
+					timestamp: Date.now(),
+					entityType: entry.entityType,
+					entityId: entry.entityId,
+					isNew: entry.operation === 'create',
+					error: new Error(entry.error?.message ?? 'Persist failed'),
+				} satisfies EntityPersistFailedEvent)
+			}
+		}
+	}
+
+	/**
+	 * Emits `entity:persistFailed` for the whole batch when the persist itself threw.
+	 */
+	private emitPersistFailed(entities: readonly DirtyEntity[], error: Error): void {
+		const emitter = this.dispatcher.getEventEmitter()
+
+		for (const entity of entities) {
+			emitter.emit({
+				type: 'entity:persistFailed',
+				timestamp: Date.now(),
+				entityType: entity.entityType,
+				entityId: entity.entityId,
+				isNew: entity.changeType === 'create',
+				error,
+			} satisfies EntityPersistFailedEvent)
+		}
+	}
+
+	/**
+	 * Folds vetoed entities into the result as skipped — never as successes, and never
+	 * as server failures, so callers can tell a deliberate veto from a broken save.
+	 */
+	private mergeCancelled(
+		attempted: PersistenceResult,
+		cancelled: readonly DirtyEntity[],
+	): PersistenceResult {
+		if (cancelled.length === 0) return attempted
+
+		const cancelledResults = cancelled.map((entity): EntityPersistResult => ({
+			entityType: entity.entityType,
+			entityId: entity.entityId,
+			operation: entity.changeType,
+			success: false,
+			error: { message: `Persist of ${entity.entityType}:${entity.entityId} was cancelled by an entity:persisting interceptor` },
+		}))
+
+		return {
+			success: false,
+			results: [...attempted.results, ...cancelledResults],
+			successCount: attempted.successCount,
+			failedCount: attempted.failedCount,
+			skippedCount: attempted.skippedCount + cancelled.length,
 		}
 	}
 
@@ -1133,4 +1300,11 @@ export class BatchPersister {
 	cancelAll(): void {
 		this.changeRegistry.clearAllInFlight()
 	}
+}
+
+/**
+ * Normalizes a thrown value into an Error for `entity:persistFailed`.
+ */
+function toError(error: unknown): Error {
+	return error instanceof Error ? error : new Error(String(error))
 }
