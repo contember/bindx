@@ -23,6 +23,9 @@ export class ChangeRegistry {
 	/** Subscribers to in-flight state changes */
 	private readonly subscribers = new Set<() => void>()
 
+	/** Memoized {@link getDirtyEntities} result, keyed by the store's dirty version. */
+	private dirtyCache: { version: number; result: readonly DirtyEntity[] } | null = null
+
 	constructor(private readonly store: SnapshotStore) {}
 
 	/**
@@ -34,21 +37,37 @@ export class ChangeRegistry {
 
 	/**
 	 * Gets all dirty entities with their change types and dirty fields/relations.
+	 *
+	 * The underlying scan walks every entity snapshot, so it is memoized on
+	 * {@link SnapshotStore.getDirtyVersion} — a global store subscriber reads this
+	 * synchronously from inside every notification, and list helpers emit one
+	 * notification per touched item. Within a version the same array instance is
+	 * returned; callers must treat it as read-only (the type already says so).
 	 */
 	getDirtyEntities(): readonly DirtyEntity[] {
-		const rawDirty = this.store.getAllDirtyEntities()
+		const version = this.store.getDirtyVersion()
+		const cached = this.dirtyCache
+		if (cached !== null && cached.version === version) {
+			return cached.result
+		}
 
-		return rawDirty.map(entity => ({
+		const result = this.store.getAllDirtyEntities().map(entity => ({
 			entityType: entity.entityType,
 			entityId: entity.entityId,
 			changeType: entity.changeType,
 			dirtyFields: this.store.getDirtyFields(entity.entityType, entity.entityId),
 			dirtyRelations: this.store.getDirtyRelations(entity.entityType, entity.entityId),
 		}))
+
+		this.dirtyCache = { version, result }
+		return result
 	}
 
 	/**
 	 * Gets dirty entities that are not currently in-flight.
+	 *
+	 * Filtered on every call, never memoized: in-flight membership lives on this
+	 * registry and changes with no store write, so it does not move the dirty version.
 	 */
 	getDirtyEntitiesNotInFlight(): readonly DirtyEntity[] {
 		return this.getDirtyEntities().filter(
