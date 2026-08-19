@@ -108,6 +108,60 @@ function createErrorListResult(error: FieldError): ErrorEntityListResult {
 	}
 }
 
+/**
+ * Per-id cache of the accessors `useEntityList` hands out.
+ *
+ * An EntityHandle is a stateless live view over the store, so one handle — and one proxy over it —
+ * serves an id for the whole life of the list. Identity therefore means identity and nothing else:
+ * it is stable across every change to the entity, which is what lets identity-keyed consumers
+ * (`React.memo` rows, `useMemo`) skip work. Change delivery is the subscription's job — a memoized
+ * consumer must subscribe via `<Field>` / `useField` / `useAccessor` to observe changes.
+ *
+ * Subscribe to the entity that OWNS the changed relation, not merely to the row's own entity:
+ * `notifyRelationSubscribers` notifies the relation key and its owning entity but — unlike
+ * `notifyEntitySubscribers` — does not walk up the parent chain, so a membership change on a
+ * descendant relation never reaches a subscriber on the root item. A memoized row rendering
+ * `item.profile.tags` subscribes with `useAccessor(item.profile.tags)`, not `useField(item.name)`.
+ * Beware `useAccessor(item.profile)`: a has-one ref reports its OWNER, so that subscribes to the
+ * row itself rather than the target — reach through to the nested relation or `.$entity`. The
+ * composed primitives (`<HasMany>` / `<HasOne>`) already resolve the right key.
+ */
+class ItemAccessorCache {
+	private readonly entries = new Map<string, EntityAccessor<object>>()
+
+	constructor(
+		private readonly createHandle: (id: string) => EntityHandle<object>,
+	) {}
+
+	/** Rebuilds the accessor array; ids no longer listed are evicted so the cache stays bounded. */
+	build(items: ReadonlyArray<{ id: string }>): Array<EntityAccessor<object>> {
+		const accessors: Array<EntityAccessor<object>> = []
+		const liveIds = new Set<string>()
+
+		for (const item of items) {
+			accessors.push(this.resolve(item.id))
+			liveIds.add(item.id)
+		}
+
+		for (const id of this.entries.keys()) {
+			if (!liveIds.has(id)) {
+				this.entries.delete(id)
+			}
+		}
+
+		return accessors
+	}
+
+	private resolve(id: string): EntityAccessor<object> {
+		let accessor = this.entries.get(id)
+		if (!accessor) {
+			accessor = EntityHandle.wrapProxy(this.createHandle(id))
+			this.entries.set(id, accessor)
+		}
+		return accessor
+	}
+}
+
 // ============================================================================
 // Hook overloads
 // ============================================================================
@@ -234,6 +288,25 @@ export function useEntityList(
 		result: UseEntityListResult<any>
 	} | null>(null)
 
+	// --- Item accessor cache ---
+	// Kept for the hook's lifetime so item identity survives a list snapshot rebuild. Dropped
+	// whenever a handle construction input changes — handles are built against `selectionMeta` and
+	// validate field access against it. Note this does not fully close the stale-selection window:
+	// `listCacheRef` below does not include the selection in its hit key, so the render on which
+	// the selection widens still serves the previous result and its narrow accessors.
+	const itemAccessorCache = useMemo(
+		() => new ItemAccessorCache((id) => EntityHandle.createRaw<object>(
+			id,
+			entityType,
+			store,
+			dispatcher,
+			schemaRegistry as SchemaRegistry<Record<string, object>>,
+			undefined,
+			selectionMeta,
+		)),
+		[entityType, store, dispatcher, schemaRegistry, selectionMeta],
+	)
+
 	// --- Store subscription ---
 	const subscribe = useCallback(
 		(onStoreChange: () => void) => {
@@ -334,17 +407,7 @@ export function useEntityList(
 		} else if (state.status === 'error') {
 			result = createErrorListResult(state.error!)
 		} else {
-			const items = state.items.map((item) => {
-				return EntityHandle.create<object>(
-					item.id,
-					entityType,
-					store,
-					dispatcher,
-					schemaRegistry as SchemaRegistry<Record<string, object>>,
-					undefined,
-					selectionMeta,
-				) as unknown as EntityAccessor<any>
-			})
+			const items = itemAccessorCache.build(state.items)
 
 			result = {
 				$status: 'ready',
@@ -370,7 +433,7 @@ export function useEntityList(
 		}
 
 		return result
-	}, [entityType, store, dispatcher, schemaRegistry, selectionMeta, addItem, removeItem, moveItem])
+	}, [store, itemAccessorCache, addItem, removeItem, moveItem])
 
 	const isEqual = useCallback(
 		(a: UseEntityListResult<any>, b: UseEntityListResult<any>): boolean => {

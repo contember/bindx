@@ -9,6 +9,8 @@ import {
 	entityDef,
 	scalar,
 	useEntityList,
+	useField,
+	type EntityAccessor,
 } from '@contember/bindx-react'
 
 // Regression test for <issue-url — filled in after Step 7>
@@ -18,6 +20,9 @@ import {
 // store change means accessor identity is unstable even for entities whose data did not change,
 // which defeats React.memo (and any identity-based caching) in list consumers: editing one
 // item's field re-renders every sibling's subtree.
+//
+// Identity is stable and is NOT a change signal — a memoized row subscribes to observe its own
+// entity, which is the repo-wide contract for accessors.
 
 afterEach(() => {
 	cleanup()
@@ -114,13 +119,16 @@ describe('useEntityList accessor identity', () => {
 		const renderCounts: Record<string, number> = {}
 
 		interface RowProps {
-			// Matches what authors.items hands out; the row only reads .id / .name.value.
-			item: { id: string; name: { value: string | null; setValue: (v: string) => void } }
+			// Matches what authors.items hands out.
+			item: EntityAccessor<{ id: string; name: string }>
 		}
 
+		// Item accessor identity is stable by design, so a memoized row no longer re-renders from
+		// the parent — it subscribes to its own entity to observe changes.
 		const Row = React.memo(function Row({ item }: RowProps): React.ReactElement {
+			const name = useField(item.name)
 			renderCounts[item.id] = (renderCounts[item.id] ?? 0) + 1
-			return <span data-testid={`row-${item.id}`}>{item.name.value}</span>
+			return <span data-testid={`row-${item.id}`}>{name.value}</span>
 		})
 
 		function TestComponent(): React.ReactElement {
