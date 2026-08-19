@@ -13,15 +13,31 @@
  *
  * Keys use the same composite format as the rest of the store: "entityType:id".
  */
-export class RootRegistry {
+import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
+
+export class RootRegistry implements Rekeyable {
 	private readonly roots = new Set<string>()
 
+	/**
+	 * Monotonic counter bumped whenever the root set actually changes. Used by
+	 * {@link ReachabilityAnalyzer} to memoize the reachability walk. Bumps happen
+	 * only on a real change so the per-render `registerParentChild` → `unregister`
+	 * call (almost always a no-op for an already-anchored child) does not
+	 * needlessly invalidate the cache.
+	 */
+	private mutationVersion = 0
+
 	register(key: string): void {
-		this.roots.add(key)
+		if (!this.roots.has(key)) {
+			this.roots.add(key)
+			this.mutationVersion++
+		}
 	}
 
 	unregister(key: string): void {
-		this.roots.delete(key)
+		if (this.roots.delete(key)) {
+			this.mutationVersion++
+		}
 	}
 
 	keys(): IterableIterator<string> {
@@ -29,16 +45,22 @@ export class RootRegistry {
 	}
 
 	/**
-	 * Moves a root entry from oldKey to newKey (used after persist rekeys a temp
-	 * id to a server-assigned id).
+	 * Moves a root entry from the temp key to the persisted key (used after
+	 * persist rekeys a temp id to a server-assigned id).
 	 */
-	rekey(oldKey: string, newKey: string): void {
-		if (this.roots.delete(oldKey)) {
-			this.roots.add(newKey)
+	rekey(ctx: RekeyContext): void {
+		if (this.roots.delete(ctx.oldKey)) {
+			this.roots.add(ctx.newKey)
+			this.mutationVersion++
 		}
 	}
 
 	clear(): void {
 		this.roots.clear()
+		this.mutationVersion++
+	}
+
+	getMutationVersion(): number {
+		return this.mutationVersion
 	}
 }

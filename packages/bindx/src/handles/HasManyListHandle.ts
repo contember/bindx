@@ -120,7 +120,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		this.materializeEmbeddedItems()
 
 		// Use ordered IDs from store (handles removals, connections, and ordering)
-		const orderedIds = this.store.getHasManyOrderedIds(
+		const orderedIds = this.store.getPresentationHasManyOrderedIds(
 			this.entityType,
 			this.entityId,
 			this.fieldName,
@@ -322,8 +322,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 
 		return (
 			state.plannedRemovals.size > 0 ||
-			state.plannedConnections.size > 0 ||
-			state.createdEntities.size > 0 ||
+			state.plannedAdditions.size > 0 ||
 			state.orderedIds !== null
 		)
 	}

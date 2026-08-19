@@ -373,6 +373,7 @@ export class ActionDispatcher {
 					action.entityType,
 					action.entityId,
 					action.isPersisting,
+					action.pessimistic ?? false,
 				)
 				break
 

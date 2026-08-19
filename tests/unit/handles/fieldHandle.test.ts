@@ -55,6 +55,38 @@ describe('FieldHandle', () => {
 		})
 	})
 
+	// ==================== Pessimistic Presentation ====================
+
+	describe('Pessimistic Presentation', () => {
+		test('value shows the server baseline while pessimistically in-flight, but stays dirty', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Server' }, true)
+			store.setFieldValue('Article', 'a-1', ['title'], 'Local edit')
+			const handle = createFieldHandle<string>(['title'])
+
+			expect(handle.value).toBe('Local edit')
+			expect(handle.isDirty).toBe(true)
+
+			store.setPersisting('Article', 'a-1', true, true)
+			// Display flips to the server baseline; dirty state (canonical) is unchanged.
+			expect(handle.value).toBe('Server')
+			expect(handle.serverValue).toBe('Server')
+			expect(handle.isDirty).toBe(true)
+
+			store.setPersisting('Article', 'a-1', false)
+			expect(handle.value).toBe('Local edit')
+			expect(handle.isDirty).toBe(true)
+		})
+
+		test('optimistic in-flight keeps showing the live value', () => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Server' }, true)
+			store.setFieldValue('Article', 'a-1', ['title'], 'Local edit')
+			const handle = createFieldHandle<string>(['title'])
+
+			store.setPersisting('Article', 'a-1', true, false)
+			expect(handle.value).toBe('Local edit')
+		})
+	})
+
 	// ==================== Dirty State ====================
 
 	describe('Dirty State', () => {
