@@ -139,6 +139,12 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * without ever reading `items`, and that path must also see populated data.
 	 * Idempotent within a render — guarded by hasEmbeddedDataChanged.
 	 *
+	 * For the same reason EVERY entry point that reads or writes the has-many state
+	 * calls this first — isDirty and the mutators as well as items/getById. An
+	 * embedded list has no state in the store until it is materialised, so a
+	 * consumer that never iterated saw isDirty === false and had its mutation land
+	 * on a state nobody reads. Keep new entry points on this guard.
+	 *
 	 * @returns false when there is no embedded list data to materialise.
 	 */
 	private materializeEmbeddedItems(): boolean {
@@ -311,6 +317,8 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Checks if the list is dirty (items added/removed/moved/connected/disconnected).
 	 */
 	get isDirty(): boolean {
+		this.materializeEmbeddedItems()
+
 		const state = this.store.getHasMany(
 			this.entityType,
 			this.entityId,
@@ -339,6 +347,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Connects an existing entity to this has-many relation.
 	 */
 	connect(itemId: string): void {
+		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			connectToList(this.entityType, this.entityId, this.fieldName, itemId, this.itemType, this.alias),
 		)
@@ -350,6 +359,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * For created entities (via add()), cancels the add operation.
 	 */
 	disconnect(itemId: string): void {
+		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, 'disconnect', this.alias),
 		)
@@ -361,6 +371,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * For created entities (via add()), cancels the add operation.
 	 */
 	delete(itemId: string): void {
+		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, 'delete', this.alias),
 		)
@@ -372,6 +383,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * For connecting existing entities, use connect() instead.
 	 */
 	add(data?: Partial<TEntity>): string {
+		this.materializeEmbeddedItems()
 
 		// One gesture = one undo entry: the pre-create and the list-add are journaled
 		// together so undo removes (and redo re-creates) the whole row.
@@ -398,6 +410,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Falls back to disconnect when schema metadata is not available.
 	 */
 	remove(itemId: string): void {
+		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, this.resolveRemovalType(), this.alias),
 		)
@@ -428,6 +441,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * use an 'order' field on the entity.
 	 */
 	move(fromIndex: number, toIndex: number): void {
+		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			moveInList(this.entityType, this.entityId, this.fieldName, fromIndex, toIndex, this.alias),
 		)
@@ -438,6 +452,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Clears all planned connections and removals.
 	 */
 	reset(): void {
+		this.materializeEmbeddedItems()
 		this.store.resetHasMany(
 			this.entityType,
 			this.entityId,
