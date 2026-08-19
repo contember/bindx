@@ -463,11 +463,15 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 * Accessible via proxy as `$create()`.
 	 */
 	create(data?: Partial<TEntity>): string {
-		const tempId = this.store.createEntity(this.targetType, data as Record<string, unknown>)
-		this.dispatcher.dispatch(
-			connectRelation(this.entityType, this.entityId, this.fieldName, tempId, this.targetType),
-		)
-		return tempId
+		// One gesture = one undo entry: the pre-create and the connect are journaled
+		// together so undo removes (and redo re-creates) the created target.
+		return this.store.transaction(() => {
+			const tempId = this.store.createEntity(this.targetType, data as Record<string, unknown>)
+			this.dispatcher.dispatch(
+				connectRelation(this.entityType, this.entityId, this.fieldName, tempId, this.targetType),
+			)
+			return tempId
+		})
 	}
 
 	/**

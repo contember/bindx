@@ -52,8 +52,20 @@ export class EntityMetaStore implements Rekeyable {
 	 */
 	private mutationVersion = 0
 
+	/**
+	 * Monotonic counter bumped on EDITABLE-layer meta writes — deletion scheduling,
+	 * the one undoable gesture this store owns. Server-baseline (`setExistsOnServer`),
+	 * load/persist state, removal, rekey, import and clear deliberately do NOT bump
+	 * it. Read by the undo write-guard (see UndoJournal).
+	 */
+	private editableWriteVersion = 0
+
 	getMutationVersion(): number {
 		return this.mutationVersion
+	}
+
+	getEditableWriteVersion(): number {
+		return this.editableWriteVersion
 	}
 
 	// ==================== Load State ====================
@@ -95,11 +107,13 @@ export class EntityMetaStore implements Rekeyable {
 	scheduleForDeletion(key: string): void {
 		const existing = this.entityMetas.get(key) ?? { existsOnServer: false, isScheduledForDeletion: false }
 		this.entityMetas.set(key, { ...existing, isScheduledForDeletion: true })
+		this.editableWriteVersion++
 	}
 
 	unscheduleForDeletion(key: string): void {
 		const existing = this.entityMetas.get(key) ?? { existsOnServer: false, isScheduledForDeletion: false }
 		this.entityMetas.set(key, { ...existing, isScheduledForDeletion: false })
+		this.editableWriteVersion++
 	}
 
 	isScheduledForDeletion(key: string): boolean {

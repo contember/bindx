@@ -1,9 +1,10 @@
 export { UndoManager } from './UndoManager.js'
+export { UnrecordedWriteError } from './UnrecordedWriteError.js'
+export type { UndoManagerConfig, UndoState } from './types.js'
 export type {
-	PartialStoreSnapshot,
-	PendingUndoEntry,
-	UndoEntry,
-	UndoManagerConfig,
-	UndoState,
-	StoreAffectedKeys,
-} from './types.js'
+	JournalEntry,
+	JournalCellImage,
+	EntityCellImage,
+	RelationCellImage,
+	HasManyCellImage,
+} from './UndoJournal.js'
