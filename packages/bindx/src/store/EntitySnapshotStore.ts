@@ -66,6 +66,25 @@ export class EntitySnapshotStore implements Rekeyable {
 		return this.dataWriteVersion
 	}
 
+	/**
+	 * The single write chokepoint. Every path that installs a snapshot goes through
+	 * here, so {@link dataWriteVersion} cannot be forgotten by a new mutating method
+	 * or a new early-return branch — a stale dirty memo is silent (dead Save button),
+	 * so the bump must not be hand-maintained per call site. Mirrors
+	 * HasOneStore.writeRelation / HasManyStore.writeHasMany.
+	 */
+	private writeSnapshot(key: string, snapshot: EntitySnapshot): void {
+		this.snapshots.set(key, snapshot)
+		this.dataWriteVersion++
+	}
+
+	/** The single delete chokepoint — counterpart of {@link writeSnapshot}. */
+	private deleteSnapshot(key: string): void {
+		if (this.snapshots.delete(key)) {
+			this.dataWriteVersion++
+		}
+	}
+
 	get(key: string): EntitySnapshot | undefined {
 		return this.snapshots.get(key)
 	}
@@ -103,11 +122,10 @@ export class EntitySnapshotStore implements Rekeyable {
 			(existing?.version ?? 0) + 1,
 		)
 
-		this.snapshots.set(key, newSnapshot)
+		this.writeSnapshot(key, newSnapshot)
 		this.idIndex.set(id, key)
 		if (!existing) this.mutationVersion++
 		if (!isServerData) this.editableWriteVersion++
-		this.dataWriteVersion++
 		return newSnapshot
 	}
 
@@ -157,8 +175,7 @@ export class EntitySnapshotStore implements Rekeyable {
 			existing.version + 1,
 		)
 
-		this.snapshots.set(key, newSnapshot)
-		this.dataWriteVersion++
+		this.writeSnapshot(key, newSnapshot)
 		return newSnapshot
 	}
 
@@ -182,9 +199,8 @@ export class EntitySnapshotStore implements Rekeyable {
 			existing.version + 1,
 		)
 
-		this.snapshots.set(key, newSnapshot)
+		this.writeSnapshot(key, newSnapshot)
 		this.editableWriteVersion++
-		this.dataWriteVersion++
 		return newSnapshot
 	}
 
@@ -205,9 +221,8 @@ export class EntitySnapshotStore implements Rekeyable {
 			existing.version + 1,
 		)
 
-		this.snapshots.set(key, newSnapshot)
+		this.writeSnapshot(key, newSnapshot)
 		this.editableWriteVersion++
-		this.dataWriteVersion++
 		return true
 	}
 
@@ -226,8 +241,7 @@ export class EntitySnapshotStore implements Rekeyable {
 			existing.version + 1,
 		)
 
-		this.snapshots.set(key, newSnapshot)
-		this.dataWriteVersion++
+		this.writeSnapshot(key, newSnapshot)
 	}
 
 	/**
@@ -245,9 +259,8 @@ export class EntitySnapshotStore implements Rekeyable {
 			existing.version + 1,
 		)
 
-		this.snapshots.set(key, newSnapshot)
+		this.writeSnapshot(key, newSnapshot)
 		this.editableWriteVersion++
-		this.dataWriteVersion++
 	}
 
 	/**
@@ -264,13 +277,17 @@ export class EntitySnapshotStore implements Rekeyable {
 			this.idIndex.delete(existing.id)
 			this.mutationVersion++
 		}
-		if (existing) this.dataWriteVersion++
-		this.snapshots.delete(key)
+		this.deleteSnapshot(key)
 	}
 
 	/**
 	 * Bumps the version of an entity snapshot without changing data.
 	 * Used by SubscriptionManager when child entities change.
+	 *
+	 * The ONE deliberate bypass of {@link writeSnapshot}: it reinstalls the very same
+	 * `data` and `serverData` references under a new version, so it cannot change
+	 * dirtiness and must not invalidate the dirty memo — it runs once per ancestor on
+	 * every notification, which would keep the cache permanently cold.
 	 */
 	bumpVersion(key: string): void {
 		const existing = this.snapshots.get(key)
@@ -312,8 +329,7 @@ export class EntitySnapshotStore implements Rekeyable {
 			existing.version + 1,
 		)
 
-		this.snapshots.set(key, newSnapshot)
-		this.dataWriteVersion++
+		this.writeSnapshot(key, newSnapshot)
 	}
 
 	/**
@@ -337,14 +353,11 @@ export class EntitySnapshotStore implements Rekeyable {
 	importSnapshots(snapshots: Map<string, EntitySnapshot>): Set<string> {
 		const keys = new Set<string>()
 		for (const [key, snapshot] of snapshots) {
-			this.snapshots.set(key, snapshot)
+			this.writeSnapshot(key, snapshot)
 			this.idIndex.set(snapshot.id, key)
 			keys.add(key)
 		}
-		if (keys.size > 0) {
-			this.mutationVersion++
-			this.dataWriteVersion++
-		}
+		if (keys.size > 0) this.mutationVersion++
 		return keys
 	}
 
@@ -368,12 +381,11 @@ export class EntitySnapshotStore implements Rekeyable {
 			snapshot.version + 1,
 		)
 
-		this.snapshots.delete(ctx.oldKey)
-		this.snapshots.set(ctx.newKey, newSnapshot)
+		this.deleteSnapshot(ctx.oldKey)
+		this.writeSnapshot(ctx.newKey, newSnapshot)
 		this.idIndex.delete(snapshot.id)
 		this.idIndex.set(ctx.newId, ctx.newKey)
 		this.mutationVersion++
-		this.dataWriteVersion++
 	}
 
 	keys(): IterableIterator<string> {
@@ -391,6 +403,8 @@ export class EntitySnapshotStore implements Rekeyable {
 	}
 
 	clear(): void {
+		// Bulk drop: bumps both counters inline rather than per key, the same shape as
+		// HasOneStore.clear / HasManyStore.clear.
 		this.snapshots.clear()
 		this.idIndex.clear()
 		this.mutationVersion++

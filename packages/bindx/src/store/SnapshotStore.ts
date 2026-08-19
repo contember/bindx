@@ -1271,6 +1271,17 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	 *
 	 * The entity snapshot store contributes its data-write counter alone: it bumps
 	 * on a superset of the writes `getMutationVersion()` covers.
+	 *
+	 * REQUIRES snapshot values to be replaced, never mutated in place.
+	 * `createEntitySnapshot` freezes only the top level, so a nested object inside
+	 * `data` (a rich-text JSON payload, say) stays writable. Editing one in place
+	 * changes dirtiness without touching any counter, and the memo will serve the
+	 * pre-edit answer — where the former unconditional scan happened to notice it on
+	 * the next read. The store already implies this rule by freezing at all; the memo
+	 * is what makes breaking it consequential.
+	 *
+	 * @internal Cache key for the dirty-scan memo. Monotonic and otherwise
+	 * meaningless — the absolute value carries no consumer-facing information.
 	 */
 	getDirtyVersion(): number {
 		return this.entitySnapshots.getDataWriteVersion()

@@ -110,17 +110,20 @@ describe('ChangeRegistry dirty-scan memoization', () => {
 
 		// The save-button hook subscribes globally and reads the dirty set
 		// synchronously from inside the notification — i.e. mid-createEntity, before
-		// roots.register() has run and with no further notification to follow it.
-		const readsDuringNotify: number[] = []
+		// roots.register() has run — which is how a stale entry gets into the memo.
+		// What those mid-write reads return is NOT asserted here: whether the create
+		// is visible from inside createEntity's own notification depends on the
+		// missing notification after roots.register, a separate open bug. This test
+		// pins only what the memo owes: the read AFTER the write is correct.
+		let readsDuringWrite = 0
 		store.subscribe(() => {
-			readsDuringNotify.push(registry.getDirtyEntities().length)
+			readsDuringWrite++
+			registry.getDirtyEntities()
 		})
 
 		const id = store.createEntity('Article', { title: 'draft' })
 
-		expect(readsDuringNotify.length).toBeGreaterThan(0)
-		expect(readsDuringNotify.every(count => count === 0)).toBe(true)
-
+		expect(readsDuringWrite).toBeGreaterThan(0)
 		expect(registry.getDirtyEntities()).toEqual([{
 			entityType: 'Article',
 			entityId: id,
@@ -128,6 +131,36 @@ describe('ChangeRegistry dirty-scan memoization', () => {
 			dirtyFields: [],
 			dirtyRelations: [],
 		}])
+	})
+
+	test('registerParentChild invalidates the memo — it un-roots a create without notifying', () => {
+		const { store, registry } = createHarness()
+		store.setEntityData('Article', 'a1', { id: 'a1' }, true)
+		const childId = store.createEntity('Comment', { text: 'draft' })
+
+		// Top-level create: a root, so a reachable create.
+		expect(registry.getDirtyEntities()).toHaveLength(1)
+
+		// Anchoring it under a parent drops its root registration and notifies
+		// nothing. With no relation edge added, the create is no longer reachable —
+		// so the dirty set changes while the notification version does not.
+		store.registerParentChild('Article', 'a1', 'Comment', childId)
+
+		expect(registry.getDirtyEntities()).toEqual([])
+	})
+
+	test('resetAllRelations invalidates the memo — it notifies nothing at all', () => {
+		const { store, registry } = createHarness()
+		store.setEntityData('Article', 'a1', { id: 'a1' }, true)
+		store.setEntityData('Author', 'u1', { id: 'u1' }, true)
+		store.setRelation('Article', 'a1', 'author', { currentId: 'u1', state: 'connected' })
+
+		expect(registry.getDirtyEntities()).toHaveLength(1)
+
+		// The rollback path: reverts the relation to its server state, silently.
+		store.resetAllRelations('Article', 'a1')
+
+		expect(registry.getDirtyEntities()).toEqual([])
 	})
 
 	test('a silent server-baseline refresh invalidates the memo', () => {
