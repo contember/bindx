@@ -1256,6 +1256,30 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 
 	// ==================== Dirty Tracking (delegated to DirtyTracker) ====================
 
+	/**
+	 * Sum of the monotonic mutation counters of every sub-store {@link getAllDirtyEntities}
+	 * reads. Strictly increasing, so an unchanged value proves no write could have
+	 * changed the dirty set — the cache key {@link ChangeRegistry} memoizes the
+	 * full-store scan on.
+	 *
+	 * Deliberately NOT derived from {@link getVersion} (the notification version):
+	 * several writes change dirtiness without notifying — `createEntity` registers
+	 * its root after its last notify, `registerParentChild` un-registers one,
+	 * `commit/resetAllRelations` never notify, and `refreshServerData` can skip it —
+	 * so a notification-keyed memo would serve a stale result. Counters bump inside
+	 * the write itself and cannot be bypassed that way.
+	 *
+	 * The entity snapshot store contributes its data-write counter alone: it bumps
+	 * on a superset of the writes `getMutationVersion()` covers.
+	 */
+	getDirtyVersion(): number {
+		return this.entitySnapshots.getDataWriteVersion()
+			+ this.meta.getMutationVersion()
+			+ this.meta.getEditableWriteVersion()
+			+ this.relations.getMutationVersion()
+			+ this.roots.getMutationVersion()
+	}
+
 	getAllDirtyEntities(): Array<{
 		entityType: string
 		entityId: string

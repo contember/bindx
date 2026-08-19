@@ -43,12 +43,27 @@ export class EntitySnapshotStore implements Rekeyable {
 	 */
 	private editableWriteVersion = 0
 
+	/**
+	 * Monotonic counter bumped on every write that can change a snapshot's `data`
+	 * or `serverData` — i.e. every write that can change whether the entity is
+	 * dirty. Unlike the two counters above it spans BOTH layers: `mutationVersion`
+	 * ignores value edits and `editableWriteVersion` ignores server-baseline writes
+	 * (refreshServerData/commit/commitFields), so neither alone is a sound dirty
+	 * key. {@link bumpVersion} is excluded — it rewrites neither side. Read by
+	 * SnapshotStore.getDirtyVersion() to memoize the full-store dirty scan.
+	 */
+	private dataWriteVersion = 0
+
 	getMutationVersion(): number {
 		return this.mutationVersion
 	}
 
 	getEditableWriteVersion(): number {
 		return this.editableWriteVersion
+	}
+
+	getDataWriteVersion(): number {
+		return this.dataWriteVersion
 	}
 
 	get(key: string): EntitySnapshot | undefined {
@@ -92,6 +107,7 @@ export class EntitySnapshotStore implements Rekeyable {
 		this.idIndex.set(id, key)
 		if (!existing) this.mutationVersion++
 		if (!isServerData) this.editableWriteVersion++
+		this.dataWriteVersion++
 		return newSnapshot
 	}
 
@@ -142,6 +158,7 @@ export class EntitySnapshotStore implements Rekeyable {
 		)
 
 		this.snapshots.set(key, newSnapshot)
+		this.dataWriteVersion++
 		return newSnapshot
 	}
 
@@ -167,6 +184,7 @@ export class EntitySnapshotStore implements Rekeyable {
 
 		this.snapshots.set(key, newSnapshot)
 		this.editableWriteVersion++
+		this.dataWriteVersion++
 		return newSnapshot
 	}
 
@@ -189,6 +207,7 @@ export class EntitySnapshotStore implements Rekeyable {
 
 		this.snapshots.set(key, newSnapshot)
 		this.editableWriteVersion++
+		this.dataWriteVersion++
 		return true
 	}
 
@@ -208,6 +227,7 @@ export class EntitySnapshotStore implements Rekeyable {
 		)
 
 		this.snapshots.set(key, newSnapshot)
+		this.dataWriteVersion++
 	}
 
 	/**
@@ -227,6 +247,7 @@ export class EntitySnapshotStore implements Rekeyable {
 
 		this.snapshots.set(key, newSnapshot)
 		this.editableWriteVersion++
+		this.dataWriteVersion++
 	}
 
 	/**
@@ -243,6 +264,7 @@ export class EntitySnapshotStore implements Rekeyable {
 			this.idIndex.delete(existing.id)
 			this.mutationVersion++
 		}
+		if (existing) this.dataWriteVersion++
 		this.snapshots.delete(key)
 	}
 
@@ -291,6 +313,7 @@ export class EntitySnapshotStore implements Rekeyable {
 		)
 
 		this.snapshots.set(key, newSnapshot)
+		this.dataWriteVersion++
 	}
 
 	/**
@@ -318,7 +341,10 @@ export class EntitySnapshotStore implements Rekeyable {
 			this.idIndex.set(snapshot.id, key)
 			keys.add(key)
 		}
-		if (keys.size > 0) this.mutationVersion++
+		if (keys.size > 0) {
+			this.mutationVersion++
+			this.dataWriteVersion++
+		}
 		return keys
 	}
 
@@ -347,6 +373,7 @@ export class EntitySnapshotStore implements Rekeyable {
 		this.idIndex.delete(snapshot.id)
 		this.idIndex.set(ctx.newId, ctx.newKey)
 		this.mutationVersion++
+		this.dataWriteVersion++
 	}
 
 	keys(): IterableIterator<string> {
@@ -367,6 +394,7 @@ export class EntitySnapshotStore implements Rekeyable {
 		this.snapshots.clear()
 		this.idIndex.clear()
 		this.mutationVersion++
+		this.dataWriteVersion++
 	}
 }
 
