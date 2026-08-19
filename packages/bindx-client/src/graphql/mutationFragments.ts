@@ -76,76 +76,67 @@ export function buildMutationSelection(
 export function buildNodeSelectionFromMutationData(
 	data: Record<string, unknown>,
 ): GraphQlSelectionSet {
-	const fields: GraphQlSelectionSet = [new GraphQlField(null, 'id')]
+	return buildSelectionFromDataObjects([data])
+}
 
-	for (const [fieldName, value] of Object.entries(data)) {
-		if (value === null || value === undefined) continue
-
-		if (Array.isArray(value)) {
-			const nested = buildSelectionFromOps(value)
-			if (nested) fields.push(new GraphQlField(null, fieldName, {}, nested))
-		} else if (typeof value === 'object') {
-			const nested = buildSelectionFromCreateOrUpdate(value as Record<string, unknown>)
-			if (nested) fields.push(new GraphQlField(null, fieldName, {}, nested))
-		} else {
-			fields.push(new GraphQlField(null, fieldName))
-		}
-	}
-
-	return fields
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /**
- * Extracts the inner data from a create or update operation and recurses.
+ * Unwraps a create/update operation to the data object it writes.
  */
-function buildSelectionFromCreateOrUpdate(
-	op: Record<string, unknown>,
-): GraphQlSelectionSet | undefined {
-	if ('create' in op && typeof op['create'] === 'object' && op['create'] !== null) {
-		return buildNodeSelectionFromMutationData(op['create'] as Record<string, unknown>)
+function extractOperationData(op: unknown): Record<string, unknown> | undefined {
+	if (!isRecord(op)) return undefined
+
+	const create = op['create']
+	if (isRecord(create)) return create
+
+	const update = op['update']
+	if (isRecord(update)) {
+		const data = update['data']
+		return isRecord(data) ? data : update
 	}
-	if ('update' in op && typeof op['update'] === 'object' && op['update'] !== null) {
-		const update = op['update'] as Record<string, unknown>
-		const data = ('data' in update ? update['data'] : update) as Record<string, unknown>
-		return buildNodeSelectionFromMutationData(data)
-	}
+
 	return undefined
 }
 
 /**
- * Merges selections from all create/update operations in a hasMany array.
- * Collects the union of scalar + relation fields across all operations.
+ * Builds one selection set covering every given data object.
+ *
+ * Sibling ops in a hasMany often carry different subsets of the same relation
+ * (unset fields are absent from create data), so both scalars and nested
+ * relations are unioned — keeping only the last shape would emit a selection
+ * the other siblings' responses cannot be content-matched against.
  */
-function buildSelectionFromOps(ops: unknown[]): GraphQlSelectionSet | undefined {
+function buildSelectionFromDataObjects(
+	dataObjects: readonly Record<string, unknown>[],
+): GraphQlSelectionSet {
 	const scalarFields = new Set<string>()
-	const nestedFields = new Map<string, Record<string, unknown>>()
-	let hasOps = false
+	const nestedOps = new Map<string, unknown[]>()
 
-	for (const item of ops) {
-		if (typeof item !== 'object' || item === null) continue
-		const op = item as Record<string, unknown>
-
-		const innerData =
-			('create' in op && typeof op['create'] === 'object' && op['create'] !== null)
-				? op['create'] as Record<string, unknown>
-				: ('update' in op && typeof op['update'] === 'object' && op['update'] !== null)
-					? (() => { const u = op['update'] as Record<string, unknown>; return ('data' in u ? u['data'] : u) as Record<string, unknown> })()
-					: null
-
-		if (!innerData) continue
-		hasOps = true
-
-		for (const [key, value] of Object.entries(innerData)) {
-			if (value === null || value === undefined) continue
-			if (typeof value === 'object') {
-				nestedFields.set(key, value as Record<string, unknown>)
-			} else {
-				scalarFields.add(key)
-			}
+	const collectNested = (fieldName: string, ops: readonly unknown[]): void => {
+		const collected = nestedOps.get(fieldName)
+		if (collected) {
+			collected.push(...ops)
+		} else {
+			nestedOps.set(fieldName, [...ops])
 		}
 	}
 
-	if (!hasOps) return undefined
+	for (const data of dataObjects) {
+		for (const [fieldName, value] of Object.entries(data)) {
+			if (value === null || value === undefined) continue
+
+			if (Array.isArray(value)) {
+				collectNested(fieldName, value)
+			} else if (isRecord(value)) {
+				collectNested(fieldName, [value])
+			} else if (fieldName !== 'id') {
+				scalarFields.add(fieldName)
+			}
+		}
+	}
 
 	const fields: GraphQlSelectionSet = [new GraphQlField(null, 'id')]
 
@@ -153,15 +144,26 @@ function buildSelectionFromOps(ops: unknown[]): GraphQlSelectionSet | undefined 
 		fields.push(new GraphQlField(null, fieldName))
 	}
 
-	for (const [fieldName, value] of nestedFields) {
-		if (Array.isArray(value)) {
-			const nested = buildSelectionFromOps(value)
-			if (nested) fields.push(new GraphQlField(null, fieldName, {}, nested))
-		} else {
-			const nested = buildSelectionFromCreateOrUpdate(value as Record<string, unknown>)
-			if (nested) fields.push(new GraphQlField(null, fieldName, {}, nested))
-		}
+	for (const [fieldName, ops] of nestedOps) {
+		const nested = buildSelectionFromOps(ops)
+		if (nested) fields.push(new GraphQlField(null, fieldName, {}, nested))
 	}
 
 	return fields
+}
+
+/**
+ * Merges the selections of all create/update operations written to one field.
+ */
+function buildSelectionFromOps(ops: readonly unknown[]): GraphQlSelectionSet | undefined {
+	const dataObjects: Record<string, unknown>[] = []
+
+	for (const op of ops) {
+		const data = extractOperationData(op)
+		if (data) dataObjects.push(data)
+	}
+
+	if (dataObjects.length === 0) return undefined
+
+	return buildSelectionFromDataObjects(dataObjects)
 }
