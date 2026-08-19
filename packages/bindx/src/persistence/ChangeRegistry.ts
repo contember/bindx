@@ -43,6 +43,10 @@ export class ChangeRegistry {
 	 * synchronously from inside every notification, and list helpers emit one
 	 * notification per touched item. Within a version the same array instance is
 	 * returned; callers must treat it as read-only (the type already says so).
+	 *
+	 * The key only sees writes that go through the store, so snapshot values must be
+	 * replaced rather than mutated in place — snapshots are frozen only at the top
+	 * level. See {@link SnapshotStore.getDirtyVersion}.
 	 */
 	getDirtyEntities(): readonly DirtyEntity[] {
 		const version = this.store.getDirtyVersion()
@@ -145,7 +149,8 @@ export class ChangeRegistry {
 	 * Checks if there are any dirty entities.
 	 */
 	hasDirtyEntities(): boolean {
-		return this.store.getAllDirtyEntities().length > 0
+		// Shares the memo: this is public API a save button may be built on.
+		return this.getDirtyEntities().length > 0
 	}
 
 	/**
