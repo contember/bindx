@@ -13,7 +13,7 @@ import {
 	type EntityAccessor,
 } from '@contember/bindx-react'
 
-// Regression test for <issue-url — filled in after Step 7>
+// Regression test for https://github.com/contember/bindx/issues/64
 //
 // useEntityList's getSnapshot invalidates its list cache on every store version bump and then
 // rebuilds each item via EntityHandle.create(...). A brand-new handle (and proxy) per item per

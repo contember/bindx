@@ -242,4 +242,35 @@ describe('useEntityList item accessor cache', () => {
 		expect(seen.length).toBeGreaterThan(1)
 		expect(seen[seen.length - 1]).toBe(seen[0])
 	})
+
+	test('should give a re-entering id a new accessor, proving the evicted entry is gone', async () => {
+		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+		const { Probe, latest } = createListProbe()
+
+		const showOnly = async (id: string): Promise<void> => {
+			rerender(
+				<BindxProvider adapter={adapter} schema={schema}>
+					<Probe filter={{ id: { eq: id } }} />
+				</BindxProvider>,
+			)
+			await waitFor(() => {
+				expect(readyItems(latest()).map(item => item.id)).toEqual([id])
+			})
+		}
+
+		const { rerender } = render(
+			<BindxProvider adapter={adapter} schema={schema}>
+				<Probe filter={{ id: { eq: 'author-1' } }} />
+			</BindxProvider>,
+		)
+		await waitFor(() => expect(readyItems(latest())).toHaveLength(1))
+		const before = readyItems(latest())[0]!
+
+		// author-1 leaves the list entirely, then comes back.
+		await showOnly('author-2')
+		await showOnly('author-1')
+
+		// A surviving cache entry would hand back the very same accessor here.
+		expect(readyItems(latest())[0]).not.toBe(before)
+	})
 })

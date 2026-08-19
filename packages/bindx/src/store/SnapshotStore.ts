@@ -1312,7 +1312,9 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		// Undo history describes the now-wiped world; drop it with the store.
 		this.journal?.clear()
 
-		this.subscriptions.notify()
+		// Every subscription's data just disappeared, so notify entity/relation subscribers too —
+		// a global-only notify leaves them rendering wiped data with no consumer-side remedy.
+		this.subscriptions.notifyAll()
 	}
 }
 
