@@ -24,6 +24,11 @@ export interface DataGridColumnHeaderUIProps {
 	className?: string
 }
 
+function DataGridColumnFilterIcon({ filterName }: { filterName: string }): ReactElement | null {
+	const [, , { isEmpty }] = useDataViewFilter(filterName)
+	return isEmpty ? null : <FilterIcon className="h-4 w-4 text-blue-600" />
+}
+
 export function DataGridColumnHeaderUI({
 	sortingField,
 	hidingName,
@@ -32,13 +37,6 @@ export function DataGridColumnHeaderUI({
 	filterName,
 	className,
 }: DataGridColumnHeaderUIProps): ReactElement {
-	let hasFilter = false
-	if (filterName) {
-		// eslint-disable-next-line react-hooks/rules-of-hooks
-		const [, , { isEmpty }] = useDataViewFilter(filterName)
-		hasFilter = !isEmpty
-	}
-
 	if (!sortingField && !hidingName && !filter) {
 		return <div className={cn('text-xs', className)}>{children}</div>
 	}
@@ -61,7 +59,7 @@ export function DataGridColumnHeaderUI({
 								none={<ArrowUpDownIcon className="h-4 w-4" />}
 							/>
 						)}
-						{hasFilter && <FilterIcon className="h-4 w-4 text-blue-600" />}
+						{filterName && <DataGridColumnFilterIcon filterName={filterName} />}
 					</Button>
 				</PopoverTrigger>
 				<PopoverContent className="p-3">
