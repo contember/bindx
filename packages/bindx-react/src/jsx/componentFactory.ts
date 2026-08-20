@@ -123,7 +123,7 @@ export function buildComponent<TProps extends object>(
 
 	// Every entity prop is subscribed, selector or not: accessor identity is stable, so a
 	// memo()-wrapped component only learns about its entity through its own subscription.
-	// The list is fixed at build time, which keeps the hook count in ComponentImpl stable.
+	// Interface props are appended during lazy collection, before the first runtime render.
 	const entityPropNames = [...entityConfigs.keys()]
 
 	// 2. Implicit entities - collect lazily to avoid TDZ errors
@@ -139,6 +139,9 @@ export function buildComponent<TProps extends object>(
 		}
 		implicitCollected = true
 		collectImplicitSelections(implicitConfigs, renderFn, selectionsMap, componentBrand, roles, hasInterfacesMode, schemaRegistry, conditionFn)
+		for (const propName of selectionsMap.keys()) {
+			if (!entityPropNames.includes(propName)) entityPropNames.push(propName)
+		}
 	}
 
 	// 3. Create React component

@@ -17,6 +17,10 @@ afterEach(() => {
  * collection) is a first-party API and must subscribe exactly like the explicit-selector form.
  */
 describe('createComponent entity prop subscriptions', () => {
+	interface HasName {
+		name: string
+	}
+
 	test('re-renders an implicit entity prop when its entity changes', async () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 
@@ -57,6 +61,48 @@ describe('createComponent entity prop subscriptions', () => {
 
 		await waitFor(() => {
 			expect(getByTestId(container, 'implicit').textContent).toBe('Renamed')
+		})
+	})
+
+	test('re-renders an implicit interface prop when its entity changes', async () => {
+		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+
+		const InterfaceName = createComponent()
+			.interfaces<{ item: HasName }>()
+			.render(({ item }) => <span data-testid="interface">{item.name.inputProps.value}</span>)
+
+		let rename: (() => void) | null = null
+
+		function Rename({ name }: { name: FieldRef<string> }): null {
+			const field = useField(name)
+			rename = () => field.setValue('Renamed')
+			return null
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<Entity entity={schema.Author} by={{ id: 'author-1' }}>
+					{author => (
+						<>
+							<InterfaceName item={author} />
+							<Rename name={author.name} />
+						</>
+					)}
+				</Entity>
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'interface')).not.toBeNull()
+		})
+		expect(getByTestId(container, 'interface').textContent).toBe('John Doe')
+
+		act(() => {
+			rename!()
+		})
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'interface').textContent).toBe('Renamed')
 		})
 	})
 
