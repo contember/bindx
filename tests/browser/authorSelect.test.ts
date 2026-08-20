@@ -21,10 +21,14 @@ browserTest('Article with Author Select', () => {
 		// Type to filter and click an option
 		waitFor(() => el('[role="dialog"] input').exists)
 		el('[role="dialog"] input').fill('Bob')
-		// Wait for the FILTERED option — the stale pre-filter list also has buttons
-		waitFor(() => el('[role="dialog"] button[class]').text.includes('Bob'))
+		const bobOption = () => el('xpath=//*[@role="dialog"]//button[contains(normalize-space(.), "Bob")]')
+		waitFor(() => bobOption().exists)
 		clickUntil(
-			() => el('[role="dialog"] button[class]'),
+			() => {
+				const option = bobOption()
+				expect(option.text).toContain('Bob')
+				return option
+			},
 			() => !el('author-select-save-button').isDisabled,
 		)
 		expect(el('current-author-display').text).toContain('Changes will be applied on save')
