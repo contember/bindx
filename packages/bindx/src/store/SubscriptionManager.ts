@@ -194,7 +194,15 @@ export class SubscriptionManager implements Rekeyable {
 	notifyEntitySubscribers(
 		key: string,
 		bumper: SnapshotVersionBumper,
-		notifiedKeys: Set<string> = new Set(),
+	): void {
+		this.notifyEntityAndParentSubscribers(key, bumper, new Set(), true)
+	}
+
+	private notifyEntityAndParentSubscribers(
+		key: string,
+		bumper: SnapshotVersionBumper,
+		notifiedKeys: Set<string>,
+		incrementGlobalVersion: boolean,
 	): void {
 		// Prevent infinite recursion
 		if (notifiedKeys.has(key)) return
@@ -205,7 +213,7 @@ export class SubscriptionManager implements Rekeyable {
 		const isRoot = notifiedKeys.size === 0
 		notifiedKeys.add(key)
 
-		this.globalVersion++
+		if (incrementGlobalVersion) this.globalVersion++
 
 		// Notify entity-specific subscribers
 		const entitySubs = this.entitySubscribers.get(key)
@@ -222,7 +230,7 @@ export class SubscriptionManager implements Rekeyable {
 		for (const parentKey of parents) {
 			// Bump parent snapshot version so useSyncExternalStore detects a change
 			bumper.bumpEntitySnapshotVersion(parentKey)
-			this.notifyEntitySubscribers(parentKey, bumper, notifiedKeys)
+			this.notifyEntityAndParentSubscribers(parentKey, bumper, notifiedKeys, true)
 		}
 
 		// Notify global subscribers (only once, from the root invocation — not
@@ -235,8 +243,8 @@ export class SubscriptionManager implements Rekeyable {
 	}
 
 	/**
-	 * Notifies relation subscribers and the parent entity's subscribers.
-	 * The bumper callback is used to bump the parent entity snapshot version.
+	 * Notifies relation subscribers, the owning entity, and its ancestors.
+	 * The bumper callback is used to bump entity snapshot versions.
 	 * The entityKey is the parent entity key derived from the relation key.
 	 */
 	notifyRelationSubscribers(
@@ -257,18 +265,7 @@ export class SubscriptionManager implements Rekeyable {
 		// Bump entity snapshot version so isEqual detects a change
 		bumper.bumpEntitySnapshotVersion(entityKey)
 
-		// Notify entity subscribers
-		const entitySubs = this.entitySubscribers.get(entityKey)
-		if (entitySubs) {
-			for (const sub of entitySubs) {
-				sub()
-			}
-		}
-
-		// Notify global subscribers
-		for (const sub of this.globalSubscribers) {
-			sub()
-		}
+		this.notifyEntityAndParentSubscribers(entityKey, bumper, new Set(), false)
 	}
 
 	/**

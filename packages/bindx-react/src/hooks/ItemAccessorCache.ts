@@ -10,14 +10,8 @@ import { EntityHandle } from '@contember/bindx'
  * (`React.memo` rows, `useMemo`) skip work. Change delivery is the subscription's job — a memoized
  * consumer must subscribe via `<Field>` / `useField` / `useAccessor` to observe changes.
  *
- * Subscribe to the entity that OWNS the changed relation, not merely to the row's own entity:
- * `notifyRelationSubscribers` notifies the relation key and its owning entity but — unlike
- * `notifyEntitySubscribers` — does not walk up the parent chain, so a membership change on a
- * descendant relation never reaches a subscriber on the root item. A memoized row rendering
- * `item.profile.tags` subscribes with `useAccessor(item.profile.tags)`, not `useField(item.name)`.
- * Beware `useAccessor(item.profile)`: a has-one ref reports its OWNER, so that subscribes to the
- * row itself rather than the target — reach through to the nested relation or `.$entity`. The
- * composed primitives (`<HasMany>` / `<HasOne>`) already resolve the right key.
+ * Relation and field notifications propagate through live parent edges, so subscribers on a root
+ * item still update when one of its descendants changes.
  *
  * The cache belongs to one hook instance and is thrown away whenever a handle construction input
  * changes; handles validate field access against the selection they were built with.

@@ -176,7 +176,7 @@ describe('HasOne JSX — nested nullable has-one with no connected row', () => {
 		expect(getByTestId(container, 'profile-bio').textContent).toBe('empty')
 	})
 
-	test.failing('$connect(id) re-points sibling field subscriptions to a warm target', async () => {
+	test('$connect(id) re-points sibling field subscriptions to a warm target', async () => {
 		const adapter = new MockAdapter(mockData, { delay: 0 })
 
 		function ConnectProfile({ field }: { field: HasOneRef<Profile, SelectedProfile> }): React.ReactElement {
