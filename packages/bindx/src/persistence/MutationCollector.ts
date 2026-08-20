@@ -42,8 +42,8 @@ export class MutationCollector implements MutationDataCollector {
 
 	/**
 	 * Sets entity IDs that should be excluded from nested mutation generation.
-	 * These entities get their own top-level mutations, so nested updates are skipped
-	 * to avoid duplicate changes.
+	 * These entities either get their own top-level mutation or were vetoed by a
+	 * persistence interceptor.
 	 */
 	setExcludedEntities(ids: ReadonlySet<string>): void {
 		this.excludedEntityIds = ids
@@ -353,6 +353,7 @@ export class MutationCollector implements MutationDataCollector {
 					if (currentId && this.isExistingEntity(currentId)) {
 						return { connect: { id: currentId } }
 					} else if (currentId && isTempId(currentId)) {
+						if (this.excludedEntityIds.has(currentId)) return null
 						// Temp entity — generate inline create with its collected data
 						this._nestedEntityIds.add(currentId)
 						const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
@@ -389,6 +390,7 @@ export class MutationCollector implements MutationDataCollector {
 				return null
 
 			case 'deleted':
+				if (serverId !== null && this.excludedEntityIds.has(serverId)) return null
 				// Delete the related entity
 				return { delete: true }
 
@@ -466,6 +468,7 @@ export class MutationCollector implements MutationDataCollector {
 		// Planned removals -> disconnect/delete
 		for (const [removedId, removalType] of hasManyState.plannedRemovals) {
 			if (removalType === 'delete') {
+				if (this.excludedEntityIds.has(removedId)) continue
 				operations.push({ delete: { id: removedId }, alias: removedId })
 			} else {
 				operations.push({ disconnect: { id: removedId }, alias: removedId })
@@ -475,6 +478,7 @@ export class MutationCollector implements MutationDataCollector {
 		// Planned additions -> create (newly created) or connect (existing persisted)
 		for (const [additionId, kind] of hasManyState.plannedAdditions) {
 			if (kind === 'created') {
+				if (this.excludedEntityIds.has(additionId)) continue
 				if (!targetType) continue
 				this._nestedEntityIds.add(additionId)
 				this._nestedEntityTypes.set(additionId, targetType)

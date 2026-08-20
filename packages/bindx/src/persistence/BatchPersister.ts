@@ -234,7 +234,13 @@ export class BatchPersister {
 
 		let attempted: PersistenceResult
 		try {
-			attempted = await this.executePersist(accepted, scope, options, updateMode)
+			attempted = await this.executePersist(
+				accepted,
+				new Set(cancelled.map(entity => entity.entityId)),
+				scope,
+				options,
+				updateMode,
+			)
 		} catch (error) {
 			this.emitPersistFailed(accepted, toError(error))
 			throw error
@@ -252,6 +258,7 @@ export class BatchPersister {
 	 */
 	private async executePersist(
 		sortedEntities: DirtyEntity[],
+		excludedNestedEntityIds: ReadonlySet<string>,
 		scope: PersistScope,
 		options: BatchPersistOptions | undefined,
 		updateMode: UpdateMode,
@@ -272,7 +279,7 @@ export class BatchPersister {
 			// mutated to the server view — pessimistic mode presents the server
 			// baseline via getPresentationSnapshot instead — so there is nothing to
 			// capture or restore.
-			const mutations = this.buildMutations(sortedEntities, scope)
+			const mutations = this.buildMutations(sortedEntities, excludedNestedEntityIds, scope)
 
 			if (mutations.length === 0) {
 				// Nothing to persist
@@ -361,8 +368,10 @@ export class BatchPersister {
 	 */
 	private emitPersistOutcome(results: readonly EntityPersistResult[]): void {
 		const emitter = this.dispatcher.getEventEmitter()
+		const emittedEntityKeys = new Set<string>()
 
 		for (const entry of results) {
+			emittedEntityKeys.add(`${entry.entityType}:${entry.entityId}`)
 			if (entry.success) {
 				emitter.emit({
 					type: 'entity:persisted',
@@ -381,6 +390,33 @@ export class BatchPersister {
 					entityId: entry.entityId,
 					isNew: entry.operation === 'create',
 					error: new Error(entry.error?.message ?? 'Persist failed'),
+				} satisfies EntityPersistFailedEvent)
+			}
+		}
+
+		if (!(this.mutationCollector instanceof MutationCollector)) return
+
+		const failure = results.find(entry => !entry.success)?.error?.message ?? 'Persist failed'
+		for (const [entityId, entityType] of this.mutationCollector.getNestedEntityTypes()) {
+			if (emittedEntityKeys.has(`${entityType}:${entityId}`)) continue
+
+			if (this.store.existsOnServer(entityType, entityId)) {
+				emitter.emit({
+					type: 'entity:persisted',
+					timestamp: Date.now(),
+					entityType,
+					entityId,
+					isNew: true,
+					persistedId: this.store.getPersistedId(entityType, entityId) ?? entityId,
+				} satisfies EntityPersistedEvent)
+			} else {
+				emitter.emit({
+					type: 'entity:persistFailed',
+					timestamp: Date.now(),
+					entityType,
+					entityId,
+					isNew: true,
+					error: new Error(failure),
 				} satisfies EntityPersistFailedEvent)
 			}
 		}
@@ -543,15 +579,17 @@ export class BatchPersister {
 	 */
 	private buildMutations(
 		entities: DirtyEntity[],
+		excludedNestedEntityIds: ReadonlySet<string>,
 		scope: PersistScope,
 	): TransactionMutation[] {
 		// Exclude only non-create entities from nesting —
 		// new entities should be nested inside their parent's mutation
 		// to maintain correct relation connections without transaction support.
 		if (this.mutationCollector instanceof MutationCollector) {
-			const excludedIds = new Set(
-				entities.filter(e => e.changeType !== 'create').map(e => e.entityId),
-			)
+			const excludedIds = new Set(excludedNestedEntityIds)
+			for (const entity of entities) {
+				if (entity.changeType !== 'create') excludedIds.add(entity.entityId)
+			}
 			this.mutationCollector.setExcludedEntities(excludedIds)
 		}
 
