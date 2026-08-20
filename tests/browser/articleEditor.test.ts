@@ -21,9 +21,7 @@ browserTest('Article Editor', () => {
 	test('changing author enables save and shows dirty notice', () => {
 		// Open the author SelectField popover
 		el(`${tid('article-author-select')} [aria-haspopup="dialog"]`).click()
-		// Type in the search input to filter, then click the filtered option
-		waitFor(() => el('[role="dialog"] input').exists)
-		el('[role="dialog"] input').fill('Jane')
+		// Select from the stable initial list; filtering remounts options asynchronously.
 		const janeOption = () => el('xpath=//*[@role="dialog"]//button[contains(normalize-space(.), "Jane")]')
 		waitFor(() => janeOption().exists)
 		clickUntil(
@@ -49,9 +47,7 @@ browserTest('Article Editor', () => {
 	test('adding a tag shows it in the list', () => {
 		// Open the tags MultiSelectField popover
 		el(`${tid('article-tags')} [aria-haspopup="dialog"]`).click()
-		// Search for the tag and click it
-		waitFor(() => el('[role="dialog"] input').exists)
-		el('[role="dialog"] input').fill('TypeScript')
+		// Select from the stable initial list; filtering remounts options asynchronously.
 		const typeScriptOption = () => el('xpath=//*[@role="dialog"]//button[contains(normalize-space(.), "TypeScript")]')
 		waitFor(() => typeScriptOption().exists)
 		clickUntil(

@@ -18,9 +18,7 @@ browserTest('Article with Author Select', () => {
 	test('changing author enables save and updates display', () => {
 		// Open the author SelectField popover
 		el(`${tid('article-with-author-select')} [aria-haspopup="dialog"]`).click()
-		// Type to filter and click an option
-		waitFor(() => el('[role="dialog"] input').exists)
-		el('[role="dialog"] input').fill('Bob')
+		// Select from the stable initial list; filtering remounts options asynchronously.
 		const bobOption = () => el('xpath=//*[@role="dialog"]//button[contains(normalize-space(.), "Bob")]')
 		waitFor(() => bobOption().exists)
 		clickUntil(
