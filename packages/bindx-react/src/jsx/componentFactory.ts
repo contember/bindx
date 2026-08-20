@@ -145,10 +145,8 @@ export function buildComponent<TProps extends object>(
 	function ComponentImpl(props: TProps): ReactNode {
 		ensureImplicitCollected()
 
-		// Subscribe every entity ref prop (stable hook count — entityPropNames is fixed)
-		const renderProps = entityPropNames.length > 0
-			? useRenderProps(props, entityPropNames)
-			: props
+		// Subscribe every entity ref prop; an empty fixed list is a no-op.
+		const renderProps = useRenderProps(props, entityPropNames)
 
 		// Evaluate condition at runtime
 		if (conditionFn) {
