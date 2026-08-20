@@ -441,14 +441,20 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		const data = { ...initialData, id }
 
 		this.setEntityData(entityType, id, data, false)
-		this.setExistsOnServer(entityType, id, false)
 
 		// A freshly created entity is pending-persist by default — a root for
 		// reachability-based create detection. It stops being a root the moment a
 		// relation anchors it as a child (see registerParentChild). A top-level
 		// create (<Entity create>, useEntityList add) is never anchored, so it stays
 		// a root and is reported as a `create`.
+		//
+		// Registered after the snapshot exists (the reachability seed skips a root
+		// without one) but BEFORE the notifying setExistsOnServer, so the last
+		// notification of the create already carries it — a subscriber reading
+		// getAllDirtyEntities() would otherwise miss the new create entirely.
 		this.roots.register(this.getEntityKey(entityType, id))
+
+		this.setExistsOnServer(entityType, id, false)
 
 		return id
 	}
@@ -834,6 +840,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		const entityKey = this.getEntityKey(entityType, id)
 		const keyPrefix = `${entityType}:${id}:`
 		this.errors.clearAllServerErrors(entityKey, keyPrefix)
+		this.notifyEntitySubscribers(entityKey)
 	}
 
 	clearAllErrors(entityType: string, id: string): void {

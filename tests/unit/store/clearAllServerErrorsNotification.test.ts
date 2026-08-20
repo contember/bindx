@@ -1,14 +1,9 @@
-// KNOWN-BROKEN PIN — the `test.failing` cases below assert the behaviour the
-// store SHOULD have. Bun reports them as passing while the bug is present, and
-// turns them into a failure the moment it is fixed, which forces whoever fixes it
-// to drop the `.failing` marker. The assertions are the real symptom; nothing was
-// relaxed to fit the marker.
-//
-// `SnapshotStore.clearAllServerErrors` mutates observable state (getFieldErrors /
-// getEntityErrors / hasAnyErrors) but never calls notifyEntitySubscribers, while
-// its sibling `clearAllErrors` does — an asymmetry with no stated reason. A
-// subscriber therefore keeps reading the pre-clear error list until some unrelated
-// write happens to notify.
+// Regression: `SnapshotStore.clearAllServerErrors` mutated observable state
+// (getFieldErrors / getEntityErrors / hasAnyErrors) without calling
+// notifyEntitySubscribers, while its sibling `clearAllErrors` did. A subscriber
+// therefore kept reading the pre-clear error list until some unrelated write
+// happened to notify. The clear now notifies like its sibling; these tests guard
+// that symmetry.
 //
 // The React-level consequence is in tests/react/storeNotifications/.
 import { describe, test, expect, beforeEach } from 'bun:test'
@@ -27,7 +22,7 @@ describe('clearAllServerErrors / clearAllErrors notification symmetry', () => {
 	const renderedErrors = (): string =>
 		store.getFieldErrors('Author', 'author-1', 'name').map(e => e.message).join('|')
 
-	test.failing('clearAllServerErrors notifies the entity subscriber (known broken)', () => {
+	test('clearAllServerErrors notifies the entity subscriber', () => {
 		let notifications = 0
 		const unsubscribe = store.subscribeToEntity('Author', 'author-1', () => { notifications++ })
 
@@ -45,7 +40,7 @@ describe('clearAllServerErrors / clearAllErrors notification symmetry', () => {
 		unsubscribe()
 	})
 
-	test.failing('clearAllServerErrors notifies global subscribers (known broken)', () => {
+	test('clearAllServerErrors notifies global subscribers', () => {
 		let notifications = 0
 		const unsubscribe = store.subscribe(() => { notifications++ })
 		const versionBefore = store.getVersion()

@@ -1,14 +1,9 @@
-// KNOWN-BROKEN PIN — the `test.failing` case below asserts the behaviour the
-// store SHOULD have. Bun reports it as passing while the bug is present, and
-// turns it into a failure the moment the root registration starts notifying,
-// which forces whoever fixes it to drop the `.failing` marker. The assertions are
-// the real symptom; nothing was relaxed to fit the marker.
-//
-// `SnapshotStore.createEntity` writes in three steps: setEntityData (notifies),
-// setExistsOnServer (notifies), then `roots.register()` — which is silent. The
-// entity only becomes a `create` in getAllDirtyEntities() at that third step, so
-// both notifications carry the pre-registration value and the value that matters
-// is never announced. A subscriber keeps reading "nothing to save".
+// Regression: `SnapshotStore.createEntity` used to register the create-root AFTER
+// both of its notifying writes (setEntityData, setExistsOnServer). The root
+// registration is what makes the entity a `create` in getAllDirtyEntities(), so
+// every notification carried the pre-registration value and a subscriber kept
+// reading "nothing to save". The root is now registered before the final
+// setExistsOnServer, so the last notification already carries it.
 //
 // The user-visible half of this is in
 // tests/react/storeNotifications/createDraftRootRegistration.test.tsx.
@@ -22,7 +17,7 @@ describe('createEntity root registration notification', () => {
 		store = new SnapshotStore()
 	})
 
-	test.failing('the dirty count a subscriber last saw includes the new create (known broken)', () => {
+	test('the dirty count a subscriber last saw includes the new create', () => {
 		// What a save indicator renders on every notification.
 		const seen: number[] = []
 		const unsubscribe = store.subscribe(() => { seen.push(store.getAllDirtyEntities().length) })
