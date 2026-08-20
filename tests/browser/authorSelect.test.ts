@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test'
-import { browserTest, el, tid, waitFor } from './browser.js'
+import { browserTest, clickUntil, el, tid, waitFor } from './browser.js'
 
 browserTest('Article with Author Select', () => {
 	test('section renders', () => {
@@ -21,10 +21,12 @@ browserTest('Article with Author Select', () => {
 		// Type to filter and click an option
 		waitFor(() => el('[role="dialog"] input').exists)
 		el('[role="dialog"] input').fill('Bob')
-		waitFor(() => el('[role="dialog"] button[class]').exists)
-		el('[role="dialog"] button[class]').click()
-
-		waitFor(() => !el('author-select-save-button').isDisabled)
+		// Wait for the FILTERED option — the stale pre-filter list also has buttons
+		waitFor(() => el('[role="dialog"] button[class]').text.includes('Bob'))
+		clickUntil(
+			() => el('[role="dialog"] button[class]'),
+			() => !el('author-select-save-button').isDisabled,
+		)
 		expect(el('current-author-display').text).toContain('Changes will be applied on save')
 	})
 

@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test'
-import { browserTest, el, tid, waitFor } from './browser.js'
+import { browserTest, clickUntil, el, tid, waitFor } from './browser.js'
 
 browserTest('Article Editor', () => {
 	test('section renders with all sub-components', () => {
@@ -24,10 +24,12 @@ browserTest('Article Editor', () => {
 		// Type in the search input to filter, then click the filtered option
 		waitFor(() => el('[role="dialog"] input').exists)
 		el('[role="dialog"] input').fill('Jane')
-		waitFor(() => el('[role="dialog"] button[class]').exists)
-		el('[role="dialog"] button[class]').click()
-
-		waitFor(() => !el('article-save-button').isDisabled)
+		// Wait for the FILTERED option — the stale pre-filter list also has buttons
+		waitFor(() => el('[role="dialog"] button[class]').text.includes('Jane'))
+		clickUntil(
+			() => el('[role="dialog"] button[class]'),
+			() => !el('article-save-button').isDisabled,
+		)
 		expect(el('article-dirty-notice').exists).toBe(true)
 	})
 
@@ -46,10 +48,12 @@ browserTest('Article Editor', () => {
 		// Search for the tag and click it
 		waitFor(() => el('[role="dialog"] input').exists)
 		el('[role="dialog"] input').fill('TypeScript')
-		waitFor(() => el('[role="dialog"] button[class]').exists)
-		el('[role="dialog"] button[class]').click()
-
-		waitFor(() => el('tag-badge-TypeScript').exists)
+		// Wait for the FILTERED option — the stale pre-filter list also has buttons
+		waitFor(() => el('[role="dialog"] button[class]').text.includes('TypeScript'))
+		clickUntil(
+			() => el('[role="dialog"] button[class]'),
+			() => el('tag-badge-TypeScript').exists,
+		)
 	})
 
 }, 'article-editor')

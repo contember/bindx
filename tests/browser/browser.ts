@@ -112,6 +112,37 @@ export function el(selector: string): ElementHandle {
 }
 
 /**
+ * Click until the expected outcome materializes — popover option lists re-render
+ * async (debounced fetches), so a click can land on a node mid-remount and get lost.
+ * Checks the condition before re-clicking, so a registered click is never repeated.
+ */
+export function clickUntil(
+	target: () => ElementHandle,
+	condition: () => boolean,
+	{ attempts = 3, settle = 3_000 }: { attempts?: number; settle?: number } = {},
+): void {
+	for (let i = 0; i < attempts; i++) {
+		try {
+			if (condition()) return
+		} catch {
+			// not ready yet
+		}
+		try {
+			target().click()
+		} catch {
+			// target gone — the previous click may have registered and closed the popover
+		}
+		try {
+			waitFor(condition, { timeout: settle })
+			return
+		} catch {
+			// outcome didn't materialize — re-click
+		}
+	}
+	waitFor(condition, { timeout: settle })
+}
+
+/**
  * Build a `[data-testid="..."]` selector for compound selectors.
  * Usage: `el(\`\${tid('parent')} button\`)`
  */

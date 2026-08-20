@@ -89,8 +89,11 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      # Install agent-browser + Chromium
-      - run: bun add -g agent-browser
+      # Install agent-browser + Chromium.
+      # Pinned: the driver is a test dependency that can otherwise change under the
+      # suite between two runs of the same commit. 0.32.4 is the version the popover
+      # tests were last proven green on in CI; 0.34.0 fails them even with clickUntil.
+      - run: bun add -g agent-browser@0.32.4
       - run: agent-browser install
 
       # Run Contember migrations & seed
