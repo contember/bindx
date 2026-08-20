@@ -14,8 +14,8 @@ bun run build
 # Type check
 bun run typecheck
 
-# Run all tests
-bun test
+# Run all tests (everything except tests/browser, which needs a live playground)
+bun run test
 
 # Run a specific test file
 bun test tests/useEntity.test.tsx
