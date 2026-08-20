@@ -11,7 +11,7 @@ import {
 } from '@contember/bindx'
 
 /**
- * Schema modeling the exact pattern from NPI:
+ * Schema modeling a deeply nested consumer pattern:
  * Program → Approval (hasOne) → Round (hasMany) → Review (hasMany)
  * Review → Guarantor (hasOne)
  *

@@ -11,7 +11,7 @@ import {
 } from '@contember/bindx'
 import { createTestDispatcher } from './unit/shared/unitTestHelpers.js'
 
-// NPI shape: Post → content (hasOne Content) → references (hasMany ContentReference)
+// Consumer shape: Post → content (hasOne Content) → references (hasMany ContentReference)
 interface TestPost { id: string; title: string; content: TestContent }
 interface TestContent { id: string; data: string; references: TestRef[] }
 interface TestRef { id: string; type: string }
