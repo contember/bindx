@@ -309,6 +309,7 @@ export {
 	// Ref → Accessor hooks
 	useAccessor,
 	useField,
+	useFields,
 	useHasMany,
 	useHasOne,
 	// Notifications

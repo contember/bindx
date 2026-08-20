@@ -13,7 +13,7 @@ import type {
 	SelectionProvider,
 } from '../types.js'
 import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
-import { useField } from '../../hooks/useField.js'
+import { useFields } from '../../hooks/useFields.js'
 import {
 	type Condition,
 	isCondition,
@@ -132,6 +132,20 @@ function resolveTriggerField(props: CaseProps<unknown>): FieldRef<unknown> | nul
 	return null
 }
 
+/**
+ * Fields read by `if={cond...}` cases. They are evaluated against live data, so they need
+ * a subscription of their own — a memoized <Switch> is not re-rendered by its parent.
+ */
+function collectConditionRefs(cases: readonly CaseEntry[]): unknown[] {
+	const refs: unknown[] = []
+	for (const { props } of cases) {
+		if ('if' in props && props.if !== undefined && isCondition(props.if)) {
+			refs.push(...collectConditionFields(props.if))
+		}
+	}
+	return refs
+}
+
 // =============================================================================
 // Runtime
 // =============================================================================
@@ -139,17 +153,14 @@ function resolveTriggerField(props: CaseProps<unknown>): FieldRef<unknown> | nul
 function SwitchImpl({ children }: SwitchProps): ReactElement | null {
 	const entries = extractEntries(children)
 
-	// Subscribe to one field per case (stable count, stable order).
-	const accessors: Array<{ value: unknown } | null> = []
-	for (const entry of entries.cases) {
-		const ref = resolveTriggerField(entry.props)
-		// eslint-disable-next-line react-hooks/rules-of-hooks
-		accessors.push(useField(ref))
-	}
+	// Two fixed hooks cover every case, so the hook count never depends on how many
+	// <Case> children are rendered (a conditional <Case> used to crash React).
+	const accessors = useFields(entries.cases.map(entry => resolveTriggerField(entry.props)))
+	useFields(collectConditionRefs(entries.cases))
 
 	for (let i = 0; i < entries.cases.length; i++) {
 		const { props } = entries.cases[i]!
-		const accessor = accessors[i]!
+		const accessor = accessors[i]
 
 		if ('show' in props && props.show !== undefined) {
 			const value = accessor?.value
