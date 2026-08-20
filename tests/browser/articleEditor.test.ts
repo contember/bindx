@@ -22,7 +22,7 @@ browserTest('Article Editor', () => {
 		// Open the author SelectField popover
 		el(`${tid('article-author-select')} [aria-haspopup="dialog"]`).click()
 		// Select from the stable initial list; filtering remounts options asynchronously.
-		const janeOption = () => el('xpath=//*[@role="dialog"]//button[contains(normalize-space(.), "Jane")]')
+		const janeOption = () => el('[role="dialog"] button[data-entity-id="00000000-0000-0000-0000-000000000a02"]')
 		waitFor(() => janeOption().exists)
 		clickUntil(
 			() => {
@@ -48,7 +48,7 @@ browserTest('Article Editor', () => {
 		// Open the tags MultiSelectField popover
 		el(`${tid('article-tags')} [aria-haspopup="dialog"]`).click()
 		// Select from the stable initial list; filtering remounts options asynchronously.
-		const typeScriptOption = () => el('xpath=//*[@role="dialog"]//button[contains(normalize-space(.), "TypeScript")]')
+		const typeScriptOption = () => el('[role="dialog"] button[data-entity-id="00000000-0000-0000-0000-000000000b03"]')
 		waitFor(() => typeScriptOption().exists)
 		clickUntil(
 			() => {

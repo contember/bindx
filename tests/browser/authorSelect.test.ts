@@ -19,7 +19,7 @@ browserTest('Article with Author Select', () => {
 		// Open the author SelectField popover
 		el(`${tid('article-with-author-select')} [aria-haspopup="dialog"]`).click()
 		// Select from the stable initial list; filtering remounts options asynchronously.
-		const janeOption = () => el('xpath=//*[@role="dialog"]//button[contains(normalize-space(.), "Jane")]')
+		const janeOption = () => el('[role="dialog"] button[data-entity-id="00000000-0000-0000-0000-000000000a02"]')
 		waitFor(() => janeOption().exists)
 		clickUntil(
 			() => {
