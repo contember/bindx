@@ -27,6 +27,9 @@ export {
 	type HasManyAccessor,
 	type HasOneAccessor,
 	type EntityAccessor,
+	// Selection-erased views (parameter positions that accept any selection)
+	type EntityRefLike,
+	type EntityAccessorLike,
 	type Unsubscribe,
 	// Type extraction helpers
 	type ExtractHasOneEntityName,
