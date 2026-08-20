@@ -365,6 +365,45 @@ export type EntityAccessor<
 } & EntityFieldsAccessor<TEntity, TSelected, TSchema>
 
 // ============================================================================
+// SELECTION-ERASED VIEWS
+// ============================================================================
+
+/**
+ * Selection-erased pointer to an entity of type `TEntity`.
+ *
+ * `EntityRef<TEntity>` means "an entity ref whose selection is the *whole*
+ * entity", so a ref carrying a narrower selection is (correctly) not assignable
+ * to it, and neither is a ref whose selection is still a free type parameter.
+ * Use `EntityRefLike` in parameter positions that only need entity *identity*
+ * and the selection-independent API (`id`, `$isNew`, `$errors`, `$on`, ...) and
+ * accept any selection, including one not yet known:
+ *
+ * ```ts
+ * // accepts EntityRef<Website, anything>
+ * function trackVisit(website: EntityRefLike<Website>): void { ... }
+ * ```
+ *
+ * It deliberately drops the field proxy: erasing the selection must never grant
+ * field access, because reading an unfetched field throws `UnfetchedFieldError`
+ * at runtime. To read fields, take an `EntityRef<TEntity, TSelected>` instead.
+ *
+ * `TEntityName` is erased to `string`, so refs produced with a literal entity
+ * name (hooks) and refs produced without one (createComponent) both fit.
+ */
+export type EntityRefLike<TEntity> = EntityRefInterface<TEntity, unknown>
+
+/**
+ * Selection-erased live accessor for an entity of type `TEntity`.
+ *
+ * Same erasure as {@link EntityRefLike}, but only satisfied by *live* accessors
+ * (`EntityAccessor` and `HasOneAccessor`), not by pointer-only refs. Like
+ * `EntityRefLike` it exposes no field proxy — see the note there.
+ */
+export type EntityAccessorLike<TEntity> = EntityRefLike<TEntity> & {
+	readonly $data: unknown
+}
+
+// ============================================================================
 // ENTITY FIELDS MAPPING TYPES
 // ============================================================================
 
