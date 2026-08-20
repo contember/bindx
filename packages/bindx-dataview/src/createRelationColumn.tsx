@@ -13,7 +13,7 @@
 import React from 'react'
 import type { FieldRef, FilterArtifact, FilterHandler, EntityAccessor, SelectionMeta } from '@contember/bindx'
 import { SelectionScope } from '@contember/bindx'
-import { createCollectorProxy } from '@contember/bindx-react'
+import { createCollectorProxy, collectSelection as collectJsxSelection, SCOPE_REF } from '@contember/bindx-react'
 import type { ColumnTypeDef } from './columnTypes.js'
 import { accessField } from './columnTypes.js'
 
@@ -66,6 +66,25 @@ export interface RelationColumnProps<TEntity, TSelected> {
 	children: (entity: EntityAccessor<TEntity, TSelected>) => React.ReactNode
 }
 
+/** Reads a collector proxy's own SelectionScope; runtime refs do not carry one. */
+function readSelectionScope(target: unknown): SelectionScope | null {
+	if (target === null || typeof target !== 'object' || !(SCOPE_REF in target)) {
+		return null
+	}
+	const scope = target[SCOPE_REF]
+	return scope instanceof SelectionScope ? scope : null
+}
+
+/**
+ * Merges the selection declared by the cell renderer's returned JSX into the
+ * given scope. Proxy touches alone only see the refs passed as props, so fields
+ * declared by nested components would otherwise never be fetched.
+ */
+function mergeRenderedSelection(rendered: React.ReactNode, scope: SelectionScope | null): void {
+	if (!scope) return
+	scope.mergeFromSelectionMeta(collectJsxSelection(rendered))
+}
+
 // ============================================================================
 // Factory
 // ============================================================================
@@ -97,7 +116,7 @@ export function createRelationColumn<TFilterArtifact extends FilterArtifact>(
 		if (relatedEntityName && renderer) {
 			const scope = new SelectionScope()
 			const proxy = createCollectorProxy(scope, relatedEntityName)
-			renderer(proxy)
+			mergeRenderedSelection(renderer(proxy), scope)
 			relatedSelection = scope.toSelectionMeta()
 		}
 
@@ -177,7 +196,7 @@ export interface RelationColumnComponent {
 
 export const hasOneCellConfig: RelationCellConfig = {
 	collectSelection: (renderer, fieldRef) => {
-		renderer(fieldRef)
+		mergeRenderedSelection(renderer(fieldRef), readSelectionScope(fieldRef))
 	},
 	renderCell: (accessor, fieldName, renderer) => {
 		const related = getRelatedAccessor(accessor, fieldName)
@@ -189,7 +208,9 @@ export const hasOneCellConfig: RelationCellConfig = {
 export const hasManyCellConfig: RelationCellConfig = {
 	collectSelection: (renderer, fieldRef) => {
 		const ref = fieldRef as { map?: (fn: (item: unknown, index: number) => unknown) => unknown[] }
-		ref.map?.((item) => { renderer(item); return null })
+		const rendered: React.ReactNode[] = []
+		ref.map?.((item) => { rendered.push(renderer(item)); return null })
+		mergeRenderedSelection(rendered, readSelectionScope(fieldRef))
 	},
 	renderCell: (accessor, fieldName, renderer) => {
 		const ref = accessField(accessor, fieldName) as { items?: EntityAccessor<object>[] } | null
