@@ -24,6 +24,7 @@ import type {
 	HasManyDisconnectingEvent,
 } from '../events/types.js'
 import { createAliasProxy } from './proxyFactory.js'
+import { isPersistedId } from '../store/entityId.js'
 
 /**
  * HasManyListHandle provides access to a has-many relation (list of entities).
@@ -33,7 +34,10 @@ import { createAliasProxy } from './proxyFactory.js'
  * @typeParam TSelected - The selected subset of fields (defaults to TEntity for backwards compatibility)
  */
 export class HasManyListHandle<TEntity extends object = object, TSelected = TEntity> extends EntityRelatedHandle {
-	private itemHandleCacheRaw = new Map<string, EntityHandle<TEntity, TSelected>>()
+	// Per-item accessor cache, keyed by the item's canonical (post-rekey) id. Identity is the
+	// point: a still-listed item keeps the same proxy — and with it the same handle, which the
+	// proxy is the only reference to. Kept bounded by syncItemHandleCache, which drops ids
+	// that have left the list.
 	private itemHandleCacheProxy = new Map<string, EntityAccessor<TEntity, TSelected>>()
 
 	/** Runtime brand symbols for validation */
@@ -91,7 +95,28 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		alias?: string,
 		selection?: SelectionMeta,
 	): HasManyAccessor<TEntity, TSelected> {
-		return createAliasProxy<HasManyListHandle<TEntity, TSelected>, HasManyAccessor<TEntity, TSelected>>(new HasManyListHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection))
+		return createAliasProxy<HasManyListHandle<TEntity, TSelected>, HasManyAccessor<TEntity, TSelected>>(
+			HasManyListHandle.createRaw<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection),
+		)
+	}
+
+	/**
+	 * Creates the handle without the alias proxy. Mirrors {@link EntityHandle.createRaw}:
+	 * the class surface (e.g. {@link itemHandleCacheSize}) is not part of HasManyAccessor.
+	 */
+	static createRaw<TEntity extends object = object, TSelected = TEntity>(
+		parentEntityType: string,
+		parentEntityId: string,
+		fieldName: string,
+		itemType: string,
+		store: SnapshotStore,
+		dispatcher: ActionDispatcher,
+		schema: SchemaRegistry,
+		brands?: Set<symbol>,
+		alias?: string,
+		selection?: SelectionMeta,
+	): HasManyListHandle<TEntity, TSelected> {
+		return new HasManyListHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection)
 	}
 
 	/**
@@ -115,6 +140,8 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Returns selection-aware EntityAccessors that support `item.fieldName.value`.
 	 * Includes planned connections and excludes planned removals.
 	 * Uses ordered IDs to preserve order including after move() operations.
+	 *
+	 * This is also where the item-accessor cache is pruned — see {@link syncItemHandleCache}.
 	 */
 	get items(): EntityAccessor<TEntity, TSelected>[] {
 		this.materializeEmbeddedItems()
@@ -127,7 +154,52 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			this.alias,
 		)
 
+		this.syncItemHandleCache(orderedIds)
+
 		return orderedIds.map((id) => this.getItemHandle(id))
+	}
+
+	/**
+	 * Canonical cache key for an item id: a temp id follows its temp→persisted rekey, so a
+	 * lookup by the now-dead temp id reuses the persisted item's handle instead of minting a
+	 * duplicate for the same entity.
+	 */
+	private resolveItemKey(itemId: string): string {
+		if (isPersistedId(itemId)) return itemId
+		return this.store.getPersistedId(this.itemType, itemId) ?? itemId
+	}
+
+	/**
+	 * Drops cached item accessors for ids that have left the list. Without it the cache keeps an
+	 * accessor for every id the relation has ever shown, for as long as the parent handle lives
+	 * — a paginated / filtered / refetched has-many grows without bound.
+	 *
+	 * Runs before the accessors are resolved and never touches a live id, so an item that is
+	 * still listed keeps the exact same proxy and the exact same handle behind it.
+	 */
+	private syncItemHandleCache(liveIds: readonly string[]): void {
+		if (this.itemHandleCacheProxy.size === 0) return
+
+		// While the parent persists, the presented list hides planned additions — pruning
+		// against it would drop handles that reappear as soon as the persist settles.
+		if (this.store.isPersisting(this.entityType, this.entityId)) return
+
+		const liveKeys = new Set(liveIds)
+		for (const key of this.itemHandleCacheProxy.keys()) {
+			if (liveKeys.has(key)) continue
+			// A key with no live id is dead — including the temp key of a rekeyed item, whose
+			// handle must be rebuilt under the persisted id (a carried-over handle would keep
+			// reporting the temp id as its `id`).
+			this.itemHandleCacheProxy.delete(key)
+		}
+	}
+
+	/**
+	 * @internal Occupancy of the item-accessor cache. Exposed only so eviction tests can
+	 * assert the cache stays bounded; not part of the HasManyAccessor API.
+	 */
+	get itemHandleCacheSize(): number {
+		return this.itemHandleCacheProxy.size
 	}
 
 	/**
@@ -280,11 +352,12 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Returns selection-aware EntityAccessor that supports direct field access.
 	 */
 	getItemHandle(itemId: string): EntityAccessor<TEntity, TSelected> {
-		let proxy = this.itemHandleCacheProxy.get(itemId)
+		const key = this.resolveItemKey(itemId)
+		let proxy = this.itemHandleCacheProxy.get(key)
 
 		if (!proxy) {
 			const raw = EntityHandle.createRaw<TEntity, TSelected>(
-				itemId,
+				key,
 				this.itemType,
 				this.store,
 				this.dispatcher,
@@ -293,8 +366,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 				this.selection,
 			)
 			proxy = EntityHandle.wrapProxy(raw)
-			this.itemHandleCacheRaw.set(itemId, raw)
-			this.itemHandleCacheProxy.set(itemId, proxy)
+			this.itemHandleCacheProxy.set(key, proxy)
 		}
 
 		return proxy
