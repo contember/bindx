@@ -1,31 +1,23 @@
-// Regression test for https://github.com/contember/bindx/issues/32
-//
-// `<HasOne field={...}>` over a nullable many/one-has-one relation that is
-// currently null at runtime fires its children callback with `undefined`
-// instead of the placeholder accessor `useEntity` returns for the same
-// field. The typed contract claims `EntityRef<T>` (non-nullable), so callers
-// don't guard — and crash on the first field access (`Cannot read properties
-// of undefined (reading '<field>')`).
-//
-// Bug observed in NPI (`packages/admin/app/components/publications/seo-card.tsx`):
-// outer `<HasOne field={product.seo}>` auto-creates the placeholder, then the
-// inner `<HasOne field={seo.image}>` over the disconnected image relation
-// gives `undefined` to the callback. The same shape reproduces here with
-// `<HasOne field={article.author}>{author => <HasOne field={author.profile}>…`.
+// Regression test for https://github.com/contember/bindx/issues/32.
+// Nested nullable relations must expose placeholder accessors to JSX children.
 
 import '../../setup'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import React from 'react'
 import {
 	BindxProvider,
 	defineSchema,
 	entityDef,
 	HasOne,
+	type HasOneRef,
 	hasOne,
+	isPlaceholderId,
 	MockAdapter,
 	scalar,
+	Show,
 	useEntity,
+	useHasOne,
 } from '@contember/bindx-react'
 
 afterEach(() => {
@@ -47,6 +39,10 @@ interface Article {
 	id: string
 	title: string
 	author: Author | null
+}
+interface SelectedProfile {
+	id: string
+	bio: string | null
 }
 interface NestedSchema {
 	Article: Article
@@ -92,17 +88,34 @@ const mockData = {
 		'article-1': {
 			id: 'article-1',
 			title: 'Article 1',
-			// Both levels disconnected — outer `author` is null, so the
-			// inner `<HasOne field={author.profile}>` runs on a placeholder
-			// author. This mirrors the NPI seo-card scenario where the
-			// product has no SEO meta row yet, the outer HasOne hands out
-			// a placeholder, and the inner one over the still-empty image
-			// relation crashes.
 			author: null,
 		},
+		'article-2': {
+			id: 'article-2',
+			title: 'Article 2',
+			author: {
+				id: 'author-1',
+				name: 'Author 1',
+				email: 'author@example.com',
+				profile: null,
+			},
+		},
 	},
-	Author: {},
-	Profile: {},
+	Author: {
+		'author-1': {
+			id: 'author-1',
+			name: 'Author 1',
+			email: 'author@example.com',
+			profile: null,
+		},
+	},
+	Profile: {
+		'profile-1': {
+			id: 'profile-1',
+			bio: 'Connected profile',
+			avatar: null,
+		},
+	},
 }
 
 function getByTestId(container: Element, testId: string): Element {
@@ -130,13 +143,17 @@ describe('HasOne JSX — nested nullable has-one with no connected row', () => {
 				<div>
 					<HasOne field={article.author}>
 						{author => (
-							<HasOne field={author.profile}>
-								{profile => (
-									<div data-testid="profile-block">
-										<span data-testid="profile-bio">{profile.bio.inputProps.value ?? 'empty'}</span>
-									</div>
-								)}
-							</HasOne>
+							<div>
+								<span data-testid="author-placeholder">{isPlaceholderId(author.id) ? 'yes' : 'no'}</span>
+								<HasOne field={author.profile}>
+									{profile => (
+										<div data-testid="profile-block">
+											<span data-testid="profile-placeholder">{isPlaceholderId(profile.id) ? 'yes' : 'no'}</span>
+											<span data-testid="profile-bio">{profile.bio.inputProps.value ?? 'empty'}</span>
+										</div>
+									)}
+								</HasOne>
+							</div>
 						)}
 					</HasOne>
 				</div>
@@ -153,9 +170,71 @@ describe('HasOne JSX — nested nullable has-one with no connected row', () => {
 			expect(queryByTestId(container, 'loading')).toBeNull()
 		})
 
-		// Inner HasOne should still render — placeholder accessor returns
-		// `null` field values, not throw `Cannot read properties of undefined`.
 		expect(getByTestId(container, 'profile-block')).not.toBeNull()
+		expect(getByTestId(container, 'author-placeholder').textContent).toBe('yes')
+		expect(getByTestId(container, 'profile-placeholder').textContent).toBe('yes')
 		expect(getByTestId(container, 'profile-bio').textContent).toBe('empty')
+	})
+
+	test.failing('$connect(id) re-points sibling field subscriptions to a warm target', async () => {
+		const adapter = new MockAdapter(mockData, { delay: 0 })
+
+		function ConnectProfile({ field }: { field: HasOneRef<Profile, SelectedProfile> }): React.ReactElement {
+			const profile = useHasOne(field)
+			return (
+				<div>
+					<span data-testid="connected-profile-id">{profile.$id}</span>
+					<button data-testid="connect-profile" onClick={() => profile.$connect('profile-1')}>
+						Connect profile
+					</button>
+				</div>
+			)
+		}
+
+		function ProfileSlot({ field }: { field: HasOneRef<Profile, SelectedProfile> }): React.ReactElement {
+			return (
+				<div>
+					<Show field={field.bio} fallback={<span data-testid="profile-empty">empty</span>}>
+						{bio => <span data-testid="profile-value">{bio}</span>}
+					</Show>
+					<ConnectProfile field={field} />
+				</div>
+			)
+		}
+
+		function TestComponent(): React.ReactElement {
+			const article = useEntity(schema.Article, { by: { id: 'article-2' } }, a =>
+				a.id().author(author => author.id().profile(profile => profile.id().bio())))
+			const profile = useEntity(schema.Profile, { by: { id: 'profile-1' } }, p => p.id().bio())
+
+			if (article.$isLoading || profile.$isLoading) return <div data-testid="loading">Loading…</div>
+			if (article.$isError || article.$isNotFound || profile.$isError || profile.$isNotFound) {
+				return <div data-testid="error">Error</div>
+			}
+
+			return (
+				<HasOne field={article.author}>
+					{author => <ProfileSlot field={author.profile} />}
+				</HasOne>
+			)
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={nestedSchema}>
+				<TestComponent />
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'loading')).toBeNull()
+		})
+		expect(getByTestId(container, 'profile-empty').textContent).toBe('empty')
+
+		fireEvent.click(getByTestId(container, 'connect-profile'))
+
+		expect(getByTestId(container, 'connected-profile-id').textContent).toBe('profile-1')
+		await waitFor(() => {
+			expect(getByTestId(container, 'profile-value').textContent).toBe('Connected profile')
+		})
 	})
 })
