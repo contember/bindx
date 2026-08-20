@@ -27,8 +27,9 @@ browserTest('Article with Author Select', () => {
 				expect(option.text).toContain('Jane')
 				return option
 			},
-			() => !el('author-select-save-button').isDisabled,
+			() => el('current-author-display').text.includes('Jane'),
 		)
+		expect(el('author-select-save-button').isDisabled).toBe(false)
 		expect(el('current-author-display').text).toContain('Changes will be applied on save')
 	})
 
