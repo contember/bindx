@@ -19,12 +19,12 @@ browserTest('Article with Author Select', () => {
 		// Open the author SelectField popover
 		el(`${tid('article-with-author-select')} [aria-haspopup="dialog"]`).click()
 		// Select from the stable initial list; filtering remounts options asynchronously.
-		const bobOption = () => el('xpath=//*[@role="dialog"]//button[contains(normalize-space(.), "Bob")]')
-		waitFor(() => bobOption().exists)
+		const janeOption = () => el('xpath=//*[@role="dialog"]//button[contains(normalize-space(.), "Jane")]')
+		waitFor(() => janeOption().exists)
 		clickUntil(
 			() => {
-				const option = bobOption()
-				expect(option.text).toContain('Bob')
+				const option = janeOption()
+				expect(option.text).toContain('Jane')
 				return option
 			},
 			() => !el('author-select-save-button').isDisabled,
