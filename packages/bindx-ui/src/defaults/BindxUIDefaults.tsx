@@ -12,7 +12,6 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
  * }
  * ```
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface BindxUIDefaultsMap {}
 
 type DefaultsRecord = {

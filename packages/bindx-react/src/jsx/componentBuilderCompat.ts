@@ -13,7 +13,6 @@ import { BINDX_COMPONENT } from './types.js'
  * @internal
  */
 export function assignFragmentProperties(
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	component: ComponentType<any>,
 	selectionsMap: Map<string, SelectionPropMeta>,
 ): void {
@@ -28,7 +27,6 @@ export function assignFragmentProperties(
  * @internal
  */
 export function assignComponentMarkers(
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	component: ComponentType<any>,
 	selectionsMap: Map<string, SelectionPropMeta>,
 ): void {

@@ -163,11 +163,9 @@ export function useEntityList(
 // Implementation
 // ============================================================================
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useEntityList(
 	entity: EntityDef<any>,
 	options: UseEntityListOptions,
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	definer?: SelectionInput<any, any>,
 ): UseEntityListResult<any> {
 	const schemaRegistry = useSchemaRegistry()

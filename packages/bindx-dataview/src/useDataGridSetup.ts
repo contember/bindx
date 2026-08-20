@@ -31,14 +31,12 @@ import { DataViewElement, type DataViewElementProps } from './selectionComponent
 
 export const QUERY_FILTER_NAME = '__query'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MARKER_TYPES: ReadonlySet<React.ComponentType<any>> = new Set([
 	ColumnLeaf,
 	DataGridToolbarContent,
 	DataGridLayout,
 ])
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ELEMENT_MARKER_TYPES: ReadonlySet<React.ComponentType<any>> = new Set([
 	DataViewElement,
 ])

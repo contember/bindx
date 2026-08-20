@@ -17,7 +17,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '#bindx-ui/ui/popover'
 
 export interface DataGridColumnHeaderUIProps {
 	children: ReactNode
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	sortingField?: FieldRef<any>
 	hidingName?: string
 	filterName?: string

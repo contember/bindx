@@ -41,11 +41,9 @@ function dataAttribute(value: unknown): '' | undefined {
 	return value ? '' : undefined
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const uic = <El extends React.ElementType, Variants extends ConfigSchema | undefined = undefined>(
 	Component: El,
 	config: UicConfig<Variants>,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): any => {
 	const cls = cva(config?.baseClass as string, {
 		variants: config?.variants as Record<string, Record<string, ClassValue>> | undefined,
@@ -55,7 +53,6 @@ export const uic = <El extends React.ElementType, Variants extends ConfigSchema 
 	})
 	const passVariantProps = config?.passVariantProps ? new Set(config.passVariantProps) : undefined
 
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const component = forwardRef<unknown, any>((props, ref) => {
 		const { className: classNameProp, children: childrenBase, ...rest } = props
 

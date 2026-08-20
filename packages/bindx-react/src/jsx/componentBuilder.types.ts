@@ -103,7 +103,6 @@ export type AnyEntityPropConfig = EntityPropConfig | InterfaceEntityPropConfig
  * Grows as you chain builder methods.
  */
 export interface ComponentBuilderState<
-	// eslint-disable-next-line @typescript-eslint/ban-types
 	TEntityProps extends Record<string, AnyEntityPropConfig> = {},
 	TScalarProps extends object = object,
 	TRoles extends readonly string[] = readonly string[],
@@ -492,7 +491,6 @@ export interface ComponentBuilder<
  */
 export type InitialBuilderState<
 	TRoles extends readonly string[] = readonly string[],
-	// eslint-disable-next-line @typescript-eslint/ban-types
 > = ComponentBuilderState<{}, object, TRoles>
 
 /**

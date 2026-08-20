@@ -49,7 +49,6 @@ import { useDataGridSetup } from './useDataGridSetup.js'
 
 export interface HasManyDataGridProps<TEntity extends object = object> {
 	/** Has-many relation field from parent entity */
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	field: HasManyRef<TEntity, any>
 	/** Children render function: receives entity proxy `it`, returns column markers + layout */
 	children: (it: EntityAccessor<TEntity>) => ReactNode
