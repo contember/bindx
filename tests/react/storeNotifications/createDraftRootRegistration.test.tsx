@@ -1,19 +1,13 @@
-// Two halves of the create-draft lifecycle, one broken and one sound.
+// Both halves of the create-draft lifecycle, at the level the user sees.
 //
-// KNOWN-BROKEN PIN (first test, `test.failing`): it asserts what the user should
-// see. Bun reports it as passing while the bug is present and turns it into a
-// failure the moment the root registration starts notifying, which forces whoever
-// fixes it to drop the `.failing` marker. The assertions are the real symptom;
-// nothing was relaxed to fit the marker. `createEntity` writes in
-// three steps — setEntityData (notifies), setExistsOnServer (notifies), and
-// finally `roots.register()`, which is silent. A created entity only becomes a
-// `create` in getAllDirtyEntities() at that third step, so both notifications
-// carry the OLD value (0 dirty) and the value that matters is never announced.
-// A save indicator built on a global store subscription therefore shows "no
-// unsaved changes" while the store holds an unsaved draft, until some unrelated
-// write happens to notify.
+// REGRESSION (first test): `createEntity` used to register the create-root after
+// both of its notifying writes, and that registration is what makes the entity a
+// `create` in getAllDirtyEntities(). A save indicator built on a global store
+// subscription therefore showed "no unsaved changes" while the store held an
+// unsaved draft. The root is now registered before the final setExistsOnServer, so
+// the notification that closes the create carries the right count.
 //
-// CHARACTERIZATION (second test, PASSES): the unmount half is sound.
+// CHARACTERIZATION (second test): the unmount half is sound.
 // `unregisterRootEntity` was investigated as a suspected staleness bug and is
 // NOT one: it is equally silent, but its callers (Entity.tsx's cleanup,
 // useEntityList.ts's draft cleanup) run `sweepUnreachableCreated()` on the next
@@ -93,7 +87,7 @@ function Harness({ adapter, showDraft, onStore }: HarnessProps): React.ReactElem
 }
 
 describe('create-draft root registration and cleanup', () => {
-	test.failing('the save indicator counts the draft the store already holds (known broken)', async () => {
+	test('the save indicator counts the draft the store already holds', async () => {
 		const adapter = new MockAdapter({}, { delay: 0 })
 		let store!: SnapshotStore
 
@@ -108,8 +102,8 @@ describe('create-draft root registration and cleanup', () => {
 		// Truth in the store: one unsaved create.
 		expect(store.getAllDirtyEntities()).toHaveLength(1)
 
-		// What the user sees: still "0 unsaved changes", because the root
-		// registration that made it a create notified nobody.
+		// What the user sees: the same count, because the root registration now
+		// lands before the notification that announces the create.
 		expect(getByTestId('dirty-count').textContent).toBe('1')
 	})
 
@@ -122,8 +116,8 @@ describe('create-draft root registration and cleanup', () => {
 		)
 		await waitFor(() => expect(getByTestId('draft')).toBeTruthy())
 
-		// Sync the indicator past the missing create notification (the bug covered by
-		// the test above) so this one measures the unmount path alone.
+		// Redundant now that the create notifies — kept so this test measures the
+		// unmount path alone, whatever the create path does.
 		act(() => { store.notify() })
 		expect(getByTestId('dirty-count').textContent).toBe('1')
 

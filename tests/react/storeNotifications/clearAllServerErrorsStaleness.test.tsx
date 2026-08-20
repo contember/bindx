@@ -1,15 +1,10 @@
-// KNOWN-BROKEN PIN — the `test.failing` case below asserts what the user should
-// see. Bun reports it as passing while `SnapshotStore.clearAllServerErrors` stays
-// silent, and turns it into a failure the moment it notifies, which forces
-// whoever fixes it to drop the `.failing` marker. The assertions are the real
-// symptom; nothing was relaxed to fit the marker.
-//
-// `clearAllServerErrors` (packages/bindx/src/store/SnapshotStore.ts) clears the
-// entity's server errors without calling notifyEntitySubscribers, unlike its
-// sibling `clearAllErrors`. Every React consumer of errors reaches them through a
-// store subscription — `useField(...).errors` here, and the framework's own
-// `useEntityErrors` hook the same way — so with no notification React never
-// re-renders and the component keeps painting an error the store no longer holds.
+// Regression: `clearAllServerErrors` (packages/bindx/src/store/SnapshotStore.ts)
+// used to clear the entity's server errors without calling notifyEntitySubscribers,
+// unlike its sibling `clearAllErrors`. Every React consumer of errors reaches them
+// through a store subscription — `useField(...).errors` here, and the framework's
+// own `useEntityErrors` hook the same way — so React never re-rendered and the
+// component kept painting an error the store no longer held. The clear now
+// notifies; this test guards that the error leaves the DOM.
 import '../../setup'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
@@ -80,7 +75,7 @@ function renderAuthorForm(onStore: (store: SnapshotStore) => void): ReturnType<t
 }
 
 describe('clearAllServerErrors leaves the rendered error stale', () => {
-	test.failing('the field error disappears from the DOM when the store clears it (known broken)', async () => {
+	test('the field error disappears from the DOM when the store clears it', async () => {
 		let store!: SnapshotStore
 		const { getByTestId } = renderAuthorForm(s => { store = s })
 
@@ -101,15 +96,15 @@ describe('clearAllServerErrors leaves the rendered error stale', () => {
 		expect(store.getFieldErrors('Author', 'author-1', 'name')).toEqual([])
 		expect(store.hasAnyErrors('Author', 'author-1')).toBe(false)
 
-		// What the user sees: still "Name is already taken", because nothing notified.
+		// What the user sees: the error is gone too, because the clear notifies.
 		expect(getByTestId('errors').textContent).toBe('no-errors')
 	})
 
 	// Characterization of the only in-tree caller (BatchPersister, at the top of
 	// persist: setPersisting(true) immediately followed by clearAllServerErrors).
-	// The preceding notification is what re-renders the subtree; React re-reads the
-	// errors at render time, by which point the silent clear has already happened.
-	// This is why the framework's own persist path does not show the staleness.
+	// The preceding notification re-renders the subtree on its own, which is why the
+	// framework's own persist path never showed the staleness even while the clear
+	// was silent. The sequence must keep working now that the clear notifies too.
 	test('characterization: a notifying write immediately before the clear hides the bug', async () => {
 		let store!: SnapshotStore
 		const { getByTestId } = renderAuthorForm(s => { store = s })
