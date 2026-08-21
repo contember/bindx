@@ -34,6 +34,12 @@ export class MutationCollector implements MutationDataCollector {
 	private excludedEntityIds: ReadonlySet<string> = new Set()
 	/** Entities vetoed by an `entity:persisting` interceptor; nothing is emitted for them. */
 	private vetoedEntityIds: ReadonlySet<string> = new Set()
+	/**
+	 * Relation items whose op was dropped because the item is vetoed, keyed by relation
+	 * key (`Type:id:field`). The commit step leaves exactly these pending, so the planned
+	 * create/delete is sent once the veto is lifted instead of being committed unsent.
+	 */
+	private readonly _suppressedRelationItems = new Map<string, Set<string>>()
 	private readonly _nestedEntityIds: Set<string> = new Set()
 	/** Maps nested entity temp IDs to their entity types for post-persist processing */
 	private readonly _nestedEntityTypes: Map<string, string> = new Map()
@@ -52,6 +58,7 @@ export class MutationCollector implements MutationDataCollector {
 		this.excludedEntityIds = ids
 		this._nestedEntityIds.clear()
 		this._nestedEntityTypes.clear()
+		this._suppressedRelationItems.clear()
 	}
 
 	/**
@@ -78,6 +85,24 @@ export class MutationCollector implements MutationDataCollector {
 	 */
 	getNestedEntityTypes(): ReadonlyMap<string, string> {
 		return this._nestedEntityTypes
+	}
+
+	/**
+	 * Returns relation items (by relation key) whose planned op was not emitted because
+	 * the item is vetoed. BatchPersister keeps these pending when it commits relations.
+	 */
+	getSuppressedRelationItems(): ReadonlyMap<string, ReadonlySet<string>> {
+		return this._suppressedRelationItems
+	}
+
+	private suppressRelationItem(entityType: string, entityId: string, fieldName: string, itemId: string): void {
+		const key = `${entityType}:${entityId}:${fieldName}`
+		const items = this._suppressedRelationItems.get(key)
+		if (items) {
+			items.add(itemId)
+		} else {
+			this._suppressedRelationItems.set(key, new Set([itemId]))
+		}
 	}
 
 	// ==================== Main Collection Methods ====================
@@ -365,7 +390,10 @@ export class MutationCollector implements MutationDataCollector {
 					if (currentId && this.isExistingEntity(currentId)) {
 						return { connect: { id: currentId } }
 					} else if (currentId && isTempId(currentId)) {
-						if (this.vetoedEntityIds.has(currentId)) return null
+						if (this.vetoedEntityIds.has(currentId)) {
+							this.suppressRelationItem(entityType, entityId, fieldName, currentId)
+							return null
+						}
 						// Temp entity — generate inline create with its collected data
 						this._nestedEntityIds.add(currentId)
 						const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
@@ -402,7 +430,10 @@ export class MutationCollector implements MutationDataCollector {
 				return null
 
 			case 'deleted':
-				if (serverId !== null && this.vetoedEntityIds.has(serverId)) return null
+				if (serverId !== null && this.vetoedEntityIds.has(serverId)) {
+					this.suppressRelationItem(entityType, entityId, fieldName, serverId)
+					return null
+				}
 				// Delete the related entity
 				return { delete: true }
 
@@ -480,7 +511,10 @@ export class MutationCollector implements MutationDataCollector {
 		// Planned removals -> disconnect/delete
 		for (const [removedId, removalType] of hasManyState.plannedRemovals) {
 			if (removalType === 'delete') {
-				if (this.vetoedEntityIds.has(removedId)) continue
+				if (this.vetoedEntityIds.has(removedId)) {
+					this.suppressRelationItem(entityType, entityId, fieldName, removedId)
+					continue
+				}
 				operations.push({ delete: { id: removedId }, alias: removedId })
 			} else {
 				operations.push({ disconnect: { id: removedId }, alias: removedId })
@@ -490,7 +524,10 @@ export class MutationCollector implements MutationDataCollector {
 		// Planned additions -> create (newly created) or connect (existing persisted)
 		for (const [additionId, kind] of hasManyState.plannedAdditions) {
 			if (kind === 'created') {
-				if (this.vetoedEntityIds.has(additionId)) continue
+				if (this.vetoedEntityIds.has(additionId)) {
+					this.suppressRelationItem(entityType, entityId, fieldName, additionId)
+					continue
+				}
 				if (!targetType) continue
 				this._nestedEntityIds.add(additionId)
 				this._nestedEntityTypes.set(additionId, targetType)

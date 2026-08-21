@@ -216,9 +216,9 @@ export class RelationStore implements Rekeyable {
 	/**
 	 * Commits all relations (hasOne and hasMany) for an entity.
 	 */
-	commitAllRelations(keyPrefix: string): void {
-		this.hasOne.commitAllRelations(keyPrefix)
-		this.hasMany.commitAllRelations(keyPrefix)
+	commitAllRelations(keyPrefix: string, pendingItems?: ReadonlyMap<string, ReadonlySet<string>>): void {
+		this.hasOne.commitAllRelations(keyPrefix, pendingItems)
+		this.hasMany.commitAllRelations(keyPrefix, pendingItems)
 	}
 
 	/**

@@ -235,12 +235,18 @@ export class HasOneStore {
 
 	/**
 	 * Commits all has-one relations for an entity.
+	 *
+	 * A relation whose planned op targets an item in `pendingItems` (by relation key)
+	 * was not sent and is left uncommitted, so the op is retried on the next persist.
 	 */
-	commitAllRelations(keyPrefix: string): void {
-		for (const key of this.relationStates.keys()) {
-			if (key.startsWith(keyPrefix)) {
-				this.commitRelation(key)
+	commitAllRelations(keyPrefix: string, pendingItems?: ReadonlyMap<string, ReadonlySet<string>>): void {
+		for (const [key, state] of this.relationStates) {
+			if (!key.startsWith(keyPrefix)) continue
+			const pending = pendingItems?.get(key)
+			if (pending && ((state.currentId !== null && pending.has(state.currentId)) || (state.serverId !== null && pending.has(state.serverId)))) {
+				continue
 			}
+			this.commitRelation(key)
 		}
 	}
 

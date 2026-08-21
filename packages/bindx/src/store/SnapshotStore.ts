@@ -955,9 +955,17 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		this.notifyRelationSubscribers(key)
 	}
 
-	commitAllRelations(entityType: string, entityId: string): void {
+	/**
+	 * Commits every relation of an entity. Items listed in `pendingItems` (by relation
+	 * key) were not sent in the persist and stay planned.
+	 */
+	commitAllRelations(
+		entityType: string,
+		entityId: string,
+		pendingItems?: ReadonlyMap<string, ReadonlySet<string>>,
+	): void {
 		const keyPrefix = `${entityType}:${entityId}:`
-		this.relations.commitAllRelations(keyPrefix)
+		this.relations.commitAllRelations(keyPrefix, pendingItems)
 	}
 
 	resetAllRelations(entityType: string, entityId: string): void {

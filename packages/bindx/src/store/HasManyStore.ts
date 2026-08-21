@@ -525,19 +525,41 @@ export class HasManyStore {
 
 	/**
 	 * Commits all has-many relations for an entity.
+	 *
+	 * `pendingItems` (by relation key) names planned additions/removals that were NOT
+	 * sent — they stay planned instead of being folded into the server baseline.
 	 */
-	commitAllRelations(keyPrefix: string): void {
+	commitAllRelations(keyPrefix: string, pendingItems?: ReadonlyMap<string, ReadonlySet<string>>): void {
 		for (const [key, state] of this.hasManyStates) {
-			if (key.startsWith(keyPrefix)) {
-				const newServerIds = new Set(state.serverIds)
-				for (const removedId of state.plannedRemovals.keys()) {
+			if (!key.startsWith(keyPrefix)) continue
+
+			const pending = pendingItems?.get(key)
+			const newServerIds = new Set(state.serverIds)
+			const keptRemovals = new Map<string, HasManyRemovalType>()
+			const keptAdditions = new Map<string, HasManyAdditionKind>()
+
+			for (const [removedId, type] of state.plannedRemovals) {
+				if (pending?.has(removedId)) {
+					keptRemovals.set(removedId, type)
+				} else {
 					newServerIds.delete(removedId)
 				}
-				for (const connectedId of state.plannedAdditions.keys()) {
-					newServerIds.add(connectedId)
-				}
-				this.commitHasMany(key, Array.from(newServerIds))
 			}
+			for (const [addedId, kind] of state.plannedAdditions) {
+				if (pending?.has(addedId)) {
+					keptAdditions.set(addedId, kind)
+				} else {
+					newServerIds.add(addedId)
+				}
+			}
+
+			this.writeHasMany(key, {
+				serverIds: newServerIds,
+				orderedIds: null,
+				plannedRemovals: keptRemovals,
+				plannedAdditions: keptAdditions,
+				version: state.version + 1,
+			})
 		}
 	}
 

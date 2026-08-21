@@ -323,6 +323,18 @@ export class BatchPersister {
 	}
 
 	/**
+	 * Commits an entity's relations after a successful persist, except the planned ops
+	 * the collector dropped for vetoed items — those stay pending so the next persist
+	 * sends them, rather than being folded into the server baseline unsent.
+	 */
+	private commitRelations(entityType: string, entityId: string): void {
+		const suppressed = this.mutationCollector instanceof MutationCollector
+			? this.mutationCollector.getSuppressedRelationItems()
+			: undefined
+		this.store.commitAllRelations(entityType, entityId, suppressed?.size ? suppressed : undefined)
+	}
+
+	/**
 	 * Whether any entity in the batch has an `entity:persisting` interceptor.
 	 */
 	private hasPersistingInterceptors(entities: readonly DirtyEntity[]): boolean {
@@ -891,7 +903,7 @@ export class BatchPersister {
 					} else {
 						// Full commit
 						this.dispatcher.dispatch(commitEntity(entity.entityType, entity.entityId))
-						this.store.commitAllRelations(entity.entityType, entity.entityId)
+						this.commitRelations(entity.entityType, entity.entityId)
 					}
 
 					// Map temp ID if create
@@ -1090,7 +1102,7 @@ export class BatchPersister {
 
 			// Commit the nested entity
 			this.dispatcher.dispatch(commitEntity(entityType, nested.entityId))
-			this.store.commitAllRelations(entityType, nested.entityId)
+			this.commitRelations(entityType, nested.entityId)
 			this.store.setExistsOnServer(entityType, nested.entityId, true)
 
 			// Map temp ID to server-assigned ID
@@ -1131,7 +1143,7 @@ export class BatchPersister {
 
 			// Commit it — the parent mutation succeeded, so this entity exists on the server
 			this.dispatcher.dispatch(commitEntity(entity.entityType, entity.entityId))
-			this.store.commitAllRelations(entity.entityType, entity.entityId)
+			this.commitRelations(entity.entityType, entity.entityId)
 			this.store.setExistsOnServer(entity.entityType, entity.entityId, true)
 		}
 
@@ -1144,7 +1156,7 @@ export class BatchPersister {
 			if (!snapshot) continue
 
 			this.dispatcher.dispatch(commitEntity(entityType, tempId))
-			this.store.commitAllRelations(entityType, tempId)
+			this.commitRelations(entityType, tempId)
 			this.store.setExistsOnServer(entityType, tempId, true)
 		}
 	}
