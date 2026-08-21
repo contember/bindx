@@ -1,6 +1,8 @@
 import { parentKeyFromOwnerPrefix, parentKeyFromRelationKey } from './relationKey.js'
 import { RelationEdgeIndex } from './RelationEdgeIndex.js'
 
+type ReconciliationResult = 'applied' | 'conflict'
+
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
 	if (a.size !== b.size) return false
 	for (const item of a) {
@@ -28,6 +30,21 @@ export type HasManyRemovalType = 'disconnect' | 'delete'
  *   - 'connected': an existing persisted entity being connected (via connect())
  */
 export type HasManyAdditionKind = 'created' | 'connected'
+
+export interface SentHasManyAddition {
+	itemId: string
+	kind: HasManyAdditionKind
+}
+
+export interface SentHasManyRemoval {
+	itemId: string
+	type: HasManyRemovalType
+}
+
+export interface SentHasManyDelta {
+	additions: readonly SentHasManyAddition[]
+	removals: readonly SentHasManyRemoval[]
+}
 
 /**
  * Has-many list state stored in SnapshotStore
@@ -292,6 +309,19 @@ export class HasManyStore {
 			plannedAdditions: new Map(),
 			version: (existing?.version ?? 0) + 1,
 		})
+	}
+
+	/**
+	 * Advances the server baseline by the confirmed sent delta and rebases local
+	 * edits made after the request started onto that new baseline.
+	 */
+	reconcileSentDelta(key: string, delta: SentHasManyDelta): ReconciliationResult {
+		const existing = this.hasManyStates.get(key)
+		if (!existing) return 'conflict'
+
+		const next = reconcileHasManyState(existing, delta)
+		this.writeHasMany(key, next.state)
+		return next.result
 	}
 
 	/**
@@ -722,4 +752,59 @@ function liveHasManyChildIds(state: StoredHasManyState | undefined): Set<string>
 		if (!state.plannedRemovals.has(id)) live.add(id)
 	}
 	return live
+}
+
+interface HasManyReconciliation {
+	state: StoredHasManyState
+	result: ReconciliationResult
+}
+
+function reconcileHasManyState(
+	existing: StoredHasManyState,
+	delta: SentHasManyDelta,
+): HasManyReconciliation {
+	const currentLive = liveHasManyChildIds(existing)
+	const serverIds = new Set(existing.serverIds)
+	const plannedAdditions = new Map(existing.plannedAdditions)
+	const plannedRemovals = new Map(existing.plannedRemovals)
+	let result: ReconciliationResult = 'applied'
+
+	for (const addition of delta.additions) {
+		serverIds.add(addition.itemId)
+		plannedAdditions.delete(addition.itemId)
+		plannedRemovals.delete(addition.itemId)
+		if (!currentLive.has(addition.itemId)) {
+			plannedRemovals.set(
+				addition.itemId,
+				addition.kind === 'created' ? 'delete' : 'disconnect',
+			)
+		}
+	}
+
+	for (const removal of delta.removals) {
+		serverIds.delete(removal.itemId)
+		const currentRemoval = plannedRemovals.get(removal.itemId)
+		if (currentRemoval === removal.type) plannedRemovals.delete(removal.itemId)
+
+		if (!currentLive.has(removal.itemId)) {
+			if (removal.type === 'delete') plannedRemovals.delete(removal.itemId)
+			continue
+		}
+		if (removal.type === 'delete') {
+			result = 'conflict'
+		} else if (!plannedAdditions.has(removal.itemId)) {
+			plannedAdditions.set(removal.itemId, 'connected')
+		}
+	}
+
+	return {
+		state: {
+			serverIds,
+			orderedIds: existing.orderedIds ? [...existing.orderedIds] : null,
+			plannedRemovals,
+			plannedAdditions,
+			version: existing.version + 1,
+		},
+		result,
+	}
 }

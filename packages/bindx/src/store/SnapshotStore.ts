@@ -6,6 +6,9 @@ import { ErrorStore } from './ErrorStore.js'
 import {
 	RelationStore,
 	type HasManyRemovalType,
+	type RelationReconciliationResult,
+	type SentHasManyDelta,
+	type SentHasOneTransition,
 	type StoredHasManyState,
 	type StoredRelationState,
 } from './RelationStore.js'
@@ -28,7 +31,16 @@ import type {
 	EditableWriteCounters,
 } from '../undo/UndoJournal.js'
 
-export type { HasManyRemovalType, StoredHasManyState, StoredRelationState } from './RelationStore.js'
+export type {
+	HasManyRemovalType,
+	RelationReconciliationResult,
+	SentHasManyAddition,
+	SentHasManyDelta,
+	SentHasManyRemoval,
+	SentHasOneTransition,
+	StoredHasManyState,
+	StoredRelationState,
+} from './RelationStore.js'
 export type { EntityMeta } from './EntityMetaStore.js'
 export { isTempId, isPlaceholderId, isPersistedId, generatePlaceholderId } from './entityId.js'
 
@@ -597,6 +609,19 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		this.notifyRelationSubscribers(key)
 	}
 
+	reconcileSentHasMany(
+		parentType: string,
+		parentId: string,
+		fieldName: string,
+		delta: SentHasManyDelta,
+		alias?: string,
+	): RelationReconciliationResult {
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		const result = this.relations.reconcileSentHasMany(key, delta)
+		this.notifyRelationSubscribers(key)
+		return result
+	}
+
 	resetHasMany(
 		parentType: string,
 		parentId: string,
@@ -946,6 +971,18 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		const key = this.getRelationKey(parentType, parentId, fieldName)
 		this.relations.commitRelation(key)
 		this.notifyRelationSubscribers(key)
+	}
+
+	reconcileSentRelation(
+		parentType: string,
+		parentId: string,
+		fieldName: string,
+		transition: SentHasOneTransition,
+	): RelationReconciliationResult {
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const result = this.relations.reconcileSentRelation(key, transition)
+		this.notifyRelationSubscribers(key)
+		return result
 	}
 
 	resetRelation(parentType: string, parentId: string, fieldName: string): void {

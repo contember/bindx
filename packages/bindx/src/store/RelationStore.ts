@@ -1,18 +1,33 @@
 import type { EntitySnapshot } from './snapshots.js'
 import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
-import { HasOneStore, type StoredRelationState } from './HasOneStore.js'
+import {
+	HasOneStore,
+	type SentHasOneTransition,
+	type StoredRelationState,
+} from './HasOneStore.js'
 import {
 	HasManyStore,
 	computeDefaultOrderedIds,
 	type HasManyAdditionKind,
 	type HasManyRemovalType,
+	type SentHasManyDelta,
 	type StoredHasManyState,
 } from './HasManyStore.js'
 
 // Re-exported so existing imports from './RelationStore.js' keep resolving.
 export type { StoredRelationState } from './HasOneStore.js'
-export type { HasManyAdditionKind, HasManyRemovalType, StoredHasManyState } from './HasManyStore.js'
+export type { SentHasOneTransition } from './HasOneStore.js'
+export type {
+	HasManyAdditionKind,
+	HasManyRemovalType,
+	SentHasManyAddition,
+	SentHasManyDelta,
+	SentHasManyRemoval,
+	StoredHasManyState,
+} from './HasManyStore.js'
 export { computeDefaultOrderedIds } from './HasManyStore.js'
+
+export type RelationReconciliationResult = 'applied' | 'conflict'
 
 /**
  * Manages has-one and has-many relation state.
@@ -75,6 +90,13 @@ export class RelationStore implements Rekeyable {
 		this.hasOne.commitRelation(key)
 	}
 
+	reconcileSentRelation(
+		key: string,
+		transition: SentHasOneTransition,
+	): RelationReconciliationResult {
+		return this.hasOne.reconcileSentTransition(key, transition)
+	}
+
 	resetRelation(key: string): void {
 		this.hasOne.resetRelation(key)
 	}
@@ -103,6 +125,13 @@ export class RelationStore implements Rekeyable {
 
 	commitHasMany(key: string, newServerIds: string[]): void {
 		this.hasMany.commitHasMany(key, newServerIds)
+	}
+
+	reconcileSentHasMany(
+		key: string,
+		delta: SentHasManyDelta,
+	): RelationReconciliationResult {
+		return this.hasMany.reconcileSentDelta(key, delta)
 	}
 
 	resetHasMany(key: string): void {
