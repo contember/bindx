@@ -30,7 +30,10 @@ export interface EntityMutationResult {
  * implementing MutationSchemaProvider interface (SchemaRegistry, Contember SchemaNames via adapter).
  */
 export class MutationCollector implements MutationDataCollector {
+	/** Entities with their own top-level mutation; only their nested update is skipped. */
 	private excludedEntityIds: ReadonlySet<string> = new Set()
+	/** Entities vetoed by an `entity:persisting` interceptor; nothing is emitted for them. */
+	private vetoedEntityIds: ReadonlySet<string> = new Set()
 	private readonly _nestedEntityIds: Set<string> = new Set()
 	/** Maps nested entity temp IDs to their entity types for post-persist processing */
 	private readonly _nestedEntityTypes: Map<string, string> = new Map()
@@ -41,14 +44,23 @@ export class MutationCollector implements MutationDataCollector {
 	) {}
 
 	/**
-	 * Sets entity IDs that should be excluded from nested mutation generation.
-	 * These entities either get their own top-level mutation or were vetoed by a
-	 * persistence interceptor.
+	 * Sets entity IDs that get their own top-level mutation, so their nested
+	 * update is skipped to avoid duplicate changes. Relation operations that only
+	 * exist on the parent (delete, disconnect) are still emitted for them.
 	 */
 	setExcludedEntities(ids: ReadonlySet<string>): void {
 		this.excludedEntityIds = ids
 		this._nestedEntityIds.clear()
 		this._nestedEntityTypes.clear()
+	}
+
+	/**
+	 * Sets entity IDs vetoed by an `entity:persisting` interceptor. Unlike excluded
+	 * entities they have no top-level mutation either, so every nested operation
+	 * that would write them — create, update or delete — is dropped.
+	 */
+	setVetoedEntities(ids: ReadonlySet<string>): void {
+		this.vetoedEntityIds = ids
 	}
 
 	/**
@@ -353,7 +365,7 @@ export class MutationCollector implements MutationDataCollector {
 					if (currentId && this.isExistingEntity(currentId)) {
 						return { connect: { id: currentId } }
 					} else if (currentId && isTempId(currentId)) {
-						if (this.excludedEntityIds.has(currentId)) return null
+						if (this.vetoedEntityIds.has(currentId)) return null
 						// Temp entity — generate inline create with its collected data
 						this._nestedEntityIds.add(currentId)
 						const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
@@ -390,7 +402,7 @@ export class MutationCollector implements MutationDataCollector {
 				return null
 
 			case 'deleted':
-				if (serverId !== null && this.excludedEntityIds.has(serverId)) return null
+				if (serverId !== null && this.vetoedEntityIds.has(serverId)) return null
 				// Delete the related entity
 				return { delete: true }
 
@@ -468,7 +480,7 @@ export class MutationCollector implements MutationDataCollector {
 		// Planned removals -> disconnect/delete
 		for (const [removedId, removalType] of hasManyState.plannedRemovals) {
 			if (removalType === 'delete') {
-				if (this.excludedEntityIds.has(removedId)) continue
+				if (this.vetoedEntityIds.has(removedId)) continue
 				operations.push({ delete: { id: removedId }, alias: removedId })
 			} else {
 				operations.push({ disconnect: { id: removedId }, alias: removedId })
@@ -478,7 +490,7 @@ export class MutationCollector implements MutationDataCollector {
 		// Planned additions -> create (newly created) or connect (existing persisted)
 		for (const [additionId, kind] of hasManyState.plannedAdditions) {
 			if (kind === 'created') {
-				if (this.excludedEntityIds.has(additionId)) continue
+				if (this.vetoedEntityIds.has(additionId)) continue
 				if (!targetType) continue
 				this._nestedEntityIds.add(additionId)
 				this._nestedEntityTypes.set(additionId, targetType)

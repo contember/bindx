@@ -244,6 +244,7 @@ describe('BatchPersister persist lifecycle events', () => {
 			expect(result.skippedCount).toBe(1)
 			const cancelledEntry = result.results.find(r => r.entityId === 'a-1')
 			expect(cancelledEntry?.success).toBe(false)
+			expect(cancelledEntry?.skipped).toBe(true)
 			expect(cancelledEntry?.error?.message).toMatch(/cancelled/)
 
 			// No after-event is emitted for a vetoed entity.

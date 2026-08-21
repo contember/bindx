@@ -258,7 +258,7 @@ export class BatchPersister {
 	 */
 	private async executePersist(
 		sortedEntities: DirtyEntity[],
-		excludedNestedEntityIds: ReadonlySet<string>,
+		vetoedEntityIds: ReadonlySet<string>,
 		scope: PersistScope,
 		options: BatchPersistOptions | undefined,
 		updateMode: UpdateMode,
@@ -279,7 +279,7 @@ export class BatchPersister {
 			// mutated to the server view — pessimistic mode presents the server
 			// baseline via getPresentationSnapshot instead — so there is nothing to
 			// capture or restore.
-			const mutations = this.buildMutations(sortedEntities, excludedNestedEntityIds, scope)
+			const mutations = this.buildMutations(sortedEntities, vetoedEntityIds, scope)
 
 			if (mutations.length === 0) {
 				// Nothing to persist
@@ -443,6 +443,7 @@ export class BatchPersister {
 	/**
 	 * Folds vetoed entities into the result as skipped — never as successes, and never
 	 * as server failures, so callers can tell a deliberate veto from a broken save.
+	 * Their entries carry `skipped`, which keeps `failedCount` in step with `results`.
 	 */
 	private mergeCancelled(
 		attempted: PersistenceResult,
@@ -455,6 +456,7 @@ export class BatchPersister {
 			entityId: entity.entityId,
 			operation: entity.changeType,
 			success: false,
+			skipped: true,
 			error: { message: `Persist of ${entity.entityType}:${entity.entityId} was cancelled by an entity:persisting interceptor` },
 		}))
 
@@ -579,18 +581,21 @@ export class BatchPersister {
 	 */
 	private buildMutations(
 		entities: DirtyEntity[],
-		excludedNestedEntityIds: ReadonlySet<string>,
+		vetoedEntityIds: ReadonlySet<string>,
 		scope: PersistScope,
 	): TransactionMutation[] {
 		// Exclude only non-create entities from nesting —
 		// new entities should be nested inside their parent's mutation
 		// to maintain correct relation connections without transaction support.
+		// Vetoed entities are kept apart: an excluded entity still has its parent-side
+		// delete emitted, a vetoed one must not be written at all.
 		if (this.mutationCollector instanceof MutationCollector) {
-			const excludedIds = new Set(excludedNestedEntityIds)
+			const excludedIds = new Set<string>()
 			for (const entity of entities) {
 				if (entity.changeType !== 'create') excludedIds.add(entity.entityId)
 			}
 			this.mutationCollector.setExcludedEntities(excludedIds)
+			this.mutationCollector.setVetoedEntities(vetoedEntityIds)
 		}
 
 		const mutations: TransactionMutation[] = []

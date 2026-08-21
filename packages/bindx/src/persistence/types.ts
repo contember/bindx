@@ -97,6 +97,12 @@ export interface EntityPersistResult {
 	readonly entityId: string
 	readonly operation: 'create' | 'update' | 'delete'
 	readonly success: boolean
+	/**
+	 * The entity was deliberately not sent (vetoed by an `entity:persisting`
+	 * interceptor). `success` is false, but it counts towards `skippedCount`,
+	 * not `failedCount`.
+	 */
+	readonly skipped?: true
 	readonly error?: PersistError
 	readonly fieldResults?: readonly FieldPersistResult[]
 	/** Server-assigned ID for creates (when tempId was used) */
@@ -121,9 +127,9 @@ export interface PersistenceResult {
 	readonly results: readonly EntityPersistResult[]
 	/** Number of successfully persisted entities */
 	readonly successCount: number
-	/** Number of failed entities */
+	/** Number of entities the server rejected — results with `success: false` and no `skipped` flag */
 	readonly failedCount: number
-	/** Number of entities skipped (e.g., already in-flight) */
+	/** Number of entities not sent: already in-flight, or vetoed by an interceptor (listed in `results` with `skipped`) */
 	readonly skippedCount: number
 }
 
