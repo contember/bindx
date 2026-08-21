@@ -19,8 +19,15 @@ import { EntityHandle } from '@contember/bindx'
 export class ItemAccessorCache {
 	private readonly entries = new Map<string, EntityAccessor<object>>()
 
+	/**
+	 * @param createHandle builds the handle for a canonical id
+	 * @param resolveId maps an id to its canonical form — a temp id follows its
+	 *   temp→persisted rekey, so the handle (and the `id` it reports) is minted under the
+	 *   server id and the dead temp key is evicted. Mirrors HasManyListHandle.resolveItemKey.
+	 */
 	constructor(
 		private readonly createHandle: (id: string) => EntityHandle<object>,
+		private readonly resolveId: (id: string) => string,
 	) {}
 
 	/** Rebuilds the accessor array; ids no longer listed are evicted so the cache stays bounded. */
@@ -29,8 +36,9 @@ export class ItemAccessorCache {
 		const liveIds = new Set<string>()
 
 		for (const item of items) {
-			accessors.push(this.resolve(item.id))
-			liveIds.add(item.id)
+			const id = this.resolveId(item.id)
+			accessors.push(this.resolve(id))
+			liveIds.add(id)
 		}
 
 		for (const id of this.entries.keys()) {

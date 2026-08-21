@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react'
 import type { EntityDef, EntityAccessor, SelectionInput, SelectionMeta, FieldError, SchemaRegistry, CommonEntity, EntityForRoles, RoleNames } from '@contember/bindx'
-import { EntityHandle, isTempId, resolveSelectionMeta, buildQueryFromSelection, refreshServerData, createLoadError } from '@contember/bindx'
+import { EntityHandle, isTempId, isPersistedId, resolveSelectionMeta, buildQueryFromSelection, refreshServerData, createLoadError } from '@contember/bindx'
 import { useBindxContext, useSchemaRegistry } from './BackendAdapterContext.js'
 import { useStoreSubscription } from './useStoreSubscription.js'
 import { ItemAccessorCache } from './ItemAccessorCache.js'
@@ -239,17 +239,27 @@ export function useEntityList(
 	// whenever a handle construction input changes — handles are built against `selectionMeta` and
 	// validate field access against it. A new cache also invalidates `listCacheRef`, so a widened
 	// selection never serves the previous result with its narrow accessors.
+	// Canonical id of a list item: a temp id follows its temp→persisted rekey. The list
+	// state keeps the id it was given, so every id comparison goes through this.
+	const resolveItemId = useCallback(
+		(id: string): string => (isPersistedId(id) ? id : store.getPersistedId(entityType, id) ?? id),
+		[store, entityType],
+	)
+
 	const itemAccessorCache = useMemo(
-		() => new ItemAccessorCache((id) => EntityHandle.createRaw<object>(
-			id,
-			entityType,
-			store,
-			dispatcher,
-			schemaRegistry as SchemaRegistry<Record<string, object>>,
-			undefined,
-			selectionMeta,
-		)),
-		[entityType, store, dispatcher, schemaRegistry, selectionMeta],
+		() => new ItemAccessorCache(
+			(id) => EntityHandle.createRaw<object>(
+				id,
+				entityType,
+				store,
+				dispatcher,
+				schemaRegistry as SchemaRegistry<Record<string, object>>,
+				undefined,
+				selectionMeta,
+			),
+			resolveItemId,
+		),
+		[entityType, store, dispatcher, schemaRegistry, selectionMeta, resolveItemId],
 	)
 
 	// --- Store subscription ---
@@ -284,11 +294,12 @@ export function useEntityList(
 			} else {
 				store.scheduleForDeletion(entityType, key)
 			}
-			listStateRef.current.items = listStateRef.current.items.filter(item => item.id !== key)
+			const removedId = resolveItemId(key)
+			listStateRef.current.items = listStateRef.current.items.filter(item => resolveItemId(item.id) !== removedId)
 			versionRef.current++
 			store.notify()
 		},
-		[entityType, store],
+		[entityType, store, resolveItemId],
 	)
 
 	const moveItem = useCallback(
