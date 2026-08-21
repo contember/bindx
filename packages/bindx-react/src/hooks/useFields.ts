@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useRef, useSyncExternalStore } from 'react'
 import {
 	FIELD_REF_META,
 	type FieldAccessor,
@@ -20,59 +20,74 @@ function hasFieldRefMeta(value: unknown): value is { readonly [FIELD_REF_META]: 
 /** Deduplicates the entities behind `refs`; entries without field metadata are ignored. */
 function collectTargets(refs: ReadonlyArray<unknown>): SubscriptionTarget[] {
 	const targets: SubscriptionTarget[] = []
-	const seen = new Set<string>()
+	const seen = new Map<string, Set<string>>()
 
 	for (const ref of refs) {
 		if (!hasFieldRefMeta(ref)) continue
 		const meta = ref[FIELD_REF_META]
 		if (!meta) continue
-		const key = `${meta.entityType}:${meta.entityId}`
-		if (seen.has(key)) continue
-		seen.add(key)
+		let ids = seen.get(meta.entityType)
+		if (!ids) {
+			ids = new Set()
+			seen.set(meta.entityType, ids)
+		}
+		if (ids.has(meta.entityId)) continue
+		ids.add(meta.entityId)
 		targets.push({ entityType: meta.entityType, entityId: meta.entityId })
 	}
 
+	targets.sort((left, right) => {
+		if (left.entityType < right.entityType) return -1
+		if (left.entityType > right.entityType) return 1
+		if (left.entityId < right.entityId) return -1
+		if (left.entityId > right.entityId) return 1
+		return 0
+	})
 	return targets
 }
 
-/**
- * Subscribes to every entity behind `refs` with a single hook, so the hook count stays
- * constant no matter how many refs are passed. Use it wherever the number of refs is
- * driven by data or by children (`<Switch>` cases, condition DSL fields) — calling
- * {@link useField} in a loop breaks the rules of hooks the moment the count changes.
- *
- * Nulls and values without field metadata are ignored, which makes it safe to pass
- * loosely typed collections such as the fields of a `Condition`.
- *
- * @example
- * ```tsx
- * // Values + subscription for a variable number of fields
- * const accessors = useFields([article.title, article.publishedAt])
- *
- * // Subscription only (condition DSL refs are not necessarily FieldRefs)
- * useFields(collectConditionFields(condition))
- * ```
- */
-export function useFields<T>(refs: ReadonlyArray<FieldRef<T> | null>): ReadonlyArray<FieldAccessor<T> | null>
-export function useFields(refs: ReadonlyArray<unknown>): void
-export function useFields(refs: ReadonlyArray<unknown>): unknown {
+type FieldAccessorFor<TRef> = TRef extends FieldRef<infer TValue>
+	? FieldAccessor<TValue>
+	: TRef extends null
+		? null
+		: never
+
+type FieldRefFor<TRef> = TRef extends FieldRef<infer TValue>
+	? FieldRef<TValue>
+	: TRef extends null
+		? null
+		: never
+
+type FieldAccessorTuple<TRefs extends readonly unknown[]> = {
+	readonly [TIndex in keyof TRefs]: FieldAccessorFor<TRefs[TIndex]>
+}
+
+type FieldRefTuple<TRefs extends readonly unknown[]> = {
+	readonly [TIndex in keyof TRefs]: FieldRefFor<TRefs[TIndex]>
+}
+
+/** Internal subscription path for metadata-bearing refs of any kind. */
+export function useRefSubscription(refs: readonly unknown[]): readonly unknown[] {
 	const store = useSnapshotStore()
 	const targets = collectTargets(refs)
 	const subscriptionKey = JSON.stringify(targets)
-	const hasTargets = targets.length > 0
+	const stableTargetsRef = useRef({ subscriptionKey, targets })
+	if (stableTargetsRef.current.subscriptionKey !== subscriptionKey) {
+		stableTargetsRef.current = { subscriptionKey, targets }
+	}
+	const stableTargets = stableTargetsRef.current.targets
+	const hasTargets = stableTargets.length > 0
 
-	// `subscriptionKey` fully determines `targets`, so keeping the capture from the render that
-	// last changed the key is equivalent — and it avoids resubscribing on every render.
 	const subscribe = useCallback(
 		(callback: () => void): (() => void) => {
-			const unsubscribes = targets.map(target =>
+			const unsubscribes = stableTargets.map(target =>
 				store.subscribeToEntity(target.entityType, target.entityId, callback),
 			)
 			return () => {
 				for (const unsubscribe of unsubscribes) unsubscribe()
 			}
 		},
-		[store, subscriptionKey],
+		[store, stableTargets],
 	)
 
 	const getSnapshot = useCallback(
@@ -81,7 +96,23 @@ export function useFields(refs: ReadonlyArray<unknown>): unknown {
 	)
 
 	useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-
-	// Ref proxies already expose accessor properties at runtime — the overloads widen the type.
 	return refs
+}
+
+/**
+ * Subscribes to every entity behind `refs` with a single hook, so the hook count stays
+ * constant no matter how many refs are passed. Use it wherever the number of refs is
+ * driven by data or by children (`<Switch>` cases, condition DSL fields) — calling
+ * {@link useField} in a loop breaks the rules of hooks the moment the count changes.
+ *
+ * @example
+ * ```tsx
+ * const accessors = useFields([article.title, article.publishedAt])
+ * ```
+ */
+export function useFields<const TRefs extends readonly unknown[]>(
+	refs: TRefs & FieldRefTuple<TRefs>,
+): FieldAccessorTuple<TRefs>
+export function useFields(refs: ReadonlyArray<unknown>): unknown {
+	return useRefSubscription(refs)
 }

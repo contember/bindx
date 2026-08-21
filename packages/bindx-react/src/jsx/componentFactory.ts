@@ -15,7 +15,6 @@ import type {
 	SelectionMeta,
 	SelectionBuilder,
 	AnyBrand,
-	EntityRef,
 	SchemaDefinition,
 } from '@contember/bindx'
 import {
@@ -33,7 +32,7 @@ import { FIELD_REF_META, BINDX_COMPONENT, SCOPE_REF } from './types.js'
 import { createCollectorProxy } from './proxy.js'
 import { collectSelection } from './analyzer.js'
 import { type Condition, evaluateCondition } from './conditions.js'
-import { useAccessor } from '../hooks/useAccessor.js'
+import { useRefSubscription } from '../hooks/useFields.js'
 
 // ============================================================================
 // Symbols
@@ -70,17 +69,19 @@ export interface EntityConfig {
 // ============================================================================
 
 /**
- * Converts entity ref props to accessors via useAccessor, subscribing each one.
- * Called with a fixed list of prop names — hook count is stable across renders.
+ * Converts entity ref props to accessors while subscribing with one fixed hook.
  */
+function readProperty(target: object, name: string): unknown {
+	return Reflect.get(target, name)
+}
+
 function useRenderProps<TProps extends object>(props: TProps, entityPropNames: string[]): TProps {
-	const record = props as Record<string, unknown>
-	const accessors: Record<string, unknown> = {}
-	for (const name of entityPropNames) {
-		// eslint-disable-next-line react-hooks/rules-of-hooks -- stable iteration count (entityPropNames is fixed at build time)
-		accessors[name] = useAccessor(record[name] as EntityRef<object>)
-	}
-	return { ...props, ...accessors } as TProps
+	const refs = entityPropNames.map(name => readProperty(props, name))
+	const accessors = useRefSubscription(refs)
+	const accessorProps = Object.fromEntries(
+		entityPropNames.map((name, index) => [name, accessors[index]]),
+	)
+	return Object.assign({}, props, accessorProps)
 }
 
 // ============================================================================

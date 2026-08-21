@@ -13,7 +13,7 @@ import type {
 	SelectionProvider,
 } from '../types.js'
 import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
-import { useFields } from '../../hooks/useFields.js'
+import { useFields, useRefSubscription } from '../../hooks/useFields.js'
 import {
 	type Condition,
 	isCondition,
@@ -156,7 +156,7 @@ function SwitchImpl({ children }: SwitchProps): ReactElement | null {
 	// Two fixed hooks cover every case, so the hook count never depends on how many
 	// <Case> children are rendered (a conditional <Case> used to crash React).
 	const accessors = useFields(entries.cases.map(entry => resolveTriggerField(entry.props)))
-	useFields(collectConditionRefs(entries.cases))
+	useRefSubscription(collectConditionRefs(entries.cases))
 
 	for (let i = 0; i < entries.cases.length; i++) {
 		const { props } = entries.cases[i]!

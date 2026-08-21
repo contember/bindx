@@ -3,7 +3,7 @@ import type { IfProps, SelectionFieldMeta, SelectionMeta, SelectionProvider, Fie
 import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
 import { mergeSelections, createEmptySelection } from '../SelectionMeta.js'
 import { useField } from '../../hooks/useField.js'
-import { useFields } from '../../hooks/useFields.js'
+import { useRefSubscription } from '../../hooks/useFields.js'
 import {
 	type Condition,
 	isCondition,
@@ -60,7 +60,7 @@ function IfImpl({ condition, then: thenBranch, else: elseBranch }: IfProps): Rea
 	const fieldAccessor = useField(fieldRef)
 	// A Condition is evaluated against live data, so it needs a subscription of its own —
 	// a memoized <If> is not re-rendered by its parent.
-	useFields(isCondition(condition) ? collectConditionFields(condition) : NO_CONDITION_FIELDS)
+	useRefSubscription(isCondition(condition) ? collectConditionFields(condition) : NO_CONDITION_FIELDS)
 
 	let conditionValue: boolean
 
