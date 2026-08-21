@@ -268,7 +268,8 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		// Server loads are not user gestures; only journal local data sets (incl. the
 		// initial write of a freshly created entity, which captures an absent pre-image).
 		if (!isServerData) this.journal?.recordEntity(key)
-		const newSnapshot = this.entitySnapshots.setData(key, id, entityType, data, isServerData)
+		// The caller may still hold a rekeyed temp id; the snapshot must carry the live one.
+		const newSnapshot = this.entitySnapshots.setData(key, this.resolveId(entityType, id), entityType, data, isServerData)
 
 		if (isServerData) {
 			this.meta.setExistsOnServer(key, true)
@@ -292,7 +293,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		skipNotify: boolean = false,
 	): EntitySnapshot<T> {
 		const key = this.getEntityKey(entityType, id)
-		const newSnapshot = this.entitySnapshots.refreshServerData(key, id, entityType, data)
+		const newSnapshot = this.entitySnapshots.refreshServerData(key, this.resolveId(entityType, id), entityType, data)
 		this.meta.setExistsOnServer(key, true)
 		if (!skipNotify) {
 			this.notifyEntitySubscribers(key)

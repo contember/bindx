@@ -123,8 +123,11 @@ export class EntitySnapshotStore implements Rekeyable {
 		)
 
 		this.writeSnapshot(key, newSnapshot)
+		// The id index resolves relation edges for reachability, which memoizes on
+		// mutationVersion — so any change to the index must move it, not just a new key.
+		const indexChanged = this.idIndex.get(id) !== key
 		this.idIndex.set(id, key)
-		if (!existing) this.mutationVersion++
+		if (!existing || indexChanged) this.mutationVersion++
 		if (!isServerData) this.editableWriteVersion++
 		return newSnapshot
 	}
