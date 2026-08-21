@@ -230,15 +230,15 @@ export function useEntityList(
 		storeVersion: number
 		status: string
 		isRefetching: boolean
+		accessorCache: ItemAccessorCache
 		result: UseEntityListResult<any>
 	} | null>(null)
 
 	// --- Item accessor cache ---
 	// Kept for the hook's lifetime so item identity survives a list snapshot rebuild. Dropped
 	// whenever a handle construction input changes — handles are built against `selectionMeta` and
-	// validate field access against it. Note this does not fully close the stale-selection window:
-	// `listCacheRef` below does not include the selection in its hit key, so the render on which
-	// the selection widens still serves the previous result and its narrow accessors.
+	// validate field access against it. A new cache also invalidates `listCacheRef`, so a widened
+	// selection never serves the previous result with its narrow accessors.
 	const itemAccessorCache = useMemo(
 		() => new ItemAccessorCache((id) => EntityHandle.createRaw<object>(
 			id,
@@ -340,7 +340,8 @@ export function useEntityList(
 			cache.version === version &&
 			cache.storeVersion === storeVersion &&
 			cache.status === state.status &&
-			cache.isRefetching === state.isRefetching
+			cache.isRefetching === state.isRefetching &&
+			cache.accessorCache === itemAccessorCache
 		) {
 			return cache.result
 		}
@@ -377,6 +378,7 @@ export function useEntityList(
 			storeVersion,
 			status: state.status,
 			isRefetching: state.isRefetching,
+			accessorCache: itemAccessorCache,
 			result,
 		}
 

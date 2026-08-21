@@ -195,14 +195,19 @@ export class SubscriptionManager implements Rekeyable {
 		key: string,
 		bumper: SnapshotVersionBumper,
 	): void {
-		this.notifyEntityAndParentSubscribers(key, bumper, new Set(), true)
+		this.globalVersion++
+		this.notifyEntityAndParentSubscribers(key, bumper, new Set())
 	}
 
+	/**
+	 * Walks the entity and its live ancestors. The global version is bumped once by the
+	 * caller, before the first subscriber runs — a subscriber reading getVersion() from
+	 * inside its callback must already see the new value.
+	 */
 	private notifyEntityAndParentSubscribers(
 		key: string,
 		bumper: SnapshotVersionBumper,
 		notifiedKeys: Set<string>,
-		incrementGlobalVersion: boolean,
 	): void {
 		// Prevent infinite recursion
 		if (notifiedKeys.has(key)) return
@@ -212,8 +217,6 @@ export class SubscriptionManager implements Rekeyable {
 		// and skip the global notification (see issue #51).
 		const isRoot = notifiedKeys.size === 0
 		notifiedKeys.add(key)
-
-		if (incrementGlobalVersion) this.globalVersion++
 
 		// Notify entity-specific subscribers
 		const entitySubs = this.entitySubscribers.get(key)
@@ -230,7 +233,7 @@ export class SubscriptionManager implements Rekeyable {
 		for (const parentKey of parents) {
 			// Bump parent snapshot version so useSyncExternalStore detects a change
 			bumper.bumpEntitySnapshotVersion(parentKey)
-			this.notifyEntityAndParentSubscribers(parentKey, bumper, notifiedKeys, true)
+			this.notifyEntityAndParentSubscribers(parentKey, bumper, notifiedKeys)
 		}
 
 		// Notify global subscribers (only once, from the root invocation — not
@@ -265,7 +268,7 @@ export class SubscriptionManager implements Rekeyable {
 		// Bump entity snapshot version so isEqual detects a change
 		bumper.bumpEntitySnapshotVersion(entityKey)
 
-		this.notifyEntityAndParentSubscribers(entityKey, bumper, new Set(), false)
+		this.notifyEntityAndParentSubscribers(entityKey, bumper, new Set())
 	}
 
 	/**

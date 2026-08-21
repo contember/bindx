@@ -78,7 +78,7 @@ function SelectListInner({
 									<DataViewHighlightRow key={item.id} index={index}>
 										<SelectOption entity={item}>
 											<SelectItemTrigger entity={item}>
-										<SelectListItemUI data-entity-id={item.id}>
+												<SelectListItemUI data-entity-id={item.id}>
 													{children(item)}
 												</SelectListItemUI>
 											</SelectItemTrigger>
