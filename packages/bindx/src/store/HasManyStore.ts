@@ -648,11 +648,13 @@ export class HasManyStore {
 			}
 
 			let plannedAdditions = state.plannedAdditions
-			const additionKind = plannedAdditions.get(oldId)
-			if (additionKind !== undefined) {
+			if (plannedAdditions.has(oldId)) {
 				plannedAdditions = new Map(plannedAdditions)
 				plannedAdditions.delete(oldId)
-				plannedAdditions.set(newId, additionKind)
+				// The id only changes when the item was persisted, so a still-planned
+				// 'created' addition (the item went out on its own, not nested in this
+				// parent) must now connect the server row rather than create a second one.
+				plannedAdditions.set(newId, 'connected')
 				changed = true
 			}
 
