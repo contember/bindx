@@ -35,7 +35,7 @@ export class UndoManager {
 	private debounceTimer: ReturnType<typeof setTimeout> | null = null
 	private manualGroupId: string | null = null
 
-	private isBlocked = false
+	private blockDepth = 0
 	private subscribers = new Set<Subscriber>()
 	private cachedState: UndoState | null = null
 
@@ -73,7 +73,7 @@ export class UndoManager {
 	// ==================== Recording (journal commit sink) ====================
 
 	private onEntry(entry: JournalEntry): void {
-		if (this.isBlocked || entry.cells.length === 0) return
+		if (this.blockDepth > 0 || entry.cells.length === 0) return
 
 		// A fresh user action invalidates the redo stack.
 		if (this.redoStack.length > 0) {
@@ -109,7 +109,7 @@ export class UndoManager {
 		}
 	}
 
-	private flushPending(): void {
+	private flushPending(shouldNotify = true): void {
 		if (this.debounceTimer) {
 			clearTimeout(this.debounceTimer)
 			this.debounceTimer = null
@@ -117,16 +117,18 @@ export class UndoManager {
 		const pending = this.pending
 		this.pending = null
 		if (pending && pending.size > 0) {
-			this.pushEntry({ cells: [...pending.values()] })
+			this.pushEntry({ cells: [...pending.values()] }, shouldNotify)
 		}
 	}
 
-	private pushEntry(entry: JournalEntry): void {
+	private pushEntry(entry: JournalEntry, shouldNotify = true): void {
 		this.undoStack.push(entry)
 		while (this.undoStack.length > this.maxHistorySize) {
 			this.undoStack.shift()
 		}
-		this.notifySubscribers()
+		if (shouldNotify) {
+			this.notifySubscribers()
+		}
 	}
 
 	private resetDebounceTimer(): void {
@@ -162,7 +164,7 @@ export class UndoManager {
 
 	undo(): void {
 		this.flushPending()
-		if (this.isBlocked || this.undoStack.length === 0) return
+		if (this.blockDepth > 0 || this.undoStack.length === 0) return
 
 		const entry = this.undoStack.pop()!
 		// Capture the current state of the same cells as the inverse (redo) entry,
@@ -175,7 +177,7 @@ export class UndoManager {
 	}
 
 	redo(): void {
-		if (this.isBlocked || this.redoStack.length === 0) return
+		if (this.blockDepth > 0 || this.redoStack.length === 0) return
 
 		const entry = this.redoStack.pop()!
 		const inverse = this.journal.captureCurrent(entry.cells)
@@ -188,14 +190,21 @@ export class UndoManager {
 	// ==================== Blocking (during persist) ====================
 
 	block(): void {
-		this.flushPending()
-		this.isBlocked = true
-		this.notifySubscribers()
+		if (this.blockDepth === 0) {
+			this.blockDepth++
+			this.flushPending(false)
+			this.notifySubscribers()
+			return
+		}
+		this.blockDepth++
 	}
 
 	unblock(): void {
-		this.isBlocked = false
-		this.notifySubscribers()
+		if (this.blockDepth === 0) return
+		this.blockDepth--
+		if (this.blockDepth === 0) {
+			this.notifySubscribers()
+		}
 	}
 
 	// ==================== Persist rekey ====================
@@ -262,7 +271,7 @@ export class UndoManager {
 			this.cachedState = {
 				canUndo: this.undoStack.length > 0 || hasPending,
 				canRedo: this.redoStack.length > 0,
-				isBlocked: this.isBlocked,
+				isBlocked: this.blockDepth > 0,
 				undoCount: this.undoStack.length + (hasPending ? 1 : 0),
 				redoCount: this.redoStack.length,
 			}

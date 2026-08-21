@@ -205,6 +205,97 @@ describe('UndoManager', () => {
 
 			expect(undoManager.getState().canUndo).toBe(false)
 		})
+
+		test('should remain blocked until every overlapping block is released', () => {
+			store.setEntityData('Article', '1', { id: '1', title: 'Original' }, true)
+			dispatcher.dispatch(setField('Article', '1', ['title'], 'Before block'))
+
+			undoManager.block()
+			undoManager.block()
+			dispatcher.dispatch(setField('Article', '1', ['title'], 'During first block'))
+
+			undoManager.unblock()
+			expect(undoManager.getState().isBlocked).toBe(true)
+			dispatcher.dispatch(setField('Article', '1', ['title'], 'During second block'))
+			undoManager.undo()
+			expect(store.getEntitySnapshot<{title: string}>('Article', '1')?.data.title).toBe('During second block')
+			expect(undoManager.getState().undoCount).toBe(1)
+
+			undoManager.unblock()
+			expect(undoManager.getState().isBlocked).toBe(false)
+			dispatcher.dispatch(setField('Article', '1', ['title'], 'After block'))
+			expect(undoManager.getState().undoCount).toBe(2)
+
+			undoManager.undo()
+			expect(store.getEntitySnapshot<{title: string}>('Article', '1')?.data.title).toBe('During second block')
+		})
+
+		test('should keep an active block when history is cleared and ignore excess unblock calls', () => {
+			store.setEntityData('Article', '1', { id: '1', title: 'Original' }, true)
+			dispatcher.dispatch(setField('Article', '1', ['title'], 'Before block'))
+
+			undoManager.block()
+			undoManager.clear()
+			expect(undoManager.getState().isBlocked).toBe(true)
+
+			dispatcher.dispatch(setField('Article', '1', ['title'], 'During block'))
+			undoManager.unblock()
+			undoManager.unblock()
+			expect(undoManager.getState().isBlocked).toBe(false)
+			expect(undoManager.getState().canUndo).toBe(false)
+
+			dispatcher.dispatch(setField('Article', '1', ['title'], 'After block'))
+			expect(undoManager.getState().canUndo).toBe(true)
+		})
+
+		test('should notify subscribers only when the visible blocked state changes', () => {
+			let notifyCount = 0
+			const unsubscribe = undoManager.subscribe(() => {
+				notifyCount++
+			})
+
+			undoManager.block()
+			expect(notifyCount).toBe(1)
+			undoManager.block()
+			expect(notifyCount).toBe(1)
+			undoManager.unblock()
+			expect(notifyCount).toBe(1)
+			undoManager.unblock()
+			expect(notifyCount).toBe(2)
+			undoManager.unblock()
+			expect(notifyCount).toBe(2)
+
+			unsubscribe()
+		})
+
+		test('should enter the blocked state before flushing pending history', () => {
+			const debouncedStore = new SnapshotStore()
+			const debouncedDispatcher = new ActionDispatcher(debouncedStore)
+			const debouncedUndo = new UndoManager(debouncedStore, { debounceMs: 1000 })
+			debouncedDispatcher.addMiddleware(debouncedUndo.createMiddleware())
+			debouncedStore.setEntityData('Article', '1', { id: '1', title: 'Original' }, true)
+			debouncedDispatcher.dispatch(setField('Article', '1', ['title'], 'Pending'))
+
+			const observedBlockedStates: boolean[] = []
+			let shouldWriteReentrantly = true
+			const unsubscribe = debouncedUndo.subscribe(() => {
+				observedBlockedStates.push(debouncedUndo.getState().isBlocked)
+				if (shouldWriteReentrantly) {
+					shouldWriteReentrantly = false
+					debouncedDispatcher.dispatch(setField('Article', '1', ['title'], 'Reentrant'))
+				}
+			})
+
+			debouncedUndo.block()
+
+			expect(observedBlockedStates).toEqual([true])
+			expect(debouncedUndo.getState().undoCount).toBe(1)
+			debouncedUndo.unblock()
+			debouncedUndo.undo()
+			expect(debouncedStore.getEntitySnapshot<{title: string}>('Article', '1')?.data.title).toBe('Original')
+
+			unsubscribe()
+		})
 	})
 
 	describe('History management', () => {
