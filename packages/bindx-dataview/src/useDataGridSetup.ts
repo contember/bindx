@@ -15,7 +15,7 @@ import type {
 	SelectionValues,
 	SchemaRegistry,
 } from '@contember/bindx'
-import { createFullTextFilterHandler, SelectionScope, buildQueryFromSelection } from '@contember/bindx'
+import { createFullTextFilterHandler, SelectionScope, buildQueryFromSelection, FIELD_REF_META } from '@contember/bindx'
 import {
 	createCollectorProxy,
 	mergeSelections,
@@ -40,6 +40,13 @@ const MARKER_TYPES: ReadonlySet<React.ComponentType<any>> = new Set([
 const ELEMENT_MARKER_TYPES: ReadonlySet<React.ComponentType<any>> = new Set([
 	DataViewElement,
 ])
+
+function isEntityAccessorFor<TEntity extends object>(
+	accessor: EntityAccessor<object>,
+	entityType: string,
+): accessor is EntityAccessor<TEntity> {
+	return accessor[FIELD_REF_META].entityType === entityType
+}
 
 export interface DataGridCommonProps<TEntity extends object> {
 	children: (it: EntityAccessor<TEntity>) => ReactNode
@@ -112,6 +119,9 @@ export function useDataGridSetup<TEntity extends object>({
 		const getRuntimeColumns = (accessor: EntityAccessor<object>): readonly ColumnLeafProps[] => {
 			const cached = runtimeColumnsByAccessor.get(accessor)
 			if (cached) return cached
+			if (!isEntityAccessorFor<TEntity>(accessor, entityType)) {
+				throw new Error(`DataGrid expected a "${entityType}" row accessor, received "${accessor[FIELD_REF_META].entityType}".`)
+			}
 
 			const runtimeJsx = children(accessor)
 			const runtimeColumns = analyzeChildren(runtimeJsx, MARKER_TYPES).getAll<ColumnLeafProps>(ColumnLeaf)
