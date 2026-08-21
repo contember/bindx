@@ -379,8 +379,8 @@ export class MutationCollector implements MutationDataCollector {
 						return { connect: { id: currentId } }
 					}
 				} else if (currentId && serverId && currentId === serverId) {
-					// Skip if entity has its own top-level mutation
-					if (this.excludedEntityIds.has(currentId)) {
+					// Skip if entity has its own top-level mutation or was vetoed
+					if (this.excludedEntityIds.has(currentId) || this.vetoedEntityIds.has(currentId)) {
 						return null
 					}
 					// Same entity - check if we need to update it
@@ -505,7 +505,7 @@ export class MutationCollector implements MutationDataCollector {
 		if (targetType) {
 			for (const itemId of hasManyState.serverIds) {
 				if (hasManyState.plannedRemovals.has(itemId)) continue
-				if (this.excludedEntityIds.has(itemId)) continue
+				if (this.excludedEntityIds.has(itemId) || this.vetoedEntityIds.has(itemId)) continue
 
 				const itemSnapshot = this.store.getEntitySnapshot(targetType, itemId)
 				if (!itemSnapshot) continue
