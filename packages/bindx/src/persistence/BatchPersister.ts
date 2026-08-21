@@ -279,7 +279,17 @@ export class BatchPersister {
 			// mutated to the server view — pessimistic mode presents the server
 			// baseline via getPresentationSnapshot instead — so there is nothing to
 			// capture or restore.
-			const mutations = this.buildMutations(sortedEntities, vetoedEntityIds, scope)
+			let mutations = this.buildMutations(sortedEntities, vetoedEntityIds, scope)
+
+			// Entities that only came into being during collection (placeholder relations
+			// materialized by the collector) were not dirty when the hook phase ran, yet
+			// they do get `entity:persisted` — offer them to the interceptors too. Awaited
+			// only when one is registered, so a plain persist still reaches the adapter
+			// synchronously.
+			const lateEntities = this.collectLateNestedEntities(sortedEntities, vetoedEntityIds)
+			if (lateEntities.length > 0 && this.hasPersistingInterceptors(lateEntities)) {
+				mutations = await this.rebuildAfterLateVetoes(sortedEntities, vetoedEntityIds, scope, lateEntities, mutations)
+			}
 
 			if (mutations.length === 0) {
 				// Nothing to persist
@@ -320,6 +330,44 @@ export class BatchPersister {
 				this.store.sweepUnreachableCreated()
 			}
 		}
+	}
+
+	/**
+	 * Runs the `entity:persisting` interceptors for late nested entities. A veto drops
+	 * them and rebuilds the mutations once; materialization is idempotent, so the
+	 * second pass sees the same store.
+	 */
+	private async rebuildAfterLateVetoes(
+		sortedEntities: DirtyEntity[],
+		vetoedEntityIds: ReadonlySet<string>,
+		scope: PersistScope,
+		lateEntities: readonly DirtyEntity[],
+		mutations: TransactionMutation[],
+	): Promise<TransactionMutation[]> {
+		const { cancelled } = await this.runPersistingInterceptors(lateEntities)
+		if (cancelled.length === 0) return mutations
+
+		const vetoed = new Set(vetoedEntityIds)
+		for (const entity of cancelled) vetoed.add(entity.entityId)
+		return this.buildMutations(sortedEntities, vetoed, scope)
+	}
+
+	/**
+	 * Nested entities the collector registered that were not part of the hook phase.
+	 */
+	private collectLateNestedEntities(
+		sortedEntities: readonly DirtyEntity[],
+		vetoedEntityIds: ReadonlySet<string>,
+	): DirtyEntity[] {
+		if (!(this.mutationCollector instanceof MutationCollector)) return []
+
+		const known = new Set(sortedEntities.map(entity => entity.entityId))
+		const late: DirtyEntity[] = []
+		for (const [entityId, entityType] of this.mutationCollector.getNestedEntityTypes()) {
+			if (known.has(entityId) || vetoedEntityIds.has(entityId)) continue
+			late.push({ entityType, entityId, changeType: 'create', dirtyFields: [], dirtyRelations: [] })
+		}
+		return late
 	}
 
 	/**
