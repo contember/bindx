@@ -110,7 +110,24 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	}
 
 	static wrapProxy<T extends object, TSelected>(handle: EntityHandle<T, TSelected>): EntityAccessor<T, TSelected> {
-		return createHandleProxy<EntityHandle<T, TSelected>, EntityAccessor<T, TSelected>>(handle, (target) => target.fields)
+		return createHandleProxy<EntityHandle<T, TSelected>, EntityAccessor<T, TSelected>>(
+			handle,
+			(target) => target.fields,
+			(target) => target.selectedFieldNames,
+		)
+	}
+
+	/**
+	 * Field names the handle's selection exposes, for enumeration. Without a selection
+	 * nothing is validated and nothing is listed.
+	 */
+	get selectedFieldNames(): readonly string[] {
+		if (!this.selection) return []
+		const names = new Set<string>()
+		for (const meta of this.selection.fields.values()) {
+			names.add(meta.fieldName)
+		}
+		return [...names]
 	}
 
 	get [FIELD_REF_META](): FieldRefMeta {

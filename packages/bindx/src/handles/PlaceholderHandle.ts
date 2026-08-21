@@ -89,6 +89,11 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 		return createHandleProxy<PlaceholderHandle<TEntity, TSelected>, EntityAccessor<TEntity, TSelected>>(handle, (target) => target.fields)
 	}
 
+	/** A placeholder carries no selection, so enumeration lists nothing beyond `id`. */
+	get selectedFieldNames(): readonly string[] {
+		return []
+	}
+
 	/**
 	 * Gets the placeholder ID.
 	 */

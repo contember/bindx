@@ -24,6 +24,8 @@ const HANDLE_PASSTHROUGH_PROPERTIES = new Set<string | symbol>([
 	FIELD_REF_META,
 ])
 
+const NO_FIELD_NAMES = (): readonly string[] => []
+
 /**
  * Creates a proxy around a handle that supports direct field access.
  *
@@ -33,14 +35,23 @@ const HANDLE_PASSTHROUGH_PROPERTIES = new Set<string | symbol>([
  * 3. `$xxx` → strip `$`, access handle property
  * 4. Everything else → field access (returns FieldHandle/HasOneHandle/HasManyListHandle)
  *
+ * Enumeration (`for…in`, `Object.keys`) sees `id` plus the selected field names, never
+ * the handle's own instance fields: a generic walker (React's dev prop-diff logger,
+ * a debugger) reading those through the `get` trap would hit field access and throw
+ * `UnfetchedFieldError` for `store`, `dispatcher`, ...
+ *
  * @param handle - The handle instance to wrap
  * @param getFields - Function to get the fields object from the handle
+ * @param getFieldNames - Function to list the selected field names (enumeration only)
  * @returns Proxied handle with direct field access support
  */
 export function createHandleProxy<T extends object, TResult = T>(
 	handle: T,
 	getFields: (target: T) => object,
+	getFieldNames: (target: T) => readonly string[] = NO_FIELD_NAMES,
 ): TResult {
+	const ownKeys = (target: T): string[] => ['id', ...getFieldNames(target).filter(name => name !== 'id')]
+
 	// The proxy adds $ alias support and field access, making the handle satisfy the public type TResult at runtime
 	return new Proxy(handle, {
 		get(target, prop, _receiver) {
@@ -75,6 +86,22 @@ export function createHandleProxy<T extends object, TResult = T>(
 				return prop in fields
 			}
 			return Reflect.has(target, prop)
+		},
+
+		ownKeys(target) {
+			return ownKeys(target)
+		},
+
+		getOwnPropertyDescriptor(target, prop) {
+			if (typeof prop !== 'string' || !ownKeys(target).includes(prop)) {
+				return undefined
+			}
+			const value = prop === 'id'
+				? Reflect.get(target, prop, target)
+				: (getFields(target) as Record<string, unknown>)[prop]
+			// Configurable: the target's own properties are configurable too, so the
+			// proxy invariants allow a descriptor that differs from the target's.
+			return { value, enumerable: true, configurable: true, writable: false }
 		},
 	}) as unknown as TResult
 }

@@ -81,7 +81,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
 	): HasOneAccessor<TEntity, TSelected> {
-		return createHandleProxy<HasOneHandle<TEntity, TSelected>, HasOneAccessor<TEntity, TSelected>>(new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection), (target) => target.entityRaw.fields)
+		return HasOneHandle.wrapProxy(new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection))
 	}
 
 	static createRaw<TEntity extends object = object, TSelected = TEntity>(
@@ -99,7 +99,11 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	}
 
 	static wrapProxy<TEntity extends object, TSelected>(handle: HasOneHandle<TEntity, TSelected>): HasOneAccessor<TEntity, TSelected> {
-		return createHandleProxy<HasOneHandle<TEntity, TSelected>, HasOneAccessor<TEntity, TSelected>>(handle, (target) => target.entityRaw.fields)
+		return createHandleProxy<HasOneHandle<TEntity, TSelected>, HasOneAccessor<TEntity, TSelected>>(
+			handle,
+			(target) => target.entityRaw.fields,
+			(target) => target.entityRaw.selectedFieldNames,
+		)
 	}
 
 	/**
