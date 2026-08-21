@@ -44,10 +44,12 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	 * (the first time a child is added to one of its has-many relations). Lazily minted.
 	 */
 	private materializedId: string | null = null
+	private readonly pendingEventSubscriptions = new Set<(entityId: string) => void>()
+	private pendingRelationUnsubscribe: Unsubscribe | null = null
 
 	private constructor(
 		private readonly parentEntityType: string,
-		private readonly parentEntityId: string,
+		private readonly sourceParentEntityId: string,
 		private readonly fieldName: string,
 		private readonly targetType: string,
 		private readonly store: SnapshotStore,
@@ -57,6 +59,56 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	) {
 		this.__brands = brands
 		this.placeholderId = generatePlaceholderId()
+	}
+
+	private get parentEntityId(): string {
+		return this.store.resolveEntityId(this.parentEntityType, this.sourceParentEntityId)
+	}
+
+	private get currentEntityId(): string | null {
+		const id = this.findCurrentEntityId()
+		if (id) this.activatePendingEventSubscriptions(id)
+		return id
+	}
+
+	private findCurrentEntityId(): string | null {
+		const relationId = this.store.getRelation(
+			this.parentEntityType,
+			this.parentEntityId,
+			this.fieldName,
+		)?.currentId
+		const sourceId = relationId ?? this.materializedId
+		if (!sourceId) return null
+		const id = this.store.resolveEntityId(this.targetType, sourceId)
+		return this.store.getEntitySnapshot(this.targetType, id) ? id : null
+	}
+
+	private watchPendingMaterialization(): void {
+		if (this.pendingRelationUnsubscribe) return
+		this.pendingRelationUnsubscribe = this.store.subscribeToRelation(
+			this.parentEntityType,
+			this.parentEntityId,
+			this.fieldName,
+			() => {
+				const id = this.findCurrentEntityId()
+				if (id) this.activatePendingEventSubscriptions(id)
+			},
+		)
+	}
+
+	private activatePendingEventSubscriptions(entityId: string): void {
+		if (this.pendingEventSubscriptions.size === 0) return
+		const subscriptions = [...this.pendingEventSubscriptions]
+		this.pendingEventSubscriptions.clear()
+		this.pendingRelationUnsubscribe?.()
+		this.pendingRelationUnsubscribe = null
+		for (const subscribe of subscriptions) subscribe(entityId)
+	}
+
+	private stopWatchingMaterializationWhenIdle(): void {
+		if (this.pendingEventSubscriptions.size > 0) return
+		this.pendingRelationUnsubscribe?.()
+		this.pendingRelationUnsubscribe = null
 	}
 
 	static create<TEntity extends object = object, TSelected = TEntity>(
@@ -94,32 +146,49 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 		return []
 	}
 
+	get [FIELD_REF_META](): FieldRefMeta {
+		return {
+			entityType: this.targetType,
+			entityId: this.id,
+			path: [],
+			fieldName: '',
+			isArray: false,
+			isRelation: false,
+		}
+	}
+
 	/**
 	 * Gets the placeholder ID.
 	 */
 	get id(): string {
-		return this.placeholderId
+		return this.currentEntityId ?? this.placeholderId
 	}
 
 	/**
 	 * Gets placeholder data from the relation state.
 	 */
 	get data(): TSelected | null {
-		const relation = this.store.getRelation(
-			this.parentEntityType,
-			this.parentEntityId,
-			this.fieldName,
-		)
-		if (!relation || Object.keys(relation.placeholderData).length === 0) {
-			return null
-		}
-		return relation.placeholderData as TSelected
+		const entityId = this.currentEntityId
+		const data = entityId
+			? this.store.getPresentationSnapshot<TEntity>(this.targetType, entityId)?.data ?? null
+			: this.store.getRelation(
+				this.parentEntityType,
+				this.parentEntityId,
+				this.fieldName,
+			)?.placeholderData ?? null
+		if (data && Object.keys(data).length === 0) return null
+		return data as TSelected | null
 	}
 
 	/**
 	 * Placeholder is dirty if it has any data.
 	 */
 	get isDirty(): boolean {
+		const entityId = this.currentEntityId
+		if (entityId) {
+			return this.store.getDirtyFields(this.targetType, entityId).length > 0 ||
+				this.store.getDirtyRelations(this.targetType, entityId).length > 0
+		}
 		const relation = this.store.getRelation(
 			this.parentEntityType,
 			this.parentEntityId,
@@ -132,21 +201,24 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	 * Placeholder entities are never being persisted.
 	 */
 	get isPersisting(): boolean {
-		return false
+		const entityId = this.currentEntityId
+		return entityId ? this.store.isPersisting(this.targetType, entityId) : false
 	}
 
 	/**
 	 * Placeholder entities are always new (not yet persisted).
 	 */
-	get persistedId(): null {
-		return null
+	get persistedId(): string | null {
+		const entityId = this.currentEntityId
+		return entityId ? this.store.getPersistedId(this.targetType, entityId) : null
 	}
 
 	/**
 	 * Placeholder entities are always new.
 	 */
 	get isNew(): boolean {
-		return true
+		const entityId = this.currentEntityId
+		return entityId ? this.store.isNewEntity(this.targetType, entityId) : true
 	}
 
 	/**
@@ -165,7 +237,7 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	 */
 	private getMaterializedId(): string {
 		if (!this.materializedId) this.materializedId = generateTempId()
-		return this.materializedId
+		return this.store.resolveEntityId(this.targetType, this.materializedId)
 	}
 
 	/**
@@ -249,7 +321,7 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 			get [FIELD_REF_META](): FieldRefMeta {
 				return {
 					entityType: self.targetType,
-					entityId: self.placeholderId,
+					entityId: self.id,
 					path: [fieldName],
 					fieldName,
 					isArray: false,
@@ -257,6 +329,10 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 				}
 			},
 			get value(): unknown {
+				const entityId = self.currentEntityId
+				if (entityId) {
+					return self.store.getPresentationSnapshot<Record<string, unknown>>(self.targetType, entityId)?.data[fieldName] ?? null
+				}
 				const relation = self.store.getRelation(
 					self.parentEntityType,
 					self.parentEntityId,
@@ -268,6 +344,10 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 				return null
 			},
 			get isDirty(): boolean {
+				const entityId = self.currentEntityId
+				if (entityId) {
+					return self.store.getDirtyFields(self.targetType, entityId).includes(fieldName)
+				}
 				const relation = self.store.getRelation(
 					self.parentEntityType,
 					self.parentEntityId,
@@ -276,6 +356,16 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 				return fieldName in (relation?.placeholderData ?? {})
 			},
 			setValue: (value: unknown): void => {
+				if (self.currentEntityId) {
+					self.dispatcher.dispatch({
+						type: 'SET_FIELD',
+						entityType: self.targetType,
+						entityId: self.id,
+						fieldPath: [fieldName],
+						value,
+					})
+					return
+				}
 				self.dispatcher.dispatch({
 					type: 'SET_PLACEHOLDER_DATA',
 					entityType: self.parentEntityType,
@@ -287,6 +377,10 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 			},
 			get inputProps() {
 				const getValue = () => {
+					const entityId = self.currentEntityId
+					if (entityId) {
+						return self.store.getPresentationSnapshot<Record<string, unknown>>(self.targetType, entityId)?.data[fieldName] ?? null
+					}
 					const relation = self.store.getRelation(
 						self.parentEntityType,
 						self.parentEntityId,
@@ -295,6 +389,16 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 					return relation?.placeholderData[fieldName] ?? null
 				}
 				const setValue = (value: unknown) => {
+					if (self.currentEntityId) {
+						self.dispatcher.dispatch({
+							type: 'SET_FIELD',
+							entityType: self.targetType,
+							entityId: self.id,
+							fieldPath: [fieldName],
+							value,
+						})
+						return
+					}
 					self.dispatcher.dispatch({
 						type: 'SET_PLACEHOLDER_DATA',
 						entityType: self.parentEntityType,
@@ -354,7 +458,7 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 		const self = this
 		const nestedPlaceholderRaw = PlaceholderHandle.createRaw(
 			this.targetType,
-			this.placeholderId,
+			this.id,
 			fieldName,
 			innerTargetType,
 			this.store,
@@ -365,7 +469,7 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 		const nestedPlaceholderProxy = PlaceholderHandle.wrapProxy(nestedPlaceholderRaw)
 		const fieldRefMeta: FieldRefMeta = {
 			entityType: self.targetType,
-			entityId: self.placeholderId,
+			entityId: self.id,
 			path: [fieldName],
 			fieldName,
 			isArray: false,
@@ -469,40 +573,67 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	}
 
 	// ==================== Event Subscriptions ====================
-	// Placeholder entities don't fire events - these are no-ops that return dummy unsubscribe functions
 
 	/**
-	 * No-op for placeholder entities.
+	 * Activates the subscription when the placeholder materializes.
 	 */
 	on<E extends AfterEventTypes>(
-		_eventType: E,
-		_listener: EventListener<EventTypeMap[E]>,
+		eventType: E,
+		listener: EventListener<EventTypeMap[E]>,
 	): Unsubscribe {
-		return () => {}
+		const emitter = this.dispatcher.getEventEmitter()
+		if (this.currentEntityId) {
+			return emitter.onEntity(eventType, this.targetType, this.id, listener)
+		}
+		let unsubscribe: Unsubscribe | null = null
+		const subscribe = (entityId: string): void => {
+			unsubscribe = emitter.onEntity(eventType, this.targetType, entityId, listener)
+		}
+		this.pendingEventSubscriptions.add(subscribe)
+		this.watchPendingMaterialization()
+		return () => {
+			this.pendingEventSubscriptions.delete(subscribe)
+			this.stopWatchingMaterializationWhenIdle()
+			unsubscribe?.()
+		}
 	}
 
 	/**
-	 * No-op for placeholder entities.
+	 * Activates the interceptor when the placeholder materializes.
 	 */
 	intercept<E extends BeforeEventTypes>(
-		_eventType: E,
-		_interceptor: Interceptor<EventTypeMap[E]>,
+		eventType: E,
+		interceptor: Interceptor<EventTypeMap[E]>,
 	): Unsubscribe {
-		return () => {}
+		const emitter = this.dispatcher.getEventEmitter()
+		if (this.currentEntityId) {
+			return emitter.interceptEntity(eventType, this.targetType, this.id, interceptor)
+		}
+		let unsubscribe: Unsubscribe | null = null
+		const subscribe = (entityId: string): void => {
+			unsubscribe = emitter.interceptEntity(eventType, this.targetType, entityId, interceptor)
+		}
+		this.pendingEventSubscriptions.add(subscribe)
+		this.watchPendingMaterialization()
+		return () => {
+			this.pendingEventSubscriptions.delete(subscribe)
+			this.stopWatchingMaterializationWhenIdle()
+			unsubscribe?.()
+		}
 	}
 
 	/**
-	 * No-op for placeholder entities.
+	 * Subscribes to persistence after materialization.
 	 */
-	onPersisted(_listener: EventListener<EntityPersistedEvent>): Unsubscribe {
-		return () => {}
+	onPersisted(listener: EventListener<EntityPersistedEvent>): Unsubscribe {
+		return this.on('entity:persisted', listener)
 	}
 
 	/**
-	 * No-op for placeholder entities.
+	 * Intercepts persistence after materialization.
 	 */
-	interceptPersisting(_interceptor: Interceptor<EntityPersistingEvent>): Unsubscribe {
-		return () => {}
+	interceptPersisting(interceptor: Interceptor<EntityPersistingEvent>): Unsubscribe {
+		return this.intercept('entity:persisting', interceptor)
 	}
 
 }

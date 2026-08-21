@@ -20,7 +20,7 @@ import { EntitySnapshotStore } from './EntitySnapshotStore.js'
 import { RootRegistry } from './RootRegistry.js'
 import { ReachabilityAnalyzer } from './ReachabilityAnalyzer.js'
 import { RekeyOrchestrator } from './RekeyOrchestrator.js'
-import type { RekeyContext } from './RekeyOrchestrator.js'
+import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
 import type {
 	UndoJournal,
 	JournalTarget,
@@ -183,15 +183,20 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	}
 
 	private getRelationKey(parentType: string, parentId: string, fieldName: string): string {
-		const resolvedParentId = this.resolveId(parentType, parentId)
+		const resolvedParentId = this.resolveEntityId(parentType, parentId)
 		return `${parentType}:${resolvedParentId}:${fieldName}`
 	}
 
 	/**
 	 * Resolves an ID to its persisted ID if it has been rekeyed.
 	 */
-	private resolveId(entityType: string, id: string): string {
+	resolveEntityId(entityType: string, id: string): string {
 		return this.rekeyOrchestrator.resolveId(entityType, id)
+	}
+
+	/** Attaches identity-keyed state to the store's single rekey fan-out. */
+	attachRekeyParticipant(participant: Rekeyable): void {
+		this.rekeyOrchestrator.registerParticipant(participant)
 	}
 
 	// ==================== SnapshotVersionBumper ====================
@@ -237,7 +242,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	 * Removes all propagation tracking entries for a given parent entity.
 	 */
 	clearPropagatedDataForEntity(parentType: string, parentId: string): void {
-		const prefix = `${parentType}:${this.resolveId(parentType, parentId)}:`
+		const prefix = `${parentType}:${this.resolveEntityId(parentType, parentId)}:`
 		for (const key of this.lastPropagatedData.keys()) {
 			if (key.startsWith(prefix)) {
 				this.lastPropagatedData.delete(key)
@@ -281,7 +286,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		// initial write of a freshly created entity, which captures an absent pre-image).
 		if (!isServerData) this.journal?.recordEntity(key)
 		// The caller may still hold a rekeyed temp id; the snapshot must carry the live one.
-		const newSnapshot = this.entitySnapshots.setData(key, this.resolveId(entityType, id), entityType, data, isServerData)
+		const newSnapshot = this.entitySnapshots.setData(key, this.resolveEntityId(entityType, id), entityType, data, isServerData)
 
 		if (isServerData) {
 			this.meta.setExistsOnServer(key, true)
@@ -305,7 +310,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		skipNotify: boolean = false,
 	): EntitySnapshot<T> {
 		const key = this.getEntityKey(entityType, id)
-		const newSnapshot = this.entitySnapshots.refreshServerData(key, this.resolveId(entityType, id), entityType, data)
+		const newSnapshot = this.entitySnapshots.refreshServerData(key, this.resolveEntityId(entityType, id), entityType, data)
 		this.meta.setExistsOnServer(key, true)
 		if (!skipNotify) {
 			this.notifyEntitySubscribers(key)

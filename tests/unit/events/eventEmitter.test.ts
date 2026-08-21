@@ -431,4 +431,73 @@ describe('EventEmitter', () => {
 			expect(listener).toHaveBeenCalledTimes(1)
 		})
 	})
+
+	describe('Scoped subscription rekey', () => {
+		const context = {
+			oldKey: 'Article:__temp_1',
+			newKey: 'Article:a-1',
+			oldKeyPrefix: 'Article:__temp_1:',
+			newKeyPrefix: 'Article:a-1:',
+			oldId: '__temp_1',
+			newId: 'a-1',
+		}
+
+		test('migrates merged listeners once and preserves field/entity/global order', () => {
+			const order: string[] = []
+			const shared = (): void => { order.push('shared') }
+			emitter.onField('field:changed', 'Article', '__temp_1', 'title', () => order.push('field'))
+			emitter.onEntity('field:changed', 'Article', '__temp_1', shared)
+			emitter.onEntity('field:changed', 'Article', 'a-1', shared)
+			emitter.onEntity('field:changed', 'Article', 'a-1', () => order.push('entity'))
+			emitter.on('field:changed', () => order.push('global'))
+
+			emitter.rekey(context)
+			emitter.emit(createFieldChangedEvent({ entityId: 'a-1' }))
+
+			expect(order).toEqual(['field', 'shared', 'entity', 'global'])
+		})
+
+		test('accepts old and new event scopes after rekey', () => {
+			const listener = mock(() => {})
+			emitter.onEntity('field:changed', 'Article', '__temp_1', listener)
+			emitter.rekey(context)
+
+			emitter.emit(createFieldChangedEvent({ entityId: '__temp_1' }))
+			emitter.emit(createFieldChangedEvent({ entityId: 'a-1' }))
+
+			expect(listener).toHaveBeenCalledTimes(2)
+		})
+
+		test('pre-rekey unsubscribe removes the migrated callback after a merge', () => {
+			const listener = mock(() => {})
+			const unsubscribe = emitter.onEntity('field:changed', 'Article', '__temp_1', listener)
+			emitter.onEntity('field:changed', 'Article', 'a-1', () => {})
+			emitter.rekey(context)
+
+			unsubscribe()
+			emitter.emit(createFieldChangedEvent({ entityId: 'a-1' }))
+
+			expect(listener).not.toHaveBeenCalled()
+		})
+
+		test('migrates interceptors with order and old/new hasInterceptors lookup', () => {
+			const order: string[] = []
+			emitter.interceptField('field:changing', 'Article', '__temp_1', 'title', () => {
+				order.push('field')
+			})
+			emitter.interceptEntity('field:changing', 'Article', '__temp_1', () => {
+				order.push('entity')
+			})
+			emitter.intercept('field:changing', () => {
+				order.push('global')
+			})
+
+			emitter.rekey(context)
+			expect(emitter.hasInterceptors('field:changing', 'Article', '__temp_1')).toBe(true)
+			expect(emitter.hasInterceptors('field:changing', 'Article', 'a-1')).toBe(true)
+			emitter.runInterceptorsSync(createFieldChangingEvent({ entityId: 'a-1' }))
+
+			expect(order).toEqual(['field', 'entity', 'global'])
+		})
+	})
 })

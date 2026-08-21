@@ -24,7 +24,6 @@ import type {
 	HasManyDisconnectingEvent,
 } from '../events/types.js'
 import { createAliasProxy } from './proxyFactory.js'
-import { isPersistedId } from '../store/entityId.js'
 
 /**
  * HasManyListHandle provides access to a has-many relation (list of entities).
@@ -165,8 +164,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * duplicate for the same entity.
 	 */
 	private resolveItemKey(itemId: string): string {
-		if (isPersistedId(itemId)) return itemId
-		return this.store.getPersistedId(this.itemType, itemId) ?? itemId
+		return this.store.resolveEntityId(this.itemType, itemId)
 	}
 
 	/**
@@ -179,17 +177,26 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 */
 	private syncItemHandleCache(liveIds: readonly string[]): void {
 		if (this.itemHandleCacheProxy.size === 0) return
+		this.canonicalizeItemHandleCache()
 
 		// While the parent persists, the presented list hides planned additions — pruning
 		// against it would drop handles that reappear as soon as the persist settles.
 		if (this.store.isPersisting(this.entityType, this.entityId)) return
 
-		const liveKeys = new Set(liveIds)
+		const liveKeys = new Set(liveIds.map(id => this.resolveItemKey(id)))
 		for (const key of this.itemHandleCacheProxy.keys()) {
 			if (liveKeys.has(key)) continue
-			// A key with no live id is dead — including the temp key of a rekeyed item, whose
-			// handle must be rebuilt under the persisted id (a carried-over handle would keep
-			// reporting the temp id as its `id`).
+			this.itemHandleCacheProxy.delete(key)
+		}
+	}
+
+	private canonicalizeItemHandleCache(): void {
+		for (const [key, proxy] of [...this.itemHandleCacheProxy]) {
+			const canonicalKey = this.resolveItemKey(key)
+			if (canonicalKey === key) continue
+			if (!this.itemHandleCacheProxy.has(canonicalKey)) {
+				this.itemHandleCacheProxy.set(canonicalKey, proxy)
+			}
 			this.itemHandleCacheProxy.delete(key)
 		}
 	}
@@ -352,6 +359,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Returns selection-aware EntityAccessor that supports direct field access.
 	 */
 	getItemHandle(itemId: string): EntityAccessor<TEntity, TSelected> {
+		this.canonicalizeItemHandleCache()
 		const key = this.resolveItemKey(itemId)
 		let proxy = this.itemHandleCacheProxy.get(key)
 

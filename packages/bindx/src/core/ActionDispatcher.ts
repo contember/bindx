@@ -27,6 +27,7 @@ export class ActionDispatcher {
 		eventEmitter?: EventEmitter,
 	) {
 		this.eventEmitter = eventEmitter ?? new EventEmitter()
+		this.store.attachRekeyParticipant(this.eventEmitter)
 	}
 
 	/**

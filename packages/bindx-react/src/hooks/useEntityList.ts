@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react'
 import type { EntityDef, EntityAccessor, SelectionInput, SelectionMeta, FieldError, SchemaRegistry, CommonEntity, EntityForRoles, RoleNames } from '@contember/bindx'
-import { EntityHandle, isTempId, isPersistedId, resolveSelectionMeta, buildQueryFromSelection, refreshServerData, createLoadError } from '@contember/bindx'
+import { EntityHandle, isTempId, resolveSelectionMeta, buildQueryFromSelection, refreshServerData, createLoadError } from '@contember/bindx'
 import { useBindxContext, useSchemaRegistry } from './BackendAdapterContext.js'
 import { useStoreSubscription } from './useStoreSubscription.js'
 import { ItemAccessorCache } from './ItemAccessorCache.js'
@@ -242,7 +242,7 @@ export function useEntityList(
 	// Canonical id of a list item: a temp id follows its temp→persisted rekey. The list
 	// state keeps the id it was given, so every id comparison goes through this.
 	const resolveItemId = useCallback(
-		(id: string): string => (isPersistedId(id) ? id : store.getPersistedId(entityType, id) ?? id),
+		(id: string): string => store.resolveEntityId(entityType, id),
 		[store, entityType],
 	)
 
@@ -364,6 +364,10 @@ export function useEntityList(
 		} else if (state.status === 'error') {
 			result = createErrorListResult(state.error!)
 		} else {
+			state.items = state.items.map(item => {
+				const id = resolveItemId(item.id)
+				return id === item.id ? item : { id, data: item.data }
+			})
 			// The array itself is deliberately NOT identity-stable: consumers that only re-render
 			// through a parent (the DataGrid render chain) rely on a fresh array per store bump.
 			// Per-item accessor identity is the stable part — see ItemAccessorCache.
@@ -394,7 +398,7 @@ export function useEntityList(
 		}
 
 		return result
-	}, [store, itemAccessorCache, addItem, removeItem, moveItem])
+	}, [store, itemAccessorCache, addItem, removeItem, moveItem, resolveItemId])
 
 	const isEqual = useCallback(
 		(a: UseEntityListResult<any>, b: UseEntityListResult<any>): boolean => {

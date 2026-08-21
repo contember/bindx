@@ -65,6 +65,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		private readonly schema: SchemaRegistry,
 		brands?: Set<symbol>,
 		private readonly selection?: SelectionMeta,
+		private readonly dataFieldName: string = fieldName,
 	) {
 		super(parentEntityType, parentEntityId, store, dispatcher)
 		this.__brands = brands
@@ -80,8 +81,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		schema: SchemaRegistry,
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
+		dataFieldName?: string,
 	): HasOneAccessor<TEntity, TSelected> {
-		return HasOneHandle.wrapProxy(new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection))
+		return HasOneHandle.wrapProxy(new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection, dataFieldName))
 	}
 
 	static createRaw<TEntity extends object = object, TSelected = TEntity>(
@@ -94,8 +96,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		schema: SchemaRegistry,
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
+		dataFieldName?: string,
 	): HasOneHandle<TEntity, TSelected> {
-		return new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection)
+		return new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection, dataFieldName)
 	}
 
 	static wrapProxy<TEntity extends object, TSelected>(handle: HasOneHandle<TEntity, TSelected>): HasOneAccessor<TEntity, TSelected> {
@@ -240,7 +243,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		if (embeddedReference.kind === 'connected' && existing.serverId === embeddedReference.id && existing.serverState === 'connected') {
 			return
 		}
-		if (!this.store.hasEmbeddedDataChanged(this.entityType, this.entityId, this.fieldName, embeddedData)) {
+		if (!this.store.hasEmbeddedDataChanged(this.entityType, this.entityId, this.dataFieldName, embeddedData)) {
 			return
 		}
 
@@ -272,12 +275,12 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 
 	/** Reads the embedded related object from the parent's canonical current data. */
 	private readEmbeddedRelatedData(): unknown {
-		return this.getEntityData()?.[this.fieldName]
+		return this.getEntityData()?.[this.dataFieldName]
 	}
 
 	/** Extracts the related id from the parent's embedded server data, or null. */
 	private readServerRelatedId(): string | null {
-		return extractRelatedId(this.getServerData()?.[this.fieldName])
+		return extractRelatedId(this.getServerData()?.[this.dataFieldName])
 	}
 
 	/**
@@ -385,7 +388,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			return
 		}
 
-		const embeddedData = (parentSnapshot.data as Record<string, unknown>)[this.fieldName]
+		const embeddedData = (parentSnapshot.data as Record<string, unknown>)[this.dataFieldName]
 		if (!embeddedData || typeof embeddedData !== 'object') {
 			return
 		}
@@ -403,7 +406,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		// A new reference means the parent was re-fetched from the server.
 		// Same reference means the embedded data is stale and must not overwrite
 		// child state that may have been updated by a local commit.
-		if (!this.store.hasEmbeddedDataChanged(this.entityType, this.entityId, this.fieldName, embeddedData)) {
+		if (!this.store.hasEmbeddedDataChanged(this.entityType, this.entityId, this.dataFieldName, embeddedData)) {
 			return
 		}
 
@@ -412,7 +415,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		// (e.g. polling). A new reference with identical values means no actual change.
 		const existing = this.store.getEntitySnapshot(this.targetType, id)
 		if (existing?.serverData && embeddedDataMatchesSnapshot(embeddedData as Record<string, unknown>, existing.serverData as Record<string, unknown>)) {
-			this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, this.fieldName, embeddedData)
+			this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, this.dataFieldName, embeddedData)
 			return
 		}
 
@@ -427,7 +430,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			embeddedData as Record<string, unknown>,
 			true, // skipNotify - called during render, data already exists embedded in parent
 		)
-		this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, this.fieldName, embeddedData)
+		this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, this.dataFieldName, embeddedData)
 	}
 
 	/**

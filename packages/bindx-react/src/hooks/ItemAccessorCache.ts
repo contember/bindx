@@ -34,6 +34,7 @@ export class ItemAccessorCache {
 	build(items: ReadonlyArray<{ id: string }>): Array<EntityAccessor<object>> {
 		const accessors: Array<EntityAccessor<object>> = []
 		const liveIds = new Set<string>()
+		this.canonicalizeEntries()
 
 		for (const item of items) {
 			const id = this.resolveId(item.id)
@@ -48,6 +49,15 @@ export class ItemAccessorCache {
 		}
 
 		return accessors
+	}
+
+	private canonicalizeEntries(): void {
+		for (const [id, accessor] of [...this.entries]) {
+			const canonicalId = this.resolveId(id)
+			if (canonicalId === id) continue
+			if (!this.entries.has(canonicalId)) this.entries.set(canonicalId, accessor)
+			this.entries.delete(id)
+		}
 	}
 
 	private resolve(id: string): EntityAccessor<object> {

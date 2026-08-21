@@ -207,6 +207,7 @@ describe('HasManyListHandle item handle cache', () => {
 			const tempId = handle.add({ name: 'Fresh' })
 			expect(itemIds(handle)).toEqual(['t-1', tempId])
 			expect(handle.itemHandleCacheSize).toBe(2)
+			const draftAccessor = handle.getById(tempId)
 
 			store.mapTempIdToPersistedId('Tag', tempId, 't-9')
 			const after = handle.items
@@ -216,8 +217,25 @@ describe('HasManyListHandle item handle cache', () => {
 			expect(handle.itemHandleCacheSize).toBe(2)
 			// A lookup by the dead temp id resolves to the persisted item's handle.
 			expect(handle.getById(tempId)).toBe(at(after, 1))
+			expect(at(after, 1)).toBe(draftAccessor)
 			expect(handle.itemHandleCacheSize).toBe(2)
 			expect(at(after, 1)[FIELD_REF_META].entityId).toBe('t-9')
+		})
+
+		test('an existing persisted-key accessor wins a cache collision', () => {
+			loadTags([{ id: 't-1', name: 'One' }])
+			const handle = createListHandle()
+			expect(handle.items.length).toBe(1)
+			const tempId = handle.add({ name: 'Fresh' })
+			const tempAccessor = handle.getById(tempId)
+			const persistedAccessor = handle.getById('t-9')
+
+			store.mapTempIdToPersistedId('Tag', tempId, 't-9')
+
+			expect(handle.getById(tempId)).toBe(persistedAccessor)
+			expect(handle.getById('t-9')).toBe(persistedAccessor)
+			expect(handle.getById('t-9')).not.toBe(tempAccessor)
+			expect(handle.itemHandleCacheSize).toBe(2)
 		})
 
 		test('a never-persisted temp item keeps its accessor', () => {

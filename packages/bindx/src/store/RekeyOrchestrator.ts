@@ -42,12 +42,23 @@ export interface Rekeyable {
 export class RekeyOrchestrator {
 	/** "entityType:tempId" → persistedId. The single identity-redirect map. */
 	private readonly tempToPersisted = new Map<string, string>()
+	private readonly participants: Rekeyable[] = []
+	private readonly participantSet = new Set<Rekeyable>()
 
 	/**
 	 * @param participants the sub-stores to migrate, in the exact order
 	 *   {@link rekey} must visit them (the order is load-bearing — see rekey()).
 	 */
-	constructor(private readonly participants: readonly Rekeyable[]) {}
+	constructor(participants: readonly Rekeyable[]) {
+		for (const participant of participants) this.registerParticipant(participant)
+	}
+
+	/** Adds a participant once, preserving registration order. */
+	registerParticipant(participant: Rekeyable): void {
+		if (this.participantSet.has(participant)) return
+		this.participantSet.add(participant)
+		this.participants.push(participant)
+	}
 
 	/** Resolves an entity key, following a temp→persisted redirect if present. */
 	resolveKey(entityType: string, id: string): string {

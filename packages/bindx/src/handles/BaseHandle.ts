@@ -39,11 +39,16 @@ export abstract class BaseHandle {
 export abstract class EntityRelatedHandle extends BaseHandle {
 	constructor(
 		protected readonly entityType: string,
-		protected readonly entityId: string,
+		private readonly sourceEntityId: string,
 		store: SnapshotStore,
 		dispatcher: ActionDispatcher,
 	) {
 		super(store, dispatcher)
+	}
+
+	/** Current canonical id; the handle keeps no mutable rekey state. */
+	protected get entityId(): string {
+		return this.store.resolveEntityId(this.entityType, this.sourceEntityId)
 	}
 
 	/**

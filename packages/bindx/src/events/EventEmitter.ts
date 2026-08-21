@@ -15,6 +15,9 @@ import type {
 	InterceptorResult,
 	Unsubscribe,
 } from './types.js'
+import type { RekeyContext, Rekeyable } from '../store/RekeyOrchestrator.js'
+
+const SCOPE_SEPARATOR = '\u0000'
 
 interface ScopeKey {
 	entityType: string
@@ -31,7 +34,7 @@ interface ScopeKey {
  * - Field-scoped subscriptions (events for a specific field/relation)
  * - Interceptors for before-events (can cancel or modify)
  */
-export class EventEmitter {
+export class EventEmitter implements Rekeyable {
 	// Global listeners by event type
 	private readonly globalListeners = new Map<string, Set<EventListener<AfterEvent>>>()
 
@@ -43,6 +46,9 @@ export class EventEmitter {
 
 	// Scoped interceptors
 	private readonly scopedInterceptors = new Map<string, Set<Interceptor<BeforeEvent>>>()
+
+	/** Old scope keys retained so pre-rekey unsubscribe closures still resolve. */
+	private readonly scopeKeyRedirects = new Map<string, string>()
 
 	// ============================================================================
 	// Listener Subscription Methods
@@ -69,10 +75,11 @@ export class EventEmitter {
 		entityId: string,
 		listener: EventListener<EventTypeMap[T] & AfterEvent>,
 	): Unsubscribe {
-		const key = this.buildScopeKey(eventType, { entityType, entityId })
+		const key = this.resolveScopeKey(this.buildScopeKey(eventType, { entityType, entityId }))
 		const listeners = this.getOrCreateSet(this.scopedListeners, key)
-		listeners.add(listener as EventListener<AfterEvent>)
-		return () => listeners.delete(listener as EventListener<AfterEvent>)
+		const typedListener = listener as EventListener<AfterEvent>
+		listeners.add(typedListener)
+		return () => this.removeScoped(this.scopedListeners, key, typedListener)
 	}
 
 	/**
@@ -85,10 +92,11 @@ export class EventEmitter {
 		fieldName: string,
 		listener: EventListener<EventTypeMap[T] & AfterEvent>,
 	): Unsubscribe {
-		const key = this.buildScopeKey(eventType, { entityType, entityId, fieldName })
+		const key = this.resolveScopeKey(this.buildScopeKey(eventType, { entityType, entityId, fieldName }))
 		const listeners = this.getOrCreateSet(this.scopedListeners, key)
-		listeners.add(listener as EventListener<AfterEvent>)
-		return () => listeners.delete(listener as EventListener<AfterEvent>)
+		const typedListener = listener as EventListener<AfterEvent>
+		listeners.add(typedListener)
+		return () => this.removeScoped(this.scopedListeners, key, typedListener)
 	}
 
 	// ============================================================================
@@ -117,10 +125,11 @@ export class EventEmitter {
 		entityId: string,
 		interceptor: Interceptor<EventTypeMap[T] & BeforeEvent>,
 	): Unsubscribe {
-		const key = this.buildScopeKey(eventType, { entityType, entityId })
+		const key = this.resolveScopeKey(this.buildScopeKey(eventType, { entityType, entityId }))
 		const interceptors = this.getOrCreateSet(this.scopedInterceptors, key)
-		interceptors.add(interceptor as Interceptor<BeforeEvent>)
-		return () => interceptors.delete(interceptor as Interceptor<BeforeEvent>)
+		const typedInterceptor = interceptor as Interceptor<BeforeEvent>
+		interceptors.add(typedInterceptor)
+		return () => this.removeScoped(this.scopedInterceptors, key, typedInterceptor)
 	}
 
 	/**
@@ -133,10 +142,11 @@ export class EventEmitter {
 		fieldName: string,
 		interceptor: Interceptor<EventTypeMap[T] & BeforeEvent>,
 	): Unsubscribe {
-		const key = this.buildScopeKey(eventType, { entityType, entityId, fieldName })
+		const key = this.resolveScopeKey(this.buildScopeKey(eventType, { entityType, entityId, fieldName }))
 		const interceptors = this.getOrCreateSet(this.scopedInterceptors, key)
-		interceptors.add(interceptor as Interceptor<BeforeEvent>)
-		return () => interceptors.delete(interceptor as Interceptor<BeforeEvent>)
+		const typedInterceptor = interceptor as Interceptor<BeforeEvent>
+		interceptors.add(typedInterceptor)
+		return () => this.removeScoped(this.scopedInterceptors, key, typedInterceptor)
 	}
 
 	/**
@@ -147,7 +157,7 @@ export class EventEmitter {
 		const global = this.globalInterceptors.get(eventType)
 		if (global !== undefined && global.size > 0) return true
 
-		const scoped = this.scopedInterceptors.get(this.buildScopeKey(eventType, { entityType, entityId }))
+		const scoped = this.scopedInterceptors.get(this.resolveScopeKey(this.buildScopeKey(eventType, { entityType, entityId })))
 		return scoped !== undefined && scoped.size > 0
 	}
 
@@ -174,7 +184,7 @@ export class EventEmitter {
 				fieldName,
 			})
 			const result = await this.runInterceptorSet(
-				this.scopedInterceptors.get(fieldKey),
+				this.scopedInterceptors.get(this.resolveScopeKey(fieldKey)),
 				currentEvent,
 			)
 			if (result === null) return null
@@ -188,7 +198,7 @@ export class EventEmitter {
 			entityId: event.entityId,
 		})
 		const entityResult = await this.runInterceptorSet(
-			this.scopedInterceptors.get(entityKey),
+			this.scopedInterceptors.get(this.resolveScopeKey(entityKey)),
 			currentEvent,
 		)
 		if (entityResult === null) return null
@@ -221,7 +231,7 @@ export class EventEmitter {
 				entityId: event.entityId,
 				fieldName,
 			})
-			this.notifyListeners(this.scopedListeners.get(fieldKey), event)
+			this.notifyListeners(this.scopedListeners.get(this.resolveScopeKey(fieldKey)), event)
 		}
 
 		// Entity-level listeners
@@ -229,7 +239,7 @@ export class EventEmitter {
 			entityType: event.entityType,
 			entityId: event.entityId,
 		})
-		this.notifyListeners(this.scopedListeners.get(entityKey), event)
+		this.notifyListeners(this.scopedListeners.get(this.resolveScopeKey(entityKey)), event)
 
 		// Global listeners
 		this.notifyListeners(this.globalListeners.get(event.type), event)
@@ -243,11 +253,42 @@ export class EventEmitter {
 	 * Builds a scope key for listener/interceptor lookup.
 	 */
 	private buildScopeKey(eventType: string, scope: ScopeKey): string {
-		const parts = [eventType, scope.entityType, scope.entityId]
-		if (scope.fieldName) {
-			parts.push(scope.fieldName)
+		const parts = [eventType, scope.entityType, scope.entityId, scope.fieldName ?? '']
+		return parts.join(SCOPE_SEPARATOR)
+	}
+
+	private resolveScopeKey(key: string): string {
+		let resolved = key
+		let next = this.scopeKeyRedirects.get(resolved)
+		while (next && next !== resolved) {
+			resolved = next
+			next = this.scopeKeyRedirects.get(resolved)
 		}
-		return parts.join(':')
+		return resolved
+	}
+
+	private removeScoped<T>(map: Map<string, Set<T>>, key: string, value: T): void {
+		map.get(this.resolveScopeKey(key))?.delete(value)
+	}
+
+	rekey(ctx: RekeyContext): void {
+		this.rekeyScopedMap(this.scopedListeners, ctx)
+		this.rekeyScopedMap(this.scopedInterceptors, ctx)
+	}
+
+	private rekeyScopedMap<T>(map: Map<string, Set<T>>, ctx: RekeyContext): void {
+		const entityType = ctx.oldKey.slice(0, ctx.oldKey.length - ctx.oldId.length - 1)
+		const oldIdentity = `${SCOPE_SEPARATOR}${entityType}${SCOPE_SEPARATOR}${ctx.oldId}${SCOPE_SEPARATOR}`
+		const newIdentity = `${SCOPE_SEPARATOR}${entityType}${SCOPE_SEPARATOR}${ctx.newId}${SCOPE_SEPARATOR}`
+
+		for (const [oldScopeKey, values] of [...map]) {
+			if (!oldScopeKey.includes(oldIdentity)) continue
+			const newScopeKey = oldScopeKey.replace(oldIdentity, newIdentity)
+			const destination = this.getOrCreateSet(map, newScopeKey)
+			for (const value of values) destination.add(value)
+			map.delete(oldScopeKey)
+			this.scopeKeyRedirects.set(oldScopeKey, newScopeKey)
+		}
 	}
 
 	/**
@@ -309,7 +350,7 @@ export class EventEmitter {
 				fieldName,
 			})
 			const result = this.runInterceptorSetSync(
-				this.scopedInterceptors.get(fieldKey),
+				this.scopedInterceptors.get(this.resolveScopeKey(fieldKey)),
 				currentEvent,
 			)
 			if (result === null) return null
@@ -322,7 +363,7 @@ export class EventEmitter {
 			entityId: event.entityId,
 		})
 		const entityResult = this.runInterceptorSetSync(
-			this.scopedInterceptors.get(entityKey),
+			this.scopedInterceptors.get(this.resolveScopeKey(entityKey)),
 			currentEvent,
 		)
 		if (entityResult === null) return null
@@ -436,6 +477,7 @@ export class EventEmitter {
 		this.scopedListeners.clear()
 		this.globalInterceptors.clear()
 		this.scopedInterceptors.clear()
+		this.scopeKeyRedirects.clear()
 	}
 
 	/**
@@ -449,7 +491,7 @@ export class EventEmitter {
 
 		// Count scoped listeners
 		for (const [key, listeners] of this.scopedListeners) {
-			if (key.startsWith(eventType + ':')) {
+			if (key.startsWith(eventType + SCOPE_SEPARATOR)) {
 				count += listeners.size
 			}
 		}
