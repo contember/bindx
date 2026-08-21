@@ -84,7 +84,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Unwraps a create/update operation to the data object it writes.
+ * Unwraps a create/update/connect operation to the data object whose shape the
+ * response must echo.
+ *
+ * A connect contributes `{ id }` only: the response needs the connected id so a
+ * create op that differs from its sibling solely by what it connects can still be
+ * content-matched against its row.
  */
 function extractOperationData(op: unknown): Record<string, unknown> | undefined {
 	if (!isRecord(op)) return undefined
@@ -94,9 +99,15 @@ function extractOperationData(op: unknown): Record<string, unknown> | undefined 
 
 	const update = op['update']
 	if (isRecord(update)) {
+		// hasMany: `{ update: { by, data } }`; hasOne: `{ update: <data> }`. Both keys are
+		// required to tell them apart — a plain JSON column may be named `data`.
+		const by = update['by']
 		const data = update['data']
-		return isRecord(data) ? data : update
+		return isRecord(by) && isRecord(data) ? data : update
 	}
+
+	const connect = op['connect']
+	if (isRecord(connect)) return { id: connect['id'] }
 
 	return undefined
 }
