@@ -341,11 +341,7 @@ describe('pessimistic update mode', () => {
 			expect((store.getEntitySnapshot('Article', '2')?.serverData as { title: string })?.title).toBe('Title 2')
 		})
 
-		// PERSIST-1 regression: on a PARTIAL failure (one mutation succeeds, the
-		// transaction fails overall via the non-atomic sequential fallback — the only
-		// path any real adapter takes), the succeeded-but-reset entity must NOT be
-		// stranded at the server view. Every captured entity is restored for retry.
-		test('should restore even the individually-succeeded entity on a partial batch failure', async () => {
+		test('should confirm a sequential success before a later mutation fails', async () => {
 			// One mutation succeeds, the other fails → transaction reported as failed.
 			const adapter: BackendAdapter = {
 				query: mock(() => Promise.resolve([])),
@@ -367,11 +363,10 @@ describe('pessimistic update mode', () => {
 			const result = await persister.persistAll({ updateMode: 'pessimistic' })
 			expect(result.success).toBe(false)
 
-			// '1' succeeded individually but the transaction failed — it must be restored
-			// to its dirty edit (not left showing the reset server view) and kept dirty.
+			// Sequential success is real server state and must not be sent again on retry.
 			expect((store.getEntitySnapshot('Article', '1')?.data as { title: string })?.title).toBe('Updated 1')
 			expect((store.getEntitySnapshot('Article', '2')?.data as { title: string })?.title).toBe('Updated 2')
-			expect(store.getAllDirtyEntities()).toContainEqual({
+			expect(store.getAllDirtyEntities()).not.toContainEqual({
 				entityType: 'Article', entityId: '1', changeType: 'update',
 			})
 			expect(store.getAllDirtyEntities()).toContainEqual({

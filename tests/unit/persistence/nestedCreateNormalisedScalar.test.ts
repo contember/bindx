@@ -215,7 +215,7 @@ describe('Nested create reconciliation when the server normalises a scalar', () 
 			return blockId
 		})
 
-		expect((await persister.persistAll()).success).toBe(true)
+		expect((await persister.persistAll()).success).toBe(false)
 
 		for (const blockId of blockIds) {
 			expect(store.getPersistedId('Block', blockId)).toBeNull()
@@ -247,7 +247,7 @@ describe('Pairing create operations with response rows', () => {
 		expect(server.rowsById.get(preciseId!)?.['type']).toBe('button')
 	})
 
-	test('maps indistinguishable siblings, which any pairing describes equally well', async () => {
+	test('leaves indistinguishable siblings unresolved instead of pairing by position', async () => {
 		const store = new SnapshotStore()
 		const server = createMockServer()
 		const persister = createPersister(store, server.adapter)
@@ -256,10 +256,9 @@ describe('Pairing create operations with response rows', () => {
 		const first = addBlock(store, { order: 1, type: 'button' })
 		const second = addBlock(store, { order: 1, type: 'button' })
 
-		expect((await persister.persistAll()).success).toBe(true)
+		expect((await persister.persistAll()).success).toBe(false)
 
-		expect(store.getPersistedId('Block', first)).not.toBeNull()
-		expect(store.getPersistedId('Block', second)).not.toBeNull()
-		expect(store.getPersistedId('Block', first)).not.toBe(store.getPersistedId('Block', second))
+		expect(store.getPersistedId('Block', first)).toBeNull()
+		expect(store.getPersistedId('Block', second)).toBeNull()
 	})
 })
