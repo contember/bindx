@@ -107,6 +107,40 @@ export function useDataGridSetup<TEntity extends object>({
 		const analysis = analyzeChildren(jsx, MARKER_TYPES)
 
 		const cols = analysis.getAll<ColumnLeafProps>(ColumnLeaf)
+		const runtimeColumnsByAccessor = new WeakMap<EntityAccessor<object>, readonly ColumnLeafProps[]>()
+
+		const getRuntimeColumns = (accessor: EntityAccessor<object>): readonly ColumnLeafProps[] => {
+			const cached = runtimeColumnsByAccessor.get(accessor)
+			if (cached) return cached
+
+			const runtimeJsx = children(accessor)
+			const runtimeColumns = analyzeChildren(runtimeJsx, MARKER_TYPES).getAll<ColumnLeafProps>(ColumnLeaf)
+			if (runtimeColumns.length !== cols.length) {
+				throw new Error(`DataGrid children produced ${runtimeColumns.length} columns for row "${accessor.id}", but collection produced ${cols.length}. Data-dependent column structure is not supported.`)
+			}
+
+			for (let index = 0; index < cols.length; index++) {
+				const collected = cols[index]
+				const runtime = runtimeColumns[index]
+				if (collected?.fieldName !== runtime?.fieldName || collected?.columnType !== runtime?.columnType) {
+					throw new Error(`DataGrid children changed column order at position ${index} for row "${accessor.id}". Data-dependent column structure is not supported.`)
+				}
+			}
+
+			runtimeColumnsByAccessor.set(accessor, runtimeColumns)
+			return runtimeColumns
+		}
+
+		const runtimeBoundColumns = cols.map((column, index): ColumnLeafProps => ({
+			...column,
+			renderCell: accessor => {
+				const runtimeColumn = getRuntimeColumns(accessor)[index]
+				if (!runtimeColumn) {
+					throw new Error(`DataGrid runtime column ${index} is missing for row "${accessor.id}".`)
+				}
+				return runtimeColumn.renderCell(accessor)
+			},
+		}))
 		const toolbarMarker = analysis.getFirst<DataGridToolbarContentProps>(DataGridToolbarContent)
 		const layoutMarkers = analysis.getAll<DataGridLayoutProps>(DataGridLayout)
 
@@ -144,7 +178,7 @@ export function useDataGridSetup<TEntity extends object>({
 
 		return {
 			childrenJsx: jsx,
-			columns: cols,
+			columns: runtimeBoundColumns,
 			selection: sel,
 			queryKey: key,
 			toolbarContent: toolbarMarker?.children,

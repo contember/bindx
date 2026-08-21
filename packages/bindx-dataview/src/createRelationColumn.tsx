@@ -13,7 +13,7 @@
 import React from 'react'
 import type { FieldRef, FilterArtifact, FilterHandler, EntityAccessor, SelectionMeta } from '@contember/bindx'
 import { SelectionScope } from '@contember/bindx'
-import { createCollectorProxy, collectSelection as collectJsxSelection } from '@contember/bindx-react'
+import { createCollectorProxy, collectSelection as collectJsxSelection, SCOPE_REF } from '@contember/bindx-react'
 import type { ColumnTypeDef } from './columnTypes.js'
 import { accessField } from './columnTypes.js'
 
@@ -80,6 +80,19 @@ function analyzeRenderedSelection(rendered: React.ReactNode): void {
 	collectJsxSelection(rendered)
 }
 
+function getSelectionScope(ref: unknown): SelectionScope | null {
+	if (typeof ref !== 'object' || ref === null || !(SCOPE_REF in ref)) return null
+	const scope = ref[SCOPE_REF]
+	return scope instanceof SelectionScope ? scope : null
+}
+
+function replaceSelectionFields(target: SelectionMeta, source: SelectionMeta): void {
+	target.fields.clear()
+	for (const [name, field] of source.fields) {
+		target.fields.set(name, field)
+	}
+}
+
 // ============================================================================
 // Factory
 // ============================================================================
@@ -107,12 +120,12 @@ export function createRelationColumn<TFilterArtifact extends FilterArtifact>(
 		const relatedEntityName = extractRelatedEntityName(fieldRef) ?? ''
 
 		// Collect selection metadata for the related entity (for filter fetching)
-		let relatedSelection: SelectionMeta = { fields: new Map() }
+		const relatedSelection: SelectionMeta = { fields: new Map() }
 		if (relatedEntityName && renderer) {
 			const scope = new SelectionScope()
 			const proxy = createCollectorProxy(scope, relatedEntityName)
 			analyzeRenderedSelection(renderer(proxy))
-			relatedSelection = scope.toSelectionMeta()
+			replaceSelectionFields(relatedSelection, scope.toSelectionMeta())
 		}
 
 		const renderFilterItem = renderer
@@ -155,6 +168,10 @@ export function createRelationColumn<TFilterArtifact extends FilterArtifact>(
 			collectSelection: () => {
 				if (renderer && fieldRef) {
 					cellConfig.collectSelection(renderer, fieldRef)
+					const authoritativeScope = getSelectionScope(fieldRef)
+					if (authoritativeScope) {
+						replaceSelectionFields(relatedSelection, authoritativeScope.toSelectionMeta())
+					}
 				}
 			},
 			renderCell: (accessor: EntityAccessor<object>) => {

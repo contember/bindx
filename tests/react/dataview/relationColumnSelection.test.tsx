@@ -40,12 +40,14 @@ interface Country {
 interface Member {
 	id: string
 	fullName: string
+	value: string
 }
 
 interface Organization {
 	id: string
 	name: string
 	country: Country | null
+	member: Member | null
 	members: Member[]
 }
 
@@ -85,6 +87,7 @@ const testSchema = defineSchema<TestSchema>({
 				id: scalar(),
 				name: scalar(),
 				country: hasOne('Country'),
+				member: hasOne('Member'),
 				members: hasMany('Member'),
 			},
 		},
@@ -99,6 +102,7 @@ const testSchema = defineSchema<TestSchema>({
 			fields: {
 				id: scalar(),
 				fullName: scalar(),
+				value: scalar(),
 			},
 		},
 		Country: {
@@ -263,6 +267,25 @@ describe('relation column selection — hasMany', () => {
 // ============================================================================
 
 describe('relation column relatedSelection', () => {
+	test('schema-bound collection replaces a colliding schema-less scalar with the nested relation', () => {
+		const scope = new SelectionScope()
+		const collector = createCollectorProxy<Project>(scope, 'Project', schemaRegistry)
+		const leaves = extractColumnLeaves(
+			<DataGridHasOneColumn field={collector.organization}>
+				{organization => String(organization.member.value)}
+			</DataGridHasOneColumn>,
+		)
+		const leaf = leaves[0]
+		if (!leaf?.relatedSelection) throw new Error('expected relatedSelection to be built')
+		const relatedSelection = leaf.relatedSelection
+
+		expect(relatedSelection.fields.get('member')?.nested).toBeUndefined()
+		leaf.collectSelection?.(collector)
+
+		expect(leaf.relatedSelection).toBe(relatedSelection)
+		expect(fieldNames(nested(relatedSelection, 'member'))).toEqual(['id', 'value'])
+	})
+
 	test('nested <HasMany> in the renderer reaches relatedSelection', () => {
 		const leaf = buildColumnLeaf(it => (
 			<DataGridHasOneColumn field={it.organization}>
