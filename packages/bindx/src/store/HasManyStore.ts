@@ -368,6 +368,11 @@ export class HasManyStore {
 			// re-appending an id that is already listed: this path re-runs whenever an
 			// embedded connect reference is re-materialized, and an unconditional
 			// append would surface the same item twice (mirrors planHasManyConnection).
+			// A re-connect cancels a pending removal of the same item (mirrors
+			// planHasManyConnection); leaving both recorded hides the item from the
+			// live-edge index while it is still listed.
+			const newPlannedRemovals = new Map(existing.plannedRemovals)
+			newPlannedRemovals.delete(itemId)
 			let newOrderedIds = existing.orderedIds
 			if (newOrderedIds !== null && !newOrderedIds.includes(itemId)) {
 				newOrderedIds = [...newOrderedIds, itemId]
@@ -376,6 +381,7 @@ export class HasManyStore {
 				...existing,
 				orderedIds: newOrderedIds,
 				plannedAdditions: newPlannedAdditions,
+				plannedRemovals: newPlannedRemovals,
 				version: existing.version + 1,
 			})
 		}
