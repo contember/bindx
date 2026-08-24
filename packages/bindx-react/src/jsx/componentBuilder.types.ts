@@ -106,10 +106,12 @@ export interface ComponentBuilderState<
 	TEntityProps extends Record<string, AnyEntityPropConfig> = {},
 	TScalarProps extends object = object,
 	TRoles extends readonly string[] = readonly string[],
+	TUseProps extends object = {},
 > {
 	readonly __entityProps: TEntityProps
 	readonly __scalarProps: TScalarProps
 	readonly __roles: TRoles
+	readonly __useProps: TUseProps
 }
 
 // ============================================================================
@@ -129,7 +131,8 @@ export type AddImplicitEntity<
 		readonly [K in TPropName]: ImplicitEntityConfig<TEntity>
 	},
 	TState['__scalarProps'],
-	TState['__roles']
+	TState['__roles'],
+	TState['__useProps']
 >
 
 /**
@@ -146,7 +149,8 @@ export type AddExplicitEntity<
 		readonly [K in TPropName]: ExplicitEntityConfig<TEntity, TSelected>
 	},
 	TState['__scalarProps'],
-	TState['__roles']
+	TState['__roles'],
+	TState['__useProps']
 >
 
 /**
@@ -161,7 +165,8 @@ export type AddImplicitInterfaceEntity<
 		readonly [K in TPropName]: ImplicitInterfaceEntityConfig<TInterface>
 	},
 	TState['__scalarProps'],
-	TState['__roles']
+	TState['__roles'],
+	TState['__useProps']
 >
 
 /**
@@ -176,7 +181,8 @@ export type AddExplicitInterfaceEntity<
 		readonly [K in TPropName]: ExplicitInterfaceEntityConfig<TInterface>
 	},
 	TState['__scalarProps'],
-	TState['__roles']
+	TState['__roles'],
+	TState['__useProps']
 >
 
 /**
@@ -191,7 +197,8 @@ export type AddInterfaces<
 		readonly [K in keyof TInterfaces]: InterfaceEntityPropConfig<TInterfaces[K]>
 	},
 	TState['__scalarProps'],
-	TState['__roles']
+	TState['__roles'],
+	TState['__useProps']
 >
 
 /**
@@ -213,7 +220,21 @@ export type SetScalarProps<
 > = ComponentBuilderState<
 	TState['__entityProps'],
 	TNewScalarProps,
-	TState['__roles']
+	TState['__roles'],
+	TState['__useProps']
+>
+
+/**
+ * Merge runtime-only values from .use() into builder state.
+ */
+export type AddUseProps<
+	TState extends ComponentBuilderState,
+	TUse extends object,
+> = ComponentBuilderState<
+	TState['__entityProps'],
+	TState['__scalarProps'],
+	TState['__roles'],
+	TState['__useProps'] & TUse
 >
 
 // ============================================================================
@@ -272,9 +293,12 @@ export type BuildProps<TState extends ComponentBuilderState> =
 
 /**
  * Build complete render props type from builder state.
+ * Includes .use() values — they exist only inside the render function,
+ * never on the public props (BuildProps).
  */
 export type BuildRenderProps<TState extends ComponentBuilderState> =
 	TState['__scalarProps'] &
+		TState['__useProps'] &
 		BuildRenderEntityProps<TState['__entityProps'], TState['__roles']>
 
 /**
@@ -423,6 +447,38 @@ export interface ComponentBuilder<
 	 * ```
 	 */
 	props<TNewScalarProps extends object>(): ComponentBuilder<SetScalarProps<TState, TNewScalarProps>>
+
+	/**
+	 * Provide runtime-only values to the render function — hooks are allowed here.
+	 *
+	 * The function runs during every React render (inside the component), so
+	 * `useT()`, `useContext()`, `useMemo()` etc. all work. It is NEVER executed
+	 * during static selection analysis — its outputs are replaced by inert
+	 * stand-ins there, so the render body can use them freely without crashing
+	 * the collection pass.
+	 *
+	 * This removes the need for thin wrapper components that only thread
+	 * hook-derived values in as props (which also break selection discovery,
+	 * because the JSX walk cannot see through plain components).
+	 *
+	 * Can be chained; later use() functions see the values of earlier ones.
+	 *
+	 * @example
+	 * ```typescript
+	 * createComponent()
+	 *   .entity('article', schema.Article)
+	 *   .use(() => ({ t: useTranslator() }))
+	 *   .render(({ article, t }) => (
+	 *     <div>
+	 *       <h2>{t('article.heading')}</h2>
+	 *       <Field field={article.title} />
+	 *     </div>
+	 *   ))
+	 * ```
+	 */
+	use<TUse extends object>(
+		useFn: (props: BuildRenderProps<TState>) => TUse,
+	): ComponentBuilder<AddUseProps<TState, TUse>>
 
 	/**
 	 * Add a condition that must be true for the component to render.

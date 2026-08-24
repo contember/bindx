@@ -60,8 +60,15 @@ export function analyzeJsx(node: ReactNode, selection: SelectionMetaCollector): 
 			return nestedSelection
 		}
 
-		// Get selection info from the component
-		const fieldSelection = provider.getSelection(element.props, collectNested)
+		// Get selection info from the component. A throw here must not silently
+		// drop the sibling components' selections — report it and continue.
+		let fieldSelection: ReturnType<SelectionProvider['getSelection']>
+		try {
+			fieldSelection = provider.getSelection(element.props, collectNested)
+		} catch (error) {
+			reportAnalysisError(component, error)
+			return
+		}
 
 		// Add to selection
 		if (fieldSelection) {
@@ -85,11 +92,15 @@ export function analyzeJsx(node: ReactNode, selection: SelectionMetaCollector): 
 		'staticRender' in component &&
 		typeof (component as { staticRender: unknown }).staticRender === 'function'
 	) {
-		const staticJsx = (component as { staticRender: (props: Record<string, unknown>) => ReactNode }).staticRender(
-			element.props as Record<string, unknown>,
-		)
-		if (staticJsx) {
-			analyzeJsx(staticJsx, selection)
+		try {
+			const staticJsx = (component as { staticRender: (props: Record<string, unknown>) => ReactNode }).staticRender(
+				element.props as Record<string, unknown>,
+			)
+			if (staticJsx) {
+				analyzeJsx(staticJsx, selection)
+			}
+		} catch (error) {
+			reportAnalysisError(component, error)
 		}
 		return
 	}
@@ -100,6 +111,20 @@ export function analyzeJsx(node: ReactNode, selection: SelectionMetaCollector): 
 	if (children) {
 		analyzeJsx(children, selection)
 	}
+}
+
+/**
+ * Reports a selection-analysis failure of a single component with attribution,
+ * so one broken component doesn't silently cost its siblings their selection.
+ */
+function reportAnalysisError(component: unknown, error: unknown): void {
+	const c = component as { displayName?: string; name?: string; type?: { displayName?: string; name?: string } }
+	const name = c.displayName ?? c.type?.displayName ?? (c.name || c.type?.name) ?? 'anonymous'
+	console.error(
+		`[bindx] Selection analysis of <${name}> failed — its fields were NOT added to the fetch plan. `
+		+ 'Fix the error below; fields it uses may be missing from queries until then.',
+		error,
+	)
 }
 
 /**
