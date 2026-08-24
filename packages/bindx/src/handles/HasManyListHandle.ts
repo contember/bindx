@@ -76,6 +76,9 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		brands?: Set<symbol>,
 		alias?: string,
 		private readonly selection?: SelectionMeta,
+		// Segments from the query root down to this relation. Items do NOT inherit it:
+		// a has-many restarts the chain, mirroring the collector proxy.
+		private readonly relationPath: readonly string[] = [fieldName],
 	) {
 		super(parentEntityType, parentEntityId, store, dispatcher)
 		this.__brands = brands
@@ -93,9 +96,10 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		brands?: Set<symbol>,
 		alias?: string,
 		selection?: SelectionMeta,
+		relationPath?: readonly string[],
 	): HasManyAccessor<TEntity, TSelected> {
 		return createAliasProxy<HasManyListHandle<TEntity, TSelected>, HasManyAccessor<TEntity, TSelected>>(
-			HasManyListHandle.createRaw<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection),
+			HasManyListHandle.createRaw<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath),
 		)
 	}
 
@@ -114,8 +118,9 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		brands?: Set<symbol>,
 		alias?: string,
 		selection?: SelectionMeta,
+		relationPath?: readonly string[],
 	): HasManyListHandle<TEntity, TSelected> {
-		return new HasManyListHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection)
+		return new HasManyListHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath)
 	}
 
 	/**
@@ -131,6 +136,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			isArray: true,
 			isRelation: true,
 			targetType: this.itemType,
+			fullPath: this.relationPath,
 		}
 	}
 

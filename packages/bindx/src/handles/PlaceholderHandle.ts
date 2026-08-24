@@ -56,6 +56,9 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 		private readonly dispatcher: ActionDispatcher,
 		private readonly schema: SchemaRegistry | null,
 		brands?: Set<symbol>,
+		// Segments from the query root down to the relation this placeholder stands in
+		// for, so its field refs carry the same `fullPath` a connected entity would.
+		private readonly relationPath: readonly string[] = [fieldName],
 	) {
 		this.__brands = brands
 		this.placeholderId = generatePlaceholderId()
@@ -120,8 +123,9 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 		dispatcher: ActionDispatcher,
 		schema?: SchemaRegistry | null,
 		brands?: Set<symbol>,
+		relationPath?: readonly string[],
 	): EntityAccessor<TEntity, TSelected> {
-		return PlaceholderHandle.wrapProxy(new PlaceholderHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema ?? null, brands))
+		return PlaceholderHandle.wrapProxy(new PlaceholderHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema ?? null, brands, relationPath))
 	}
 
 	static createRaw<TEntity extends object = object, TSelected = TEntity>(
@@ -133,8 +137,9 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 		dispatcher: ActionDispatcher,
 		schema?: SchemaRegistry | null,
 		brands?: Set<symbol>,
+		relationPath?: readonly string[],
 	): PlaceholderHandle<TEntity, TSelected> {
-		return new PlaceholderHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema ?? null, brands)
+		return new PlaceholderHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema ?? null, brands, relationPath)
 	}
 
 	static wrapProxy<TEntity extends object, TSelected>(handle: PlaceholderHandle<TEntity, TSelected>): EntityAccessor<TEntity, TSelected> {
@@ -290,6 +295,9 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 				this.dispatcher,
 				this.schema,
 				this.__brands,
+				undefined,
+				undefined,
+				[...this.relationPath, fieldName],
 			)
 			// Intercept add() to lazily promote the placeholder to a real entity first — a child
 			// can't belong to a parent that doesn't exist. Reads pass through untouched.
@@ -326,6 +334,7 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 					fieldName,
 					isArray: false,
 					isRelation: false,
+					fullPath: [...self.relationPath, fieldName],
 				}
 			},
 			get value(): unknown {
@@ -456,6 +465,7 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 	 */
 	private createPlaceholderHasOneFieldHandle(fieldName: string, innerTargetType: string): unknown {
 		const self = this
+		const nestedRelationPath = [...this.relationPath, fieldName]
 		const nestedPlaceholderRaw = PlaceholderHandle.createRaw(
 			this.targetType,
 			this.id,
@@ -465,6 +475,7 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 			this.dispatcher,
 			this.schema,
 			this.__brands,
+			nestedRelationPath,
 		)
 		const nestedPlaceholderProxy = PlaceholderHandle.wrapProxy(nestedPlaceholderRaw)
 		const fieldRefMeta: FieldRefMeta = {
@@ -475,6 +486,7 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 			isArray: false,
 			isRelation: true,
 			targetType: innerTargetType,
+			fullPath: nestedRelationPath,
 		}
 		const noopUnsubscribe: Unsubscribe = () => {}
 

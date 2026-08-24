@@ -38,6 +38,8 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 		private readonly _enumName?: string,
 		private readonly _columnType?: string,
 		private readonly dataFieldPath: string[] = fieldPath,
+		// Absolute chain from the query root; see FieldRefMeta.fullPath.
+		private readonly _fullPath: readonly string[] = fieldPath,
 	) {
 		super(entityType, entityId, store, dispatcher)
 	}
@@ -51,8 +53,9 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 		enumName?: string,
 		columnType?: string,
 		dataFieldPath?: string[],
+		fullPath?: readonly string[],
 	): FieldAccessor<T> {
-		return createAliasProxy<FieldHandle<T>, FieldAccessor<T>>(new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType, dataFieldPath))
+		return createAliasProxy<FieldHandle<T>, FieldAccessor<T>>(new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType, dataFieldPath, fullPath))
 	}
 
 	static createRaw<T = unknown>(
@@ -64,8 +67,9 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 		enumName?: string,
 		columnType?: string,
 		dataFieldPath?: string[],
+		fullPath?: readonly string[],
 	): FieldHandle<T> {
-		return new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType, dataFieldPath)
+		return new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType, dataFieldPath, fullPath)
 	}
 
 	static wrapProxy<T>(handle: FieldHandle<T>): FieldAccessor<T> {
@@ -86,6 +90,7 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 			isRelation: false,
 			enumName: this._enumName,
 			columnType: this._columnType,
+			fullPath: this._fullPath,
 		}
 	}
 

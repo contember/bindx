@@ -66,6 +66,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		brands?: Set<symbol>,
 		private readonly selection?: SelectionMeta,
 		private readonly dataFieldName: string = fieldName,
+		// Segments from the query root down to this relation; also the entity path
+		// of whatever it resolves to. See FieldRefMeta.fullPath.
+		private readonly relationPath: readonly string[] = [fieldName],
 	) {
 		super(parentEntityType, parentEntityId, store, dispatcher)
 		this.__brands = brands
@@ -82,8 +85,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
 		dataFieldName?: string,
+		relationPath?: readonly string[],
 	): HasOneAccessor<TEntity, TSelected> {
-		return HasOneHandle.wrapProxy(new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection, dataFieldName))
+		return HasOneHandle.wrapProxy(new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection, dataFieldName, relationPath))
 	}
 
 	static createRaw<TEntity extends object = object, TSelected = TEntity>(
@@ -97,8 +101,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
 		dataFieldName?: string,
+		relationPath?: readonly string[],
 	): HasOneHandle<TEntity, TSelected> {
-		return new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection, dataFieldName)
+		return new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection, dataFieldName, relationPath)
 	}
 
 	static wrapProxy<TEntity extends object, TSelected>(handle: HasOneHandle<TEntity, TSelected>): HasOneAccessor<TEntity, TSelected> {
@@ -122,6 +127,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			isArray: false,
 			isRelation: true,
 			targetType: this.targetType,
+			fullPath: this.relationPath,
 		}
 	}
 
@@ -321,6 +327,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 					this.schema,
 					this.__brands,
 					this.selection,
+					this.relationPath,
 				)
 				this.entityHandleCacheProxy = EntityHandle.wrapProxy(this.entityHandleCacheRaw)
 			}
@@ -337,6 +344,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 				this.dispatcher,
 				this.schema,
 				this.__brands,
+				this.relationPath,
 			)
 			this.placeholderCacheProxy = PlaceholderHandle.wrapProxy(this.placeholderCacheRaw)
 		}

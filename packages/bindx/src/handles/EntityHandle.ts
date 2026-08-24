@@ -80,6 +80,9 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 		private readonly schema: SchemaRegistry,
 		brands?: Set<symbol>,
 		private readonly selection?: SelectionMeta,
+		// Segments from the query root down to this entity. Empty at a root and at
+		// every has-many item, so item chains restart their own `fullPath`.
+		private readonly entityPath: readonly string[] = [],
 	) {
 		super(entityType, id, store, dispatcher)
 		this.__brands = brands
@@ -93,8 +96,9 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 		schema: SchemaRegistry,
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
+		entityPath?: readonly string[],
 	): EntityAccessor<T, TSelected> {
-		return EntityHandle.wrapProxy(new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands, selection))
+		return EntityHandle.wrapProxy(new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands, selection, entityPath))
 	}
 
 	static createRaw<T extends object = object, TSelected = T>(
@@ -105,8 +109,9 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 		schema: SchemaRegistry,
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
+		entityPath?: readonly string[],
 	): EntityHandle<T, TSelected> {
-		return new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands, selection)
+		return new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands, selection, entityPath)
 	}
 
 	static wrapProxy<T extends object, TSelected>(handle: EntityHandle<T, TSelected>): EntityAccessor<T, TSelected> {
@@ -287,6 +292,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			enumName,
 			columnType,
 			[dataFieldName],
+			[...this.entityPath, schemaFieldName],
 		)
 		const proxy = FieldHandle.wrapProxy(raw)
 		this.fieldHandleCache.set(cacheKey, { raw, proxy } as CachedFieldHandle)
@@ -323,6 +329,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			undefined,
 			nestedSelection,
 			dataFieldName,
+			[...this.entityPath, fieldName],
 		)
 		const proxy = HasOneHandle.wrapProxy(raw)
 		this.relationHandleCache.set(cacheKey, { raw, proxy })
@@ -363,6 +370,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			this.__brands,
 			effectiveAlias,
 			nestedSelection,
+			[...this.entityPath, fieldName],
 		)
 		this.relationHandleCache.set(cacheKey, { raw: handle as unknown as RelationHandleRaw, proxy: handle })
 
@@ -398,6 +406,8 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			this.schema,
 			undefined,
 			undefined,
+			undefined,
+			[...this.entityPath, fieldName],
 		)
 		const proxy = HasOneHandle.wrapProxy(raw)
 		this.relationHandleCache.set(cacheKey, { raw, proxy })
