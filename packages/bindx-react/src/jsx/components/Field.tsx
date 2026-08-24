@@ -22,13 +22,11 @@ import { annotateElement, isDevAnnotationsEnabled } from '../devAnnotations.js'
  * ```
  */
 function FieldImpl<T>({ field, children, format }: FieldProps<T>): ReactElement | null {
-	// Handle undefined field (e.g., when accessing field on disconnected has-one relation)
-	if (field === undefined || field === null) {
+	const accessor = useField(field ?? null)
+	if (accessor === null) {
 		return null
 	}
 
-	// useField() subscribes to store and returns FieldAccessor with .value access
-	const accessor = useField(field)
 	const fieldName = field[FIELD_REF_META]?.fieldName
 
 	if (children) {

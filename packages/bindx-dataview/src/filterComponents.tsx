@@ -62,10 +62,9 @@ export {
 } from './filterHooks.js'
 export type { UseDataViewFilterResult as DataViewFilterState } from './filterHooks.js'
 
-function resolveFilterName(name: string | undefined): string {
-	if (name !== undefined) return name
-	// eslint-disable-next-line react-hooks/rules-of-hooks
+function useResolvedFilterName(name: string | undefined): string {
 	const contextName = useOptionalDataViewFilterName()
+	if (name !== undefined) return name
 	if (contextName !== null) return contextName
 	throw new Error('Filter name must be provided via `name` prop or filter scope context')
 }
@@ -86,7 +85,7 @@ export interface DataViewTextFilterInputProps {
 
 export const DataViewTextFilterInput = forwardRef<HTMLInputElement, DataViewTextFilterInputProps>(
 	({ name, debounceMs, ...props }, ref) => {
-		name = resolveFilterName(name)
+		name = useResolvedFilterName(name)
 		return (
 			<SlotInput
 				{...useDataViewTextFilterInput({ name, debounceMs })}
@@ -110,7 +109,7 @@ export interface DataViewTextFilterMatchModeTriggerProps {
 
 export const DataViewTextFilterMatchModeTrigger = forwardRef<HTMLButtonElement, DataViewTextFilterMatchModeTriggerProps>(
 	({ name, mode, ...props }, ref) => {
-		name = resolveFilterName(name)
+		name = useResolvedFilterName(name)
 		const [active, cb] = useDataViewTextFilterMatchMode(name, mode)
 		const { onClick, ...otherProps } = props as React.ButtonHTMLAttributes<HTMLButtonElement>
 
@@ -145,7 +144,7 @@ const TEXT_MODE_LABELS: Record<TextFilterArtifact['mode'], string> = {
 export function DataViewTextFilterMatchModeLabel({
 	name,
 }: DataViewTextFilterMatchModeLabelProps): ReactElement {
-	name = resolveFilterName(name)
+	name = useResolvedFilterName(name)
 	const [state] = useDataViewFilter<TextFilterArtifact>(name)
 	const mode = state?.mode ?? 'contains'
 	return <>{TEXT_MODE_LABELS[mode]}</>
@@ -162,7 +161,7 @@ export interface DataViewTextFilterResetTriggerProps {
 
 export const DataViewTextFilterResetTrigger = forwardRef<HTMLButtonElement, DataViewTextFilterResetTriggerProps>(
 	({ name, ...props }, ref) => {
-		name = resolveFilterName(name)
+		name = useResolvedFilterName(name)
 		const [state, setFilter] = useDataViewFilter<TextFilterArtifact>(name)
 		const hasQuery = (state?.query?.length ?? 0) > 0
 
@@ -202,7 +201,7 @@ export interface DataViewNumberFilterInputProps {
 
 export const DataViewNumberFilterInput = forwardRef<HTMLInputElement, DataViewNumberFilterInputProps>(
 	({ name, type, allowFloat, ...props }, ref) => {
-		name = resolveFilterName(name)
+		name = useResolvedFilterName(name)
 		const [artifact, setFilter] = useDataViewFilter<NumberRangeFilterArtifact>(name)
 		const min = artifact?.min ?? null
 		const max = artifact?.max ?? null
@@ -248,7 +247,7 @@ export interface DataViewDateFilterInputProps {
 
 export const DataViewDateFilterInput = forwardRef<HTMLInputElement, DataViewDateFilterInputProps>(
 	({ name, type, ...props }, ref) => {
-		name = resolveFilterName(name)
+		name = useResolvedFilterName(name)
 		const [artifact, setFilter] = useDataViewFilter<import('@contember/bindx').DateFilterArtifact>(name)
 		const start = artifact?.start ?? null
 		const end = artifact?.end ?? null
@@ -289,7 +288,7 @@ export interface DataViewBooleanFilterTriggerProps {
 
 export const DataViewBooleanFilterTrigger = forwardRef<HTMLButtonElement, DataViewBooleanFilterTriggerProps>(
 	({ name, action = 'include', value, ...props }, ref) => {
-		name = resolveFilterName(name)
+		name = useResolvedFilterName(name)
 		const [current, setFilter] = useDataViewBooleanFilter(name, value)
 
 		const toggleFilter = useCallback((): void => {
@@ -331,7 +330,7 @@ export interface DataViewEnumFilterTriggerProps {
 
 export const DataViewEnumFilterTrigger = forwardRef<HTMLButtonElement, DataViewEnumFilterTriggerProps>(
 	({ name, action = 'include', value, ...props }, ref) => {
-		name = resolveFilterName(name)
+		name = useResolvedFilterName(name)
 		const [current, setFilter] = useDataViewEnumFilter(name, value)
 
 		const toggleFilter = useCallback((): void => {
@@ -377,7 +376,7 @@ export function DataViewEnumFilterState({
 	value,
 	children,
 }: DataViewEnumFilterStateProps): ReactElement {
-	name = resolveFilterName(name)
+	name = useResolvedFilterName(name)
 	const [artifact] = useDataViewFilter<EnumFilterArtifact>(name)
 	const includedValues = artifact?.values ?? []
 	const excludedValues = artifact?.notValues ?? []
@@ -401,7 +400,7 @@ export interface DataViewRelationFilterTriggerProps {
 
 export const DataViewRelationFilterTrigger = forwardRef<HTMLButtonElement, DataViewRelationFilterTriggerProps>(
 	({ name, action = 'include', id, ...props }, ref) => {
-		name = resolveFilterName(name)
+		name = useResolvedFilterName(name)
 		const [current, setFilter] = useDataViewRelationFilter(name, id)
 
 		const toggleFilter = useCallback((): void => {
@@ -447,7 +446,7 @@ export function DataViewRelationFilterState({
 	id,
 	children,
 }: DataViewRelationFilterStateProps): ReactElement {
-	name = resolveFilterName(name)
+	name = useResolvedFilterName(name)
 	const [artifact] = useDataViewFilter<import('@contember/bindx').RelationFilterArtifact>(name)
 	const includedIds = artifact?.id ?? []
 	const excludedIds = artifact?.notId ?? []
@@ -470,7 +469,7 @@ export interface DataViewNullFilterTriggerProps {
 
 export const DataViewNullFilterTrigger = forwardRef<HTMLButtonElement, DataViewNullFilterTriggerProps>(
 	({ name, action, ...props }, ref) => {
-		name = resolveFilterName(name)
+		name = useResolvedFilterName(name)
 		const [current, setFilter] = useDataViewNullFilter(name)
 
 		const toggleFilter = useCallback((): void => {
@@ -512,7 +511,7 @@ export interface DataViewFilterResetTriggerProps {
 
 export const DataViewFilterResetTrigger = forwardRef<HTMLButtonElement, DataViewFilterResetTriggerProps>(
 	({ name, ...props }, ref) => {
-		name = resolveFilterName(name)
+		name = useResolvedFilterName(name)
 		const { filtering } = useDataViewContext()
 		const filter = filtering.filters.get(name)
 		const isActive = filter ? filter.handler.isActive(filter.artifact) : false
@@ -549,7 +548,7 @@ export interface DataViewDateFilterResetTriggerProps {
 
 export const DataViewDateFilterResetTrigger = forwardRef<HTMLButtonElement, DataViewDateFilterResetTriggerProps>(
 	({ name, type, ...props }, ref) => {
-		name = resolveFilterName(name)
+		name = useResolvedFilterName(name)
 		const [state, setFilter] = useDataViewFilter<import('@contember/bindx').DateFilterArtifact>(name)
 		const hasValue = type === 'start'
 			? (state?.start ?? null) !== null
@@ -593,7 +592,7 @@ export interface DataViewNumberFilterResetTriggerProps {
 
 export const DataViewNumberFilterResetTrigger = forwardRef<HTMLButtonElement, DataViewNumberFilterResetTriggerProps>(
 	({ name, ...props }, ref) => {
-		name = resolveFilterName(name)
+		name = useResolvedFilterName(name)
 		const [state, setFilter] = useDataViewFilter<NumberRangeFilterArtifact>(name)
 		const hasValue = (state?.min ?? null) !== null || (state?.max ?? null) !== null
 

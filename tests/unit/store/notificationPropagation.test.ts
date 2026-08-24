@@ -11,12 +11,8 @@ import { createTestStore, createMockSubscriber } from '../shared/unitTestHelpers
  * harness is the regression oracle: every assertion encodes today's behavior so
  * the rework can prove it introduced no re-render regression.
  *
- * Mechanics worth keeping in mind while reading these tests:
- * - `setRelation` / `addToHasMany` notify the relation's own subscribers and the
- *   relation OWNER's entity subscribers — they do NOT walk `childToParents`.
- * - `setFieldValue` on the child entity calls `notifyEntitySubscribers`, which
- *   walks `childToParents` UP the tree and bumps each ancestor's snapshot version.
- *   So the child-field mutation is what exercises parent propagation here.
+ * Field and relation changes both walk live parent edges and bump each ancestor's
+ * snapshot version.
  */
 describe('Notification propagation', () => {
 	let store: SnapshotStore
@@ -71,6 +67,29 @@ describe('Notification propagation', () => {
 		store.setFieldValue('Article', 'article-1', ['title'], 'Updated')
 
 		expect(parent.callCount()).toBe(1)
+	})
+
+	test('ancestor re-renders when a nested relation changes', () => {
+		store.setEntityData('Article', 'article-1', { id: 'article-1', title: 'Draft' }, true)
+		store.setEntityData('Author', 'author-1', { id: 'author-1', name: 'Alice' }, true)
+		store.setEntityData('Profile', 'profile-1', { id: 'profile-1', bio: 'Writer' }, true)
+		store.setRelation('Article', 'article-1', 'author', {
+			currentId: 'author-1',
+			state: 'connected',
+		})
+
+		const article = createMockSubscriber()
+		const global = createMockSubscriber()
+		store.subscribeToEntity('Article', 'article-1', article.fn)
+		store.subscribe(global.fn)
+
+		store.setRelation('Author', 'author-1', 'profile', {
+			currentId: 'profile-1',
+			state: 'connected',
+		})
+
+		expect(article.callCount()).toBe(1)
+		expect(global.callCount()).toBe(1)
 	})
 
 	test('disconnect stops notifying the former parent', () => {

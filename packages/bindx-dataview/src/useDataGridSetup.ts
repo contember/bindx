@@ -15,7 +15,7 @@ import type {
 	SelectionValues,
 	SchemaRegistry,
 } from '@contember/bindx'
-import { createFullTextFilterHandler, SelectionScope, buildQueryFromSelection } from '@contember/bindx'
+import { createFullTextFilterHandler, SelectionScope, buildQueryFromSelection, FIELD_REF_META } from '@contember/bindx'
 import {
 	createCollectorProxy,
 	mergeSelections,
@@ -31,17 +31,22 @@ import { DataViewElement, type DataViewElementProps } from './selectionComponent
 
 export const QUERY_FILTER_NAME = '__query'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MARKER_TYPES: ReadonlySet<React.ComponentType<any>> = new Set([
 	ColumnLeaf,
 	DataGridToolbarContent,
 	DataGridLayout,
 ])
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ELEMENT_MARKER_TYPES: ReadonlySet<React.ComponentType<any>> = new Set([
 	DataViewElement,
 ])
+
+function isEntityAccessorFor<TEntity extends object>(
+	accessor: EntityAccessor<object>,
+	entityType: string,
+): accessor is EntityAccessor<TEntity> {
+	return accessor[FIELD_REF_META].entityType === entityType
+}
 
 export interface DataGridCommonProps<TEntity extends object> {
 	children: (it: EntityAccessor<TEntity>) => ReactNode
@@ -109,6 +114,43 @@ export function useDataGridSetup<TEntity extends object>({
 		const analysis = analyzeChildren(jsx, MARKER_TYPES)
 
 		const cols = analysis.getAll<ColumnLeafProps>(ColumnLeaf)
+		const runtimeColumnsByAccessor = new WeakMap<EntityAccessor<object>, readonly ColumnLeafProps[]>()
+
+		const getRuntimeColumns = (accessor: EntityAccessor<object>): readonly ColumnLeafProps[] => {
+			const cached = runtimeColumnsByAccessor.get(accessor)
+			if (cached) return cached
+			if (!isEntityAccessorFor<TEntity>(accessor, entityType)) {
+				throw new Error(`DataGrid expected a "${entityType}" row accessor, received "${accessor[FIELD_REF_META].entityType}".`)
+			}
+
+			const runtimeJsx = children(accessor)
+			const runtimeColumns = analyzeChildren(runtimeJsx, MARKER_TYPES).getAll<ColumnLeafProps>(ColumnLeaf)
+			if (runtimeColumns.length !== cols.length) {
+				throw new Error(`DataGrid children produced ${runtimeColumns.length} columns for row "${accessor.id}", but collection produced ${cols.length}. Data-dependent column structure is not supported.`)
+			}
+
+			for (let index = 0; index < cols.length; index++) {
+				const collected = cols[index]
+				const runtime = runtimeColumns[index]
+				if (collected?.fieldName !== runtime?.fieldName || collected?.columnType !== runtime?.columnType) {
+					throw new Error(`DataGrid children changed column order at position ${index} for row "${accessor.id}". Data-dependent column structure is not supported.`)
+				}
+			}
+
+			runtimeColumnsByAccessor.set(accessor, runtimeColumns)
+			return runtimeColumns
+		}
+
+		const runtimeBoundColumns = cols.map((column, index): ColumnLeafProps => ({
+			...column,
+			renderCell: accessor => {
+				const runtimeColumn = getRuntimeColumns(accessor)[index]
+				if (!runtimeColumn) {
+					throw new Error(`DataGrid runtime column ${index} is missing for row "${accessor.id}".`)
+				}
+				return runtimeColumn.renderCell(accessor)
+			},
+		}))
 		const toolbarMarker = analysis.getFirst<DataGridToolbarContentProps>(DataGridToolbarContent)
 		const layoutMarkers = analysis.getAll<DataGridLayoutProps>(DataGridLayout)
 
@@ -146,7 +188,7 @@ export function useDataGridSetup<TEntity extends object>({
 
 		return {
 			childrenJsx: jsx,
-			columns: cols,
+			columns: runtimeBoundColumns,
 			selection: sel,
 			queryKey: key,
 			toolbarContent: toolbarMarker?.children,

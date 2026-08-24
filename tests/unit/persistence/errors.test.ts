@@ -60,10 +60,10 @@ describe('BatchPersister - Error Handling', () => {
 			const result = await persister.persistAll()
 
 			expect(result.success).toBe(false)
-			expect(result.failedCount).toBe(1)
+			expect(result.failedCount).toBe(2)
 
-			// Find the failed result
-			const failedResult = result.results.find(r => !r.success)
+			// Atomic failure marks every mutation failed, while retaining the specific server error.
+			const failedResult = result.results.find(r => r.entityId === 'a-2')
 			expect(failedResult?.entityId).toBe('a-2')
 			expect(failedResult?.error?.message).toBe('Title is required')
 		})
@@ -288,15 +288,15 @@ describe('BatchPersister - Error Handling', () => {
 			const result = await persister.persistAll()
 
 			expect(result.success).toBe(false)
-			expect(result.successCount).toBe(2)
-			expect(result.failedCount).toBe(2)
+			expect(result.successCount).toBe(0)
+			expect(result.failedCount).toBe(4)
 
 			// Check individual results
 			const successResults = result.results.filter(r => r.success)
 			const failedResults = result.results.filter(r => !r.success)
 
-			expect(successResults.length).toBe(2)
-			expect(failedResults.length).toBe(2)
+			expect(successResults.length).toBe(0)
+			expect(failedResults.length).toBe(4)
 
 			// Failed entities should have error messages
 			for (const failed of failedResults) {

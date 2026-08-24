@@ -132,6 +132,28 @@ export class SubscriptionManager implements Rekeyable {
 		}
 	}
 
+	/**
+	 * Notifies every registered subscriber — entity, relation and global.
+	 *
+	 * For store-wide events such as clear(), where every subscription's data is gone at once and
+	 * there is no per-key change to notify from. Registrations are left intact: the subscribers
+	 * belong to mounted components that must learn their entity is no longer there.
+	 */
+	notifyAll(): void {
+		this.globalVersion++
+
+		// Iterate the live sets, as the per-key paths do: a subscriber that unsubscribes a
+		// not-yet-visited sibling removes it from the iteration, whereas a copied array would
+		// still invoke it after its unsubscribe() returned.
+		for (const subs of this.entitySubscribers.values()) {
+			for (const sub of subs) sub()
+		}
+		for (const subs of this.relationSubscribers.values()) {
+			for (const sub of subs) sub()
+		}
+		for (const sub of this.globalSubscribers) sub()
+	}
+
 	// ==================== Parent-Child Relationships ====================
 
 	/**
@@ -169,7 +191,25 @@ export class SubscriptionManager implements Rekeyable {
 	notifyEntitySubscribers(
 		key: string,
 		bumper: SnapshotVersionBumper,
-		notifiedKeys: Set<string> = new Set(),
+	): void {
+		this.globalVersion++
+		this.notifyEntityAndParentSubscribers(key, bumper, new Set())
+	}
+
+	/**
+	 * Walks the entity and its live ancestors. The global version is bumped once by the
+	 * caller, before the first subscriber runs — a subscriber reading getVersion() from
+	 * inside its callback must already see the new value.
+	 *
+	 * The walk is a transitive closure over live edges, so an entity many rows point at
+	 * (a shared lookup entity whose own has-many is loaded) acts as a hub: a write in one
+	 * row reaches every other row through it. That is the price of not knowing which part
+	 * of the hub each row presents; a selection-aware edge index would be the fix.
+	 */
+	private notifyEntityAndParentSubscribers(
+		key: string,
+		bumper: SnapshotVersionBumper,
+		notifiedKeys: Set<string>,
 	): void {
 		// Prevent infinite recursion
 		if (notifiedKeys.has(key)) return
@@ -179,8 +219,6 @@ export class SubscriptionManager implements Rekeyable {
 		// and skip the global notification (see issue #51).
 		const isRoot = notifiedKeys.size === 0
 		notifiedKeys.add(key)
-
-		this.globalVersion++
 
 		// Notify entity-specific subscribers
 		const entitySubs = this.entitySubscribers.get(key)
@@ -195,9 +233,11 @@ export class SubscriptionManager implements Rekeyable {
 		// disconnected child no longer reaches its former parent.
 		const parents = this.getParentKeys(key)
 		for (const parentKey of parents) {
+			// An ancestor reachable through several edges is bumped and walked once.
+			if (notifiedKeys.has(parentKey)) continue
 			// Bump parent snapshot version so useSyncExternalStore detects a change
 			bumper.bumpEntitySnapshotVersion(parentKey)
-			this.notifyEntitySubscribers(parentKey, bumper, notifiedKeys)
+			this.notifyEntityAndParentSubscribers(parentKey, bumper, notifiedKeys)
 		}
 
 		// Notify global subscribers (only once, from the root invocation — not
@@ -210,8 +250,8 @@ export class SubscriptionManager implements Rekeyable {
 	}
 
 	/**
-	 * Notifies relation subscribers and the parent entity's subscribers.
-	 * The bumper callback is used to bump the parent entity snapshot version.
+	 * Notifies relation subscribers, the owning entity, and its ancestors.
+	 * The bumper callback is used to bump entity snapshot versions.
 	 * The entityKey is the parent entity key derived from the relation key.
 	 */
 	notifyRelationSubscribers(
@@ -232,18 +272,7 @@ export class SubscriptionManager implements Rekeyable {
 		// Bump entity snapshot version so isEqual detects a change
 		bumper.bumpEntitySnapshotVersion(entityKey)
 
-		// Notify entity subscribers
-		const entitySubs = this.entitySubscribers.get(entityKey)
-		if (entitySubs) {
-			for (const sub of entitySubs) {
-				sub()
-			}
-		}
-
-		// Notify global subscribers
-		for (const sub of this.globalSubscribers) {
-			sub()
-		}
+		this.notifyEntityAndParentSubscribers(entityKey, bumper, new Set())
 	}
 
 	/**
@@ -300,21 +329,17 @@ export class SubscriptionManager implements Rekeyable {
 		}
 		this.rekeyedKeys.set(oldKey, newKey)
 
-		// Move entity subscribers
-		const entitySubs = this.entitySubscribers.get(oldKey)
-		if (entitySubs) {
-			this.entitySubscribers.delete(oldKey)
-			this.entitySubscribers.set(newKey, entitySubs)
-		}
+		// Move entity subscribers, merging into anything already subscribed under the new key
+		this.moveSubscribers(this.entitySubscribers, oldKey, newKey)
 
 		// Move relation subscribers by prefix (e.g. "Entity:tempId:" → "Entity:persistedId:")
-		const toMoveRelations: [string, Set<Subscriber>][] = []
-		for (const [key, subs] of this.relationSubscribers) {
+		const toMoveRelations: string[] = []
+		for (const key of this.relationSubscribers.keys()) {
 			if (key.startsWith(oldKeyPrefix)) {
-				toMoveRelations.push([key, subs])
+				toMoveRelations.push(key)
 			}
 		}
-		for (const [oldRelKey, subs] of toMoveRelations) {
+		for (const oldRelKey of toMoveRelations) {
 			const newRelKey = newKeyPrefix + oldRelKey.slice(oldKeyPrefix.length)
 
 			// Register redirect for relation key (update existing chains first)
@@ -325,8 +350,25 @@ export class SubscriptionManager implements Rekeyable {
 			}
 			this.rekeyedKeys.set(oldRelKey, newRelKey)
 
-			this.relationSubscribers.delete(oldRelKey)
-			this.relationSubscribers.set(newRelKey, subs)
+			this.moveSubscribers(this.relationSubscribers, oldRelKey, newRelKey)
 		}
+	}
+
+	/**
+	 * Re-homes a subscriber set under a new key. The destination may already hold
+	 * subscribers (a component mounted on the persisted id before the draft was rekeyed
+	 * onto it); replacing the set would silently orphan them, so the two are merged.
+	 */
+	private moveSubscribers(map: Map<string, Set<Subscriber>>, oldKey: string, newKey: string): void {
+		const moved = map.get(oldKey)
+		if (!moved) return
+		map.delete(oldKey)
+
+		const existing = map.get(newKey)
+		if (!existing) {
+			map.set(newKey, moved)
+			return
+		}
+		for (const sub of moved) existing.add(sub)
 	}
 }

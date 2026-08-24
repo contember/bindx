@@ -97,10 +97,8 @@ export interface ChildrenAnalysisResult {
  */
 export function analyzeChildren(
 	elements: React.ReactNode,
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	markerTypes: ReadonlySet<React.ComponentType<any>>,
 ): ChildrenAnalysisResult {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const collected = new Map<React.ComponentType<any>, unknown[]>()
 	for (const type of markerTypes) {
 		collected.set(type, [])
@@ -121,9 +119,7 @@ export function analyzeChildren(
 
 function walkTree(
 	elements: React.ReactNode,
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	markerTypes: ReadonlySet<React.ComponentType<any>>,
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	collected: Map<React.ComponentType<any>, unknown[]>,
 ): void {
 	React.Children.forEach(elements, (child) => {

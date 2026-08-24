@@ -80,6 +80,9 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 		private readonly schema: SchemaRegistry,
 		brands?: Set<symbol>,
 		private readonly selection?: SelectionMeta,
+		// Segments from the query root down to this entity. Empty at a root and at
+		// every has-many item, so item chains restart their own `fullPath`.
+		private readonly entityPath: readonly string[] = [],
 	) {
 		super(entityType, id, store, dispatcher)
 		this.__brands = brands
@@ -93,8 +96,9 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 		schema: SchemaRegistry,
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
+		entityPath?: readonly string[],
 	): EntityAccessor<T, TSelected> {
-		return EntityHandle.wrapProxy(new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands, selection))
+		return EntityHandle.wrapProxy(new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands, selection, entityPath))
 	}
 
 	static createRaw<T extends object = object, TSelected = T>(
@@ -105,12 +109,26 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 		schema: SchemaRegistry,
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
+		entityPath?: readonly string[],
 	): EntityHandle<T, TSelected> {
-		return new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands, selection)
+		return new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands, selection, entityPath)
 	}
 
 	static wrapProxy<T extends object, TSelected>(handle: EntityHandle<T, TSelected>): EntityAccessor<T, TSelected> {
-		return createHandleProxy<EntityHandle<T, TSelected>, EntityAccessor<T, TSelected>>(handle, (target) => target.fields)
+		return createHandleProxy<EntityHandle<T, TSelected>, EntityAccessor<T, TSelected>>(
+			handle,
+			(target) => target.fields,
+			(target) => target.selectedFieldNames,
+		)
+	}
+
+	/**
+	 * Field names the handle's selection exposes, for enumeration. Without a selection
+	 * nothing is validated and nothing is listed.
+	 */
+	get selectedFieldNames(): readonly string[] {
+		if (!this.selection) return []
+		return [...this.selection.fields.keys()]
 	}
 
 	get [FIELD_REF_META](): FieldRefMeta {
@@ -254,24 +272,27 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	 * Gets a field handle for a specific field.
 	 * Returns cached handle to ensure stable identity.
 	 */
-	field<K extends keyof T>(fieldName: K): FieldAccessor<T[K]> {
-		const cacheKey = String(fieldName)
+	field<K extends keyof T>(fieldName: K, dataFieldName = String(fieldName)): FieldAccessor<T[K]> {
+		const schemaFieldName = String(fieldName)
+		const cacheKey = dataFieldName
 		const cached = this.fieldHandleCache.get(cacheKey)
 
 		if (cached) {
 			return cached.proxy as FieldAccessor<T[K]>
 		}
 
-		const enumName = this.schema.getEnumName(this.entityType, cacheKey)
-		const columnType = this.schema.getColumnType(this.entityType, cacheKey)
+		const enumName = this.schema.getEnumName(this.entityType, schemaFieldName)
+		const columnType = this.schema.getColumnType(this.entityType, schemaFieldName)
 		const raw = FieldHandle.createRaw<T[K]>(
 			this.entityType,
 			this.entityId,
-			[cacheKey],
+			[schemaFieldName],
 			this.store,
 			this.dispatcher,
 			enumName,
 			columnType,
+			[dataFieldName],
+			[...this.entityPath, schemaFieldName],
 		)
 		const proxy = FieldHandle.wrapProxy(raw)
 		this.fieldHandleCache.set(cacheKey, { raw, proxy } as CachedFieldHandle)
@@ -282,8 +303,8 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	/**
 	 * Gets a has-one relation handle.
 	 */
-	hasOne<TRelated extends object>(fieldName: string, nestedSelection?: SelectionMeta): HasOneAccessor<TRelated> {
-		const cacheKey = `hasOne:${fieldName}`
+	hasOne<TRelated extends object>(fieldName: string, nestedSelection?: SelectionMeta, dataFieldName = fieldName): HasOneAccessor<TRelated> {
+		const cacheKey = `hasOne:${dataFieldName}`
 		const cached = this.relationHandleCache.get(cacheKey)
 
 		if (cached) {
@@ -307,6 +328,8 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			this.schema,
 			undefined,
 			nestedSelection,
+			dataFieldName,
+			[...this.entityPath, fieldName],
 		)
 		const proxy = HasOneHandle.wrapProxy(raw)
 		this.relationHandleCache.set(cacheKey, { raw, proxy })
@@ -347,6 +370,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			this.__brands,
 			effectiveAlias,
 			nestedSelection,
+			[...this.entityPath, fieldName],
 		)
 		this.relationHandleCache.set(cacheKey, { raw: handle as unknown as RelationHandleRaw, proxy: handle })
 
@@ -382,6 +406,8 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			this.schema,
 			undefined,
 			undefined,
+			undefined,
+			[...this.entityPath, fieldName],
 		)
 		const proxy = HasOneHandle.wrapProxy(raw)
 		this.relationHandleCache.set(cacheKey, { raw, proxy })
@@ -465,29 +491,31 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 				}
 
 				const nestedSelection = fieldMeta?.nested
+				const schemaFieldName = fieldMeta?.fieldName ?? fieldName
+				const dataFieldName = fieldMeta?.alias ?? fieldName
 
 				// Use schema to determine field type
-				const fieldDef = this.schema.getFieldDef(this.entityType, fieldName)
+				const fieldDef = this.schema.getFieldDef(this.entityType, schemaFieldName)
 
 				if (!fieldDef || fieldDef.type === 'scalar') {
 					// Scalar field - return FieldHandle
-					return this.field(fieldName as keyof T)
+					return this.field(schemaFieldName as keyof T, dataFieldName)
 				}
 
 				if (fieldDef.type === 'hasOne') {
 					// Has-one relation - return HasOneHandle
-					return this.hasOne(fieldName, nestedSelection)
+					return this.hasOne(schemaFieldName, nestedSelection, dataFieldName)
 				}
 
 				if (fieldDef.type === 'hasMany') {
 					// Has-many relation - return HasManyListHandle.
 					// Thread the selected alias so the handle reads data stored under the
 					// auto-generated alias (e.g. `tags_<hash>`) for params-bearing relations.
-					return this.hasMany(fieldName, fieldMeta?.alias, nestedSelection)
+					return this.hasMany(schemaFieldName, fieldMeta?.alias, nestedSelection)
 				}
 
 				// Unknown field type - fallback to FieldHandle
-				return this.field(fieldName as keyof T)
+				return this.field(schemaFieldName as keyof T, dataFieldName)
 			},
 		})
 	}

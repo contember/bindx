@@ -15,6 +15,14 @@ export interface StoredRelationState {
 	version: number
 }
 
+type ReconciliationResult = 'applied' | 'conflict'
+
+export type SentHasOneTransition =
+	| { operation: 'connect'; targetId: string }
+	| { operation: 'create'; targetId: string }
+	| { operation: 'disconnect'; targetId: string }
+	| { operation: 'delete'; targetId: string }
+
 function cloneRelationState(state: StoredRelationState): StoredRelationState {
 	return {
 		...state,
@@ -170,6 +178,22 @@ export class HasOneStore {
 	}
 
 	/**
+	 * Advances the server baseline by one confirmed sent transition while keeping
+	 * edits made after the request started as pending local state.
+	 */
+	reconcileSentTransition(
+		key: string,
+		transition: SentHasOneTransition,
+	): ReconciliationResult {
+		const existing = this.relationStates.get(key)
+		if (!existing) return 'conflict'
+
+		const next = reconcileHasOneState(existing, transition)
+		this.writeRelation(key, next.state)
+		return next.result
+	}
+
+	/**
 	 * Resets relation to server state.
 	 */
 	resetRelation(key: string): void {
@@ -235,12 +259,18 @@ export class HasOneStore {
 
 	/**
 	 * Commits all has-one relations for an entity.
+	 *
+	 * A relation whose planned op targets an item in `pendingItems` (by relation key)
+	 * was not sent and is left uncommitted, so the op is retried on the next persist.
 	 */
-	commitAllRelations(keyPrefix: string): void {
-		for (const key of this.relationStates.keys()) {
-			if (key.startsWith(keyPrefix)) {
-				this.commitRelation(key)
+	commitAllRelations(keyPrefix: string, pendingItems?: ReadonlyMap<string, ReadonlySet<string>>): void {
+		for (const [key, state] of this.relationStates) {
+			if (!key.startsWith(keyPrefix)) continue
+			const pending = pendingItems?.get(key)
+			if (pending && ((state.currentId !== null && pending.has(state.currentId)) || (state.serverId !== null && pending.has(state.serverId)))) {
+				continue
 			}
+			this.commitRelation(key)
 		}
 	}
 
@@ -358,4 +388,67 @@ export class HasOneStore {
 function liveHasOneChildId(state: StoredRelationState | undefined): string | null {
 	if (!state) return null
 	return state.currentId !== null && state.state !== 'deleted' ? state.currentId : null
+}
+
+interface HasOneReconciliation {
+	state: StoredRelationState
+	result: ReconciliationResult
+}
+
+function reconcileHasOneState(
+	existing: StoredRelationState,
+	transition: SentHasOneTransition,
+): HasOneReconciliation {
+	if (transition.operation === 'connect' || transition.operation === 'create') {
+		return reconcileHasOneAddition(existing, transition)
+	}
+	return reconcileHasOneRemoval(existing, transition)
+}
+
+function reconcileHasOneAddition(
+	existing: StoredRelationState,
+	transition: Extract<SentHasOneTransition, { operation: 'connect' | 'create' }>,
+): HasOneReconciliation {
+	const wasRemoved = existing.currentId !== transition.targetId || existing.state !== 'connected'
+	const removedCreatedTarget = transition.operation === 'create'
+		&& existing.currentId === null
+		&& existing.state === 'disconnected'
+
+	return {
+		state: {
+			...existing,
+			currentId: removedCreatedTarget ? transition.targetId : existing.currentId,
+			serverId: transition.targetId,
+			state: removedCreatedTarget ? 'deleted' : existing.state,
+			serverState: 'connected',
+			placeholderData: wasRemoved ? existing.placeholderData : {},
+			version: existing.version + 1,
+		},
+		result: 'applied',
+	}
+}
+
+function reconcileHasOneRemoval(
+	existing: StoredRelationState,
+	transition: Extract<SentHasOneTransition, { operation: 'disconnect' | 'delete' }>,
+): HasOneReconciliation {
+	const isCompletedDelete = transition.operation === 'delete'
+		&& existing.currentId === transition.targetId
+		&& existing.state === 'deleted'
+	const isDeleteReversal = transition.operation === 'delete'
+		&& existing.currentId === transition.targetId
+		&& existing.state !== 'deleted'
+
+	return {
+		state: {
+			...existing,
+			currentId: isCompletedDelete ? null : existing.currentId,
+			serverId: null,
+			state: isCompletedDelete ? 'disconnected' : existing.state,
+			serverState: 'disconnected',
+			placeholderData: isCompletedDelete ? {} : existing.placeholderData,
+			version: existing.version + 1,
+		},
+		result: isDeleteReversal ? 'conflict' : 'applied',
+	}
 }

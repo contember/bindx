@@ -63,6 +63,19 @@ describe('RekeyOrchestrator', () => {
 		expect(calls).toEqual(['a', 'b', 'c'])
 	})
 
+	test('registers dynamic participants once and keeps their order', () => {
+		const calls: string[] = []
+		const initial: Rekeyable = { rekey: () => calls.push('initial') }
+		const dynamic: Rekeyable = { rekey: () => calls.push('dynamic') }
+		const o = new RekeyOrchestrator([initial])
+
+		o.registerParticipant(dynamic)
+		o.registerParticipant(dynamic)
+		o.rekey('Article', TEMP, SERVER)
+
+		expect(calls).toEqual(['initial', 'dynamic'])
+	})
+
 	test('rekey passes a fully-derived context to participants', () => {
 		let captured: RekeyContext | undefined
 		const o = new RekeyOrchestrator([{ rekey: ctx => { captured = ctx } }])

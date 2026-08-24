@@ -20,8 +20,8 @@ import type {
 	SelectionState,
 	FieldRef,
 } from '@contember/bindx'
-import { FIELD_REF_META } from '@contember/bindx'
 import { useStoredState, type StateStorageOrName } from './stateStorage.js'
+import { extractFieldName } from './fieldRef.js'
 
 // ============================================================================
 // Filter State
@@ -183,8 +183,9 @@ export function useSortingState(options: UseSortingOptions): SortingStateResult 
 
 	const setOrderBy = useCallback(
 		<T>(field: FieldRef<T>, action: SortingDirectionAction, append?: boolean): void => {
-			const fieldName = field[FIELD_REF_META].fieldName
-			if (!sortableFields.has(fieldName)) return
+			// Dotted path, not the leaf — `sortableFields` is keyed the same way (see #68).
+			const fieldName = extractFieldName(field)
+			if (fieldName === null || !sortableFields.has(fieldName)) return
 			const currentDir = directions[fieldName] ?? null
 			const newDir = resolveSortAction(currentDir, action)
 
@@ -210,7 +211,10 @@ export function useSortingState(options: UseSortingOptions): SortingStateResult 
 	}, [setDirections])
 
 	const directionOf = useCallback(
-		<T>(field: FieldRef<T>): OrderDirection | null => directions[field[FIELD_REF_META].fieldName] ?? null,
+		<T>(field: FieldRef<T>): OrderDirection | null => {
+			const fieldName = extractFieldName(field)
+			return fieldName === null ? null : directions[fieldName] ?? null
+		},
 		[directions],
 	)
 

@@ -6,6 +6,9 @@ import { ErrorStore } from './ErrorStore.js'
 import {
 	RelationStore,
 	type HasManyRemovalType,
+	type RelationReconciliationResult,
+	type SentHasManyDelta,
+	type SentHasOneTransition,
 	type StoredHasManyState,
 	type StoredRelationState,
 } from './RelationStore.js'
@@ -17,7 +20,7 @@ import { EntitySnapshotStore } from './EntitySnapshotStore.js'
 import { RootRegistry } from './RootRegistry.js'
 import { ReachabilityAnalyzer } from './ReachabilityAnalyzer.js'
 import { RekeyOrchestrator } from './RekeyOrchestrator.js'
-import type { RekeyContext } from './RekeyOrchestrator.js'
+import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
 import type {
 	UndoJournal,
 	JournalTarget,
@@ -28,7 +31,16 @@ import type {
 	EditableWriteCounters,
 } from '../undo/UndoJournal.js'
 
-export type { HasManyRemovalType, StoredHasManyState, StoredRelationState } from './RelationStore.js'
+export type {
+	HasManyRemovalType,
+	RelationReconciliationResult,
+	SentHasManyAddition,
+	SentHasManyDelta,
+	SentHasManyRemoval,
+	SentHasOneTransition,
+	StoredHasManyState,
+	StoredRelationState,
+} from './RelationStore.js'
 export type { EntityMeta } from './EntityMetaStore.js'
 export { isTempId, isPlaceholderId, isPersistedId, generatePlaceholderId } from './entityId.js'
 
@@ -171,15 +183,20 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	}
 
 	private getRelationKey(parentType: string, parentId: string, fieldName: string): string {
-		const resolvedParentId = this.resolveId(parentType, parentId)
+		const resolvedParentId = this.resolveEntityId(parentType, parentId)
 		return `${parentType}:${resolvedParentId}:${fieldName}`
 	}
 
 	/**
 	 * Resolves an ID to its persisted ID if it has been rekeyed.
 	 */
-	private resolveId(entityType: string, id: string): string {
+	resolveEntityId(entityType: string, id: string): string {
 		return this.rekeyOrchestrator.resolveId(entityType, id)
+	}
+
+	/** Attaches identity-keyed state to the store's single rekey fan-out. */
+	attachRekeyParticipant(participant: Rekeyable): void {
+		this.rekeyOrchestrator.registerParticipant(participant)
 	}
 
 	// ==================== SnapshotVersionBumper ====================
@@ -225,7 +242,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	 * Removes all propagation tracking entries for a given parent entity.
 	 */
 	clearPropagatedDataForEntity(parentType: string, parentId: string): void {
-		const prefix = `${parentType}:${this.resolveId(parentType, parentId)}:`
+		const prefix = `${parentType}:${this.resolveEntityId(parentType, parentId)}:`
 		for (const key of this.lastPropagatedData.keys()) {
 			if (key.startsWith(prefix)) {
 				this.lastPropagatedData.delete(key)
@@ -268,7 +285,8 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		// Server loads are not user gestures; only journal local data sets (incl. the
 		// initial write of a freshly created entity, which captures an absent pre-image).
 		if (!isServerData) this.journal?.recordEntity(key)
-		const newSnapshot = this.entitySnapshots.setData(key, id, entityType, data, isServerData)
+		// The caller may still hold a rekeyed temp id; the snapshot must carry the live one.
+		const newSnapshot = this.entitySnapshots.setData(key, this.resolveEntityId(entityType, id), entityType, data, isServerData)
 
 		if (isServerData) {
 			this.meta.setExistsOnServer(key, true)
@@ -292,7 +310,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		skipNotify: boolean = false,
 	): EntitySnapshot<T> {
 		const key = this.getEntityKey(entityType, id)
-		const newSnapshot = this.entitySnapshots.refreshServerData(key, id, entityType, data)
+		const newSnapshot = this.entitySnapshots.refreshServerData(key, this.resolveEntityId(entityType, id), entityType, data)
 		this.meta.setExistsOnServer(key, true)
 		if (!skipNotify) {
 			this.notifyEntitySubscribers(key)
@@ -441,14 +459,20 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		const data = { ...initialData, id }
 
 		this.setEntityData(entityType, id, data, false)
-		this.setExistsOnServer(entityType, id, false)
 
 		// A freshly created entity is pending-persist by default — a root for
 		// reachability-based create detection. It stops being a root the moment a
 		// relation anchors it as a child (see registerParentChild). A top-level
 		// create (<Entity create>, useEntityList add) is never anchored, so it stays
 		// a root and is reported as a `create`.
+		//
+		// Registered after the snapshot exists (the reachability seed skips a root
+		// without one) but BEFORE the notifying setExistsOnServer, so the last
+		// notification of the create already carries it — a subscriber reading
+		// getAllDirtyEntities() would otherwise miss the new create entirely.
 		this.roots.register(this.getEntityKey(entityType, id))
+
+		this.setExistsOnServer(entityType, id, false)
 
 		return id
 	}
@@ -588,6 +612,19 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
 		this.relations.commitHasMany(key, newServerIds)
 		this.notifyRelationSubscribers(key)
+	}
+
+	reconcileSentHasMany(
+		parentType: string,
+		parentId: string,
+		fieldName: string,
+		delta: SentHasManyDelta,
+		alias?: string,
+	): RelationReconciliationResult {
+		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		const result = this.relations.reconcileSentHasMany(key, delta)
+		this.notifyRelationSubscribers(key)
+		return result
 	}
 
 	resetHasMany(
@@ -834,6 +871,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		const entityKey = this.getEntityKey(entityType, id)
 		const keyPrefix = `${entityType}:${id}:`
 		this.errors.clearAllServerErrors(entityKey, keyPrefix)
+		this.notifyEntitySubscribers(entityKey)
 	}
 
 	clearAllErrors(entityType: string, id: string): void {
@@ -940,6 +978,18 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		this.notifyRelationSubscribers(key)
 	}
 
+	reconcileSentRelation(
+		parentType: string,
+		parentId: string,
+		fieldName: string,
+		transition: SentHasOneTransition,
+	): RelationReconciliationResult {
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const result = this.relations.reconcileSentRelation(key, transition)
+		this.notifyRelationSubscribers(key)
+		return result
+	}
+
 	resetRelation(parentType: string, parentId: string, fieldName: string): void {
 		const key = this.getRelationKey(parentType, parentId, fieldName)
 		this.journal?.recordRelation(key)
@@ -947,9 +997,17 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		this.notifyRelationSubscribers(key)
 	}
 
-	commitAllRelations(entityType: string, entityId: string): void {
+	/**
+	 * Commits every relation of an entity. Items listed in `pendingItems` (by relation
+	 * key) were not sent in the persist and stay planned.
+	 */
+	commitAllRelations(
+		entityType: string,
+		entityId: string,
+		pendingItems?: ReadonlyMap<string, ReadonlySet<string>>,
+	): void {
 		const keyPrefix = `${entityType}:${entityId}:`
-		this.relations.commitAllRelations(keyPrefix)
+		this.relations.commitAllRelations(keyPrefix, pendingItems)
 	}
 
 	resetAllRelations(entityType: string, entityId: string): void {
@@ -1256,6 +1314,41 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 
 	// ==================== Dirty Tracking (delegated to DirtyTracker) ====================
 
+	/**
+	 * Sum of the monotonic mutation counters of every sub-store {@link getAllDirtyEntities}
+	 * reads. Strictly increasing, so an unchanged value proves no write could have
+	 * changed the dirty set — the cache key {@link ChangeRegistry} memoizes the
+	 * full-store scan on.
+	 *
+	 * Deliberately NOT derived from {@link getVersion} (the notification version):
+	 * several writes change dirtiness without notifying — `createEntity` registers
+	 * its root after its last notify, `registerParentChild` un-registers one,
+	 * `commit/resetAllRelations` never notify, and `refreshServerData` can skip it —
+	 * so a notification-keyed memo would serve a stale result. Counters bump inside
+	 * the write itself and cannot be bypassed that way.
+	 *
+	 * The entity snapshot store contributes its data-write counter alone: it bumps
+	 * on a superset of the writes `getMutationVersion()` covers.
+	 *
+	 * REQUIRES snapshot values to be replaced, never mutated in place.
+	 * `createEntitySnapshot` freezes only the top level, so a nested object inside
+	 * `data` (a rich-text JSON payload, say) stays writable. Editing one in place
+	 * changes dirtiness without touching any counter, and the memo will serve the
+	 * pre-edit answer — where the former unconditional scan happened to notice it on
+	 * the next read. The store already implies this rule by freezing at all; the memo
+	 * is what makes breaking it consequential.
+	 *
+	 * @internal Cache key for the dirty-scan memo. Monotonic and otherwise
+	 * meaningless — the absolute value carries no consumer-facing information.
+	 */
+	getDirtyVersion(): number {
+		return this.entitySnapshots.getDataWriteVersion()
+			+ this.meta.getMutationVersion()
+			+ this.meta.getEditableWriteVersion()
+			+ this.relations.getMutationVersion()
+			+ this.roots.getMutationVersion()
+	}
+
 	getAllDirtyEntities(): Array<{
 		entityType: string
 		entityId: string
@@ -1312,7 +1405,9 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		// Undo history describes the now-wiped world; drop it with the store.
 		this.journal?.clear()
 
-		this.subscriptions.notify()
+		// Every subscription's data just disappeared, so notify entity/relation subscribers too —
+		// a global-only notify leaves them rendering wiped data with no consumer-side remedy.
+		this.subscriptions.notifyAll()
 	}
 }
 

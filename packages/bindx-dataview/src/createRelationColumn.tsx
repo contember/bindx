@@ -13,9 +13,8 @@
 import React from 'react'
 import type { FieldRef, FilterArtifact, FilterHandler, EntityAccessor, SelectionMeta } from '@contember/bindx'
 import { SelectionScope } from '@contember/bindx'
-import { createCollectorProxy } from '@contember/bindx-react'
+import { createCollectorProxy, collectSelection as collectJsxSelection, SCOPE_REF } from '@contember/bindx-react'
 import type { ColumnTypeDef } from './columnTypes.js'
-import { accessField } from './columnTypes.js'
 
 /** If a render result is a FieldRef-like object with `.value`, extract the string value. */
 function unwrapRenderResult(result: React.ReactNode): React.ReactNode {
@@ -26,7 +25,8 @@ function unwrapRenderResult(result: React.ReactNode): React.ReactNode {
 	return result
 }
 import { ColumnLeaf, type ColumnLeafProps } from './columnLeaf.js'
-import { extractFieldName, extractRelatedEntityName, getRelatedAccessor } from './columns.js'
+import { extractFieldName, extractRelatedEntityName } from './fieldRef.js'
+import { accessField, getRelatedAccessor } from './columnTypes.js'
 
 // ============================================================================
 // Config
@@ -66,6 +66,33 @@ export interface RelationColumnProps<TEntity, TSelected> {
 	children: (entity: EntityAccessor<TEntity, TSelected>) => React.ReactNode
 }
 
+/**
+ * Walks the JSX a cell renderer returned so nested components declare their
+ * selection. Proxy touches alone only see the refs passed as props; a nested
+ * `<HasMany>` or `createComponent()` registers its fields only when analyzed.
+ *
+ * The analyzer's return value is deliberately discarded: every component
+ * registers through the scope of the ref it received, which is the only way to
+ * attribute a field to the right entity — the rendered JSX may mix refs of the
+ * related entity with refs of the row entity.
+ */
+function analyzeRenderedSelection(rendered: React.ReactNode): void {
+	collectJsxSelection(rendered)
+}
+
+function getSelectionScope(ref: unknown): SelectionScope | null {
+	if (typeof ref !== 'object' || ref === null || !(SCOPE_REF in ref)) return null
+	const scope = ref[SCOPE_REF]
+	return scope instanceof SelectionScope ? scope : null
+}
+
+function replaceSelectionFields(target: SelectionMeta, source: SelectionMeta): void {
+	target.fields.clear()
+	for (const [name, field] of source.fields) {
+		target.fields.set(name, field)
+	}
+}
+
 // ============================================================================
 // Factory
 // ============================================================================
@@ -93,12 +120,12 @@ export function createRelationColumn<TFilterArtifact extends FilterArtifact>(
 		const relatedEntityName = extractRelatedEntityName(fieldRef) ?? ''
 
 		// Collect selection metadata for the related entity (for filter fetching)
-		let relatedSelection: SelectionMeta = { fields: new Map() }
+		const relatedSelection: SelectionMeta = { fields: new Map() }
 		if (relatedEntityName && renderer) {
 			const scope = new SelectionScope()
 			const proxy = createCollectorProxy(scope, relatedEntityName)
-			renderer(proxy)
-			relatedSelection = scope.toSelectionMeta()
+			analyzeRenderedSelection(renderer(proxy))
+			replaceSelectionFields(relatedSelection, scope.toSelectionMeta())
 		}
 
 		const renderFilterItem = renderer
@@ -141,6 +168,10 @@ export function createRelationColumn<TFilterArtifact extends FilterArtifact>(
 			collectSelection: () => {
 				if (renderer && fieldRef) {
 					cellConfig.collectSelection(renderer, fieldRef)
+					const authoritativeScope = getSelectionScope(fieldRef)
+					if (authoritativeScope) {
+						replaceSelectionFields(relatedSelection, authoritativeScope.toSelectionMeta())
+					}
 				}
 			},
 			renderCell: (accessor: EntityAccessor<object>) => {
@@ -177,7 +208,7 @@ export interface RelationColumnComponent {
 
 export const hasOneCellConfig: RelationCellConfig = {
 	collectSelection: (renderer, fieldRef) => {
-		renderer(fieldRef)
+		analyzeRenderedSelection(renderer(fieldRef))
 	},
 	renderCell: (accessor, fieldName, renderer) => {
 		const related = getRelatedAccessor(accessor, fieldName)
@@ -189,7 +220,9 @@ export const hasOneCellConfig: RelationCellConfig = {
 export const hasManyCellConfig: RelationCellConfig = {
 	collectSelection: (renderer, fieldRef) => {
 		const ref = fieldRef as { map?: (fn: (item: unknown, index: number) => unknown) => unknown[] }
-		ref.map?.((item) => { renderer(item); return null })
+		const rendered: React.ReactNode[] = []
+		ref.map?.((item) => { rendered.push(renderer(item)); return null })
+		analyzeRenderedSelection(rendered)
 	},
 	renderCell: (accessor, fieldName, renderer) => {
 		const ref = accessField(accessor, fieldName) as { items?: EntityAccessor<object>[] } | null

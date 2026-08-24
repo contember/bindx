@@ -13,17 +13,21 @@ import type {
 	PersistScope,
 	TransactionMutation,
 	TransactionMutationResult,
-	TransactionResult,
 	UpdateMode,
 } from './types.js'
-import { setPersisting, commitEntity, resetEntity, addFieldError, addEntityError, addRelationError, clearAllServerErrors } from '../core/actions.js'
+import { setPersisting, resetEntity, addFieldError, addEntityError, addRelationError, clearAllServerErrors } from '../core/actions.js'
 import { type ContemberMutationResult } from '../errors/pathMapper.js'
 import { resolveAllErrors } from '../errors/errorPathResolver.js'
 import { createServerError } from '../errors/types.js'
 import { MutationCollector } from './MutationCollector.js'
-import type { EntitySnapshot } from '../store/snapshots.js'
-import type { StoredHasManyState, StoredRelationState } from '../store/SnapshotStore.js'
+import type { EntityPersistedEvent, EntityPersistFailedEvent, EntityPersistingEvent } from '../events/types.js'
 import { deepEqual } from '../utils/deepEqual.js'
+import {
+	createPersistExecution,
+	entityIdentityKey,
+	type ExecutionEntity,
+	type PersistExecution,
+} from './PersistExecution.js'
 
 /**
  * Options for BatchPersister
@@ -52,6 +56,35 @@ export interface BatchPersisterOptions {
 	defaultUpdateMode?: UpdateMode
 }
 
+/** One inline create operation inside a hasMany mutation, keyed by its alias (a temp ID). */
+interface NodeCreateOp {
+	readonly alias: string
+	readonly entityType: string
+	readonly createData: Record<string, unknown>
+}
+
+/** A create operation and the response row it produced. */
+interface NodeCreatePair {
+	readonly op: NodeCreateOp
+	readonly nodeItem: Record<string, unknown>
+}
+
+interface ExecutedMutationResult extends TransactionMutationResult {
+	readonly nodeData?: Record<string, unknown>
+}
+
+type ExecutedPersist =
+	| {
+		readonly mode: 'atomic'
+		readonly ok: boolean
+		readonly results: readonly ExecutedMutationResult[]
+	}
+	| {
+		readonly mode: 'sequential'
+		readonly ok: boolean
+		readonly results: readonly ExecutedMutationResult[]
+	}
+
 /**
  * BatchPersister orchestrates multi-entity persistence with:
  * - Deduplication (same entity referenced multiple times → single mutation)
@@ -65,6 +98,8 @@ export class BatchPersister {
 	private readonly undoManager?: UndoManager
 	private readonly schema?: SchemaRegistry
 	private readonly defaultUpdateMode: UpdateMode
+	private readonly nestedOutcomes = new WeakMap<PersistenceResult, readonly EntityPersistResult[]>()
+	private readonly eventOutcomes = new WeakMap<PersistenceResult, readonly EntityPersistResult[]>()
 
 	constructor(
 		private readonly adapter: BackendAdapter,
@@ -189,66 +224,242 @@ export class BatchPersister {
 
 		// Sort by dependencies (creates first)
 		const sortedEntities = this.sortByDependencies(entitiesToPersist)
-
-		// Mark all as in-flight
-		this.changeRegistry.markInFlight(sortedEntities)
-
-		// Set persisting state for all entities. In pessimistic mode the flag also
-		// marks the entity for server-baseline presentation while in-flight.
-		for (const entity of sortedEntities) {
-			this.dispatcher.dispatch(setPersisting(entity.entityType, entity.entityId, true, updateMode === 'pessimistic'))
-			this.dispatcher.dispatch(clearAllServerErrors(entity.entityType, entity.entityId))
+		const collector = this.mutationCollector instanceof MutationCollector
+			? this.mutationCollector.forkSession()
+			: this.mutationCollector
+		try {
+			const result = await this.executePersist(sortedEntities, scope, options, updateMode, collector)
+			const callbackOutcomes = [...result.results, ...(this.nestedOutcomes.get(result) ?? [])]
+			this.emitPersistOutcome(this.eventOutcomes.get(result) ?? callbackOutcomes)
+			for (const entry of callbackOutcomes) options?.onEntityPersisted?.(entry)
+			return result
+		} catch (error) {
+			this.emitPersistFailed(sortedEntities, toError(error))
+			throw error
 		}
+	}
 
-		// Block undo during persist
+	/**
+	 * Runs the persist lifecycle for entities that passed the before-persist hooks.
+	 * They are already marked in-flight by the caller; this method releases them.
+	 */
+	private async executePersist(
+		sortedEntities: DirtyEntity[],
+		scope: PersistScope,
+		options: BatchPersistOptions | undefined,
+		updateMode: UpdateMode,
+		collector: MutationDataCollector | undefined,
+	): Promise<PersistenceResult> {
+		const claimed = new Map<string, DirtyEntity>()
+		const accepted = new Map<string, DirtyEntity>()
+		const vetoed = new Map<string, DirtyEntity>()
+		const offered = new Set<string>()
+		const initialKeys = new Set(sortedEntities.map(entity => entityIdentityKey(entity.entityType, entity.entityId)))
+		this.claimEntities(sortedEntities, claimed, updateMode)
 		this.undoManager?.block()
 
 		let result: PersistenceResult | undefined
 		try {
-			// Build mutations from the (dirty) canonical state. The store is never
-			// mutated to the server view — pessimistic mode presents the server
-			// baseline via getPresentationSnapshot instead — so there is nothing to
-			// capture or restore.
-			const mutations = this.buildMutations(sortedEntities, scope)
-
-			if (mutations.length === 0) {
-				// Nothing to persist
-				result = {
-					success: true,
-					results: [],
-					successCount: 0,
-					failedCount: 0,
-					skippedCount: 0,
+			let execution: PersistExecution
+			while (true) {
+				const pending = [...claimed.values()].filter(entity => !offered.has(entityIdentityKey(entity.entityType, entity.entityId)))
+				for (const entity of pending) {
+					const key = entityIdentityKey(entity.entityType, entity.entityId)
+					offered.add(key)
+					if (options?.onEntityPersisting) {
+						await options.onEntityPersisting(entity.entityType, entity.entityId)
+					}
+					const outcome = this.hasPersistingInterceptors([entity])
+						? await this.runPersistingInterceptors([entity])
+						: { accepted: [entity], cancelled: [] }
+					if (outcome.cancelled.length > 0) {
+						vetoed.set(key, entity)
+						this.releaseEntities([entity])
+					} else {
+						accepted.set(key, entity)
+					}
 				}
+
+				const topLevel = sortedEntities.filter(entity => accepted.has(entityIdentityKey(entity.entityType, entity.entityId)))
+				const vetoedKeys = new Set(vetoed.keys())
+				const mutations = this.buildMutations(topLevel, vetoedKeys, scope, collector)
+				const nested = collector instanceof MutationCollector ? collector.getNestedEntities() : []
+				const discovered: DirtyEntity[] = []
+				for (const entity of nested) {
+					const key = entityIdentityKey(entity.entityType, entity.entityId)
+					if (claimed.has(key) || vetoed.has(key)) continue
+					const dirty: DirtyEntity = {
+						entityType: entity.entityType,
+						entityId: entity.entityId,
+						changeType: 'create',
+						dirtyFields: this.store.getDirtyFields(entity.entityType, entity.entityId),
+						dirtyRelations: this.store.getDirtyRelations(entity.entityType, entity.entityId),
+					}
+					discovered.push(dirty)
+				}
+				if (discovered.length > 0) {
+					this.claimEntities(discovered, claimed, updateMode)
+					continue
+				}
+
+				const executionEntities = [...accepted.values()].filter(entity => initialKeys.has(entityIdentityKey(entity.entityType, entity.entityId)))
+				execution = createPersistExecution(
+					this.store,
+					mutations,
+					executionEntities,
+					nested,
+					collector instanceof MutationCollector ? collector.getCollectedRelationFields() : [],
+					collector instanceof MutationCollector ? collector.getCollectedNestedCreates() : [],
+					collector instanceof MutationCollector ? collector.getCollectedNestedUpdates() : [],
+					collector instanceof MutationCollector ? collector.getCollectedHasOneChanges() : [],
+					collector instanceof MutationCollector ? collector.getCollectedHasManyChanges() : [],
+					[...vetoed.values()],
+					collector instanceof MutationCollector ? collector.getSuppressedRelationItems() : new Map(),
+					scope,
+				)
+				break
+			}
+
+			this.assertCustomCollectorIsSafe(execution, collector)
+			if (execution.mutations.length === 0) {
+				result = this.mergeCancelled(emptyPersistenceResult(), execution.vetoed)
 				return result
 			}
 
-			// Execute transaction
-			const transactionResult = await this.executeTransaction(mutations, options?.signal)
-
-			// Assigned to `result` so the finally block can gate the sweep on full success.
-			result = this.processTransactionResult(sortedEntities, transactionResult, scope, options)
+			const transactionResult = await this.executeTransaction(execution, options?.signal)
+			result = this.processExecutionResult(execution, transactionResult, options)
+			result = this.mergeCancelled(result, execution.vetoed)
 			return result
 
 		} finally {
-			// Clear in-flight status
-			this.changeRegistry.clearInFlight(sortedEntities)
-
-			// Clear persisting state
-			for (const entity of sortedEntities) {
-				this.dispatcher.dispatch(setPersisting(entity.entityType, entity.entityId, false))
-			}
-
-			// Unblock undo
+			this.releaseEntities([...claimed.values()])
 			this.undoManager?.unblock()
-
-			// Reclaim memory: drop snapshots of any created entities orphaned during
-			// editing. Only after a FULLY successful persist — on a failed or partial
-			// persist the user's creates and edits are left intact and dirty for a retry,
-			// and sweeping then could reclaim a create the user still intends to save.
 			if (result?.success) {
 				this.store.sweepUnreachableCreated()
 			}
+		}
+
+		// Unreachable, but keeps the return type explicit when control-flow analysis changes.
+		return emptyPersistenceResult()
+	}
+
+	/**
+	 * Whether any entity in the batch has an `entity:persisting` interceptor.
+	 */
+	private hasPersistingInterceptors(entities: readonly DirtyEntity[]): boolean {
+		const emitter = this.dispatcher.getEventEmitter()
+		return entities.some(
+			entity => emitter.hasInterceptors('entity:persisting', entity.entityType, entity.entityId),
+		)
+	}
+
+	/**
+	 * Runs `entity:persisting` interceptors for every entity in the batch.
+	 * A `null` result vetoes that one entity — mirroring how ActionDispatcher treats
+	 * a cancelling interceptor — while the rest of the batch proceeds.
+	 */
+	private async runPersistingInterceptors(
+		entities: readonly DirtyEntity[],
+	): Promise<{ accepted: DirtyEntity[]; cancelled: DirtyEntity[] }> {
+		const emitter = this.dispatcher.getEventEmitter()
+		const accepted: DirtyEntity[] = []
+		const cancelled: DirtyEntity[] = []
+
+		for (const entity of entities) {
+			const event: EntityPersistingEvent = {
+				type: 'entity:persisting',
+				timestamp: Date.now(),
+				entityType: entity.entityType,
+				entityId: entity.entityId,
+				isNew: entity.changeType === 'create',
+			}
+			const result = await emitter.runInterceptors(event)
+			if (result === null) {
+				cancelled.push(entity)
+			} else {
+				accepted.push(entity)
+			}
+		}
+
+		return { accepted, cancelled }
+	}
+
+	/**
+	 * Emits `entity:persisted` / `entity:persistFailed` for entities that were sent.
+	 */
+	private emitPersistOutcome(results: readonly EntityPersistResult[]): void {
+		const emitter = this.dispatcher.getEventEmitter()
+
+		for (const entry of results) {
+			if (entry.skipped) continue
+			if (entry.success) {
+				emitter.emit({
+					type: 'entity:persisted',
+					timestamp: Date.now(),
+					entityType: entry.entityType,
+					entityId: entry.entityId,
+					isNew: entry.operation === 'create',
+					// Updates keep their id; creates carry the server-assigned one.
+					persistedId: entry.persistedId ?? entry.entityId,
+				} satisfies EntityPersistedEvent)
+			} else {
+				emitter.emit({
+					type: 'entity:persistFailed',
+					timestamp: Date.now(),
+					entityType: entry.entityType,
+					entityId: entry.entityId,
+					isNew: entry.operation === 'create',
+					error: new Error(entry.error?.message ?? 'Persist failed'),
+				} satisfies EntityPersistFailedEvent)
+			}
+		}
+
+	}
+
+	/**
+	 * Emits `entity:persistFailed` for the whole batch when the persist itself threw.
+	 */
+	private emitPersistFailed(entities: readonly DirtyEntity[], error: Error): void {
+		const emitter = this.dispatcher.getEventEmitter()
+
+		for (const entity of entities) {
+			emitter.emit({
+				type: 'entity:persistFailed',
+				timestamp: Date.now(),
+				entityType: entity.entityType,
+				entityId: entity.entityId,
+				isNew: entity.changeType === 'create',
+				error,
+			} satisfies EntityPersistFailedEvent)
+		}
+	}
+
+	/**
+	 * Folds vetoed entities into the result as skipped — never as successes, and never
+	 * as server failures, so callers can tell a deliberate veto from a broken save.
+	 * Their entries carry `skipped`, which keeps `failedCount` in step with `results`.
+	 */
+	private mergeCancelled(
+		attempted: PersistenceResult,
+		cancelled: readonly DirtyEntity[],
+	): PersistenceResult {
+		if (cancelled.length === 0) return attempted
+
+		const cancelledResults = cancelled.map((entity): EntityPersistResult => ({
+			entityType: entity.entityType,
+			entityId: entity.entityId,
+			operation: entity.changeType,
+			success: false,
+			skipped: true,
+			error: { message: `Persist of ${entity.entityType}:${entity.entityId} was cancelled by an entity:persisting interceptor` },
+		}))
+
+		return {
+			success: false,
+			results: [...attempted.results, ...cancelledResults],
+			successCount: attempted.successCount,
+			failedCount: attempted.failedCount,
+			skippedCount: attempted.skippedCount + cancelled.length,
 		}
 	}
 
@@ -364,16 +575,22 @@ export class BatchPersister {
 	 */
 	private buildMutations(
 		entities: DirtyEntity[],
+		vetoedEntityKeys: ReadonlySet<string>,
 		scope: PersistScope,
+		collector: MutationDataCollector | undefined,
 	): TransactionMutation[] {
 		// Exclude only non-create entities from nesting —
 		// new entities should be nested inside their parent's mutation
 		// to maintain correct relation connections without transaction support.
-		if (this.mutationCollector instanceof MutationCollector) {
-			const excludedIds = new Set(
-				entities.filter(e => e.changeType !== 'create').map(e => e.entityId),
-			)
-			this.mutationCollector.setExcludedEntities(excludedIds)
+		// Vetoed entities are kept apart: an excluded entity still has its parent-side
+		// delete emitted, a vetoed one must not be written at all.
+		if (collector instanceof MutationCollector) {
+			const excludedIds = new Set<string>()
+			for (const entity of entities) {
+				if (entity.changeType !== 'create') excludedIds.add(entityIdentityKey(entity.entityType, entity.entityId))
+			}
+			collector.setExcludedEntityKeys(excludedIds)
+			collector.setVetoedEntityKeys(vetoedEntityKeys)
 		}
 
 		const mutations: TransactionMutation[] = []
@@ -395,13 +612,13 @@ export class BatchPersister {
 				// Field-specific collection
 				data = this.collectFieldsData(entity.entityType, entity.entityId, scope.fields)
 			} else if (entity.changeType === 'create') {
-				const mc = this.mutationCollector
+				const mc = collector
 				data = mc?.collectCreateData
 					? mc.collectCreateData(entity.entityType, entity.entityId)
 					: this.collectCreateDataWithRelationCheck(entity)
 			} else {
-				data = this.mutationCollector
-					? this.mutationCollector.collectUpdateData(entity.entityType, entity.entityId)
+				data = collector
+					? collector.collectUpdateData(entity.entityType, entity.entityId)
 					: this.collectUpdateDataWithRelationCheck(entity)
 			}
 
@@ -417,10 +634,10 @@ export class BatchPersister {
 
 		// Remove standalone create mutations for entities that were included
 		// as nested inline creates inside another entity's mutation.
-		if (this.mutationCollector instanceof MutationCollector) {
-			const nestedIds = this.mutationCollector.getNestedEntityIds()
-			if (nestedIds.size > 0) {
-				return mutations.filter(m => !(m.operation === 'create' && nestedIds.has(m.entityId)))
+		if (collector instanceof MutationCollector) {
+			const nestedKeys = new Set(collector.getNestedEntities().map(entity => entityIdentityKey(entity.entityType, entity.entityId)))
+			if (nestedKeys.size > 0) {
+				return mutations.filter(m => !(m.operation === 'create' && nestedKeys.has(entityIdentityKey(m.entityType, m.entityId))))
 			}
 		}
 
@@ -532,16 +749,18 @@ export class BatchPersister {
 	 * Executes mutations as a transaction.
 	 */
 	private async executeTransaction(
-		mutations: TransactionMutation[],
+		execution: PersistExecution,
 		signal?: AbortSignal,
-	): Promise<TransactionResult> {
+	): Promise<ExecutedPersist> {
+		const mutations = execution.mutations
 		// Check if adapter supports transactions
 		if ('persistTransaction' in this.adapter && typeof this.adapter.persistTransaction === 'function') {
 			try {
-				return await this.adapter.persistTransaction(mutations)
+				const result = await this.adapter.persistTransaction(mutations)
+				return { mode: 'atomic', ok: result.ok, results: result.results }
 			} catch (error) {
-				// Adapter threw an exception - mark all as failed
 				return {
+					mode: 'atomic',
 					ok: false,
 					results: mutations.map(m => ({
 						entityType: m.entityType,
@@ -553,8 +772,26 @@ export class BatchPersister {
 			}
 		}
 
-		// Fallback: execute sequentially (not truly transactional)
-		const results: TransactionResult['results'][number][] = []
+		const missingCreate = mutations.some(mutation => mutation.operation === 'create') && !this.adapter.create
+		const missingDelete = mutations.some(mutation => mutation.operation === 'delete') && !this.adapter.delete
+		if (missingCreate || missingDelete) {
+			const message = [
+				missingCreate ? 'Adapter does not implement create' : '',
+				missingDelete ? 'Adapter does not implement delete' : '',
+			].filter(Boolean).join('; ')
+			return {
+				mode: 'sequential',
+				ok: false,
+				results: mutations.map(mutation => ({
+					entityType: mutation.entityType,
+					entityId: mutation.entityId,
+					ok: false,
+					errorMessage: message,
+				})),
+			}
+		}
+
+		const results: ExecutedMutationResult[] = []
 		let allOk = true
 
 		for (const mutation of mutations) {
@@ -585,16 +822,13 @@ export class BatchPersister {
 				} else if (mutation.operation === 'create') {
 					if (this.adapter.create && mutation.data) {
 						const result = await this.adapter.create(mutation.entityType, mutation.data)
-						const persistedId = result.data?.['id'] as string | undefined
-						const nestedResults = result.ok && result.data && mutation.data
-							? this.extractNestedResultsFromNode(mutation.data, result.data, mutation.entityType, mutation.entityId)
-							: undefined
+						const persistedId = getStringProperty(result.data, 'id')
 						results.push({
 							entityType: mutation.entityType,
 							entityId: mutation.entityId,
 							ok: result.ok,
 							persistedId,
-							nestedResults,
+							nodeData: result.data,
 							errorMessage: result.errorMessage,
 							mutationResult: result.mutationResult,
 						})
@@ -608,14 +842,11 @@ export class BatchPersister {
 							mutation.entityId,
 							mutation.data,
 						)
-						const nestedResults = result.ok && result.data && mutation.data
-							? this.extractNestedResultsFromNode(mutation.data, result.data, mutation.entityType, mutation.entityId)
-							: undefined
 						results.push({
 							entityType: mutation.entityType,
 							entityId: mutation.entityId,
 							ok: result.ok,
-							nestedResults,
+							nodeData: result.data,
 							errorMessage: result.errorMessage,
 							mutationResult: result.mutationResult,
 						})
@@ -633,129 +864,360 @@ export class BatchPersister {
 			}
 		}
 
-		return { ok: allOk, results }
+		return { mode: 'sequential', ok: allOk, results }
 	}
 
 	/**
 	 * Processes transaction result and commits/rolls back as needed.
 	 * For pessimistic mode, restores captured state on success.
 	 */
-	private processTransactionResult(
-		entities: DirtyEntity[],
-		transactionResult: TransactionResult,
-		scope: PersistScope,
+	private processExecutionResult(
+		execution: PersistExecution,
+		transactionResult: ExecutedPersist,
 		options?: BatchPersistOptions,
 	): PersistenceResult {
 		const results: EntityPersistResult[] = []
-		let successCount = 0
-		let failedCount = 0
+		const nestedResults: EntityPersistResult[] = []
 		const rollbackOnError = options?.rollbackOnError ?? false
+		const atomicFailure = transactionResult.mode === 'atomic' && (
+			!transactionResult.ok || transactionResult.results.some(entry => !entry.ok)
+		)
 
-		if (transactionResult.ok) {
-			// All succeeded - commit all
-			for (let i = 0; i < transactionResult.results.length; i++) {
-				const mutationResult = transactionResult.results[i]!
-				const entity = entities.find(
-					e => e.entityType === mutationResult.entityType && e.entityId === mutationResult.entityId,
-				)
+		for (const mutation of execution.mutations) {
+			const mutationResult = transactionResult.results.find(entry => (
+				entry.entityType === mutation.entityType && entry.entityId === mutation.entityId
+			))
+			const entity = execution.entities.find(entry => (
+				entry.entityType === mutation.entityType && entry.entityId === mutation.entityId
+			))
+			if (!entity) continue
 
-				if (entity) {
-					// The store was never mutated to the server view, so a successful
-					// persist just commits the dirty state as the new server baseline —
-					// the same path optimistic mode always took.
-					if (scope.type === 'fields' && scope.entityType === entity.entityType && scope.entityId === entity.entityId) {
-						// Partial commit for field scope
-						this.store.commitFields(entity.entityType, entity.entityId, [...scope.fields])
-					} else {
-						// Full commit
-						this.dispatcher.dispatch(commitEntity(entity.entityType, entity.entityId))
-						this.store.commitAllRelations(entity.entityType, entity.entityId)
-					}
-
-					// Map temp ID if create
-					if (entity.changeType === 'create' && mutationResult.persistedId) {
-						this.store.mapTempIdToPersistedId(
-							entity.entityType,
-							entity.entityId,
-							mutationResult.persistedId,
-						)
-					}
-
-					// Process nested results (inline-created entities within this mutation)
-					if (mutationResult.nestedResults) {
-						this.commitNestedResults(mutationResult.nestedResults)
-					}
-
-					results.push({
-						entityType: entity.entityType,
-						entityId: entity.entityId,
-						operation: entity.changeType,
-						success: true,
-						persistedId: mutationResult.persistedId,
-					})
-					successCount++
+			const adapterSucceeded = mutationResult?.ok === true && !atomicFailure
+			if (!adapterSucceeded) {
+				const message = atomicFailure
+					? mutationResult?.errorMessage ?? 'Atomic transaction failed'
+					: mutationResult?.errorMessage ?? 'Mutation result missing'
+				this.mapServerErrors(entity.entityType, entity.entityId, mutationResult?.mutationResult, message)
+				if (rollbackOnError) this.rollbackExecutionEntity(entity)
+				results.push(toFailedResult(entity, message, mutationResult?.mutationResult))
+				for (const nested of this.expectedNestedEntities(execution, mutation)) {
+					nestedResults.push(toFailedResult(nested, message))
 				}
+				for (const nested of this.expectedNestedUpdates(execution, mutation)) {
+					nestedResults.push(toFailedResult(nested, message))
+				}
+				continue
+			}
+			if (entity.operation === 'create' && isTempId(entity.entityId) && !mutationResult?.persistedId) {
+				const message = `Create of ${entity.entityType}:${entity.entityId} succeeded without a server ID`
+				this.mapServerErrors(entity.entityType, entity.entityId, undefined, message)
+				results.push(toFailedResult(entity, message))
+				continue
 			}
 
-			// Commit nested entities that don't have explicit results from the adapter.
-			// These entities were nested inside a parent mutation's data and exist on the server,
-			// but the adapter may not provide individual results for them.
-			this.commitUnresolvedNestedEntities(entities)
-		} else {
-			// Transaction failed - map errors and optionally rollback
-			// For pessimistic mode, entities are already at server state, no rollback needed
-			for (const mutationResult of transactionResult.results) {
-				const entity = entities.find(
-					e => e.entityType === mutationResult.entityType && e.entityId === mutationResult.entityId,
-				)
+			const resolvedNested = this.resolveNestedResults(execution, mutation, mutationResult)
+			const nestedUpdates = this.expectedNestedUpdates(execution, mutation)
+			const involved = [entity, ...resolvedNested.entities, ...nestedUpdates]
+			const conflicts = this.reconcileConfirmedEntities(execution, involved, new Set(resolvedNested.persistedIds.keys()))
+			this.mapConfirmedIds(entity, mutationResult.persistedId, resolvedNested.persistedIds)
 
-				if (entity) {
-					if (!mutationResult.ok) {
-						// Map errors to fields
-						this.mapServerErrors(
-							entity.entityType,
-							entity.entityId,
-							mutationResult.mutationResult,
-							mutationResult.errorMessage,
-						)
-
-						// The store was never mutated to the server view, so on failure the
-						// entity's edits and creates are already intact and dirty — they
-						// simply survive for a retry (P2), no restore needed. Rollback to
-						// server state happens only when rollbackOnError is set.
-						if (rollbackOnError) {
-							this.rollbackEntity(entity)
-						}
-					}
-
-					results.push({
-						entityType: entity.entityType,
-						entityId: entity.entityId,
-						operation: entity.changeType,
-						success: mutationResult.ok,
-						error: mutationResult.ok ? undefined : {
-							message: mutationResult.errorMessage ?? 'Unknown error',
-							mutationResult: mutationResult.mutationResult,
-						},
-						persistedId: mutationResult.persistedId,
-					})
-
-					if (mutationResult.ok) {
-						successCount++
-					} else {
-						failedCount++
-					}
-				}
+			for (const nested of resolvedNested.entities) {
+				const key = entityIdentityKey(nested.entityType, nested.entityId)
+				const conflict = conflicts.get(key)?.join('; ')
+				nestedResults.push(conflict
+					? toFailedResult(nested, conflict)
+					: toSuccessResult(nested, resolvedNested.persistedIds.get(key)))
+			}
+			for (const nested of nestedUpdates) {
+				const conflict = conflicts.get(entityIdentityKey(nested.entityType, nested.entityId))?.join('; ')
+				nestedResults.push(conflict ? toFailedResult(nested, conflict) : toSuccessResult(nested))
+			}
+			const unresolvedMessage = resolvedNested.unresolved.length > 0
+				? `Missing or ambiguous server ID for nested create ${resolvedNested.unresolved.map(item => `${item.entityType}:${item.entityId}`).join(', ')}`
+				: undefined
+			for (const nested of resolvedNested.unresolved) {
+				nestedResults.push(toFailedResult(nested, unresolvedMessage ?? 'Nested create could not be resolved'))
+			}
+			const conflictMessage = [...conflicts.values()].flat().join('; ')
+			const failure = [unresolvedMessage, conflictMessage || undefined].filter((message): message is string => message !== undefined).join('; ')
+			if (failure) {
+				this.mapServerErrors(entity.entityType, entity.entityId, undefined, failure)
+				results.push(toFailedResult(entity, failure))
+			} else {
+				results.push(toSuccessResult(entity, this.persistedIdFor(entity, mutationResult.persistedId)))
 			}
 		}
 
-		return {
-			success: transactionResult.ok,
+		for (const nested of execution.entities.filter(entity => entity.nested)) {
+			const key = entityIdentityKey(nested.entityType, nested.entityId)
+			if (nestedResults.some(entry => entityIdentityKey(entry.entityType, entry.entityId) === key)) continue
+			if (atomicFailure) nestedResults.push(toFailedResult(nested, 'Atomic transaction failed'))
+		}
+
+		const successCount = results.filter(entry => entry.success).length
+		const failedCount = results.length - successCount
+		const result: PersistenceResult = {
+			success: failedCount === 0 && transactionResult.ok,
 			results,
 			successCount,
 			failedCount,
 			skippedCount: 0,
 		}
+		this.nestedOutcomes.set(result, nestedResults)
+		if (atomicFailure) {
+			this.eventOutcomes.set(result, [
+				...execution.mutations.map(mutation => {
+					const entity = execution.entities.find(candidate => (
+						candidate.entityType === mutation.entityType && candidate.entityId === mutation.entityId
+					))
+					return entity ? toFailedResult(entity, 'Atomic transaction failed') : undefined
+				}).filter((entry): entry is EntityPersistResult => entry !== undefined),
+				...nestedResults,
+			])
+		}
+		return result
+	}
+
+	private claimEntities(
+		entities: readonly DirtyEntity[],
+		claimed: Map<string, DirtyEntity>,
+		updateMode: UpdateMode,
+	): void {
+		const fresh = entities.filter(entity => !claimed.has(entityIdentityKey(entity.entityType, entity.entityId)))
+		if (fresh.length === 0) return
+		this.changeRegistry.markInFlight(fresh)
+		for (const entity of fresh) {
+			claimed.set(entityIdentityKey(entity.entityType, entity.entityId), entity)
+			this.dispatcher.dispatch(setPersisting(entity.entityType, entity.entityId, true, updateMode === 'pessimistic'))
+			this.dispatcher.dispatch(clearAllServerErrors(entity.entityType, entity.entityId))
+		}
+	}
+
+	private releaseEntities(entities: readonly DirtyEntity[]): void {
+		if (entities.length === 0) return
+		this.changeRegistry.clearInFlight(entities)
+		for (const entity of entities) {
+			this.dispatcher.dispatch(setPersisting(entity.entityType, entity.entityId, false))
+		}
+	}
+
+	private assertCustomCollectorIsSafe(
+		execution: PersistExecution,
+		collector: MutationDataCollector | undefined,
+	): void {
+		if (!collector || collector instanceof MutationCollector) return
+		for (const entity of execution.entities) {
+			const relations = this.store.getDirtyRelations(entity.entityType, entity.entityId)
+			if (relations.length > 0) {
+				throw new Error(
+					`Custom mutation collectors support scalar data only; ${entity.entityType}:${entity.entityId} has relation changes`,
+				)
+			}
+		}
+		if (execution.mutations.some(mutation => containsNestedMutation(mutation.data))) {
+			throw new Error('Custom mutation collectors cannot emit nested or relation mutation operations')
+		}
+	}
+
+	private resolveNestedResults(
+		execution: PersistExecution,
+		mutation: TransactionMutation,
+		result: ExecutedMutationResult,
+	): {
+		readonly entities: readonly ExecutionEntity[]
+		readonly unresolved: readonly ExecutionEntity[]
+		readonly persistedIds: ReadonlyMap<string, string>
+	} {
+		const expected = this.expectedNestedEntities(execution, mutation)
+		if (expected.length === 0) return { entities: [], unresolved: [], persistedIds: new Map() }
+
+		let supplied = result.nestedResults ?? []
+		if (supplied.length === 0 && result.nodeData) {
+			supplied = this.extractNestedResultsFromNode(
+				execution,
+				result.nodeData,
+				mutation.entityType,
+				mutation.entityId,
+			)
+		}
+		const flattened = flattenMutationResults(supplied)
+		const persistedIds = new Map<string, string>()
+		const unresolved: ExecutionEntity[] = []
+		const typesById = new Map<string, Set<string>>()
+		for (const entity of expected) {
+			const types = typesById.get(entity.entityId)
+			if (types) types.add(entity.entityType)
+			else typesById.set(entity.entityId, new Set([entity.entityType]))
+		}
+		for (const entity of expected) {
+			if ((typesById.get(entity.entityId)?.size ?? 0) > 1) {
+				unresolved.push(entity)
+				continue
+			}
+			const exactMatch = flattened.find(entry => (
+				entry.entityType === entity.entityType && entry.entityId === entity.entityId && entry.ok
+			))
+			const match = exactMatch ?? flattened.find(entry => (
+				entry.entityType === 'Unknown'
+				&& entry.entityId === entity.entityId
+				&& entry.ok
+				&& typesById.get(entity.entityId)?.size === 1
+			))
+			const persistedId = match?.persistedId ?? (!isTempId(entity.entityId) ? entity.entityId : undefined)
+			if (!persistedId) unresolved.push(entity)
+			else persistedIds.set(entityIdentityKey(entity.entityType, entity.entityId), persistedId)
+		}
+		return { entities: expected.filter(entity => !unresolved.includes(entity)), unresolved, persistedIds }
+	}
+
+	private expectedNestedEntities(
+		execution: PersistExecution,
+		mutation: TransactionMutation,
+	): ExecutionEntity[] {
+		return this.expectedNestedGraph(execution, mutation).creates
+	}
+
+	private expectedNestedUpdates(execution: PersistExecution, mutation: TransactionMutation): ExecutionEntity[] {
+		return this.expectedNestedGraph(execution, mutation).updates
+	}
+
+	private expectedNestedGraph(
+		execution: PersistExecution,
+		mutation: TransactionMutation,
+	): { readonly creates: ExecutionEntity[]; readonly updates: ExecutionEntity[] } {
+		const entities = new Map(execution.entities.map(entity => [entityIdentityKey(entity.entityType, entity.entityId), entity]))
+		const ownerQueue = [entityIdentityKey(mutation.entityType, mutation.entityId)]
+		const owners = new Set(ownerQueue)
+		const creates = new Map<string, ExecutionEntity>()
+		const updates = new Map<string, ExecutionEntity>()
+		for (let index = 0; index < ownerQueue.length; index++) {
+			const owner = ownerQueue[index]!
+			for (const descriptor of execution.nestedCreates) {
+				if (entityIdentityKey(descriptor.parentEntityType, descriptor.parentEntityId) !== owner) continue
+				const key = entityIdentityKey(descriptor.entityType, descriptor.entityId)
+				const entity = entities.get(key)
+				if (!entity) continue
+				creates.set(key, entity)
+				if (!owners.has(key)) {
+					owners.add(key)
+					ownerQueue.push(key)
+				}
+			}
+			for (const update of execution.nestedUpdates) {
+				if (entityIdentityKey(update.parentEntityType, update.parentEntityId) !== owner) continue
+				const key = entityIdentityKey(update.entityType, update.entityId)
+				const entity = entities.get(key)
+				if (!entity) continue
+				updates.set(key, entity)
+				if (!owners.has(key)) {
+					owners.add(key)
+					ownerQueue.push(key)
+				}
+			}
+		}
+		return { creates: [...creates.values()], updates: [...updates.values()] }
+	}
+
+	private reconcileConfirmedEntities(
+		execution: PersistExecution,
+		entities: readonly ExecutionEntity[],
+		confirmedNestedCreates: ReadonlySet<string>,
+	): ReadonlyMap<string, readonly string[]> {
+		const keys = new Set(entities.map(entity => entityIdentityKey(entity.entityType, entity.entityId)))
+		const conflicts = new Map<string, string[]>()
+		const addConflict = (key: string, message: string): void => {
+			const messages = conflicts.get(key)
+			if (messages) messages.push(message)
+			else conflicts.set(key, [message])
+		}
+		for (const entity of entities) {
+			const key = entityIdentityKey(entity.entityType, entity.entityId)
+			if (entity.operation === 'delete') {
+				if (!this.store.isScheduledForDeletion(entity.entityType, entity.entityId)) {
+					this.store.setExistsOnServer(entity.entityType, entity.entityId, false)
+					addConflict(key, `Delete of ${entity.entityType}:${entity.entityId} completed after the local deletion was reversed`)
+					continue
+				}
+				this.store.removeEntity(entity.entityType, entity.entityId)
+				continue
+			}
+			this.store.refreshServerData(entity.entityType, entity.entityId, entity.scalarData)
+		}
+
+		for (const change of execution.hasOneChanges) {
+			const ownerKey = entityIdentityKey(change.entityType, change.entityId)
+			if (!keys.has(ownerKey)) continue
+			if (change.transition.operation === 'create') {
+				const descriptor = execution.nestedCreates.find(item => (
+					item.parentEntityType === change.entityType
+					&& item.parentEntityId === change.entityId
+					&& item.fieldName === change.fieldName
+					&& item.entityId === change.transition.targetId
+				))
+				if (!descriptor || !confirmedNestedCreates.has(entityIdentityKey(descriptor.entityType, descriptor.entityId))) continue
+			}
+			const outcome = this.store.reconcileSentRelation(
+				change.entityType,
+				change.entityId,
+				change.fieldName,
+				change.transition,
+			)
+			if (outcome === 'conflict') addConflict(ownerKey, relationConflictMessage(change.entityType, change.entityId, change.fieldName))
+		}
+		for (const change of execution.hasManyChanges) {
+			const ownerKey = entityIdentityKey(change.entityType, change.entityId)
+			if (!keys.has(ownerKey)) continue
+			const additions = change.additions.filter(addition => {
+				if (addition.kind !== 'created') return true
+				const descriptor = execution.nestedCreates.find(item => (
+					item.parentEntityType === change.entityType
+					&& item.parentEntityId === change.entityId
+					&& item.fieldName === change.fieldName
+					&& item.entityId === addition.itemId
+				))
+				return descriptor !== undefined && confirmedNestedCreates.has(entityIdentityKey(descriptor.entityType, descriptor.entityId))
+			})
+			if (additions.length === 0 && change.removals.length === 0) continue
+			const outcome = this.store.reconcileSentHasMany(
+				change.entityType,
+				change.entityId,
+				change.fieldName,
+				{ additions, removals: change.removals },
+			)
+			if (outcome === 'conflict') addConflict(ownerKey, relationConflictMessage(change.entityType, change.entityId, change.fieldName))
+		}
+		return conflicts
+	}
+
+	private mapConfirmedIds(
+		entity: ExecutionEntity,
+		persistedId: string | undefined,
+		nestedIds: ReadonlyMap<string, string>,
+	): void {
+		for (const [key, id] of nestedIds) {
+			const nested = splitExecutionKey(key)
+			if (isTempId(nested.entityId)) {
+				this.store.mapTempIdToPersistedId(nested.entityType, nested.entityId, id)
+			}
+		}
+		if (entity.operation === 'create' && isTempId(entity.entityId) && persistedId) {
+			this.store.mapTempIdToPersistedId(entity.entityType, entity.entityId, persistedId)
+		}
+	}
+
+	private persistedIdFor(entity: ExecutionEntity, persistedId: string | undefined): string | undefined {
+		if (entity.operation !== 'create') return undefined
+		return persistedId ?? (!isTempId(entity.entityId) ? entity.entityId : undefined)
+	}
+
+	private rollbackExecutionEntity(entity: ExecutionEntity): void {
+		this.rollbackEntity({
+			entityType: entity.entityType,
+			entityId: entity.entityId,
+			changeType: entity.operation,
+			dirtyFields: [],
+			dirtyRelations: [],
+		})
 	}
 
 	/**
@@ -847,193 +1309,138 @@ export class BatchPersister {
 		}
 	}
 
-	/**
-	 * Recursively commits nested entity results and maps their server IDs.
-	 * Called when the adapter provides nestedResults in the transaction response.
-	 * Uses the MutationCollector's nestedEntityTypes map to resolve entity types,
-	 * since the adapter may not know the correct entity type for nested entities.
-	 */
-	private commitNestedResults(nestedResults: readonly TransactionMutationResult[]): void {
-		const nestedTypes = this.mutationCollector instanceof MutationCollector
-			? this.mutationCollector.getNestedEntityTypes()
-			: null
-
-		for (const nested of nestedResults) {
-			if (!nested.ok) continue
-
-			// Resolve entity type from collector's tracking (adapter may report 'Unknown')
-			const entityType = nestedTypes?.get(nested.entityId) ?? nested.entityType
-			const snapshot = this.store.getEntitySnapshot(entityType, nested.entityId)
-			if (!snapshot) continue
-
-			// Commit the nested entity
-			this.dispatcher.dispatch(commitEntity(entityType, nested.entityId))
-			this.store.commitAllRelations(entityType, nested.entityId)
-			this.store.setExistsOnServer(entityType, nested.entityId, true)
-
-			// Map temp ID to server-assigned ID
-			if (nested.persistedId) {
-				this.store.mapTempIdToPersistedId(
-					entityType,
-					nested.entityId,
-					nested.persistedId,
-				)
-			}
-
-			// Recurse for deeper nesting
-			if (nested.nestedResults) {
-				this.commitNestedResults(nested.nestedResults)
-			}
-		}
-	}
-
-	/**
-	 * Commits nested entities that were part of the transaction but don't have
-	 * explicit results from the adapter. These entities were created inline
-	 * inside a parent mutation and exist on the server after a successful persist.
-	 */
-	private commitUnresolvedNestedEntities(entities: DirtyEntity[]): void {
-		if (!(this.mutationCollector instanceof MutationCollector)) return
-
-		const nestedTypes = this.mutationCollector.getNestedEntityTypes()
-		if (nestedTypes.size === 0) return
-
-		// Find nested entities that are in the entities list but weren't committed
-		// by the main result processing (they had no matching result from the adapter)
-		for (const entity of entities) {
-			if (entity.changeType !== 'create') continue
-			if (!nestedTypes.has(entity.entityId)) continue
-
-			// Check if this entity was already committed (has server data)
-			if (this.store.existsOnServer(entity.entityType, entity.entityId)) continue
-
-			// Commit it — the parent mutation succeeded, so this entity exists on the server
-			this.dispatcher.dispatch(commitEntity(entity.entityType, entity.entityId))
-			this.store.commitAllRelations(entity.entityType, entity.entityId)
-			this.store.setExistsOnServer(entity.entityType, entity.entityId, true)
-		}
-
-		// Also commit materialized entities that may not be in the entities list
-		// (they were created during mutation building by materializeEmbeddedHasMany/HasOne)
-		for (const [tempId, entityType] of nestedTypes) {
-			if (this.store.existsOnServer(entityType, tempId)) continue
-
-			const snapshot = this.store.getEntitySnapshot(entityType, tempId)
-			if (!snapshot) continue
-
-			this.dispatcher.dispatch(commitEntity(entityType, tempId))
-			this.store.commitAllRelations(entityType, tempId)
-			this.store.setExistsOnServer(entityType, tempId, true)
-		}
-	}
-
-	/**
-	 * Extracts nested entity results from a mutation's node response data.
-	 * Walks the mutation data structure to find inline create operations,
-	 * then matches them against the node response to extract server-assigned IDs.
-	 *
-	 * For hasOne creates: looks up the temp ID from the store's relation state
-	 * for the parent entity, then gets the server ID from the response node field.
-	 * For hasMany creates: filters new IDs from the response array by excluding
-	 * known pre-existing IDs, matching to temp IDs (aliases) by position.
-	 */
+	/** Resolves nested create responses from the immutable planning descriptors. */
 	private extractNestedResultsFromNode(
-		mutationData: Record<string, unknown>,
+		execution: PersistExecution,
 		nodeData: Record<string, unknown>,
 		parentEntityType: string,
 		parentEntityId: string,
 	): TransactionMutationResult[] {
 		const results: TransactionMutationResult[] = []
-		const nestedTypes = this.mutationCollector instanceof MutationCollector
-			? this.mutationCollector.getNestedEntityTypes()
-			: null
-
 		const makeResult = (
-			tempId: string,
-			createData: Record<string, unknown>,
+			op: NodeCreateOp,
 			nodeItem: Record<string, unknown>,
 		): TransactionMutationResult => {
 			const childResults = this.extractNestedResultsFromNode(
-				createData, nodeItem,
-				nestedTypes?.get(tempId) ?? 'Unknown', tempId,
+				execution,
+				nodeItem,
+				op.entityType,
+				op.alias,
 			)
 			return {
-				entityType: nestedTypes?.get(tempId) ?? 'Unknown',
-				entityId: tempId,
+				entityType: op.entityType,
+				entityId: op.alias,
 				ok: true,
-				persistedId: nodeItem['id'] as string,
+				persistedId: getStringProperty(nodeItem, 'id'),
 				nestedResults: childResults.length > 0 ? childResults : undefined,
 			}
 		}
-
-		for (const [fieldName, fieldValue] of Object.entries(mutationData)) {
-			if (fieldValue === null || fieldValue === undefined) continue
-
-			if (Array.isArray(fieldValue)) {
-				const nodeItems = nodeData[fieldName]
-				if (!Array.isArray(nodeItems)) continue
-
-				// Separate create ops from known IDs (connect/update)
-				const knownIds = new Set<string>()
-				const createOps: Array<{ alias: string; createData: Record<string, unknown> }> = []
-
-				for (const op of fieldValue) {
-					if (typeof op !== 'object' || op === null) continue
-					const opObj = op as Record<string, unknown>
-
-					if ('connect' in opObj) {
-						const connectBy = opObj['connect'] as Record<string, unknown>
-						if (connectBy['id']) knownIds.add(connectBy['id'] as string)
-					} else if ('update' in opObj) {
-						const by = (opObj['update'] as Record<string, unknown>)['by'] as Record<string, unknown> | undefined
-						if (by?.['id']) knownIds.add(by['id'] as string)
-					} else if ('create' in opObj && opObj['alias']) {
-						createOps.push({
-							alias: opObj['alias'] as string,
-							createData: opObj['create'] as Record<string, unknown>,
-						})
-					}
-				}
-
-				// Include pre-existing server IDs
-				const hasManyState = this.store.getHasMany(parentEntityType, parentEntityId, fieldName)
-				if (hasManyState) {
-					for (const id of hasManyState.serverIds) knownIds.add(id)
-				}
-
-				// Filter response to new items only, then content-match to create ops.
-				// Contember API does not guarantee hasMany ordering in node response,
-				// so we match by scalar field values instead of position.
-				// Unmatched creates keep their temp IDs until the next fetch.
-				const unmatchedItems = (nodeItems as Record<string, unknown>[])
-					.filter(it => typeof it === 'object' && it !== null && !knownIds.has(it['id'] as string))
-
-				for (const createOp of createOps) {
-					const idx = unmatchedItems.findIndex(it => this.isCreateDataMatchingNode(createOp.createData, it))
-					if (idx < 0) continue
-					results.push(makeResult(createOp.alias, createOp.createData, unmatchedItems.splice(idx, 1)[0]!))
-				}
-			} else if (typeof fieldValue === 'object') {
-				const opObj = fieldValue as Record<string, unknown>
-				const nodeField = nodeData[fieldName]
-
-				if ('create' in opObj && typeof nodeField === 'object' && nodeField !== null) {
-					const serverId = (nodeField as Record<string, unknown>)['id'] as string | undefined
-					if (!serverId) continue
-
-					const relationState = this.store.getRelation(parentEntityType, parentEntityId, fieldName)
-					if (!relationState?.currentId) continue
-
-					results.push(makeResult(
-						relationState.currentId,
-						opObj['create'] as Record<string, unknown>,
-						nodeField as Record<string, unknown>,
+		const descriptors = execution.nestedCreates.filter(descriptor => (
+			descriptor.parentEntityType === parentEntityType && descriptor.parentEntityId === parentEntityId
+		))
+		for (const descriptor of descriptors.filter(item => item.relationType === 'hasOne')) {
+			const nodeItem = nodeData[descriptor.fieldName]
+			if (!isRecord(nodeItem)) continue
+			results.push(makeResult({
+				alias: descriptor.entityId,
+				entityType: descriptor.entityType,
+				createData: { ...descriptor.createData },
+			}, nodeItem))
+		}
+		const hasManyFields = new Set(
+			descriptors.filter(item => item.relationType === 'hasMany').map(item => item.fieldName),
+		)
+		for (const fieldName of hasManyFields) {
+			const fieldDescriptors = descriptors.filter(item => item.relationType === 'hasMany' && item.fieldName === fieldName)
+			const knownIds = new Set(fieldDescriptors.flatMap(item => item.knownServerIds))
+			const nodeItems = recordArray(nodeData[fieldName]).filter(item => {
+				const id = getStringProperty(item, 'id')
+				return id === undefined || !knownIds.has(id)
+			})
+			const createOps = fieldDescriptors.map(descriptor => ({
+				alias: descriptor.entityId,
+				entityType: descriptor.entityType,
+				createData: { ...descriptor.createData },
+			}))
+			for (const { op, nodeItem } of this.pairCreateOpsWithNodes(createOps, nodeItems)) {
+				results.push(makeResult(op, nodeItem))
+			}
+		}
+		const updates = execution.nestedUpdates.filter(update => (
+			update.parentEntityType === parentEntityType && update.parentEntityId === parentEntityId
+		))
+		for (const update of updates) {
+			if (update.relationType === 'hasOne') {
+				const nodeItem = nodeData[update.fieldName]
+				if (isRecord(nodeItem)) {
+					results.push(...this.extractNestedResultsFromNode(
+						execution,
+						nodeItem,
+						update.entityType,
+						update.entityId,
 					))
 				}
+				continue
+			}
+			const nodeItem = recordArray(nodeData[update.fieldName]).find(item => (
+				getStringProperty(item, 'id') === update.entityId
+			))
+			if (nodeItem) {
+				results.push(...this.extractNestedResultsFromNode(
+					execution,
+					nodeItem,
+					update.entityType,
+					update.entityId,
+				))
 			}
 		}
 
 		return results
+	}
+
+	/**
+	 * Pairs inline create operations with the response rows they produced.
+	 *
+	 * An unambiguous match is taken first. Indistinguishable siblings remain unresolved
+	 * instead of being paired by response position.
+	 *
+	 * A single op and row left over are paired by elimination. A server that echoes a
+	 * value back normalised (a date, a decimal) matches nothing byte-for-byte, and
+	 * discarding the pair would leave that op's whole subtree on temp IDs (issue #70).
+	 */
+	private pairCreateOpsWithNodes(
+		createOps: readonly NodeCreateOp[],
+		nodeItems: readonly Record<string, unknown>[],
+	): NodeCreatePair[] {
+		const pairs: NodeCreatePair[] = []
+		const pendingOps = [...createOps]
+		const freeItems = [...nodeItems]
+
+		const takePair = (opIndex: number, nodeItem: Record<string, unknown>): void => {
+			pairs.push({ op: pendingOps[opIndex]!, nodeItem })
+			pendingOps.splice(opIndex, 1)
+			freeItems.splice(freeItems.indexOf(nodeItem), 1)
+		}
+
+		while (pendingOps.length > 0 && freeItems.length > 0) {
+			const candidatesPerOp = pendingOps.map(
+				op => freeItems.filter(item => this.isCreateDataMatchingNode(op.createData, item)),
+			)
+
+			const unique = candidatesPerOp.findIndex(candidates => candidates.length === 1)
+			if (unique >= 0) {
+				takePair(unique, candidatesPerOp[unique]![0]!)
+				continue
+			}
+
+			break
+		}
+
+		if (pendingOps.length === 1 && freeItems.length === 1) {
+			takePair(0, freeItems[0]!)
+		}
+
+		return pairs
 	}
 
 	/**
@@ -1070,5 +1477,91 @@ export class BatchPersister {
 	 */
 	cancelAll(): void {
 		this.changeRegistry.clearAllInFlight()
+	}
+}
+
+/**
+ * Normalizes a thrown value into an Error for `entity:persistFailed`.
+ */
+function toError(error: unknown): Error {
+	return error instanceof Error ? error : new Error(String(error))
+}
+
+function emptyPersistenceResult(): PersistenceResult {
+	return {
+		success: true,
+		results: [],
+		successCount: 0,
+		failedCount: 0,
+		skippedCount: 0,
+	}
+}
+
+function toSuccessResult(entity: ExecutionEntity, persistedId?: string): EntityPersistResult {
+	return {
+		entityType: entity.entityType,
+		entityId: entity.entityId,
+		operation: entity.operation,
+		success: true,
+		persistedId,
+	}
+}
+
+function toFailedResult(
+	entity: ExecutionEntity,
+	message: string,
+	mutationResult?: ContemberMutationResult,
+): EntityPersistResult {
+	return {
+		entityType: entity.entityType,
+		entityId: entity.entityId,
+		operation: entity.operation,
+		success: false,
+		error: { message, mutationResult },
+	}
+}
+
+function relationConflictMessage(entityType: string, entityId: string, fieldName: string): string {
+	return `Persisted relation ${entityType}:${entityId}.${fieldName} conflicts with a newer local change`
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function getStringProperty(value: unknown, property: string): string | undefined {
+	if (!isRecord(value)) return undefined
+	const propertyValue = value[property]
+	return typeof propertyValue === 'string' ? propertyValue : undefined
+}
+
+function recordArray(value: unknown): Record<string, unknown>[] {
+	if (!Array.isArray(value)) return []
+	return value.filter(isRecord)
+}
+
+function containsNestedMutation(value: unknown): boolean {
+	if (Array.isArray(value)) return value.some(containsNestedMutation)
+	if (!isRecord(value)) return false
+	if ('create' in value || 'connect' in value || 'disconnect' in value || 'delete' in value || 'update' in value) {
+		return true
+	}
+	return Object.values(value).some(containsNestedMutation)
+}
+
+function flattenMutationResults(results: readonly TransactionMutationResult[]): TransactionMutationResult[] {
+	const flattened: TransactionMutationResult[] = []
+	for (const result of results) {
+		flattened.push(result)
+		if (result.nestedResults) flattened.push(...flattenMutationResults(result.nestedResults))
+	}
+	return flattened
+}
+
+function splitExecutionKey(key: string): { entityType: string; entityId: string } {
+	const separator = key.indexOf(':')
+	return {
+		entityType: separator < 0 ? '' : key.slice(0, separator),
+		entityId: separator < 0 ? key : key.slice(separator + 1),
 	}
 }

@@ -37,6 +37,9 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 		dispatcher: ActionDispatcher,
 		private readonly _enumName?: string,
 		private readonly _columnType?: string,
+		private readonly dataFieldPath: string[] = fieldPath,
+		// Absolute chain from the query root; see FieldRefMeta.fullPath.
+		private readonly _fullPath: readonly string[] = fieldPath,
 	) {
 		super(entityType, entityId, store, dispatcher)
 	}
@@ -49,8 +52,10 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 		dispatcher: ActionDispatcher,
 		enumName?: string,
 		columnType?: string,
+		dataFieldPath?: string[],
+		fullPath?: readonly string[],
 	): FieldAccessor<T> {
-		return createAliasProxy<FieldHandle<T>, FieldAccessor<T>>(new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType))
+		return createAliasProxy<FieldHandle<T>, FieldAccessor<T>>(new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType, dataFieldPath, fullPath))
 	}
 
 	static createRaw<T = unknown>(
@@ -61,8 +66,10 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 		dispatcher: ActionDispatcher,
 		enumName?: string,
 		columnType?: string,
+		dataFieldPath?: string[],
+		fullPath?: readonly string[],
 	): FieldHandle<T> {
-		return new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType)
+		return new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType, dataFieldPath, fullPath)
 	}
 
 	static wrapProxy<T>(handle: FieldHandle<T>): FieldAccessor<T> {
@@ -83,6 +90,7 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 			isRelation: false,
 			enumName: this._enumName,
 			columnType: this._columnType,
+			fullPath: this._fullPath,
 		}
 	}
 
@@ -93,7 +101,7 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	get value(): T | null {
 		const data = this.getPresentationData()
 		if (!data) return null
-		return getNestedValue(data, this.fieldPath) as T | null
+		return this.getCurrentValue(data) as T | null
 	}
 
 	/**
@@ -102,7 +110,7 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	get serverValue(): T | null {
 		const serverData = this.getServerData()
 		if (!serverData) return null
-		return getNestedValue(serverData, this.fieldPath) as T | null
+		return this.getServerValue(serverData) as T | null
 	}
 
 	/**
@@ -112,8 +120,18 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	 */
 	get isDirty(): boolean {
 		const data = this.getEntityData()
-		const value = data ? (getNestedValue(data, this.fieldPath) as T | null) : null
+		const value = data ? (this.getCurrentValue(data) as T | null) : null
 		return !deepEqual(value, this.serverValue)
+	}
+
+	private getCurrentValue(data: Record<string, unknown>): unknown {
+		const value = getNestedValue(data, this.fieldPath)
+		return value === undefined ? getNestedValue(data, this.dataFieldPath) : value
+	}
+
+	private getServerValue(data: Record<string, unknown>): unknown {
+		const value = getNestedValue(data, this.fieldPath)
+		return value === undefined ? getNestedValue(data, this.dataFieldPath) : value
 	}
 
 	/**
@@ -222,12 +240,16 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	nested<K extends keyof NonNullable<T>>(
 		key: K,
 	): FieldAccessor<NonNullable<T>[K]> {
+		const fieldName = String(key)
 		return FieldHandle.create<NonNullable<T>[K]>(
 			this.entityType,
 			this.entityId,
-			[...this.fieldPath, key as string],
+			[...this.fieldPath, fieldName],
 			this.store,
 			this.dispatcher,
+			undefined,
+			undefined,
+			[...this.dataFieldPath, fieldName],
 		)
 	}
 
@@ -282,4 +304,3 @@ function getNestedValue(obj: Record<string, unknown>, path: string[]): unknown {
 
 	return current
 }
-

@@ -89,11 +89,16 @@ export {
 	type DataGridActionColumnProps,
 	type DataGridColumnProps,
 	type ColumnMeta,
+} from './columns.js'
+
+// Field ref introspection
+export {
 	extractFieldName,
+	extractEnumName,
 	extractRelatedEntityName,
 	hasFieldRefMeta,
-	getRelatedAccessor,
-} from './columns.js'
+} from './fieldRef.js'
+export { getRelatedAccessor } from './columnTypes.js'
 
 // State hooks
 export {

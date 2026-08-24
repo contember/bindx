@@ -43,12 +43,46 @@ export class EntitySnapshotStore implements Rekeyable {
 	 */
 	private editableWriteVersion = 0
 
+	/**
+	 * Monotonic counter bumped on every write that can change a snapshot's `data`
+	 * or `serverData` — i.e. every write that can change whether the entity is
+	 * dirty. Unlike the two counters above it spans BOTH layers: `mutationVersion`
+	 * ignores value edits and `editableWriteVersion` ignores server-baseline writes
+	 * (refreshServerData/commit/commitFields), so neither alone is a sound dirty
+	 * key. {@link bumpVersion} is excluded — it rewrites neither side. Read by
+	 * SnapshotStore.getDirtyVersion() to memoize the full-store dirty scan.
+	 */
+	private dataWriteVersion = 0
+
 	getMutationVersion(): number {
 		return this.mutationVersion
 	}
 
 	getEditableWriteVersion(): number {
 		return this.editableWriteVersion
+	}
+
+	getDataWriteVersion(): number {
+		return this.dataWriteVersion
+	}
+
+	/**
+	 * The single write chokepoint. Every path that installs a snapshot goes through
+	 * here, so {@link dataWriteVersion} cannot be forgotten by a new mutating method
+	 * or a new early-return branch — a stale dirty memo is silent (dead Save button),
+	 * so the bump must not be hand-maintained per call site. Mirrors
+	 * HasOneStore.writeRelation / HasManyStore.writeHasMany.
+	 */
+	private writeSnapshot(key: string, snapshot: EntitySnapshot): void {
+		this.snapshots.set(key, snapshot)
+		this.dataWriteVersion++
+	}
+
+	/** The single delete chokepoint — counterpart of {@link writeSnapshot}. */
+	private deleteSnapshot(key: string): void {
+		if (this.snapshots.delete(key)) {
+			this.dataWriteVersion++
+		}
 	}
 
 	get(key: string): EntitySnapshot | undefined {
@@ -88,9 +122,12 @@ export class EntitySnapshotStore implements Rekeyable {
 			(existing?.version ?? 0) + 1,
 		)
 
-		this.snapshots.set(key, newSnapshot)
+		this.writeSnapshot(key, newSnapshot)
+		// The id index resolves relation edges for reachability, which memoizes on
+		// mutationVersion — so any change to the index must move it, not just a new key.
+		const indexChanged = this.idIndex.get(id) !== key
 		this.idIndex.set(id, key)
-		if (!existing) this.mutationVersion++
+		if (!existing || indexChanged) this.mutationVersion++
 		if (!isServerData) this.editableWriteVersion++
 		return newSnapshot
 	}
@@ -141,7 +178,7 @@ export class EntitySnapshotStore implements Rekeyable {
 			existing.version + 1,
 		)
 
-		this.snapshots.set(key, newSnapshot)
+		this.writeSnapshot(key, newSnapshot)
 		return newSnapshot
 	}
 
@@ -165,7 +202,7 @@ export class EntitySnapshotStore implements Rekeyable {
 			existing.version + 1,
 		)
 
-		this.snapshots.set(key, newSnapshot)
+		this.writeSnapshot(key, newSnapshot)
 		this.editableWriteVersion++
 		return newSnapshot
 	}
@@ -187,7 +224,7 @@ export class EntitySnapshotStore implements Rekeyable {
 			existing.version + 1,
 		)
 
-		this.snapshots.set(key, newSnapshot)
+		this.writeSnapshot(key, newSnapshot)
 		this.editableWriteVersion++
 		return true
 	}
@@ -207,7 +244,7 @@ export class EntitySnapshotStore implements Rekeyable {
 			existing.version + 1,
 		)
 
-		this.snapshots.set(key, newSnapshot)
+		this.writeSnapshot(key, newSnapshot)
 	}
 
 	/**
@@ -225,7 +262,7 @@ export class EntitySnapshotStore implements Rekeyable {
 			existing.version + 1,
 		)
 
-		this.snapshots.set(key, newSnapshot)
+		this.writeSnapshot(key, newSnapshot)
 		this.editableWriteVersion++
 	}
 
@@ -243,12 +280,17 @@ export class EntitySnapshotStore implements Rekeyable {
 			this.idIndex.delete(existing.id)
 			this.mutationVersion++
 		}
-		this.snapshots.delete(key)
+		this.deleteSnapshot(key)
 	}
 
 	/**
 	 * Bumps the version of an entity snapshot without changing data.
 	 * Used by SubscriptionManager when child entities change.
+	 *
+	 * The ONE deliberate bypass of {@link writeSnapshot}: it reinstalls the very same
+	 * `data` and `serverData` references under a new version, so it cannot change
+	 * dirtiness and must not invalidate the dirty memo — it runs once per ancestor on
+	 * every notification, which would keep the cache permanently cold.
 	 */
 	bumpVersion(key: string): void {
 		const existing = this.snapshots.get(key)
@@ -290,7 +332,7 @@ export class EntitySnapshotStore implements Rekeyable {
 			existing.version + 1,
 		)
 
-		this.snapshots.set(key, newSnapshot)
+		this.writeSnapshot(key, newSnapshot)
 	}
 
 	/**
@@ -314,7 +356,7 @@ export class EntitySnapshotStore implements Rekeyable {
 	importSnapshots(snapshots: Map<string, EntitySnapshot>): Set<string> {
 		const keys = new Set<string>()
 		for (const [key, snapshot] of snapshots) {
-			this.snapshots.set(key, snapshot)
+			this.writeSnapshot(key, snapshot)
 			this.idIndex.set(snapshot.id, key)
 			keys.add(key)
 		}
@@ -342,8 +384,8 @@ export class EntitySnapshotStore implements Rekeyable {
 			snapshot.version + 1,
 		)
 
-		this.snapshots.delete(ctx.oldKey)
-		this.snapshots.set(ctx.newKey, newSnapshot)
+		this.deleteSnapshot(ctx.oldKey)
+		this.writeSnapshot(ctx.newKey, newSnapshot)
 		this.idIndex.delete(snapshot.id)
 		this.idIndex.set(ctx.newId, ctx.newKey)
 		this.mutationVersion++
@@ -364,9 +406,12 @@ export class EntitySnapshotStore implements Rekeyable {
 	}
 
 	clear(): void {
+		// Bulk drop: bumps both counters inline rather than per key, the same shape as
+		// HasOneStore.clear / HasManyStore.clear.
 		this.snapshots.clear()
 		this.idIndex.clear()
 		this.mutationVersion++
+		this.dataWriteVersion++
 	}
 }
 

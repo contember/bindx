@@ -1,6 +1,8 @@
 import { parentKeyFromOwnerPrefix, parentKeyFromRelationKey } from './relationKey.js'
 import { RelationEdgeIndex } from './RelationEdgeIndex.js'
 
+type ReconciliationResult = 'applied' | 'conflict'
+
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
 	if (a.size !== b.size) return false
 	for (const item of a) {
@@ -28,6 +30,21 @@ export type HasManyRemovalType = 'disconnect' | 'delete'
  *   - 'connected': an existing persisted entity being connected (via connect())
  */
 export type HasManyAdditionKind = 'created' | 'connected'
+
+export interface SentHasManyAddition {
+	itemId: string
+	kind: HasManyAdditionKind
+}
+
+export interface SentHasManyRemoval {
+	itemId: string
+	type: HasManyRemovalType
+}
+
+export interface SentHasManyDelta {
+	additions: readonly SentHasManyAddition[]
+	removals: readonly SentHasManyRemoval[]
+}
 
 /**
  * Has-many list state stored in SnapshotStore
@@ -295,6 +312,19 @@ export class HasManyStore {
 	}
 
 	/**
+	 * Advances the server baseline by the confirmed sent delta and rebases local
+	 * edits made after the request started onto that new baseline.
+	 */
+	reconcileSentDelta(key: string, delta: SentHasManyDelta): ReconciliationResult {
+		const existing = this.hasManyStates.get(key)
+		if (!existing) return 'conflict'
+
+		const next = reconcileHasManyState(existing, delta)
+		this.writeHasMany(key, next.state)
+		return next.result
+	}
+
+	/**
 	 * Resets has-many state to server state (clears planned operations).
 	 */
 	resetHasMany(key: string): void {
@@ -368,6 +398,11 @@ export class HasManyStore {
 			// re-appending an id that is already listed: this path re-runs whenever an
 			// embedded connect reference is re-materialized, and an unconditional
 			// append would surface the same item twice (mirrors planHasManyConnection).
+			// A re-connect cancels a pending removal of the same item (mirrors
+			// planHasManyConnection); leaving both recorded hides the item from the
+			// live-edge index while it is still listed.
+			const newPlannedRemovals = new Map(existing.plannedRemovals)
+			newPlannedRemovals.delete(itemId)
 			let newOrderedIds = existing.orderedIds
 			if (newOrderedIds !== null && !newOrderedIds.includes(itemId)) {
 				newOrderedIds = [...newOrderedIds, itemId]
@@ -376,6 +411,7 @@ export class HasManyStore {
 				...existing,
 				orderedIds: newOrderedIds,
 				plannedAdditions: newPlannedAdditions,
+				plannedRemovals: newPlannedRemovals,
 				version: existing.version + 1,
 			})
 		}
@@ -519,19 +555,41 @@ export class HasManyStore {
 
 	/**
 	 * Commits all has-many relations for an entity.
+	 *
+	 * `pendingItems` (by relation key) names planned additions/removals that were NOT
+	 * sent — they stay planned instead of being folded into the server baseline.
 	 */
-	commitAllRelations(keyPrefix: string): void {
+	commitAllRelations(keyPrefix: string, pendingItems?: ReadonlyMap<string, ReadonlySet<string>>): void {
 		for (const [key, state] of this.hasManyStates) {
-			if (key.startsWith(keyPrefix)) {
-				const newServerIds = new Set(state.serverIds)
-				for (const removedId of state.plannedRemovals.keys()) {
+			if (!key.startsWith(keyPrefix)) continue
+
+			const pending = pendingItems?.get(key)
+			const newServerIds = new Set(state.serverIds)
+			const keptRemovals = new Map<string, HasManyRemovalType>()
+			const keptAdditions = new Map<string, HasManyAdditionKind>()
+
+			for (const [removedId, type] of state.plannedRemovals) {
+				if (pending?.has(removedId)) {
+					keptRemovals.set(removedId, type)
+				} else {
 					newServerIds.delete(removedId)
 				}
-				for (const connectedId of state.plannedAdditions.keys()) {
-					newServerIds.add(connectedId)
-				}
-				this.commitHasMany(key, Array.from(newServerIds))
 			}
+			for (const [addedId, kind] of state.plannedAdditions) {
+				if (pending?.has(addedId)) {
+					keptAdditions.set(addedId, kind)
+				} else {
+					newServerIds.add(addedId)
+				}
+			}
+
+			this.writeHasMany(key, {
+				serverIds: newServerIds,
+				orderedIds: null,
+				plannedRemovals: keptRemovals,
+				plannedAdditions: keptAdditions,
+				version: state.version + 1,
+			})
 		}
 	}
 
@@ -620,11 +678,13 @@ export class HasManyStore {
 			}
 
 			let plannedAdditions = state.plannedAdditions
-			const additionKind = plannedAdditions.get(oldId)
-			if (additionKind !== undefined) {
+			if (plannedAdditions.has(oldId)) {
 				plannedAdditions = new Map(plannedAdditions)
 				plannedAdditions.delete(oldId)
-				plannedAdditions.set(newId, additionKind)
+				// The id only changes when the item was persisted, so a still-planned
+				// 'created' addition (the item went out on its own, not nested in this
+				// parent) must now connect the server row rather than create a second one.
+				plannedAdditions.set(newId, 'connected')
 				changed = true
 			}
 
@@ -692,4 +752,59 @@ function liveHasManyChildIds(state: StoredHasManyState | undefined): Set<string>
 		if (!state.plannedRemovals.has(id)) live.add(id)
 	}
 	return live
+}
+
+interface HasManyReconciliation {
+	state: StoredHasManyState
+	result: ReconciliationResult
+}
+
+function reconcileHasManyState(
+	existing: StoredHasManyState,
+	delta: SentHasManyDelta,
+): HasManyReconciliation {
+	const currentLive = liveHasManyChildIds(existing)
+	const serverIds = new Set(existing.serverIds)
+	const plannedAdditions = new Map(existing.plannedAdditions)
+	const plannedRemovals = new Map(existing.plannedRemovals)
+	let result: ReconciliationResult = 'applied'
+
+	for (const addition of delta.additions) {
+		serverIds.add(addition.itemId)
+		plannedAdditions.delete(addition.itemId)
+		plannedRemovals.delete(addition.itemId)
+		if (!currentLive.has(addition.itemId)) {
+			plannedRemovals.set(
+				addition.itemId,
+				addition.kind === 'created' ? 'delete' : 'disconnect',
+			)
+		}
+	}
+
+	for (const removal of delta.removals) {
+		serverIds.delete(removal.itemId)
+		const currentRemoval = plannedRemovals.get(removal.itemId)
+		if (currentRemoval === removal.type) plannedRemovals.delete(removal.itemId)
+
+		if (!currentLive.has(removal.itemId)) {
+			if (removal.type === 'delete') plannedRemovals.delete(removal.itemId)
+			continue
+		}
+		if (removal.type === 'delete') {
+			result = 'conflict'
+		} else if (!plannedAdditions.has(removal.itemId)) {
+			plannedAdditions.set(removal.itemId, 'connected')
+		}
+	}
+
+	return {
+		state: {
+			serverIds,
+			orderedIds: existing.orderedIds ? [...existing.orderedIds] : null,
+			plannedRemovals,
+			plannedAdditions,
+			version: existing.version + 1,
+		},
+		result,
+	}
 }
