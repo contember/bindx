@@ -73,6 +73,14 @@ export function accessField(accessor: EntityAccessor<object>, fieldName: string)
 	return current
 }
 
+/**
+ * Access a related entity accessor from a parent row accessor by field name.
+ * EntityAccessor is a Proxy — bracket notation triggers the get trap.
+ */
+export function getRelatedAccessor(item: EntityAccessor<object>, fieldName: string): EntityAccessor<object> | null {
+	return accessField(item, fieldName) as EntityAccessor<object> | null
+}
+
 function extractScalarValue<T>(accessor: EntityAccessor<object>, fieldName: string): T | null {
 	const fieldRef = accessField(accessor, fieldName) as { value?: unknown } | null
 	if (!fieldRef || typeof fieldRef !== 'object') return null

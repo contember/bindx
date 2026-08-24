@@ -10,7 +10,7 @@ import React from 'react'
 import type { FieldRef, FilterArtifact, FilterHandler, EntityAccessor } from '@contember/bindx'
 import type { ColumnTypeDef } from './columnTypes.js'
 import { ColumnLeaf, type ColumnLeafProps } from './columnLeaf.js'
-import { extractFieldName, extractEnumName } from './columns.js'
+import { extractFieldName, extractEnumName } from './fieldRef.js'
 
 // ============================================================================
 // Render Props

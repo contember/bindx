@@ -15,7 +15,6 @@ import type { FieldRef, FilterArtifact, FilterHandler, EntityAccessor, Selection
 import { SelectionScope } from '@contember/bindx'
 import { createCollectorProxy, collectSelection as collectJsxSelection, SCOPE_REF } from '@contember/bindx-react'
 import type { ColumnTypeDef } from './columnTypes.js'
-import { accessField } from './columnTypes.js'
 
 /** If a render result is a FieldRef-like object with `.value`, extract the string value. */
 function unwrapRenderResult(result: React.ReactNode): React.ReactNode {
@@ -26,7 +25,8 @@ function unwrapRenderResult(result: React.ReactNode): React.ReactNode {
 	return result
 }
 import { ColumnLeaf, type ColumnLeafProps } from './columnLeaf.js'
-import { extractFieldName, extractRelatedEntityName, getRelatedAccessor } from './columns.js'
+import { extractFieldName, extractRelatedEntityName } from './fieldRef.js'
+import { accessField, getRelatedAccessor } from './columnTypes.js'
 
 // ============================================================================
 // Config
