@@ -1,5 +1,9 @@
 [test]
 preload = ["./tests/setup.ts"]
+# NOTE: bun ignores this key — the per-test timeout stays at its 5000ms default.
+# Verified with a 6s test, which is killed at 5002ms regardless of the value here.
+# Suites that legitimately need longer pass --timeout on the command line
+# (see the test:browser script).
 timeout = 15000
 
 [install]

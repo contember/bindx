@@ -99,7 +99,6 @@ export type {
 	// Undo types
 	UndoManagerConfig,
 	UndoState,
-	UndoEntry,
 	// Event types
 	BindxEvent,
 	FieldScopedEvent,
@@ -310,6 +309,7 @@ export {
 	// Ref → Accessor hooks
 	useAccessor,
 	useField,
+	useFields,
 	useHasMany,
 	useHasOne,
 	// Notifications

@@ -33,7 +33,10 @@ import { createAliasProxy } from './proxyFactory.js'
  * @typeParam TSelected - The selected subset of fields (defaults to TEntity for backwards compatibility)
  */
 export class HasManyListHandle<TEntity extends object = object, TSelected = TEntity> extends EntityRelatedHandle {
-	private itemHandleCacheRaw = new Map<string, EntityHandle<TEntity, TSelected>>()
+	// Per-item accessor cache, keyed by the item's canonical (post-rekey) id. Identity is the
+	// point: a still-listed item keeps the same proxy — and with it the same handle, which the
+	// proxy is the only reference to. Kept bounded by syncItemHandleCache, which drops ids
+	// that have left the list.
 	private itemHandleCacheProxy = new Map<string, EntityAccessor<TEntity, TSelected>>()
 
 	/** Runtime brand symbols for validation */
@@ -73,6 +76,9 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		brands?: Set<symbol>,
 		alias?: string,
 		private readonly selection?: SelectionMeta,
+		// Segments from the query root down to this relation. Items do NOT inherit it:
+		// a has-many restarts the chain, mirroring the collector proxy.
+		private readonly relationPath: readonly string[] = [fieldName],
 	) {
 		super(parentEntityType, parentEntityId, store, dispatcher)
 		this.__brands = brands
@@ -90,8 +96,31 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		brands?: Set<symbol>,
 		alias?: string,
 		selection?: SelectionMeta,
+		relationPath?: readonly string[],
 	): HasManyAccessor<TEntity, TSelected> {
-		return createAliasProxy<HasManyListHandle<TEntity, TSelected>, HasManyAccessor<TEntity, TSelected>>(new HasManyListHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection))
+		return createAliasProxy<HasManyListHandle<TEntity, TSelected>, HasManyAccessor<TEntity, TSelected>>(
+			HasManyListHandle.createRaw<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath),
+		)
+	}
+
+	/**
+	 * Creates the handle without the alias proxy. Mirrors {@link EntityHandle.createRaw}:
+	 * the class surface (e.g. {@link itemHandleCacheSize}) is not part of HasManyAccessor.
+	 */
+	static createRaw<TEntity extends object = object, TSelected = TEntity>(
+		parentEntityType: string,
+		parentEntityId: string,
+		fieldName: string,
+		itemType: string,
+		store: SnapshotStore,
+		dispatcher: ActionDispatcher,
+		schema: SchemaRegistry,
+		brands?: Set<symbol>,
+		alias?: string,
+		selection?: SelectionMeta,
+		relationPath?: readonly string[],
+	): HasManyListHandle<TEntity, TSelected> {
+		return new HasManyListHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath)
 	}
 
 	/**
@@ -107,6 +136,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			isArray: true,
 			isRelation: true,
 			targetType: this.itemType,
+			fullPath: this.relationPath,
 		}
 	}
 
@@ -115,19 +145,74 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Returns selection-aware EntityAccessors that support `item.fieldName.value`.
 	 * Includes planned connections and excludes planned removals.
 	 * Uses ordered IDs to preserve order including after move() operations.
+	 *
+	 * This is also where the item-accessor cache is pruned — see {@link syncItemHandleCache}.
 	 */
 	get items(): EntityAccessor<TEntity, TSelected>[] {
 		this.materializeEmbeddedItems()
 
 		// Use ordered IDs from store (handles removals, connections, and ordering)
-		const orderedIds = this.store.getHasManyOrderedIds(
+		const orderedIds = this.store.getPresentationHasManyOrderedIds(
 			this.entityType,
 			this.entityId,
 			this.fieldName,
 			this.alias,
 		)
 
+		this.syncItemHandleCache(orderedIds)
+
 		return orderedIds.map((id) => this.getItemHandle(id))
+	}
+
+	/**
+	 * Canonical cache key for an item id: a temp id follows its temp→persisted rekey, so a
+	 * lookup by the now-dead temp id reuses the persisted item's handle instead of minting a
+	 * duplicate for the same entity.
+	 */
+	private resolveItemKey(itemId: string): string {
+		return this.store.resolveEntityId(this.itemType, itemId)
+	}
+
+	/**
+	 * Drops cached item accessors for ids that have left the list. Without it the cache keeps an
+	 * accessor for every id the relation has ever shown, for as long as the parent handle lives
+	 * — a paginated / filtered / refetched has-many grows without bound.
+	 *
+	 * Runs before the accessors are resolved and never touches a live id, so an item that is
+	 * still listed keeps the exact same proxy and the exact same handle behind it.
+	 */
+	private syncItemHandleCache(liveIds: readonly string[]): void {
+		if (this.itemHandleCacheProxy.size === 0) return
+		this.canonicalizeItemHandleCache()
+
+		// While the parent persists, the presented list hides planned additions — pruning
+		// against it would drop handles that reappear as soon as the persist settles.
+		if (this.store.isPersisting(this.entityType, this.entityId)) return
+
+		const liveKeys = new Set(liveIds.map(id => this.resolveItemKey(id)))
+		for (const key of this.itemHandleCacheProxy.keys()) {
+			if (liveKeys.has(key)) continue
+			this.itemHandleCacheProxy.delete(key)
+		}
+	}
+
+	private canonicalizeItemHandleCache(): void {
+		for (const [key, proxy] of [...this.itemHandleCacheProxy]) {
+			const canonicalKey = this.resolveItemKey(key)
+			if (canonicalKey === key) continue
+			if (!this.itemHandleCacheProxy.has(canonicalKey)) {
+				this.itemHandleCacheProxy.set(canonicalKey, proxy)
+			}
+			this.itemHandleCacheProxy.delete(key)
+		}
+	}
+
+	/**
+	 * @internal Occupancy of the item-accessor cache. Exposed only so eviction tests can
+	 * assert the cache stays bounded; not part of the HasManyAccessor API.
+	 */
+	get itemHandleCacheSize(): number {
+		return this.itemHandleCacheProxy.size
 	}
 
 	/**
@@ -138,6 +223,12 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * block editor (and any consumer) resolves a single child via getById()
 	 * without ever reading `items`, and that path must also see populated data.
 	 * Idempotent within a render — guarded by hasEmbeddedDataChanged.
+	 *
+	 * For the same reason EVERY entry point that reads or writes the has-many state
+	 * calls this first — isDirty and the mutators as well as items/getById. An
+	 * embedded list has no state in the store until it is materialised, so a
+	 * consumer that never iterated saw isDirty === false and had its mutation land
+	 * on a state nobody reads. Keep new entry points on this guard.
 	 *
 	 * @returns false when there is no embedded list data to materialise.
 	 */
@@ -274,11 +365,13 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Returns selection-aware EntityAccessor that supports direct field access.
 	 */
 	getItemHandle(itemId: string): EntityAccessor<TEntity, TSelected> {
-		let proxy = this.itemHandleCacheProxy.get(itemId)
+		this.canonicalizeItemHandleCache()
+		const key = this.resolveItemKey(itemId)
+		let proxy = this.itemHandleCacheProxy.get(key)
 
 		if (!proxy) {
 			const raw = EntityHandle.createRaw<TEntity, TSelected>(
-				itemId,
+				key,
 				this.itemType,
 				this.store,
 				this.dispatcher,
@@ -287,8 +380,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 				this.selection,
 			)
 			proxy = EntityHandle.wrapProxy(raw)
-			this.itemHandleCacheRaw.set(itemId, raw)
-			this.itemHandleCacheProxy.set(itemId, proxy)
+			this.itemHandleCacheProxy.set(key, proxy)
 		}
 
 		return proxy
@@ -311,6 +403,8 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Checks if the list is dirty (items added/removed/moved/connected/disconnected).
 	 */
 	get isDirty(): boolean {
+		this.materializeEmbeddedItems()
+
 		const state = this.store.getHasMany(
 			this.entityType,
 			this.entityId,
@@ -322,8 +416,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 
 		return (
 			state.plannedRemovals.size > 0 ||
-			state.plannedConnections.size > 0 ||
-			state.createdEntities.size > 0 ||
+			state.plannedAdditions.size > 0 ||
 			state.orderedIds !== null
 		)
 	}
@@ -340,6 +433,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Connects an existing entity to this has-many relation.
 	 */
 	connect(itemId: string): void {
+		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			connectToList(this.entityType, this.entityId, this.fieldName, itemId, this.itemType, this.alias),
 		)
@@ -351,6 +445,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * For created entities (via add()), cancels the add operation.
 	 */
 	disconnect(itemId: string): void {
+		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, 'disconnect', this.alias),
 		)
@@ -362,6 +457,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * For created entities (via add()), cancels the add operation.
 	 */
 	delete(itemId: string): void {
+		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, 'delete', this.alias),
 		)
@@ -373,16 +469,21 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * For connecting existing entities, use connect() instead.
 	 */
 	add(data?: Partial<TEntity>): string {
+		this.materializeEmbeddedItems()
 
-		// Pre-create entity so we can return tempId
-		const tempId = this.store.createEntity(this.itemType, data as Record<string, unknown>)
+		// One gesture = one undo entry: the pre-create and the list-add are journaled
+		// together so undo removes (and redo re-creates) the whole row.
+		return this.store.transaction(() => {
+			// Pre-create entity so we can return tempId
+			const tempId = this.store.createEntity(this.itemType, data as Record<string, unknown>)
 
-		// Add to has-many relation through dispatcher (enables events/interceptors)
-		this.dispatcher.dispatch(
-			addToList(this.entityType, this.entityId, this.fieldName, this.itemType, tempId, this.alias),
-		)
+			// Add to has-many relation through dispatcher (enables events/interceptors)
+			this.dispatcher.dispatch(
+				addToList(this.entityType, this.entityId, this.fieldName, this.itemType, tempId, this.alias),
+			)
 
-		return tempId
+			return tempId
+		})
 	}
 
 	/**
@@ -395,6 +496,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Falls back to disconnect when schema metadata is not available.
 	 */
 	remove(itemId: string): void {
+		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, this.resolveRemovalType(), this.alias),
 		)
@@ -425,6 +527,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * use an 'order' field on the entity.
 	 */
 	move(fromIndex: number, toIndex: number): void {
+		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			moveInList(this.entityType, this.entityId, this.fieldName, fromIndex, toIndex, this.alias),
 		)
@@ -435,6 +538,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Clears all planned connections and removals.
 	 */
 	reset(): void {
+		this.materializeEmbeddedItems()
 		this.store.resetHasMany(
 			this.entityType,
 			this.entityId,

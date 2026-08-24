@@ -1,5 +1,6 @@
 import type { ErrorState, FieldError } from '../errors/types.js'
 import { filterStickyErrors } from '../errors/types.js'
+import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
 
 /**
  * Manages error state for fields, entities, and relations.
@@ -9,7 +10,7 @@ import { filterStickyErrors } from '../errors/types.js'
  * - Entity errors: "entityType:id"
  * - Relation errors: "entityType:id:relationName"
  */
-export class ErrorStore {
+export class ErrorStore implements Rekeyable {
 	/** Field errors keyed by "entityType:id:fieldName" */
 	private readonly fieldErrors = new Map<string, ErrorState>()
 
@@ -252,10 +253,10 @@ export class ErrorStore {
 	/**
 	 * Rekeys all errors from oldKeyPrefix to newKeyPrefix.
 	 */
-	rekey(oldEntityKey: string, newEntityKey: string, oldKeyPrefix: string, newKeyPrefix: string): void {
-		this.rekeyMap(this.entityErrors, oldEntityKey, newEntityKey)
-		this.rekeyByPrefix(this.fieldErrors, oldKeyPrefix, newKeyPrefix)
-		this.rekeyByPrefix(this.relationErrors, oldKeyPrefix, newKeyPrefix)
+	rekey(ctx: RekeyContext): void {
+		this.rekeyMap(this.entityErrors, ctx.oldKey, ctx.newKey)
+		this.rekeyByPrefix(this.fieldErrors, ctx.oldKeyPrefix, ctx.newKeyPrefix)
+		this.rekeyByPrefix(this.relationErrors, ctx.oldKeyPrefix, ctx.newKeyPrefix)
 	}
 
 	private rekeyMap(map: Map<string, ErrorState>, oldKey: string, newKey: string): void {

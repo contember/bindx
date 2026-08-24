@@ -18,6 +18,59 @@ export interface EntityMutationResult {
 	data?: Record<string, unknown>
 }
 
+export interface CollectedNestedEntity {
+	readonly entityType: string
+	readonly entityId: string
+}
+
+export interface CollectedHasOneChange {
+	readonly entityType: string
+	readonly entityId: string
+	readonly fieldName: string
+	readonly transition:
+		| { readonly operation: 'connect'; readonly targetId: string }
+		| { readonly operation: 'create'; readonly targetId: string }
+		| { readonly operation: 'disconnect'; readonly targetId: string }
+		| { readonly operation: 'delete'; readonly targetId: string }
+}
+
+export interface CollectedHasManyChange {
+	readonly entityType: string
+	readonly entityId: string
+	readonly fieldName: string
+	readonly additions: readonly { readonly itemId: string; readonly kind: 'created' | 'connected' }[]
+	readonly removals: readonly { readonly itemId: string; readonly type: 'delete' | 'disconnect' }[]
+}
+
+export interface CollectedRelationField {
+	readonly entityType: string
+	readonly entityId: string
+	readonly fieldName: string
+	readonly relationType: 'hasOne' | 'hasMany'
+	readonly targetEntityType: string
+}
+
+export interface CollectedNestedCreate {
+	readonly parentEntityType: string
+	readonly parentEntityId: string
+	readonly fieldName: string
+	readonly relationType: 'hasOne' | 'hasMany'
+	readonly entityType: string
+	readonly entityId: string
+	readonly createData: Readonly<Record<string, unknown>>
+	readonly knownServerIds: readonly string[]
+}
+
+export interface CollectedNestedUpdate {
+	readonly parentEntityType: string
+	readonly parentEntityId: string
+	readonly fieldName: string
+	readonly relationType: 'hasOne' | 'hasMany'
+	readonly entityType: string
+	readonly entityId: string
+	readonly data: Readonly<Record<string, unknown>>
+}
+
 /**
  * MutationCollector builds Contember-compatible mutation input
  * by collecting changes from SnapshotStore including:
@@ -30,25 +83,73 @@ export interface EntityMutationResult {
  * implementing MutationSchemaProvider interface (SchemaRegistry, Contember SchemaNames via adapter).
  */
 export class MutationCollector implements MutationDataCollector {
+	/** Entities with their own top-level mutation; only their nested update is skipped. */
 	private excludedEntityIds: ReadonlySet<string> = new Set()
+	/** Entities vetoed by an `entity:persisting` interceptor; nothing is emitted for them. */
+	private vetoedEntityIds: ReadonlySet<string> = new Set()
+	/**
+	 * Relation items whose op was dropped because the item is vetoed, keyed by relation
+	 * key (`Type:id:field`). The commit step leaves exactly these pending, so the planned
+	 * create/delete is sent once the veto is lifted instead of being committed unsent.
+	 */
+	private readonly _suppressedRelationItems = new Map<string, Set<string>>()
 	private readonly _nestedEntityIds: Set<string> = new Set()
 	/** Maps nested entity temp IDs to their entity types for post-persist processing */
 	private readonly _nestedEntityTypes: Map<string, string> = new Map()
+	private readonly _nestedEntities = new Map<string, CollectedNestedEntity>()
+	private readonly _hasOneChanges: CollectedHasOneChange[] = []
+	private readonly _hasManyChanges: CollectedHasManyChange[] = []
+	private readonly _relationFields = new Map<string, CollectedRelationField>()
+	private readonly _nestedCreates: CollectedNestedCreate[] = []
+	private readonly _nestedUpdates: CollectedNestedUpdate[] = []
 
 	constructor(
 		private readonly store: SnapshotStore,
 		private readonly schemaProvider: MutationSchemaProvider,
 	) {}
 
+	/** Creates an isolated collection session for one persist operation. */
+	forkSession(): MutationCollector {
+		return new MutationCollector(this.store, this.schemaProvider)
+	}
+
+	private entityKey(entityType: string, entityId: string): string {
+		return `${entityType}:${entityId}`
+	}
+
 	/**
-	 * Sets entity IDs that should be excluded from nested mutation generation.
-	 * These entities get their own top-level mutations, so nested updates are skipped
-	 * to avoid duplicate changes.
+	 * Sets entity IDs that get their own top-level mutation, so their nested
+	 * update is skipped to avoid duplicate changes. Relation operations that only
+	 * exist on the parent (delete, disconnect) are still emitted for them.
 	 */
 	setExcludedEntities(ids: ReadonlySet<string>): void {
 		this.excludedEntityIds = ids
 		this._nestedEntityIds.clear()
 		this._nestedEntityTypes.clear()
+		this._suppressedRelationItems.clear()
+		this._nestedEntities.clear()
+		this._hasOneChanges.length = 0
+		this._hasManyChanges.length = 0
+		this._relationFields.clear()
+		this._nestedCreates.length = 0
+		this._nestedUpdates.length = 0
+	}
+
+	setExcludedEntityKeys(keys: ReadonlySet<string>): void {
+		this.setExcludedEntities(keys)
+	}
+
+	/**
+	 * Sets entity IDs vetoed by an `entity:persisting` interceptor. Unlike excluded
+	 * entities they have no top-level mutation either, so every nested operation
+	 * that would write them — create, update or delete — is dropped.
+	 */
+	setVetoedEntities(ids: ReadonlySet<string>): void {
+		this.vetoedEntityIds = ids
+	}
+
+	setVetoedEntityKeys(keys: ReadonlySet<string>): void {
+		this.vetoedEntityIds = keys
 	}
 
 	/**
@@ -66,6 +167,74 @@ export class MutationCollector implements MutationDataCollector {
 	 */
 	getNestedEntityTypes(): ReadonlyMap<string, string> {
 		return this._nestedEntityTypes
+	}
+
+	getNestedEntities(): readonly CollectedNestedEntity[] {
+		return [...this._nestedEntities.values()]
+	}
+
+	getCollectedHasOneChanges(): readonly CollectedHasOneChange[] {
+		return this._hasOneChanges
+	}
+
+	getCollectedHasManyChanges(): readonly CollectedHasManyChange[] {
+		return this._hasManyChanges
+	}
+
+	getCollectedRelationFields(): readonly CollectedRelationField[] {
+		return [...this._relationFields.values()]
+	}
+
+	getCollectedNestedCreates(): readonly CollectedNestedCreate[] {
+		return this._nestedCreates
+	}
+
+	getCollectedNestedUpdates(): readonly CollectedNestedUpdate[] {
+		return this._nestedUpdates
+	}
+
+	private recordRelationField(
+		entityType: string,
+		entityId: string,
+		fieldName: string,
+		relationType: 'hasOne' | 'hasMany',
+		targetEntityType: string | undefined,
+	): void {
+		if (!targetEntityType) return
+		const key = `${this.entityKey(entityType, entityId)}:${fieldName}`
+		this._relationFields.set(key, { entityType, entityId, fieldName, relationType, targetEntityType })
+	}
+
+	private registerNestedEntity(entityType: string, entityId: string): void {
+		this._nestedEntityIds.add(entityId)
+		this._nestedEntityTypes.set(entityId, entityType)
+		this._nestedEntities.set(this.entityKey(entityType, entityId), { entityType, entityId })
+	}
+
+	private isExcluded(entityType: string, entityId: string): boolean {
+		return this.excludedEntityIds.has(this.entityKey(entityType, entityId)) || this.excludedEntityIds.has(entityId)
+	}
+
+	private isVetoed(entityType: string, entityId: string): boolean {
+		return this.vetoedEntityIds.has(this.entityKey(entityType, entityId)) || this.vetoedEntityIds.has(entityId)
+	}
+
+	/**
+	 * Returns relation items (by relation key) whose planned op was not emitted because
+	 * the item is vetoed. BatchPersister keeps these pending when it commits relations.
+	 */
+	getSuppressedRelationItems(): ReadonlyMap<string, ReadonlySet<string>> {
+		return this._suppressedRelationItems
+	}
+
+	private suppressRelationItem(entityType: string, entityId: string, fieldName: string, itemId: string): void {
+		const key = `${entityType}:${entityId}:${fieldName}`
+		const items = this._suppressedRelationItems.get(key)
+		if (items) {
+			items.add(itemId)
+		} else {
+			this._suppressedRelationItems.set(key, new Set([itemId]))
+		}
 	}
 
 	// ==================== Main Collection Methods ====================
@@ -340,41 +509,67 @@ export class MutationCollector implements MutationDataCollector {
 		fieldName: string,
 	): Record<string, unknown> | null {
 		const relationState = this.store.getRelation(entityType, entityId, fieldName)
+		const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
+		this.recordRelationField(entityType, entityId, fieldName, 'hasOne', targetType)
 		if (!relationState) {
 			return null
 		}
 
 		const { state, serverState, currentId, serverId, placeholderData } = relationState
+		const record = (transition: CollectedHasOneChange['transition'], data: Record<string, unknown>): Record<string, unknown> => {
+			this._hasOneChanges.push({ entityType, entityId, fieldName, transition })
+			return data
+		}
 
 		switch (state) {
 			case 'connected':
 				if (currentId !== serverId) {
 					// Check if current entity exists on server
 					if (currentId && this.isExistingEntity(currentId)) {
-						return { connect: { id: currentId } }
+						return record({ operation: 'connect', targetId: currentId }, { connect: { id: currentId } })
 					} else if (currentId && isTempId(currentId)) {
-						// Temp entity — generate inline create with its collected data
-						this._nestedEntityIds.add(currentId)
-						const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
-						if (targetType) {
-							this._nestedEntityTypes.set(currentId, targetType)
-							const createData = this.collectCreateData(targetType, currentId)
-							return { create: createData ?? {} }
+						if (targetType && this.isVetoed(targetType, currentId)) {
+							this.suppressRelationItem(entityType, entityId, fieldName, currentId)
+							return null
 						}
-						return { create: {} }
+						// Temp entity — generate inline create with its collected data
+						if (targetType) {
+							this.registerNestedEntity(targetType, currentId)
+							const createData = this.collectCreateData(targetType, currentId)
+							this._nestedCreates.push({
+								parentEntityType: entityType,
+								parentEntityId: entityId,
+								fieldName,
+								relationType: 'hasOne',
+								entityType: targetType,
+								entityId: currentId,
+								createData: createData ?? {},
+								knownServerIds: [],
+							})
+							return record({ operation: 'create', targetId: currentId }, { create: createData ?? {} })
+						}
+						return record({ operation: 'create', targetId: currentId }, { create: {} })
 					} else if (currentId) {
-						return { connect: { id: currentId } }
+						return record({ operation: 'connect', targetId: currentId }, { connect: { id: currentId } })
 					}
 				} else if (currentId && serverId && currentId === serverId) {
-					// Skip if entity has its own top-level mutation
-					if (this.excludedEntityIds.has(currentId)) {
+					// Skip if entity has its own top-level mutation or was vetoed
+					if (targetType && (this.isExcluded(targetType, currentId) || this.isVetoed(targetType, currentId))) {
 						return null
 					}
 					// Same entity - check if we need to update it
-					const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
 					if (targetType) {
 						const nestedChanges = this.collectUpdateData(targetType, currentId)
 						if (nestedChanges) {
+							this._nestedUpdates.push({
+								parentEntityType: entityType,
+								parentEntityId: entityId,
+								fieldName,
+								relationType: 'hasOne',
+								entityType: targetType,
+								entityId: currentId,
+								data: nestedChanges,
+							})
 							return { update: nestedChanges }
 						}
 					}
@@ -384,13 +579,19 @@ export class MutationCollector implements MutationDataCollector {
 			case 'disconnected':
 				// Only emit disconnect if server had a connection
 				if (serverState === 'connected' && serverId !== null) {
-					return { disconnect: true }
+					return record({ operation: 'disconnect', targetId: serverId }, { disconnect: true })
 				}
 				return null
 
 			case 'deleted':
+				if (serverId !== null) {
+					if (targetType && this.isVetoed(targetType, serverId)) {
+						this.suppressRelationItem(entityType, entityId, fieldName, serverId)
+						return null
+					}
+				}
 				// Delete the related entity
-				return { delete: true }
+				return serverId === null ? null : record({ operation: 'delete', targetId: serverId }, { delete: true })
 
 			case 'creating':
 				// Empty placeholderData is a legitimate no-op (user opened a create
@@ -458,41 +659,62 @@ export class MutationCollector implements MutationDataCollector {
 		fieldName: string,
 	): Array<Record<string, unknown>> | null {
 		const hasManyState = this.store.getHasMany(entityType, entityId, fieldName)
+		const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
+		this.recordRelationField(entityType, entityId, fieldName, 'hasMany', targetType)
 		if (!hasManyState) return null
 
 		const operations: Array<Record<string, unknown>> = []
-		const targetType = this.schemaProvider.getRelationTarget(entityType, fieldName)
+		const additions: Array<{ itemId: string; kind: 'created' | 'connected' }> = []
+		const removals: Array<{ itemId: string; type: 'delete' | 'disconnect' }> = []
 
 		// Planned removals -> disconnect/delete
 		for (const [removedId, removalType] of hasManyState.plannedRemovals) {
 			if (removalType === 'delete') {
+				if (targetType && this.isVetoed(targetType, removedId)) {
+					this.suppressRelationItem(entityType, entityId, fieldName, removedId)
+					continue
+				}
 				operations.push({ delete: { id: removedId }, alias: removedId })
+				removals.push({ itemId: removedId, type: 'delete' })
 			} else {
 				operations.push({ disconnect: { id: removedId }, alias: removedId })
+				removals.push({ itemId: removedId, type: 'disconnect' })
 			}
 		}
 
-		// Created entities -> create (using collectCreateData for full recursive collection)
-		if (targetType) {
-			for (const tempId of hasManyState.createdEntities) {
-				this._nestedEntityIds.add(tempId)
-				this._nestedEntityTypes.set(tempId, targetType)
-				const createData = this.collectCreateData(targetType, tempId)
-				operations.push({ create: createData ?? {}, alias: tempId })
+		// Planned additions -> create (newly created) or connect (existing persisted)
+		for (const [additionId, kind] of hasManyState.plannedAdditions) {
+			if (kind === 'created') {
+				if (targetType && this.isVetoed(targetType, additionId)) {
+					this.suppressRelationItem(entityType, entityId, fieldName, additionId)
+					continue
+				}
+				if (!targetType) continue
+				this.registerNestedEntity(targetType, additionId)
+				const createData = this.collectCreateData(targetType, additionId)
+				this._nestedCreates.push({
+					parentEntityType: entityType,
+					parentEntityId: entityId,
+					fieldName,
+					relationType: 'hasMany',
+					entityType: targetType,
+					entityId: additionId,
+					createData: createData ?? {},
+					knownServerIds: [...hasManyState.serverIds],
+				})
+				operations.push({ create: createData ?? {}, alias: additionId })
+				additions.push({ itemId: additionId, kind: 'created' })
+			} else {
+				operations.push({ connect: { id: additionId }, alias: additionId })
+				additions.push({ itemId: additionId, kind: 'connected' })
 			}
-		}
-
-		// Planned connections (minus created entities) -> connect
-		for (const connectedId of hasManyState.plannedConnections) {
-			if (hasManyState.createdEntities.has(connectedId)) continue
-			operations.push({ connect: { id: connectedId }, alias: connectedId })
 		}
 
 		// Server items that aren't removed -> check for updates via entity snapshots
 		if (targetType) {
 			for (const itemId of hasManyState.serverIds) {
 				if (hasManyState.plannedRemovals.has(itemId)) continue
-				if (this.excludedEntityIds.has(itemId)) continue
+				if (this.isExcluded(targetType, itemId) || this.isVetoed(targetType, itemId)) continue
 
 				const itemSnapshot = this.store.getEntitySnapshot(targetType, itemId)
 				if (!itemSnapshot) continue
@@ -509,6 +731,15 @@ export class MutationCollector implements MutationDataCollector {
 				}
 
 				if (Object.keys(changes).length > 0) {
+					this._nestedUpdates.push({
+						parentEntityType: entityType,
+						parentEntityId: entityId,
+						fieldName,
+						relationType: 'hasMany',
+						entityType: targetType,
+						entityId: itemId,
+						data: changes,
+					})
 					operations.push({
 						update: {
 							by: { id: itemId },
@@ -520,6 +751,9 @@ export class MutationCollector implements MutationDataCollector {
 			}
 		}
 
+		if (additions.length > 0 || removals.length > 0) {
+			this._hasManyChanges.push({ entityType, entityId, fieldName, additions, removals })
+		}
 		return operations.length > 0 ? operations : null
 	}
 
@@ -723,7 +957,7 @@ export class MutationCollector implements MutationDataCollector {
 
 		// Skip if store already has managed entities for this relation
 		const existing = this.store.getHasMany(entityType, entityId, fieldName)
-		if (existing && (existing.createdEntities.size > 0 || existing.plannedConnections.size > 0)) {
+		if (existing && existing.plannedAdditions.size > 0) {
 			return
 		}
 

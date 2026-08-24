@@ -11,7 +11,7 @@ import {
 } from '@contember/bindx'
 
 /**
- * Schema modeling the exact pattern from NPI:
+ * Schema modeling a deeply nested consumer pattern:
  * Program → Approval (hasOne) → Round (hasMany) → Review (hasMany)
  * Review → Guarantor (hasOne)
  *
@@ -267,16 +267,15 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 	 * is nested inside another entity's create via collectHasManyOperations.
 	 */
 	/**
-	 * After persistAll(), embedded relation data (like `reviews: [{ reviewType: 'expert' }]`)
-	 * should be materialized into store entities during mutation building, and those
-	 * entities should be committed after the parent mutation succeeds.
+	 * Embedded relation data is materialized before persistence, but an atomic response
+	 * without IDs for temp creates must leave the entire nested change pending.
 	 *
 	 * This verifies:
 	 * 1. Embedded data is materialized into proper store entities with temp IDs
-	 * 2. Materialized entities are committed after successful persist
-	 * 3. Entities are accessible via the hasMany store state
+	 * 2. Missing IDs fail the atomic persist
+	 * 3. Materialized entities remain accessible and pending for retry
 	 */
-	test('after persistAll, materialized embedded entities should be committed in store', async () => {
+	test('atomic persist retains materialized entities when nested IDs are missing', async () => {
 		const adapter: BackendAdapter = {
 			query: mock(() => Promise.resolve([])),
 			persist: mock(() => Promise.resolve({ ok: true })),
@@ -334,21 +333,30 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 		store.getOrCreateHasMany('Approval', approvalId, 'rounds', [])
 		store.addToHasMany('Approval', approvalId, 'rounds', roundId)
 
-		// Persist
 		const result = await persister.persistAll()
-		expect(result.success).toBe(true)
+		expect(result.success).toBe(false)
+		expect(store.getPersistedId('Approval', approvalId)).toBeNull()
+		expect(store.getPersistedId('Round', roundId)).toBeNull()
+		const approvalRelation = store.getRelation('Program', 'prog-1', 'approval')
+		expect(approvalRelation?.currentId).toBe(approvalId)
+		expect(approvalRelation?.serverId).toBeNull()
+		const roundsState = store.getHasMany('Approval', approvalId, 'rounds')
+		expect(roundsState?.serverIds.size).toBe(0)
+		expect(roundsState?.plannedAdditions.has(roundId)).toBe(true)
 
-		// After persist + commit, the embedded review should have been materialized
-		// into a store entity. commitAllRelations moves createdEntities → serverIds.
 		const reviewsState = store.getHasMany('Round', roundId, 'reviews')
 		expect(reviewsState).not.toBeUndefined()
-		expect(reviewsState!.serverIds.size).toBe(1)
+		if (reviewsState === undefined) throw new Error('Expected materialized reviews state')
+		expect(reviewsState.serverIds.size).toBe(0)
+		expect(reviewsState.plannedAdditions.size).toBe(1)
 
-		// The review entity should exist in the store and be committed (existsOnServer)
-		const reviewTempId = [...reviewsState!.serverIds][0]!
+		const reviewTempId = [...reviewsState.plannedAdditions.keys()][0]
+		expect(reviewTempId).toBeDefined()
+		if (reviewTempId === undefined) throw new Error('Expected pending review')
 		const reviewSnapshot = store.getEntitySnapshot('Review', reviewTempId)
 		expect(reviewSnapshot).not.toBeUndefined()
-		expect(store.existsOnServer('Review', reviewTempId)).toBe(true)
+		expect(store.existsOnServer('Review', reviewTempId)).toBe(false)
+		expect(store.getPersistedId('Review', reviewTempId)).toBeNull()
 
 		// The review should have the correct data
 		const reviewData = reviewSnapshot!.data as Record<string, unknown>
@@ -390,7 +398,12 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 		// Build nested results by walking the mutation data and assigning server IDs
 		let serverIdCounter = 0
 		function buildNestedResults(mutation: TransactionMutation): Array<{ entityType: string; entityId: string; ok: boolean; persistedId: string }> {
-			const results: Array<{ entityType: string; entityId: string; ok: boolean; persistedId: string }> = []
+			const results: Array<{ entityType: string; entityId: string; ok: boolean; persistedId: string }> = [{
+				entityType: 'Unknown',
+				entityId: approvalId,
+				ok: true,
+				persistedId: `server-id-${++serverIdCounter}`,
+			}]
 			if (!mutation.data) return results
 			walkMutationData(mutation.data, results)
 			return results
@@ -457,6 +470,8 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 
 		const result = await persister.persistAll()
 		expect(result.success).toBe(true)
+		expect(store.getPersistedId('Approval', approvalId)).toMatch(/^server-id-/)
+		expect(store.getPersistedId('Round', roundId)).toMatch(/^server-id-/)
 
 		// The adapter should have received mutations
 		expect(capturedMutations.length).toBeGreaterThan(0)
@@ -592,12 +607,10 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 	})
 
 	/**
-	 * When the adapter returns fewer new items than create operations (e.g. partial server
-	 * failure or ACL filtering), position-based matching is skipped entirely to avoid
-	 * wrong ID mappings. The entities should still be committed (they exist on the server
-	 * as part of the parent mutation) but keep their temp IDs.
+	 * When the adapter returns fewer new items than create operations, only the uniquely
+	 * resolved child is committed. The unresolved child remains pending for retry.
 	 */
-	test('partial failure: fewer response items than creates skips ID mapping but still commits', async () => {
+	test('partial response commits resolved children and retains unresolved children for retry', async () => {
 		let serverIdCounter = 0
 
 		const adapter: BackendAdapter = {
@@ -692,32 +705,31 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 		store.addToHasMany('Approval', approvalId, 'rounds', roundId)
 
 		const result = await persister.persistAll()
-		expect(result.success).toBe(true)
+		expect(result.success).toBe(false)
 
-		// Both reviews should be committed (existsOnServer = true)
 		const reviewsState = store.getHasMany('Round', roundId, 'reviews')
 		expect(reviewsState).not.toBeUndefined()
-		expect(reviewsState!.serverIds.size).toBe(2)
+		if (reviewsState === undefined) throw new Error('Expected reviews state')
+		expect(reviewsState.serverIds.size).toBe(1)
+		expect(reviewsState.plannedAdditions.size).toBe(1)
 
-		const reviewTempIds = [...reviewsState!.serverIds]
-		for (const tempId of reviewTempIds) {
-			expect(store.existsOnServer('Review', tempId)).toBe(true)
-		}
+		const resolvedId = [...reviewsState.serverIds][0]
+		const unresolvedId = [...reviewsState.plannedAdditions.keys()][0]
+		expect(resolvedId).toMatch(/^server-/)
+		expect(unresolvedId).toBeDefined()
+		if (resolvedId === undefined || unresolvedId === undefined) throw new Error('Expected resolved and pending reviews')
+		expect(store.existsOnServer('Review', resolvedId)).toBe(true)
+		expect(store.existsOnServer('Review', unresolvedId)).toBe(false)
+		expect(store.getPersistedId('Review', unresolvedId)).toBeNull()
+		expect(store.getEntitySnapshot('Review', unresolvedId)).not.toBeUndefined()
 
-		// Content matching maps the one review present in the response.
-		// The other review (missing from response due to ACL) keeps its temp ID.
-		let mappedCount = 0
-		let unmappedCount = 0
-		for (const tempId of reviewTempIds) {
-			const persistedId = store.getPersistedId('Review', tempId)
-			if (persistedId) {
-				mappedCount++
-			} else {
-				unmappedCount++
-			}
-		}
-		expect(mappedCount).toBe(1)
-		expect(unmappedCount).toBe(1)
+		const retry = await persister.persistAll()
+		expect(retry.success).toBe(true)
+		const retriedState = store.getHasMany('Round', roundId, 'reviews')
+		expect(retriedState).not.toBeUndefined()
+		if (retriedState === undefined) throw new Error('Expected reviews state after retry')
+		expect(retriedState.serverIds.size).toBe(2)
+		expect(retriedState.plannedAdditions.size).toBe(0)
 	})
 
 	/**

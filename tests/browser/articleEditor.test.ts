@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test'
-import { browserTest, el, tid, waitFor } from './browser.js'
+import { browserTest, clickUntil, el, tid, waitFor } from './browser.js'
 
 browserTest('Article Editor', () => {
 	test('section renders with all sub-components', () => {
@@ -21,13 +21,17 @@ browserTest('Article Editor', () => {
 	test('changing author enables save and shows dirty notice', () => {
 		// Open the author SelectField popover
 		el(`${tid('article-author-select')} [aria-haspopup="dialog"]`).click()
-		// Type in the search input to filter, then click the filtered option
-		waitFor(() => el('[role="dialog"] input').exists)
-		el('[role="dialog"] input').fill('Jane')
-		waitFor(() => el('[role="dialog"] button[class]').exists)
-		el('[role="dialog"] button[class]').click()
-
-		waitFor(() => !el('article-save-button').isDisabled)
+		// Select from the stable initial list; filtering remounts options asynchronously.
+		const janeOption = () => el('[role="dialog"] button[data-entity-id="00000000-0000-0000-0000-000000000a02"]')
+		waitFor(() => janeOption().exists)
+		clickUntil(
+			() => {
+				const option = janeOption()
+				expect(option.text).toContain('Jane')
+				return option
+			},
+			() => !el('article-save-button').isDisabled,
+		)
 		expect(el('article-dirty-notice').exists).toBe(true)
 	})
 
@@ -43,13 +47,17 @@ browserTest('Article Editor', () => {
 	test('adding a tag shows it in the list', () => {
 		// Open the tags MultiSelectField popover
 		el(`${tid('article-tags')} [aria-haspopup="dialog"]`).click()
-		// Search for the tag and click it
-		waitFor(() => el('[role="dialog"] input').exists)
-		el('[role="dialog"] input').fill('TypeScript')
-		waitFor(() => el('[role="dialog"] button[class]').exists)
-		el('[role="dialog"] button[class]').click()
-
-		waitFor(() => el('tag-badge-TypeScript').exists)
+		// Select from the stable initial list; filtering remounts options asynchronously.
+		const typeScriptOption = () => el('[role="dialog"] button[data-entity-id="00000000-0000-0000-0000-000000000b03"]')
+		waitFor(() => typeScriptOption().exists)
+		clickUntil(
+			() => {
+				const option = typeScriptOption()
+				expect(option.text).toContain('TypeScript')
+				return option
+			},
+			() => el('tag-badge-TypeScript').exists,
+		)
 	})
 
 }, 'article-editor')

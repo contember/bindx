@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test'
-import { browserTest, el, tid, waitFor } from './browser.js'
+import { browserTest, clickUntil, el, tid, waitFor } from './browser.js'
 
 browserTest('Article with Author Select', () => {
 	test('section renders', () => {
@@ -18,13 +18,18 @@ browserTest('Article with Author Select', () => {
 	test('changing author enables save and updates display', () => {
 		// Open the author SelectField popover
 		el(`${tid('article-with-author-select')} [aria-haspopup="dialog"]`).click()
-		// Type to filter and click an option
-		waitFor(() => el('[role="dialog"] input').exists)
-		el('[role="dialog"] input').fill('Bob')
-		waitFor(() => el('[role="dialog"] button[class]').exists)
-		el('[role="dialog"] button[class]').click()
-
-		waitFor(() => !el('author-select-save-button').isDisabled)
+		// Select from the stable initial list; filtering remounts options asynchronously.
+		const janeOption = () => el('[role="dialog"] button[data-entity-id="00000000-0000-0000-0000-000000000a02"]')
+		waitFor(() => janeOption().exists)
+		clickUntil(
+			() => {
+				const option = janeOption()
+				expect(option.text).toContain('Jane')
+				return option
+			},
+			() => el('current-author-display').text.includes('Jane'),
+		)
+		expect(el('author-select-save-button').isDisabled).toBe(false)
 		expect(el('current-author-display').text).toContain('Changes will be applied on save')
 	})
 

@@ -178,13 +178,11 @@ export class ComponentBuilderImpl<
 export function createComponentBuilder(
 	schemaRegistry: SchemaRegistry<Record<string, object>> | null,
 	roles: readonly string[] = [],
-// eslint-disable-next-line @typescript-eslint/ban-types
 ): ComponentBuilder<ComponentBuilderState<{}, object, typeof roles>> {
 	return new ComponentBuilderImpl(
 		schemaRegistry,
 		new Map(),
 		roles,
-	// eslint-disable-next-line @typescript-eslint/ban-types
 	) as unknown as ComponentBuilder<ComponentBuilderState<{}, object, typeof roles>>
 }
 

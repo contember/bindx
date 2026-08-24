@@ -1,3 +1,5 @@
+import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
+
 type Subscriber = () => void
 
 /**
@@ -9,16 +11,26 @@ export interface SnapshotVersionBumper {
 }
 
 /**
+ * Resolves the parent entity keys that currently have a LIVE relation edge to a
+ * child, so a child-field change can propagate up to its parents. Implemented by
+ * the relation store (the single source of truth for relation membership); this
+ * interface keeps {@link SubscriptionManager} decoupled from its concrete type.
+ */
+export interface ParentKeyLookup {
+	getParentKeysForChild(childId: string): Set<string>
+}
+
+/**
  * Manages subscriptions for entity and relation changes.
  *
  * Provides:
  * - Entity-level subscriptions
  * - Relation-level subscriptions
  * - Global subscriptions (any change)
- * - Parent-child change propagation
+ * - Parent-child change propagation (derived from live relation edges)
  * - Global version tracking for change detection
  */
-export class SubscriptionManager {
+export class SubscriptionManager implements Rekeyable {
 	/** Subscribers per entity key */
 	private readonly entitySubscribers = new Map<string, Set<Subscriber>>()
 
@@ -28,14 +40,18 @@ export class SubscriptionManager {
 	/** Global subscribers (notified on any change) */
 	private readonly globalSubscribers = new Set<Subscriber>()
 
-	/** Parent-child relationships: childKey -> Set of parentKeys */
-	private readonly childToParents = new Map<string, Set<string>>()
-
 	/** Maps old keys → new keys after rekey, so unsubscribe closures can find migrated callbacks */
 	private readonly rekeyedKeys = new Map<string, string>()
 
 	/** Global version number for change detection */
 	private globalVersion = 0
+
+	/**
+	 * Resolves a child's parents from live relation edges. Injected after
+	 * construction (the relation store and this manager are siblings under
+	 * SnapshotStore) via {@link setParentKeyLookup}.
+	 */
+	private parentKeyLookup: ParentKeyLookup | undefined
 
 	/**
 	 * Resolves a key through the rekey redirect chain.
@@ -116,32 +132,54 @@ export class SubscriptionManager {
 		}
 	}
 
+	/**
+	 * Notifies every registered subscriber — entity, relation and global.
+	 *
+	 * For store-wide events such as clear(), where every subscription's data is gone at once and
+	 * there is no per-key change to notify from. Registrations are left intact: the subscribers
+	 * belong to mounted components that must learn their entity is no longer there.
+	 */
+	notifyAll(): void {
+		this.globalVersion++
+
+		// Iterate the live sets, as the per-key paths do: a subscriber that unsubscribes a
+		// not-yet-visited sibling removes it from the iteration, whereas a copied array would
+		// still invoke it after its unsubscribe() returned.
+		for (const subs of this.entitySubscribers.values()) {
+			for (const sub of subs) sub()
+		}
+		for (const subs of this.relationSubscribers.values()) {
+			for (const sub of subs) sub()
+		}
+		for (const sub of this.globalSubscribers) sub()
+	}
+
 	// ==================== Parent-Child Relationships ====================
 
 	/**
-	 * Registers a parent-child relationship for change propagation.
-	 * When the child entity changes, parent entity subscribers will be notified.
+	 * Wires the live-edge parent lookup. Parent re-render propagation is derived
+	 * from the relation store's edges rather than a separate registry, so there is
+	 * one source of truth for the parent-child graph.
 	 */
-	registerParentChild(parentKey: string, childKey: string): void {
-		let parents = this.childToParents.get(childKey)
-		if (!parents) {
-			parents = new Set()
-			this.childToParents.set(childKey, parents)
-		}
-		parents.add(parentKey)
+	setParentKeyLookup(lookup: ParentKeyLookup): void {
+		this.parentKeyLookup = lookup
 	}
 
 	/**
-	 * Unregisters a parent-child relationship.
+	 * Derives the parent entity keys for a child entity key by reading the live
+	 * relation edges via the injected lookup. The child's bare id is the part of
+	 * the key after the first ':' ("entityType:id").
+	 *
+	 * The child's TYPE is intentionally dropped — {@link ParentKeyLookup} matches on
+	 * the bare id, relying on the store-wide global-id-uniqueness invariant (see
+	 * {@link RelationStore.getParentKeysForChild}).
 	 */
-	unregisterParentChild(parentKey: string, childKey: string): void {
-		const parents = this.childToParents.get(childKey)
-		if (parents) {
-			parents.delete(parentKey)
-			if (parents.size === 0) {
-				this.childToParents.delete(childKey)
-			}
-		}
+	private getParentKeys(childKey: string): Set<string> {
+		if (!this.parentKeyLookup) return new Set()
+		const separator = childKey.indexOf(':')
+		if (separator === -1) return new Set()
+		const childId = childKey.slice(separator + 1)
+		return this.parentKeyLookup.getParentKeysForChild(childId)
 	}
 
 	// ==================== Notification ====================
@@ -153,7 +191,25 @@ export class SubscriptionManager {
 	notifyEntitySubscribers(
 		key: string,
 		bumper: SnapshotVersionBumper,
-		notifiedKeys: Set<string> = new Set(),
+	): void {
+		this.globalVersion++
+		this.notifyEntityAndParentSubscribers(key, bumper, new Set())
+	}
+
+	/**
+	 * Walks the entity and its live ancestors. The global version is bumped once by the
+	 * caller, before the first subscriber runs — a subscriber reading getVersion() from
+	 * inside its callback must already see the new value.
+	 *
+	 * The walk is a transitive closure over live edges, so an entity many rows point at
+	 * (a shared lookup entity whose own has-many is loaded) acts as a hub: a write in one
+	 * row reaches every other row through it. That is the price of not knowing which part
+	 * of the hub each row presents; a selection-aware edge index would be the fix.
+	 */
+	private notifyEntityAndParentSubscribers(
+		key: string,
+		bumper: SnapshotVersionBumper,
+		notifiedKeys: Set<string>,
 	): void {
 		// Prevent infinite recursion
 		if (notifiedKeys.has(key)) return
@@ -164,8 +220,6 @@ export class SubscriptionManager {
 		const isRoot = notifiedKeys.size === 0
 		notifiedKeys.add(key)
 
-		this.globalVersion++
-
 		// Notify entity-specific subscribers
 		const entitySubs = this.entitySubscribers.get(key)
 		if (entitySubs) {
@@ -174,14 +228,16 @@ export class SubscriptionManager {
 			}
 		}
 
-		// Notify parent entity subscribers (propagate change up the tree)
-		const parents = this.childToParents.get(key)
-		if (parents) {
-			for (const parentKey of parents) {
-				// Bump parent snapshot version so useSyncExternalStore detects a change
-				bumper.bumpEntitySnapshotVersion(parentKey)
-				this.notifyEntitySubscribers(parentKey, bumper, notifiedKeys)
-			}
+		// Notify parent entity subscribers (propagate change up the tree).
+		// Parents are derived from the relation store's LIVE edges, so a
+		// disconnected child no longer reaches its former parent.
+		const parents = this.getParentKeys(key)
+		for (const parentKey of parents) {
+			// An ancestor reachable through several edges is bumped and walked once.
+			if (notifiedKeys.has(parentKey)) continue
+			// Bump parent snapshot version so useSyncExternalStore detects a change
+			bumper.bumpEntitySnapshotVersion(parentKey)
+			this.notifyEntityAndParentSubscribers(parentKey, bumper, notifiedKeys)
 		}
 
 		// Notify global subscribers (only once, from the root invocation — not
@@ -194,8 +250,8 @@ export class SubscriptionManager {
 	}
 
 	/**
-	 * Notifies relation subscribers and the parent entity's subscribers.
-	 * The bumper callback is used to bump the parent entity snapshot version.
+	 * Notifies relation subscribers, the owning entity, and its ancestors.
+	 * The bumper callback is used to bump entity snapshot versions.
 	 * The entityKey is the parent entity key derived from the relation key.
 	 */
 	notifyRelationSubscribers(
@@ -216,18 +272,7 @@ export class SubscriptionManager {
 		// Bump entity snapshot version so isEqual detects a change
 		bumper.bumpEntitySnapshotVersion(entityKey)
 
-		// Notify entity subscribers
-		const entitySubs = this.entitySubscribers.get(entityKey)
-		if (entitySubs) {
-			for (const sub of entitySubs) {
-				sub()
-			}
-		}
-
-		// Notify global subscribers
-		for (const sub of this.globalSubscribers) {
-			sub()
-		}
+		this.notifyEntityAndParentSubscribers(entityKey, bumper, new Set())
 	}
 
 	/**
@@ -267,11 +312,15 @@ export class SubscriptionManager {
 	}
 
 	/**
-	 * Moves subscriptions and parent-child relationships from oldKey to newKey.
+	 * Moves entity and relation subscriptions from oldKey to newKey.
 	 * Also rekeys relation subscribers under oldKeyPrefix to newKeyPrefix.
 	 * Registers redirects so unsubscribe closures can find migrated callbacks.
+	 *
+	 * Parent-child links are NOT migrated here — they are derived from the
+	 * relation store's live edges, which migrate their own id references on rekey.
 	 */
-	rekey(oldKey: string, newKey: string, oldKeyPrefix: string, newKeyPrefix: string): void {
+	rekey(ctx: RekeyContext): void {
+		const { oldKey, newKey, oldKeyPrefix, newKeyPrefix } = ctx
 		// Register redirect for entity key (update existing chains first)
 		for (const [fromKey, toKey] of this.rekeyedKeys) {
 			if (toKey === oldKey) {
@@ -280,21 +329,17 @@ export class SubscriptionManager {
 		}
 		this.rekeyedKeys.set(oldKey, newKey)
 
-		// Move entity subscribers
-		const entitySubs = this.entitySubscribers.get(oldKey)
-		if (entitySubs) {
-			this.entitySubscribers.delete(oldKey)
-			this.entitySubscribers.set(newKey, entitySubs)
-		}
+		// Move entity subscribers, merging into anything already subscribed under the new key
+		this.moveSubscribers(this.entitySubscribers, oldKey, newKey)
 
 		// Move relation subscribers by prefix (e.g. "Entity:tempId:" → "Entity:persistedId:")
-		const toMoveRelations: [string, Set<Subscriber>][] = []
-		for (const [key, subs] of this.relationSubscribers) {
+		const toMoveRelations: string[] = []
+		for (const key of this.relationSubscribers.keys()) {
 			if (key.startsWith(oldKeyPrefix)) {
-				toMoveRelations.push([key, subs])
+				toMoveRelations.push(key)
 			}
 		}
-		for (const [oldRelKey, subs] of toMoveRelations) {
+		for (const oldRelKey of toMoveRelations) {
 			const newRelKey = newKeyPrefix + oldRelKey.slice(oldKeyPrefix.length)
 
 			// Register redirect for relation key (update existing chains first)
@@ -305,23 +350,25 @@ export class SubscriptionManager {
 			}
 			this.rekeyedKeys.set(oldRelKey, newRelKey)
 
-			this.relationSubscribers.delete(oldRelKey)
-			this.relationSubscribers.set(newRelKey, subs)
+			this.moveSubscribers(this.relationSubscribers, oldRelKey, newRelKey)
 		}
+	}
 
-		// Move parent-child: update child→parent mappings
-		const parents = this.childToParents.get(oldKey)
-		if (parents) {
-			this.childToParents.delete(oldKey)
-			this.childToParents.set(newKey, parents)
-		}
+	/**
+	 * Re-homes a subscriber set under a new key. The destination may already hold
+	 * subscribers (a component mounted on the persisted id before the draft was rekeyed
+	 * onto it); replacing the set would silently orphan them, so the two are merged.
+	 */
+	private moveSubscribers(map: Map<string, Set<Subscriber>>, oldKey: string, newKey: string): void {
+		const moved = map.get(oldKey)
+		if (!moved) return
+		map.delete(oldKey)
 
-		// Update parent-child: replace oldKey in any parent sets that reference it
-		for (const parentSet of this.childToParents.values()) {
-			if (parentSet.has(oldKey)) {
-				parentSet.delete(oldKey)
-				parentSet.add(newKey)
-			}
+		const existing = map.get(newKey)
+		if (!existing) {
+			map.set(newKey, moved)
+			return
 		}
+		for (const sub of moved) existing.add(sub)
 	}
 }

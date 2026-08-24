@@ -34,11 +34,11 @@ export interface AttributeProps<T> {
  * ```
  */
 function AttributeImpl<T>({ field, format, children }: AttributeProps<T>): ReactElement | null {
-	if (field === undefined || field === null) {
+	const accessor = useField(field ?? null)
+	if (accessor === null) {
 		return children
 	}
 
-	const accessor = useField(field)
 	const extraProps = {
 		...format(accessor),
 		...(isDevAnnotationsEnabled() ? { 'data-field': field[FIELD_REF_META]?.fieldName } : {}),

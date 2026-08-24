@@ -39,11 +39,16 @@ export abstract class BaseHandle {
 export abstract class EntityRelatedHandle extends BaseHandle {
 	constructor(
 		protected readonly entityType: string,
-		protected readonly entityId: string,
+		private readonly sourceEntityId: string,
 		store: SnapshotStore,
 		dispatcher: ActionDispatcher,
 	) {
 		super(store, dispatcher)
+	}
+
+	/** Current canonical id; the handle keeps no mutable rekey state. */
+	protected get entityId(): string {
+		return this.store.resolveEntityId(this.entityType, this.sourceEntityId)
 	}
 
 	/**
@@ -62,11 +67,23 @@ export abstract class EntityRelatedHandle extends BaseHandle {
 	}
 
 	/**
-	 * Get entity data.
+	 * Get the CANONICAL entity data — the live, possibly-dirty values. Use this
+	 * for dirty tracking and any logic that must reflect the user's edits, even
+	 * while a pessimistic persist is in-flight. For values to DISPLAY, use
+	 * {@link getPresentationData}.
 	 */
 	protected getEntityData(): Record<string, unknown> | undefined {
 		const snapshot = this.store.getEntitySnapshot(this.entityType, this.entityId)
 		return snapshot?.data as Record<string, unknown> | undefined
+	}
+
+	/**
+	 * Get the entity data a consumer should DISPLAY. Equals {@link getEntityData}
+	 * except while the entity is pessimistically in-flight, when it returns the
+	 * server baseline (the canonical data stays dirty underneath).
+	 */
+	protected getPresentationData(): Record<string, unknown> | undefined {
+		return this.store.getPresentationSnapshot<Record<string, unknown>>(this.entityType, this.entityId)?.data
 	}
 
 	/**

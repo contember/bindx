@@ -3,6 +3,7 @@ import type { EntityDef, EntityAccessor, SelectionInput, SelectionMeta, FieldErr
 import { EntityHandle, isTempId, resolveSelectionMeta, buildQueryFromSelection, refreshServerData, createLoadError } from '@contember/bindx'
 import { useBindxContext, useSchemaRegistry } from './BackendAdapterContext.js'
 import { useStoreSubscription } from './useStoreSubscription.js'
+import { ItemAccessorCache } from './ItemAccessorCache.js'
 
 // ============================================================================
 // Options
@@ -162,11 +163,9 @@ export function useEntityList(
 // Implementation
 // ============================================================================
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useEntityList(
 	entity: EntityDef<any>,
 	options: UseEntityListOptions,
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	definer?: SelectionInput<any, any>,
 ): UseEntityListResult<any> {
 	const schemaRegistry = useSchemaRegistry()
@@ -231,8 +230,37 @@ export function useEntityList(
 		storeVersion: number
 		status: string
 		isRefetching: boolean
+		accessorCache: ItemAccessorCache
 		result: UseEntityListResult<any>
 	} | null>(null)
+
+	// --- Item accessor cache ---
+	// Kept for the hook's lifetime so item identity survives a list snapshot rebuild. Dropped
+	// whenever a handle construction input changes — handles are built against `selectionMeta` and
+	// validate field access against it. A new cache also invalidates `listCacheRef`, so a widened
+	// selection never serves the previous result with its narrow accessors.
+	// Canonical id of a list item: a temp id follows its temp→persisted rekey. The list
+	// state keeps the id it was given, so every id comparison goes through this.
+	const resolveItemId = useCallback(
+		(id: string): string => store.resolveEntityId(entityType, id),
+		[store, entityType],
+	)
+
+	const itemAccessorCache = useMemo(
+		() => new ItemAccessorCache(
+			(id) => EntityHandle.createRaw<object>(
+				id,
+				entityType,
+				store,
+				dispatcher,
+				schemaRegistry as SchemaRegistry<Record<string, object>>,
+				undefined,
+				selectionMeta,
+			),
+			resolveItemId,
+		),
+		[entityType, store, dispatcher, schemaRegistry, selectionMeta, resolveItemId],
+	)
 
 	// --- Store subscription ---
 	const subscribe = useCallback(
@@ -266,11 +294,12 @@ export function useEntityList(
 			} else {
 				store.scheduleForDeletion(entityType, key)
 			}
-			listStateRef.current.items = listStateRef.current.items.filter(item => item.id !== key)
+			const removedId = resolveItemId(key)
+			listStateRef.current.items = listStateRef.current.items.filter(item => resolveItemId(item.id) !== removedId)
 			versionRef.current++
 			store.notify()
 		},
-		[entityType, store],
+		[entityType, store, resolveItemId],
 	)
 
 	const moveItem = useCallback(
@@ -322,7 +351,8 @@ export function useEntityList(
 			cache.version === version &&
 			cache.storeVersion === storeVersion &&
 			cache.status === state.status &&
-			cache.isRefetching === state.isRefetching
+			cache.isRefetching === state.isRefetching &&
+			cache.accessorCache === itemAccessorCache
 		) {
 			return cache.result
 		}
@@ -334,17 +364,14 @@ export function useEntityList(
 		} else if (state.status === 'error') {
 			result = createErrorListResult(state.error!)
 		} else {
-			const items = state.items.map((item) => {
-				return EntityHandle.create<object>(
-					item.id,
-					entityType,
-					store,
-					dispatcher,
-					schemaRegistry as SchemaRegistry<Record<string, object>>,
-					undefined,
-					selectionMeta,
-				) as unknown as EntityAccessor<any>
+			state.items = state.items.map(item => {
+				const id = resolveItemId(item.id)
+				return id === item.id ? item : { id, data: item.data }
 			})
+			// The array itself is deliberately NOT identity-stable: consumers that only re-render
+			// through a parent (the DataGrid render chain) rely on a fresh array per store bump.
+			// Per-item accessor identity is the stable part — see ItemAccessorCache.
+			const items = itemAccessorCache.build(state.items)
 
 			result = {
 				$status: 'ready',
@@ -366,11 +393,12 @@ export function useEntityList(
 			storeVersion,
 			status: state.status,
 			isRefetching: state.isRefetching,
+			accessorCache: itemAccessorCache,
 			result,
 		}
 
 		return result
-	}, [entityType, store, dispatcher, schemaRegistry, selectionMeta, addItem, removeItem, moveItem])
+	}, [store, itemAccessorCache, addItem, removeItem, moveItem, resolveItemId])
 
 	const isEqual = useCallback(
 		(a: UseEntityListResult<any>, b: UseEntityListResult<any>): boolean => {

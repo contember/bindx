@@ -67,6 +67,9 @@ export type {
 	HasManyAccessor,
 	HasOneAccessor,
 	EntityAccessor,
+	// Selection-erased views (parameter positions that accept any selection)
+	EntityRefLike,
+	EntityAccessorLike,
 	// Type extraction helpers
 	ExtractHasOneEntityName,
 	ExtractHasManyEntityName,
@@ -237,13 +240,10 @@ export { MutationCollector, ContemberSchemaMutationAdapter, type SchemaNames } f
 export type { MutationSchemaProvider, EntityMutationResult } from './contember/index.js'
 
 // Undo/Redo
-export { UndoManager } from './undo/index.js'
+export { UndoManager, UnrecordedWriteError } from './undo/index.js'
 export type {
 	UndoManagerConfig,
 	UndoState,
-	UndoEntry,
-	PartialStoreSnapshot,
-	StoreAffectedKeys,
 } from './undo/index.js'
 
 // Store types (for undo)

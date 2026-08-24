@@ -38,7 +38,6 @@ export interface UseEntityCountResult {
  * recompute the count. Batched into the same request as any sibling list query.
  */
 export function useEntityCount(
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	entity: EntityDef<any>,
 	options: UseEntityCountOptions = {},
 ): UseEntityCountResult {

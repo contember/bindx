@@ -3,6 +3,7 @@ import {
 	SnapshotStore,
 	ActionDispatcher,
 	EventEmitter,
+	FIELD_REF_META,
 	HasManyListHandle,
 	SchemaRegistry,
 	type SchemaDefinition,
@@ -124,6 +125,34 @@ describe('HasManyListHandle', () => {
 			expect(handle.items.length).toBe(2)
 			expect(handle.items[0]?.id as string).toBe('t-1')
 			expect(handle.items[1]?.id as string).toBe('t-2')
+		})
+
+		test('pessimistic in-flight presents the server list while canonical state stays dirty', () => {
+			store.setEntityData('Article', 'a-1', {
+				id: 'a-1',
+				title: 'Test',
+				tags: [
+					{ id: 't-1', name: 'Tag 1' },
+					{ id: 't-2', name: 'Tag 2' },
+				],
+			}, true)
+
+			const handle = createHasManyHandle()
+			const itemIds = (): string[] => handle.items.map(item => item[FIELD_REF_META].entityId)
+			expect(itemIds()).toEqual(['t-1', 't-2'])
+
+			handle.disconnect('t-1')
+			handle.connect('t-3')
+			expect(itemIds()).toEqual(['t-2', 't-3'])
+			expect(handle.isDirty).toBe(true)
+
+			store.setPersisting('Article', 'a-1', true, true)
+			expect(itemIds()).toEqual(['t-1', 't-2'])
+			expect(handle.isDirty).toBe(true)
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags')).toEqual(['t-2', 't-3'])
+
+			store.setPersisting('Article', 'a-1', false)
+			expect(itemIds()).toEqual(['t-2', 't-3'])
 		})
 
 		test('should exclude planned removals', () => {
@@ -372,8 +401,8 @@ describe('HasManyListHandle', () => {
 			handle.remove(tempId)
 
 			const state = store.getHasMany('Article', 'a-1', 'tags')
-			expect(state?.createdEntities.has(tempId)).toBe(false)
-			expect(state?.plannedConnections.has(tempId)).toBe(false)
+			expect(state?.plannedAdditions.get(tempId) === 'created').toBe(false)
+			expect(state?.plannedAdditions.has(tempId)).toBe(false)
 		})
 
 		test('should remove server entity — manyHasMany uses disconnect', () => {
@@ -564,8 +593,8 @@ describe('HasManyListHandle', () => {
 			handle.remove(tempId)
 
 			const state = store.getHasMany('Article', 'a-1', 'comments')
-			expect(state?.createdEntities.has(tempId)).toBe(false)
-			expect(state?.plannedConnections.has(tempId)).toBe(false)
+			expect(state?.plannedAdditions.get(tempId) === 'created').toBe(false)
+			expect(state?.plannedAdditions.has(tempId)).toBe(false)
 			// No planned removal — the add was cancelled, not a delete
 			expect(state?.plannedRemovals.has(tempId)).toBe(false)
 		})
@@ -605,8 +634,8 @@ describe('HasManyListHandle', () => {
 
 			const state = store.getHasMany('Article', 'a-1', 'tags')
 			expect(state?.plannedRemovals.has(tempId)).toBe(false)
-			expect(state?.plannedConnections.has(tempId)).toBe(false)
-			expect(state?.createdEntities.has(tempId)).toBe(false)
+			expect(state?.plannedAdditions.has(tempId)).toBe(false)
+			expect(state?.plannedAdditions.get(tempId) === 'created').toBe(false)
 			expect(handle.items.length).toBe(0)
 		})
 
@@ -625,8 +654,8 @@ describe('HasManyListHandle', () => {
 
 			const state = store.getHasMany('Article', 'a-1', 'tags')
 			expect(state?.plannedRemovals.has(tempId)).toBe(false)
-			expect(state?.plannedConnections.has(tempId)).toBe(false)
-			expect(state?.createdEntities.has(tempId)).toBe(false)
+			expect(state?.plannedAdditions.has(tempId)).toBe(false)
+			expect(state?.plannedAdditions.get(tempId) === 'created').toBe(false)
 			expect(handle.items.length).toBe(0)
 		})
 	})
@@ -825,7 +854,7 @@ describe('HasManyListHandle', () => {
 
 			const state = store.getHasMany('Article', 'a-1', 'tags')
 			expect(state?.plannedRemovals.size).toBe(0)
-			expect(state?.plannedConnections.size).toBe(0)
+			expect(state?.plannedAdditions.size).toBe(0)
 		})
 	})
 
@@ -1029,7 +1058,7 @@ describe('HasManyListHandle', () => {
 			handle.connect('t-1')
 
 			const state = store.getHasMany('Article', 'a-1', 'tags')
-			expect(state?.plannedConnections.has('t-1')).toBe(false)
+			expect(state?.plannedAdditions.has('t-1')).toBe(false)
 		})
 
 		test('interceptor can cancel disconnect()', () => {

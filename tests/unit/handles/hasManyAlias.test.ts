@@ -262,8 +262,8 @@ describe('HasMany with Alias Support', () => {
 			const state1 = store.getHasMany('Article', 'a-1', 'tags', alias1)
 			const state2 = store.getHasMany('Article', 'a-1', 'tags', alias2)
 
-			expect(state1?.plannedConnections.size).toBe(0)
-			expect(state2?.plannedConnections.size).toBe(1)
+			expect(state1?.plannedAdditions.size).toBe(0)
+			expect(state2?.plannedAdditions.size).toBe(1)
 		})
 	})
 
@@ -309,7 +309,7 @@ describe('HasMany with Alias Support', () => {
 
 			// Should be tracked under the alias
 			const state = store.getHasMany('Article', 'a-1', 'tags', alias)
-			expect(state?.createdEntities.has(tempId)).toBe(true)
+			expect(state?.plannedAdditions.get(tempId) === 'created').toBe(true)
 		})
 
 		test('should remove items from the correct alias', () => {

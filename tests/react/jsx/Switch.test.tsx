@@ -27,7 +27,6 @@ function getByTestId(container: Element, testId: string): Element {
 	return el
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ArticleAccessor = any
 
 function renderWithArticle(
