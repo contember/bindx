@@ -106,7 +106,6 @@ export interface ComponentBuilderState<
 	TEntityProps extends Record<string, AnyEntityPropConfig> = {},
 	TScalarProps extends object = object,
 	TRoles extends readonly string[] = readonly string[],
-	// eslint-disable-next-line @typescript-eslint/ban-types
 	TUseProps extends object = {},
 > {
 	readonly __entityProps: TEntityProps
