@@ -119,6 +119,22 @@ describe('relation cycles during collection', () => {
 		expect(pageCall?.changes).toEqual({ title: 'Renamed page' })
 	})
 
+	/**
+	 * `collectFieldsData` is the other public entry into relation collection. Nothing in
+	 * the persist pipeline routes through it today — `BatchPersister` has its own
+	 * scalar-only variant for a fields scope — so it needs its own coverage.
+	 */
+	test('collectFieldsData walks into the cycle and terminates', () => {
+		const collector = new MutationCollector(store, new ContemberSchemaMutationAdapter(schema))
+		store.setFieldValue('Revision', 'rev-published', ['name'], 'Renamed published')
+
+		const data = collector.collectFieldsData('Revision', 'rev-draft', ['page'])
+
+		expect(data).toEqual({
+			page: { update: { publishedRevision: { update: { name: 'Renamed published' } } } },
+		})
+	})
+
 	test('a create whose nested target points back at it does not recurse forever', async () => {
 		const pageId = store.createEntity('Page', { title: 'New page' })
 		const revisionId = store.createEntity('Revision', { name: 'New revision' })
