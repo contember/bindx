@@ -260,14 +260,14 @@ describe('createRelationColumn — hasMany', () => {
 })
 
 // ============================================================================
-// Nested declarative selection inside a relation renderer (npi regression)
+// Nested declarative selection inside a relation renderer (downstream regression)
 // ============================================================================
 
-// Repro of the npi workaround: a relation-column renderer that returns declarative
+// Repro of the downstream workaround: a relation-column renderer that returns declarative
 // <HasMany>/<Field> JSX. Before the JSX-walk fix, collectSelection discarded the
 // returned JSX, so nested fields never reached the query (only the .map() proxy trick
 // worked). The renderer's returned JSX must now be walked and merged into the scope.
-describe('createRelationColumn — nested declarative selection (npi regression)', () => {
+describe('createRelationColumn — nested declarative selection (downstream regression)', () => {
 	const HasOneColumn = createRelationColumn(hasOneColumnDef, hasOneCellConfig)
 	const HasManyColumn = createRelationColumn(hasManyColumnDef, hasManyCellConfig)
 

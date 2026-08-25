@@ -169,6 +169,12 @@ export function buildComponent<TProps extends object>(
 	// Interface props are appended during lazy collection, before the first runtime render.
 	const entityPropNames = [...entityConfigs.keys()]
 
+	// Selector-backed props are the only ones step 1 seeds into selectionsMap; anything
+	// else there came from a collection pass and must not survive a reset.
+	const explicitEntityPropNames = [...entityConfigs.entries()]
+		.filter(([_, c]) => c.selector)
+		.map(([name]) => name)
+
 	// 2. Implicit entities - collect lazily to avoid TDZ errors
 	const implicitConfigs = [...entityConfigs.entries()].filter(([_, c]) => !c.selector)
 	// Tri-state: 'collecting' terminates self-recursive components
