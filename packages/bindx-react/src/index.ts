@@ -37,6 +37,10 @@ export type {
 	FluentDefiner,
 	HasManyOptions,
 	InferSelection,
+	// Static (precompiled) selection
+	StaticSelection,
+	StaticFieldMap,
+	StaticFieldNode,
 	QuerySpec,
 	QueryFieldSpec,
 	// Query types (typed filter/orderBy)
@@ -150,6 +154,7 @@ export {
 	// Selection utilities
 	createFragment,
 	buildQueryFromSelection,
+	staticSelectionToMeta,
 	// Handles
 	EntityHandle,
 	HasOneHandle,
@@ -274,6 +279,9 @@ export type {
 	BuildProps,
 	BuildFragmentProps,
 	InitialBuilderState,
+	// Compiled selection contract (v2)
+	CompiledSelection,
+	CompiledHole,
 } from './jsx/index.js'
 
 // ============================================================================
@@ -356,6 +364,11 @@ export {
 	// Component (unified API)
 	createComponent,
 	withCollector,
+	COLLECTOR_CONTRACT,
+	itemOf,
+	entityOf,
+	type CallbackContract,
+	type CollectorContract,
 	isBindxComponent,
 	mergeFragments,
 	COMPONENT_MARKER,
@@ -365,6 +378,8 @@ export {
 	getComponentBrand,
 	setBrandValidation,
 	validateBrand,
+	setStaticSelectionValidation,
+	setCompiledSelectionsEnabled,
 } from './jsx/index.js'
 
 // Entity Scope
