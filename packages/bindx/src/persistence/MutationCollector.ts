@@ -102,6 +102,14 @@ export class MutationCollector implements MutationDataCollector {
 	private readonly _relationFields = new Map<string, CollectedRelationField>()
 	private readonly _nestedCreates: CollectedNestedCreate[] = []
 	private readonly _nestedUpdates: CollectedNestedUpdate[] = []
+	/**
+	 * Entities whose data collection is still on the stack. A schema may point two
+	 * hasOne relations back at each other (`page.publishedRevision` ↔ `revision.page`),
+	 * and once both sides are in the store the nested-update walk would recurse until
+	 * the stack blows. Re-entering an entity means an ancestor frame already emits its
+	 * changes, so the inner edge contributes nothing (see issue #88).
+	 */
+	private readonly _collecting = new Set<string>()
 
 	constructor(
 		private readonly store: SnapshotStore,
@@ -133,6 +141,7 @@ export class MutationCollector implements MutationDataCollector {
 		this._relationFields.clear()
 		this._nestedCreates.length = 0
 		this._nestedUpdates.length = 0
+		this._collecting.clear()
 	}
 
 	setExcludedEntityKeys(keys: ReadonlySet<string>): void {
@@ -313,21 +322,30 @@ export class MutationCollector implements MutationDataCollector {
 			throw new Error(`Entity type '${entityType}' not found in schema`)
 		}
 
-		const mutation: Record<string, unknown> = {}
+		const key = this.entityKey(entityType, entityId)
+		if (this._collecting.has(key)) {
+			return null
+		}
+		this._collecting.add(key)
+		try {
+			const mutation: Record<string, unknown> = {}
 
-		// Collect scalar field changes
-		this.collectScalarChanges(entityType, snapshot, mutation)
+			// Collect scalar field changes
+			this.collectScalarChanges(entityType, snapshot, mutation)
 
-		// Materialize placeholder-backed creating-state hasOne relations before
-		// collecting, so the collection phase can remain a pure read over the
-		// store. Embedded data is not materialized here — for existing
-		// (server-side) parents, hasMany state is already authoritative.
-		this.materializeForUpdate(entityType, entityId)
+			// Materialize placeholder-backed creating-state hasOne relations before
+			// collecting, so the collection phase can remain a pure read over the
+			// store. Embedded data is not materialized here — for existing
+			// (server-side) parents, hasMany state is already authoritative.
+			this.materializeForUpdate(entityType, entityId)
 
-		// Collect relation changes
-		this.collectRelationChanges(entityType, entityId, mutation)
+			// Collect relation changes
+			this.collectRelationChanges(entityType, entityId, mutation)
 
-		return Object.keys(mutation).length > 0 ? mutation : null
+			return Object.keys(mutation).length > 0 ? mutation : null
+		} finally {
+			this._collecting.delete(key)
+		}
 	}
 
 	/**
@@ -347,6 +365,23 @@ export class MutationCollector implements MutationDataCollector {
 			throw new Error(`Entity type '${entityType}' not found in schema`)
 		}
 
+		const key = this.entityKey(entityType, entityId)
+		if (this._collecting.has(key)) {
+			return null
+		}
+		this._collecting.add(key)
+		try {
+			return this.buildCreateData(entityType, entityId, snapshot)
+		} finally {
+			this._collecting.delete(key)
+		}
+	}
+
+	private buildCreateData(
+		entityType: string,
+		entityId: string,
+		snapshot: EntitySnapshot,
+	): Record<string, unknown> | null {
 		const data = snapshot.data as Record<string, unknown>
 		const createData: Record<string, unknown> = {}
 
