@@ -505,7 +505,7 @@ describe('compiled selection v2 — nested-component holes', () => {
 	})
 
 	test('hole extraProps: a lifted render-prop closure collects through the target staticRender', () => {
-		// Mirrors npi's SelectField (and the compiler's phase-2.1 lift): the render-prop child is
+		// Mirrors a real app's SelectField (and the compiler's phase-2.1 lift): the render-prop child is
 		// passed via extraProps, and the target's staticRender INVOKES it with the relation entity.
 		interface SelectFieldProps {
 			entity: EntityRef<Author>
