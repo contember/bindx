@@ -40,7 +40,13 @@ function resolveSelector(selectorOrTestId: string): string {
  */
 export function waitFor(
 	condition: () => boolean,
-	{ timeout = POLL_TIMEOUT, interval = POLL_INTERVAL, message }: { timeout?: number; interval?: number; message?: string } = {},
+	{ timeout = POLL_TIMEOUT, interval = POLL_INTERVAL, message, capture = true }: {
+		timeout?: number
+		interval?: number
+		message?: string
+		/** Screenshot the page on timeout. Off for polls a caller expects to fail and retry. */
+		capture?: boolean
+	} = {},
 ): void {
 	const start = Date.now()
 	while (Date.now() - start < timeout) {
@@ -55,7 +61,16 @@ export function waitFor(
 	if (!condition()) {
 		const elapsed = Date.now() - start
 		const hint = message ?? condition.toString().slice(0, 120)
-		throw new Error(`waitFor timed out after ${elapsed}ms: ${hint}`)
+		// CI uploads /tmp/browser-test-*.png on failure; without this nothing ever writes one.
+		let shot = ''
+		if (capture) {
+			try {
+				shot = ` (screenshot: ${screenshot()})`
+			} catch {
+				// a broken session must not mask the real timeout
+			}
+		}
+		throw new Error(`waitFor timed out after ${elapsed}ms: ${hint}${shot}`)
 	}
 }
 
@@ -133,7 +148,7 @@ export function clickUntil(
 			// target gone — the previous click may have registered and closed the popover
 		}
 		try {
-			waitFor(condition, { timeout: settle })
+			waitFor(condition, { timeout: settle, capture: false })
 			return
 		} catch {
 			// outcome didn't materialize — re-click
