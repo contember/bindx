@@ -16,13 +16,19 @@ browserTest('Article with Author Select', () => {
 	})
 
 	test('changing author enables save and updates display', () => {
-		// Open the author SelectField popover
-		el(`${tid('article-with-author-select')} [aria-haspopup="dialog"]`).click()
-		// Select from the stable initial list; filtering remounts options asynchronously.
+		const trigger = () => el(`${tid('article-with-author-select')} [aria-haspopup="dialog"]`)
+		// Pick from the stable initial list; filtering remounts options asynchronously.
 		const janeOption = () => el('[role="dialog"] button[data-entity-id="00000000-0000-0000-0000-000000000a02"]')
-		waitFor(() => janeOption().exists)
+
 		clickUntil(
 			() => {
+				// Re-open on every attempt. A click that lands mid-remount is lost *and*
+				// dismisses the popover, so without this the remaining attempts have no
+				// option to click and the whole budget burns without a single real try.
+				if (!janeOption().exists) {
+					trigger().click()
+					waitFor(() => janeOption().exists, { capture: false })
+				}
 				const option = janeOption()
 				expect(option.text).toContain('Jane')
 				return option
