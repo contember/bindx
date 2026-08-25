@@ -194,7 +194,9 @@ export class MockAdapter implements BackendAdapter {
 		this.applyChanges(entity, changes)
 		this.log('persist result', entity)
 
-		return { ok: true }
+		// Echo the mutated node — PersistResult.data is what the persister reads
+		// nested create IDs out of.
+		return { ok: true, data: entity }
 	}
 
 	/**
@@ -335,11 +337,15 @@ export class MockAdapter implements BackendAdapter {
 	}
 
 	/**
-	 * Creates a related entity with a generated ID.
+	 * Creates a related entity with a generated ID, materializing its own nested
+	 * operations. The persister reconciles a create by reading server IDs out of
+	 * the echoed node, so a nested create left as a raw `{ create: … }` operation
+	 * reads as an unresolved ID and fails the whole persist.
 	 */
 	private createRelatedEntity(data: Record<string, unknown>): Record<string, unknown> {
-		const id = this.generateId()
-		return { id, ...data }
+		const entity: Record<string, unknown> = { id: this.generateId() }
+		this.applyChanges(entity, data)
+		return entity
 	}
 
 	/**
@@ -368,7 +374,11 @@ export class MockAdapter implements BackendAdapter {
 
 		// Generate ID if not provided
 		const id = (data['id'] as string) ?? this.generateId()
-		const entity = { ...data, id }
+		// Materialize relation operations so the echoed node carries the server IDs
+		// of every nested create — the persister reconciles against exactly that.
+		const entity: Record<string, unknown> = { id }
+		this.applyChanges(entity, data)
+		entity['id'] = id
 
 		this.store[entityType]![id] = entity
 		this.log('create result', entity)
