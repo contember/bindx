@@ -100,6 +100,9 @@ export {
 } from './fieldRef.js'
 export { getRelatedAccessor } from './columnTypes.js'
 
+// Argument types of the bulk state setters — saves consumers a second import.
+export type { FilterArtifact, SortingDirections } from '@contember/bindx'
+
 // State hooks
 export {
 	useFilteringState,
@@ -107,6 +110,7 @@ export {
 	usePagingState,
 	useSelectionState,
 	type FilteringState,
+	type FilterArtifactUpdate,
 	type RegisteredFilter,
 	type UseFilteringOptions,
 	type UseSortingOptions,

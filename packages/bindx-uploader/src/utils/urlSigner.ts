@@ -57,55 +57,24 @@ function buildGenerateUploadUrlMutation(
 		const params = parameters[alias]
 		if (!params) continue
 
-		const hasNewFormat = params.suffix || params.fileName || params.extension
-
-		if (hasNewFormat) {
-			const inputVarName = `input_${varIndex}`
-			variableDefinitions.push(`$${inputVarName}: S3GenerateSignedUploadInput`)
-			variables[inputVarName] = {
-				contentType: params.contentType,
-				prefix: params.prefix,
-				expiration: params.expiration,
-				acl: params.acl,
-				size: params.size,
-				suffix: params.suffix,
-				fileName: params.fileName,
-				extension: params.extension,
-			}
-			fields.push(`${alias}: generateUploadUrl(input: $${inputVarName}) {
-				url
-				publicUrl
-				method
-				headers { key value }
-			}`)
-		} else {
-			const contentTypeVar = `contentType_${varIndex}`
-			const expirationVar = `expiration_${varIndex}`
-			const prefixVar = `prefix_${varIndex}`
-			const aclVar = `acl_${varIndex}`
-
-			variableDefinitions.push(`$${contentTypeVar}: String`)
-			variableDefinitions.push(`$${expirationVar}: Int`)
-			variableDefinitions.push(`$${prefixVar}: String`)
-			variableDefinitions.push(`$${aclVar}: S3Acl`)
-
-			variables[contentTypeVar] = params.contentType
-			variables[expirationVar] = params.expiration
-			variables[prefixVar] = params.prefix
-			variables[aclVar] = params.acl
-
-			fields.push(`${alias}: generateUploadUrl(
-				contentType: $${contentTypeVar}
-				expiration: $${expirationVar}
-				prefix: $${prefixVar}
-				acl: $${aclVar}
-			) {
-				url
-				publicUrl
-				method
-				headers { key value }
-			}`)
+		const inputVarName = `input_${varIndex}`
+		variableDefinitions.push(`$${inputVarName}: S3GenerateSignedUploadInput`)
+		variables[inputVarName] = {
+			contentType: params.contentType,
+			prefix: params.prefix,
+			expiration: params.expiration,
+			acl: params.acl,
+			size: params.size,
+			suffix: params.suffix,
+			fileName: params.fileName,
+			extension: params.extension,
 		}
+		fields.push(`${alias}: generateUploadUrl(input: $${inputVarName}) {
+			url
+			publicUrl
+			method
+			headers { key value }
+		}`)
 		varIndex++
 	}
 

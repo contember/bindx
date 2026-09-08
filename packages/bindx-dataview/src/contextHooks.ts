@@ -11,6 +11,7 @@ import type { DataViewElementData } from './DataViewContext.js'
 import type { FilteringState, SortingStateResult, PagingStateResult, SelectionStateResult } from './useDataViewState.js'
 import type {
 	SortingState,
+	SortingDirections,
 	SortingDirectionAction,
 	PagingState,
 	PagingInfo,
@@ -27,6 +28,7 @@ import type {
 
 export interface DataViewSortingMethods {
 	setOrderBy<T>(field: FieldRef<T>, action: SortingDirectionAction, append?: boolean): void
+	setDirections(directions: SortingDirections): void
 }
 
 export function useDataViewSortingState(): SortingState {
@@ -35,7 +37,10 @@ export function useDataViewSortingState(): SortingState {
 
 export function useDataViewSortingMethods(): DataViewSortingMethods {
 	const { sorting } = useDataViewContext()
-	return useMemo(() => ({ setOrderBy: sorting.setOrderBy }), [sorting.setOrderBy])
+	return useMemo((): DataViewSortingMethods => ({
+		setOrderBy: sorting.setOrderBy,
+		setDirections: sorting.setDirections,
+	}), [sorting.setOrderBy, sorting.setDirections])
 }
 
 export function useDataViewSortingDirection<T>(field: FieldRef<T>): OrderDirection | null {
@@ -81,6 +86,7 @@ export function useDataViewPagingMethods(): DataViewPagingMethods {
 
 export interface DataViewFilteringMethods {
 	setFilter(name: string, artifact: FilterArtifact): void
+	setAllFilters(artifacts: Record<string, FilterArtifact>): void
 }
 
 export function useDataViewFilteringState(): FilteringState {
@@ -89,7 +95,10 @@ export function useDataViewFilteringState(): FilteringState {
 
 export function useDataViewFilteringMethods(): DataViewFilteringMethods {
 	const { filtering } = useDataViewContext()
-	return useMemo(() => ({ setFilter: filtering.setArtifact }), [filtering.setArtifact])
+	return useMemo((): DataViewFilteringMethods => ({
+		setFilter: filtering.setArtifact,
+		setAllFilters: filtering.setAllArtifacts,
+	}), [filtering.setArtifact, filtering.setAllArtifacts])
 }
 
 export function useDataViewFilterHandlerRegistry(): ReadonlyMap<string, { handler: FilterHandler<FilterArtifact> }> {

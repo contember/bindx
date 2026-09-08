@@ -33,10 +33,18 @@ export interface RegisteredFilter {
 	artifact: FilterArtifact
 }
 
+/** Value or updater accepted by {@link FilteringState.setArtifact}. */
+export type FilterArtifactUpdate =
+	| FilterArtifact
+	| ((current: FilterArtifact | undefined) => FilterArtifact | undefined)
+
 export interface FilteringState {
 	readonly filters: ReadonlyMap<string, RegisteredFilter>
 	getArtifact(name: string): FilterArtifact | undefined
-	setArtifact(name: string, artifact: FilterArtifact): void
+	/** An updater sees the live artifact, not a render snapshot; returning `undefined` resets the filter to its default. */
+	setArtifact(name: string, artifact: FilterArtifactUpdate): void
+	/** Replaces the whole artifact record at once — for restoring a saved filter preset. */
+	setAllArtifacts(artifacts: Record<string, FilterArtifact>): void
 	resetFilter(name: string): void
 	resetAll(): void
 	readonly hasActiveFilters: boolean
@@ -73,20 +81,25 @@ export function useFilteringState(options: UseFilteringOptions): FilteringState 
 		[artifacts],
 	)
 
+	// Functional form: two writes batched into one commit must compose, not clobber.
 	const setArtifact = useCallback(
-		(name: string, artifact: FilterArtifact): void => {
-			setArtifacts({ ...artifacts, [name]: artifact })
+		(name: string, artifact: FilterArtifactUpdate): void => {
+			setArtifacts(current => {
+				const next = typeof artifact === 'function' ? artifact(current[name]) : artifact
+				const resolved = next ?? filterDefs.get(name)?.handler.defaultArtifact()
+				return resolved === undefined ? current : { ...current, [name]: resolved }
+			})
 		},
-		[artifacts, setArtifacts],
+		[filterDefs, setArtifacts],
 	)
 
 	const resetFilter = useCallback(
 		(name: string): void => {
 			const def = filterDefs.get(name)
 			if (!def) return
-			setArtifacts({ ...artifacts, [name]: def.handler.defaultArtifact() })
+			setArtifacts(current => ({ ...current, [name]: def.handler.defaultArtifact() }))
 		},
-		[filterDefs, artifacts, setArtifacts],
+		[filterDefs, setArtifacts],
 	)
 
 	const resetAll = useCallback((): void => {
@@ -128,7 +141,16 @@ export function useFilteringState(options: UseFilteringOptions): FilteringState 
 		return map
 	}, [filterDefs, artifacts])
 
-	return { filters, getArtifact, setArtifact, resetFilter, resetAll, hasActiveFilters, resolvedWhere }
+	return {
+		filters,
+		getArtifact,
+		setArtifact,
+		setAllArtifacts: setArtifacts,
+		resetFilter,
+		resetAll,
+		hasActiveFilters,
+		resolvedWhere,
+	}
 }
 
 // ============================================================================
@@ -145,6 +167,8 @@ export interface UseSortingOptions {
 export interface SortingStateResult {
 	readonly state: SortingState
 	setOrderBy<T>(field: FieldRef<T>, action: SortingDirectionAction, append?: boolean): void
+	/** Replaces the whole direction record at once — for restoring saved sorting. */
+	setDirections(directions: SortingDirections): void
 	clear(): void
 	directionOf<T>(field: FieldRef<T>): OrderDirection | null
 	readonly resolvedOrderBy: readonly Record<string, unknown>[] | undefined
@@ -186,24 +210,23 @@ export function useSortingState(options: UseSortingOptions): SortingStateResult 
 			// Dotted path, not the leaf — `sortableFields` is keyed the same way (see #68).
 			const fieldName = extractFieldName(field)
 			if (fieldName === null || !sortableFields.has(fieldName)) return
-			const currentDir = directions[fieldName] ?? null
-			const newDir = resolveSortAction(currentDir, action)
 
-			if (append) {
-				const next = { ...directions }
+			// Functional form: two writes batched into one commit must compose, not clobber.
+			setDirections((current): SortingDirections => {
+				const newDir = resolveSortAction(current[fieldName] ?? null, action)
+				if (!append) {
+					return newDir ? { [fieldName]: newDir } : {}
+				}
+				const next = { ...current }
 				if (newDir) {
 					next[fieldName] = newDir
 				} else {
 					delete next[fieldName]
 				}
-				setDirections(next)
-			} else if (newDir) {
-				setDirections({ [fieldName]: newDir })
-			} else {
-				setDirections({})
-			}
+				return next
+			})
 		},
-		[sortableFields, directions, setDirections],
+		[sortableFields, setDirections],
 	)
 
 	const clear = useCallback((): void => {
@@ -224,7 +247,7 @@ export function useSortingState(options: UseSortingOptions): SortingStateResult 
 		return entries.map(([field, dir]) => buildNestedOrderBy(field, dir))
 	}, [directions])
 
-	return { state, setOrderBy, clear, directionOf, resolvedOrderBy }
+	return { state, setOrderBy, setDirections, clear, directionOf, resolvedOrderBy }
 }
 
 function buildNestedOrderBy(fieldPath: string, direction: OrderDirection): Record<string, unknown> {
@@ -319,8 +342,8 @@ export function usePagingState(options: UsePagingOptions = {}): PagingStateResul
 		[setPageIndex],
 	)
 
-	const next = useCallback((): void => setPageIndex(pageIndex + 1), [pageIndex, setPageIndex])
-	const previous = useCallback((): void => setPageIndex(Math.max(0, pageIndex - 1)), [pageIndex, setPageIndex])
+	const next = useCallback((): void => setPageIndex(current => current + 1), [setPageIndex])
+	const previous = useCallback((): void => setPageIndex(current => Math.max(0, current - 1)), [setPageIndex])
 	const first = useCallback((): void => setPageIndex(0), [setPageIndex])
 
 	const last = useCallback((): void => {
@@ -395,18 +418,21 @@ export function useSelectionState(options: UseSelectionOptions = {}): SelectionS
 	const state = useMemo((): SelectionState => ({ values, layouts }), [values, layouts])
 
 	const setLayout = useCallback((layout: string | undefined): void => {
-		setValues({ ...values, layout })
-	}, [values, setValues])
+		setValues(current => ({ ...current, layout }))
+	}, [setValues])
 
+	// Functional form: toggling several columns in one commit must compose, not clobber.
 	const setVisibility = useCallback((name: string, visible: boolean | undefined): void => {
-		const next = { ...values.visibility }
-		if (visible === undefined) {
-			delete next[name]
-		} else {
-			next[name] = visible
-		}
-		setValues({ ...values, visibility: next })
-	}, [values, setValues])
+		setValues((current): SelectionValues => {
+			const next = { ...current.visibility }
+			if (visible === undefined) {
+				delete next[name]
+			} else {
+				next[name] = visible
+			}
+			return { ...current, visibility: next }
+		})
+	}, [setValues])
 
 	const isVisible = useCallback((name: string, fallback = true): boolean => {
 		return values.visibility[name] ?? fallback
