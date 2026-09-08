@@ -187,7 +187,7 @@ function resolveSortAction(
 export function useSortingState(options: UseSortingOptions): SortingStateResult {
 	const { sortableFields, initialSorting, stateStorage = 'null', storageKey = 'dataview' } = options
 
-	const [directions, setDirectionsRaw] = useStoredState<SortingDirections>(
+	const [directions, setDirections] = useStoredState<SortingDirections>(
 		stateStorage,
 		[storageKey, 'sorting'],
 		(stored) => stored ?? initialSorting ?? {},
@@ -202,7 +202,7 @@ export function useSortingState(options: UseSortingOptions): SortingStateResult 
 			if (fieldName === null || !sortableFields.has(fieldName)) return
 
 			// Functional form: two writes batched into one commit must compose, not clobber.
-			setDirectionsRaw((current): SortingDirections => {
+			setDirections((current): SortingDirections => {
 				const newDir = resolveSortAction(current[fieldName] ?? null, action)
 				if (!append) {
 					return newDir ? { [fieldName]: newDir } : {}
@@ -216,12 +216,12 @@ export function useSortingState(options: UseSortingOptions): SortingStateResult 
 				return next
 			})
 		},
-		[sortableFields, setDirectionsRaw],
+		[sortableFields, setDirections],
 	)
 
 	const clear = useCallback((): void => {
-		setDirectionsRaw({})
-	}, [setDirectionsRaw])
+		setDirections({})
+	}, [setDirections])
 
 	const directionOf = useCallback(
 		<T>(field: FieldRef<T>): OrderDirection | null => {
@@ -237,7 +237,7 @@ export function useSortingState(options: UseSortingOptions): SortingStateResult 
 		return entries.map(([field, dir]) => buildNestedOrderBy(field, dir))
 	}, [directions])
 
-	return { state, setOrderBy, setDirections: setDirectionsRaw, clear, directionOf, resolvedOrderBy }
+	return { state, setOrderBy, setDirections, clear, directionOf, resolvedOrderBy }
 }
 
 function buildNestedOrderBy(fieldPath: string, direction: OrderDirection): Record<string, unknown> {
@@ -332,8 +332,8 @@ export function usePagingState(options: UsePagingOptions = {}): PagingStateResul
 		[setPageIndex],
 	)
 
-	const next = useCallback((): void => setPageIndex(pageIndex + 1), [pageIndex, setPageIndex])
-	const previous = useCallback((): void => setPageIndex(Math.max(0, pageIndex - 1)), [pageIndex, setPageIndex])
+	const next = useCallback((): void => setPageIndex(current => current + 1), [setPageIndex])
+	const previous = useCallback((): void => setPageIndex(current => Math.max(0, current - 1)), [setPageIndex])
 	const first = useCallback((): void => setPageIndex(0), [setPageIndex])
 
 	const last = useCallback((): void => {
@@ -408,18 +408,21 @@ export function useSelectionState(options: UseSelectionOptions = {}): SelectionS
 	const state = useMemo((): SelectionState => ({ values, layouts }), [values, layouts])
 
 	const setLayout = useCallback((layout: string | undefined): void => {
-		setValues({ ...values, layout })
-	}, [values, setValues])
+		setValues(current => ({ ...current, layout }))
+	}, [setValues])
 
+	// Functional form: toggling several columns in one commit must compose, not clobber.
 	const setVisibility = useCallback((name: string, visible: boolean | undefined): void => {
-		const next = { ...values.visibility }
-		if (visible === undefined) {
-			delete next[name]
-		} else {
-			next[name] = visible
-		}
-		setValues({ ...values, visibility: next })
-	}, [values, setValues])
+		setValues((current): SelectionValues => {
+			const next = { ...current.visibility }
+			if (visible === undefined) {
+				delete next[name]
+			} else {
+				next[name] = visible
+			}
+			return { ...current, visibility: next }
+		})
+	}, [setValues])
 
 	const isVisible = useCallback((name: string, fallback = true): boolean => {
 		return values.visibility[name] ?? fallback

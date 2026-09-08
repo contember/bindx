@@ -1,10 +1,6 @@
-// Companion to filteringSetArtifactBatchClobber.test.tsx (issue #66).
-//
-// useSortingState.setOrderBy had the same stale-snapshot shape as
-// FilteringState.setArtifact: the next record was spread from the render
-// closure, so two appended sorts batched into one commit lost the first one.
-// Covered here together with the bulk setters that make restoring a saved
-// filter/sorting combination a single write.
+// Companion to filteringSetArtifactBatchClobber.test.tsx (issue #66): the same
+// stale-snapshot pattern in the sorting, selection and paging state, plus the
+// bulk setters for restoring a saved filter/sorting combination.
 import '../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
 import { renderHook, cleanup, act } from '@testing-library/react'
@@ -16,7 +12,13 @@ import {
 	createEnumFilterHandler,
 } from '@contember/bindx'
 import type { EntityAccessor, EnumFilterArtifact, FilterArtifact, FilterHandler, TextFilterArtifact } from '@contember/bindx'
-import { useFilteringState, useSortingState } from '@contember/bindx-dataview'
+import {
+	useFilteringState,
+	usePagingState,
+	useSelectionState,
+	useSortingState,
+	type StateStorage,
+} from '@contember/bindx-dataview'
 
 afterEach(() => {
 	cleanup()
@@ -54,6 +56,21 @@ const filterDefs = new Map<string, { handler: FilterHandler<FilterArtifact> }>([
 	['title', { handler: createTextFilterHandler('title') }],
 	['status', { handler: createEnumFilterHandler('status') }],
 ])
+
+interface RecordedWrite {
+	readonly key: string
+	readonly value: unknown
+}
+
+function createRecordingStorage(writes: RecordedWrite[]): StateStorage {
+	return {
+		get: (): undefined => undefined,
+		set: (key: string, value: unknown): void => {
+			writes.push({ key, value })
+		},
+		remove: (): void => {},
+	}
+}
 
 describe('useSortingState — batched writes', () => {
 	test('should keep both fields when two appended sorts land in one commit', () => {
@@ -103,6 +120,114 @@ describe('useFilteringState — batched writes', () => {
 		expect(result.current.getArtifact('title')).toEqual({ mode: 'contains', query: 'gamma' })
 		expect(result.current.getArtifact('status')).toEqual({})
 	})
+
+	test('should hand the storage backend the composed record, never an updater', () => {
+		const writes: RecordedWrite[] = []
+		const { result } = renderHook(() => useFilteringState({
+			filters: filterDefs,
+			stateStorage: createRecordingStorage(writes),
+			storageKey: 'grid',
+		}))
+
+		act(() => {
+			result.current.setArtifact('title', { mode: 'contains', query: 'alpha' } satisfies TextFilterArtifact)
+			result.current.setArtifact('status', { values: ['published'] } satisfies EnumFilterArtifact)
+		})
+
+		// A persisted updater would round-trip as `undefined` through JSON storage.
+		expect(writes.every(write => typeof write.value === 'object')).toBe(true)
+		expect(writes.at(-1)).toEqual({
+			key: 'grid:filters',
+			value: {
+				title: { mode: 'contains', query: 'alpha' },
+				status: { values: ['published'] },
+			},
+		})
+	})
+})
+
+describe('useSelectionState — batched writes', () => {
+	test('should keep every column when visibility is toggled for several columns in one commit', () => {
+		const { result } = renderHook(() => useSelectionState())
+
+		// What a "hide all columns" control does: one call per column, one commit.
+		act(() => {
+			result.current.setVisibility('title', false)
+			result.current.setVisibility('status', false)
+		})
+
+		expect(result.current.state.values.visibility).toEqual({ title: false, status: false })
+		expect(result.current.isVisible('title')).toBe(false)
+		expect(result.current.isVisible('status')).toBe(false)
+	})
+
+	test('should keep a visibility write when setLayout lands in the same commit', () => {
+		const { result } = renderHook(() => useSelectionState())
+
+		act(() => {
+			result.current.setVisibility('title', false)
+			result.current.setLayout('grid')
+		})
+
+		expect(result.current.currentLayout).toBe('grid')
+		expect(result.current.isVisible('title')).toBe(false)
+	})
+
+	test('should persist the composed visibility record to the storage backend', () => {
+		const writes: RecordedWrite[] = []
+		const { result } = renderHook(() => useSelectionState({
+			stateStorage: createRecordingStorage(writes),
+			storageKey: 'grid',
+		}))
+
+		act(() => {
+			result.current.setVisibility('title', false)
+			result.current.setVisibility('status', false)
+		})
+
+		expect(writes.at(-1)).toEqual({
+			key: 'grid:selection',
+			value: { visibility: { title: false, status: false } },
+		})
+	})
+})
+
+describe('usePagingState — batched writes', () => {
+	test('should advance two pages when next is called twice in one commit', () => {
+		const { result } = renderHook(() => usePagingState())
+
+		act(() => {
+			result.current.next()
+			result.current.next()
+		})
+
+		expect(result.current.state.pageIndex).toBe(2)
+	})
+
+	test('should go back two pages when previous is called twice in one commit', () => {
+		const { result } = renderHook(() => usePagingState())
+
+		act(() => {
+			result.current.goTo(3)
+		})
+		act(() => {
+			result.current.previous()
+			result.current.previous()
+		})
+
+		expect(result.current.state.pageIndex).toBe(1)
+	})
+
+	test('should not go below the first page', () => {
+		const { result } = renderHook(() => usePagingState())
+
+		act(() => {
+			result.current.previous()
+			result.current.previous()
+		})
+
+		expect(result.current.state.pageIndex).toBe(0)
+	})
 })
 
 describe('bulk state setters', () => {
@@ -124,26 +249,23 @@ describe('bulk state setters', () => {
 		expect(result.current.resolvedOrderBy).toEqual([{ status: 'desc' }])
 	})
 
-	test('should replace the whole record via setAllArtifacts', () => {
+	test('should replace — not merge — the whole record via setAllArtifacts', () => {
 		const { result } = renderHook(() => useFilteringState({ filters: filterDefs }))
 
 		act(() => {
-			result.current.setArtifact('title', { mode: 'contains', query: 'alpha' } satisfies TextFilterArtifact)
+			result.current.setArtifact('status', { values: ['draft'] } satisfies EnumFilterArtifact)
 		})
 		expect(result.current.hasActiveFilters).toBe(true)
 
-		// A saved preset arrives as a whole record — one write, no per-filter loop.
+		// A saved preset arrives as a whole record; a filter it omits must end up unset.
 		act(() => {
 			result.current.setAllArtifacts({
 				title: { mode: 'startsWith', query: 'beta' } satisfies TextFilterArtifact,
-				status: { values: ['published'] } satisfies EnumFilterArtifact,
 			})
 		})
 
 		expect(result.current.getArtifact('title')).toEqual({ mode: 'startsWith', query: 'beta' })
-		expect(result.current.getArtifact('status')).toEqual({ values: ['published'] })
-		expect(result.current.resolvedWhere).toEqual({
-			and: [{ title: { startsWithCI: 'beta' } }, { status: { in: ['published'] } }],
-		})
+		expect(result.current.getArtifact('status')).toBeUndefined()
+		expect(result.current.resolvedWhere).toEqual({ title: { startsWithCI: 'beta' } })
 	})
 })
