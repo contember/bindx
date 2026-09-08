@@ -1,5 +1,6 @@
 import { type ReactNode, useMemo, useState } from 'react'
 import type { FieldRef } from '@contember/bindx'
+import { dataAttribute } from '@contember/bindx-dataview'
 import { FormFieldScope, FormInput, useFormFieldState } from '@contember/bindx-form'
 import { useField } from '@contember/bindx-react'
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
@@ -86,18 +87,24 @@ function SelectEnumFieldInner<T>({
 					</SelectInputUI>
 				</PopoverTrigger>
 			</SelectInputWrapperUI>
-			<SelectPopoverContent>
-				{normalizedOptions.map(({ value, label }) => (
-					<SelectListItemUI
-						key={String(value)}
-						onClick={() => {
-							field.setValue(value)
-							setOpen(false)
-						}}
-					>
-						{label}
-					</SelectListItemUI>
-				))}
+			<SelectPopoverContent role="listbox">
+				{normalizedOptions.map(({ value, label }) => {
+					const isSelected = value === accessor.value
+					return (
+						<SelectListItemUI
+							key={String(value)}
+							role="option"
+							aria-selected={isSelected}
+							data-selected={dataAttribute(isSelected)}
+							onClick={() => {
+								field.setValue(value)
+								setOpen(false)
+							}}
+						>
+							{label}
+						</SelectListItemUI>
+					)
+				})}
 			</SelectPopoverContent>
 		</Popover>
 	)
