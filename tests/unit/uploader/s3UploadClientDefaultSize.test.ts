@@ -8,6 +8,12 @@ import type { S3FileParameters, S3UploadClientOptions } from '@contember/bindx-u
 
 const createFile = (content: string): File => new File([content], 'test.txt', { type: 'text/plain' })
 
+const createFileWithSize = (size: number): File => {
+	const file = createFile('x')
+	Object.defineProperty(file, 'size', { value: size, configurable: true })
+	return file
+}
+
 const captureSignedParameters = async (
 	options: Omit<S3UploadClientOptions, 'signUrl'>,
 	file: File,
@@ -54,5 +60,22 @@ describe('S3UploadClient default parameters', () => {
 		)
 
 		expect(captured?.size).toBe(7)
+	})
+
+	// GraphQLInt is 32-bit; a file above that omits size rather than send a value the server rejects.
+	test('omits size when file.size exceeds the 32-bit GraphQL Int range', async () => {
+		const file = createFileWithSize(2_147_483_648)
+
+		const captured = await captureSignedParameters({}, file)
+
+		expect(captured?.size).toBeUndefined()
+	})
+
+	test('still sends size at the 32-bit GraphQL Int ceiling', async () => {
+		const file = createFileWithSize(2_147_483_647)
+
+		const captured = await captureSignedParameters({}, file)
+
+		expect(captured?.size).toBe(2_147_483_647)
 	})
 })

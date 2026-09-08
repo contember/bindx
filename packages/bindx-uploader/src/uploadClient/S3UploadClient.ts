@@ -10,6 +10,12 @@ export interface S3UploadClientOptions {
 
 export type S3FileOptions = Partial<S3FileParameters>
 
+// generateUploadUrl's `size` is a GraphQLInt (32-bit); larger files omit it rather than fail signing.
+const MAX_GRAPHQL_INT = 2_147_483_647
+
+const getDefaultSize = (file: File): number | undefined =>
+	file.size <= MAX_GRAPHQL_INT ? file.size : undefined
+
 export class S3UploadClient implements UploadClient<S3FileOptions> {
 	private activeCount = 0
 	private resolverQueue: Array<() => void> = []
@@ -24,7 +30,7 @@ export class S3UploadClient implements UploadClient<S3FileOptions> {
 	}: UploadClientUploadArgs & S3FileOptions): Promise<{ publicUrl: string }> {
 		const parameters: S3FileParameters = {
 			contentType: file.type,
-			size: file.size,
+			size: getDefaultSize(file),
 			...this.options.getUploadOptions?.(file),
 			...options,
 		}
