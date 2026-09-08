@@ -33,10 +33,16 @@ export interface RegisteredFilter {
 	artifact: FilterArtifact
 }
 
+/** Value or updater accepted by {@link FilteringState.setArtifact}. */
+export type FilterArtifactUpdate =
+	| FilterArtifact
+	| ((current: FilterArtifact | undefined) => FilterArtifact | undefined)
+
 export interface FilteringState {
 	readonly filters: ReadonlyMap<string, RegisteredFilter>
 	getArtifact(name: string): FilterArtifact | undefined
-	setArtifact(name: string, artifact: FilterArtifact): void
+	/** An updater sees the live artifact, not a render snapshot; returning `undefined` resets the filter to its default. */
+	setArtifact(name: string, artifact: FilterArtifactUpdate): void
 	/** Replaces the whole artifact record at once — for restoring a saved filter preset. */
 	setAllArtifacts(artifacts: Record<string, FilterArtifact>): void
 	resetFilter(name: string): void
@@ -77,10 +83,14 @@ export function useFilteringState(options: UseFilteringOptions): FilteringState 
 
 	// Functional form: two writes batched into one commit must compose, not clobber.
 	const setArtifact = useCallback(
-		(name: string, artifact: FilterArtifact): void => {
-			setArtifacts(current => ({ ...current, [name]: artifact }))
+		(name: string, artifact: FilterArtifactUpdate): void => {
+			setArtifacts(current => {
+				const next = typeof artifact === 'function' ? artifact(current[name]) : artifact
+				const resolved = next ?? filterDefs.get(name)?.handler.defaultArtifact()
+				return resolved === undefined ? current : { ...current, [name]: resolved }
+			})
 		},
-		[setArtifacts],
+		[filterDefs, setArtifacts],
 	)
 
 	const resetFilter = useCallback(
