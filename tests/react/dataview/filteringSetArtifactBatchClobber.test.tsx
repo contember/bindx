@@ -1,12 +1,6 @@
-// Regression test for <issue-url — filled in after filing>
-//
-// FilteringState offers no bulk artifact replace, and `setArtifact` builds the
-// next record from the *render-snapshot* `artifacts` closure instead of the
-// functional-update form. Two `setArtifact` calls batched into one React
-// commit therefore each spread the same stale record — the second write wins
-// and the first is silently lost. Restoring a saved filter combination
-// ("filter presets": apply a stored Record<filterName, FilterArtifact> at
-// runtime) is impossible without one-write-per-commit workarounds.
+// Regression test for https://github.com/contember/bindx/issues/66: two
+// setArtifact calls batched into one commit each spread the same stale record,
+// so the earlier write was silently lost.
 import '../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
 import { render, waitFor, cleanup, act } from '@testing-library/react'
@@ -95,20 +89,14 @@ describe('FilteringState.setArtifact under React batching', () => {
 		})
 		expect(filteringRef).not.toBeNull()
 
-		// Apply a two-filter "preset" in a single tick — exactly what a
-		// save/restore feature does after loading a stored artifact record.
+		// A two-filter "preset" applied in a single tick, as a save/restore feature does.
 		await act(async () => {
 			filteringRef!.setArtifact('title', { mode: 'contains', query: 'alpha' } satisfies TextFilterArtifact)
 			filteringRef!.setArtifact('status', { values: ['published'] } satisfies EnumFilterArtifact)
 		})
 
-		const statusArtifact = filteringRef!.getArtifact('status') as EnumFilterArtifact | undefined
-		const titleArtifact = filteringRef!.getArtifact('title') as TextFilterArtifact | undefined
-
-		// The later write survives…
-		expect(statusArtifact?.values).toEqual(['published'])
-		// …and so must the earlier one. With the stale-snapshot spread in
-		// `setArtifact` this comes back as the default artifact (query: '').
-		expect(titleArtifact?.query).toBe('alpha')
+		// Both writes must survive the commit, not just the later one.
+		expect(filteringRef!.getArtifact('status')).toEqual({ values: ['published'] })
+		expect(filteringRef!.getArtifact('title')).toEqual({ mode: 'contains', query: 'alpha' })
 	})
 })
