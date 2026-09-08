@@ -37,6 +37,8 @@ export interface FilteringState {
 	readonly filters: ReadonlyMap<string, RegisteredFilter>
 	getArtifact(name: string): FilterArtifact | undefined
 	setArtifact(name: string, artifact: FilterArtifact): void
+	/** Replaces the whole artifact record at once — for restoring a saved filter preset. */
+	setAllArtifacts(artifacts: Record<string, FilterArtifact>): void
 	resetFilter(name: string): void
 	resetAll(): void
 	readonly hasActiveFilters: boolean
@@ -129,7 +131,16 @@ export function useFilteringState(options: UseFilteringOptions): FilteringState 
 		return map
 	}, [filterDefs, artifacts])
 
-	return { filters, getArtifact, setArtifact, resetFilter, resetAll, hasActiveFilters, resolvedWhere }
+	return {
+		filters,
+		getArtifact,
+		setArtifact,
+		setAllArtifacts: setArtifacts,
+		resetFilter,
+		resetAll,
+		hasActiveFilters,
+		resolvedWhere,
+	}
 }
 
 // ============================================================================
@@ -146,6 +157,8 @@ export interface UseSortingOptions {
 export interface SortingStateResult {
 	readonly state: SortingState
 	setOrderBy<T>(field: FieldRef<T>, action: SortingDirectionAction, append?: boolean): void
+	/** Replaces the whole direction record at once — for restoring saved sorting. */
+	setDirections(directions: SortingDirections): void
 	clear(): void
 	directionOf<T>(field: FieldRef<T>): OrderDirection | null
 	readonly resolvedOrderBy: readonly Record<string, unknown>[] | undefined
@@ -174,7 +187,7 @@ function resolveSortAction(
 export function useSortingState(options: UseSortingOptions): SortingStateResult {
 	const { sortableFields, initialSorting, stateStorage = 'null', storageKey = 'dataview' } = options
 
-	const [directions, setDirections] = useStoredState<SortingDirections>(
+	const [directions, setDirectionsRaw] = useStoredState<SortingDirections>(
 		stateStorage,
 		[storageKey, 'sorting'],
 		(stored) => stored ?? initialSorting ?? {},
@@ -189,7 +202,7 @@ export function useSortingState(options: UseSortingOptions): SortingStateResult 
 			if (fieldName === null || !sortableFields.has(fieldName)) return
 
 			// Functional form: two writes batched into one commit must compose, not clobber.
-			setDirections((current): SortingDirections => {
+			setDirectionsRaw((current): SortingDirections => {
 				const newDir = resolveSortAction(current[fieldName] ?? null, action)
 				if (!append) {
 					return newDir ? { [fieldName]: newDir } : {}
@@ -203,12 +216,12 @@ export function useSortingState(options: UseSortingOptions): SortingStateResult 
 				return next
 			})
 		},
-		[sortableFields, setDirections],
+		[sortableFields, setDirectionsRaw],
 	)
 
 	const clear = useCallback((): void => {
-		setDirections({})
-	}, [setDirections])
+		setDirectionsRaw({})
+	}, [setDirectionsRaw])
 
 	const directionOf = useCallback(
 		<T>(field: FieldRef<T>): OrderDirection | null => {
@@ -224,7 +237,7 @@ export function useSortingState(options: UseSortingOptions): SortingStateResult 
 		return entries.map(([field, dir]) => buildNestedOrderBy(field, dir))
 	}, [directions])
 
-	return { state, setOrderBy, clear, directionOf, resolvedOrderBy }
+	return { state, setOrderBy, setDirections: setDirectionsRaw, clear, directionOf, resolvedOrderBy }
 }
 
 function buildNestedOrderBy(fieldPath: string, direction: OrderDirection): Record<string, unknown> {
