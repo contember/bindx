@@ -3,6 +3,8 @@
 // useSortingState.setOrderBy had the same stale-snapshot shape as
 // FilteringState.setArtifact: the next record was spread from the render
 // closure, so two appended sorts batched into one commit lost the first one.
+// Covered here together with the bulk setters that make restoring a saved
+// filter/sorting combination a single write.
 import '../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
 import { renderHook, cleanup, act } from '@testing-library/react'
@@ -100,5 +102,48 @@ describe('useFilteringState — batched writes', () => {
 
 		expect(result.current.getArtifact('title')).toEqual({ mode: 'contains', query: 'gamma' })
 		expect(result.current.getArtifact('status')).toEqual({})
+	})
+})
+
+describe('bulk state setters', () => {
+	test('should replace the whole record via setDirections', () => {
+		const it = createArticleProxy()
+		const { result } = renderHook(() =>
+			useSortingState({
+				sortableFields: new Set(['title', 'status']),
+				initialSorting: { title: 'asc' },
+			}),
+		)
+
+		act(() => {
+			result.current.setDirections({ status: 'desc' })
+		})
+
+		expect(result.current.state.directions).toEqual({ status: 'desc' })
+		expect(result.current.directionOf(it.title)).toBeNull()
+		expect(result.current.resolvedOrderBy).toEqual([{ status: 'desc' }])
+	})
+
+	test('should replace the whole record via setAllArtifacts', () => {
+		const { result } = renderHook(() => useFilteringState({ filters: filterDefs }))
+
+		act(() => {
+			result.current.setArtifact('title', { mode: 'contains', query: 'alpha' } satisfies TextFilterArtifact)
+		})
+		expect(result.current.hasActiveFilters).toBe(true)
+
+		// A saved preset arrives as a whole record — one write, no per-filter loop.
+		act(() => {
+			result.current.setAllArtifacts({
+				title: { mode: 'startsWith', query: 'beta' } satisfies TextFilterArtifact,
+				status: { values: ['published'] } satisfies EnumFilterArtifact,
+			})
+		})
+
+		expect(result.current.getArtifact('title')).toEqual({ mode: 'startsWith', query: 'beta' })
+		expect(result.current.getArtifact('status')).toEqual({ values: ['published'] })
+		expect(result.current.resolvedWhere).toEqual({
+			and: [{ title: { startsWithCI: 'beta' } }, { status: { in: ['published'] } }],
+		})
 	})
 })
