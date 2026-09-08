@@ -24,6 +24,7 @@ export class S3UploadClient implements UploadClient<S3FileOptions> {
 	}: UploadClientUploadArgs & S3FileOptions): Promise<{ publicUrl: string }> {
 		const parameters: S3FileParameters = {
 			contentType: file.type,
+			size: file.size,
 			...this.options.getUploadOptions?.(file),
 			...options,
 		}
