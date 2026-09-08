@@ -1,10 +1,11 @@
 import '../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
-import { render, act, cleanup, waitFor } from '@testing-library/react'
+import { render, act, cleanup, waitFor, fireEvent } from '@testing-library/react'
 import React from 'react'
 import {
 	BindxProvider,
 	MockAdapter,
+	type MockDataStore,
 	defineSchema,
 	entityDef,
 	scalar,
@@ -574,5 +575,100 @@ describe('Utility Functions', () => {
 		expect(arrayMove(arr, 0, 2)).toEqual(['b', 'c', 'a', 'd'])
 		expect(arrayMove(arr, 3, 0)).toEqual(['d', 'a', 'b', 'c'])
 		expect(arrayMove(arr, 1, 1)).toEqual(['a', 'b', 'c', 'd'])
+	})
+})
+
+// Regression test for https://github.com/contember/bindx/issues/93: mounting a sortable
+// list renumbered sparse order values, so a read-only view was dirty before any user action.
+describe('Sparse Order Values', () => {
+	function createSparseData(): MockDataStore {
+		return {
+			Author: {
+				'author-1': {
+					id: 'author-1',
+					name: 'John Doe',
+					articles: [
+						{ id: 'article-1', title: 'First Article', order: 10 },
+						{ id: 'article-2', title: 'Second Article', order: 20 },
+						{ id: 'article-3', title: 'Third Article', order: 30 },
+					],
+				},
+			},
+			Article: {},
+		}
+	}
+
+	function SparseRepeater(): React.ReactElement {
+		const author = useEntity(authorDef, { by: { id: 'author-1' } }, e =>
+			e.id().articles(a => a.id().title().order()),
+		)
+
+		if (author.$isLoading) return <div data-testid="loading">Loading</div>
+		if (author.$isError || author.$isNotFound) return <div>Error</div>
+
+		return (
+			<Repeater field={author.articles} sortableBy="order">
+				{(items) => (
+					<>
+						{items.map((article, { index, isFirst, moveUp }) => (
+							<div key={article.id} data-testid={`item-${index}`}>
+								<span data-testid={`title-${index}`}>{article.title.value}</span>
+								<span data-testid={`order-${article.id}`}>{String(article.order.value)}</span>
+								<span data-testid={`dirty-${article.id}`}>{String(article.order.isDirty)}</span>
+								<button data-testid={`up-${article.id}`} disabled={isFirst} onClick={moveUp}>Up</button>
+							</div>
+						))}
+					</>
+				)}
+			</Repeater>
+		)
+	}
+
+	async function renderSparse(): Promise<Element> {
+		const adapter = new MockAdapter(createSparseData(), { delay: 0 })
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={schema}>
+				<SparseRepeater />
+			</BindxProvider>,
+		)
+		await waitFor(() => {
+			expect(queryByTestId(container, 'item-0')).not.toBeNull()
+		})
+		return container
+	}
+
+	test('rendering sorts without renumbering the order field', async () => {
+		const container = await renderSparse()
+
+		expect(getByTestId(container, 'title-0').textContent).toBe('First Article')
+		expect(getByTestId(container, 'title-1').textContent).toBe('Second Article')
+		expect(getByTestId(container, 'title-2').textContent).toBe('Third Article')
+
+		expect(getByTestId(container, 'order-article-1').textContent).toBe('10')
+		expect(getByTestId(container, 'order-article-2').textContent).toBe('20')
+		expect(getByTestId(container, 'order-article-3').textContent).toBe('30')
+	})
+
+	test('rendering leaves the list clean', async () => {
+		const container = await renderSparse()
+
+		expect(getByTestId(container, 'dirty-article-1').textContent).toBe('false')
+		expect(getByTestId(container, 'dirty-article-2').textContent).toBe('false')
+		expect(getByTestId(container, 'dirty-article-3').textContent).toBe('false')
+	})
+
+	test('a move still renumbers the order field densely', async () => {
+		const container = await renderSparse()
+
+		act(() => {
+			fireEvent.click(getByTestId(container, 'up-article-2'))
+		})
+
+		expect(getByTestId(container, 'title-0').textContent).toBe('Second Article')
+		expect(getByTestId(container, 'title-1').textContent).toBe('First Article')
+
+		expect(getByTestId(container, 'order-article-2').textContent).toBe('0')
+		expect(getByTestId(container, 'order-article-1').textContent).toBe('1')
+		expect(getByTestId(container, 'order-article-3').textContent).toBe('2')
 	})
 })

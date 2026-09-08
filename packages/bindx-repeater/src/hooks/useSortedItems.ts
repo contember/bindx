@@ -1,10 +1,11 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import type { EntityAccessor, HasManyAccessor, AnyBrand } from '@contember/bindx'
 import { sortEntities } from '../utils/sortEntities.js'
-import { repairEntitiesOrder } from '../utils/repairEntitiesOrder.js'
 
 /**
- * Hook that returns sorted items from a has-many ref and repairs order field values.
+ * Hook that returns sorted items from a has-many ref.
+ *
+ * Read-only — renumbering sparse order values belongs to the operations that change order.
  *
  * @param hasMany - The has-many ref
  * @param orderField - Optional field name for sorting
@@ -23,17 +24,8 @@ export function useSortedItems<
 	const rawItems = hasMany?.items
 	const items = Array.isArray(rawItems) ? rawItems : []
 
-	const sortedItems = useMemo(
+	return useMemo(
 		() => sortEntities(items, orderField) as EntityAccessor<T, S, TBrand, TEntityName, TSchema>[],
 		[items, orderField],
 	)
-
-	useEffect(() => {
-		if (!orderField) {
-			return
-		}
-		repairEntitiesOrder(sortedItems, orderField)
-	}, [orderField, sortedItems])
-
-	return sortedItems
 }
