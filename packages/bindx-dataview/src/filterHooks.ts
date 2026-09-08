@@ -32,22 +32,23 @@ export type UseDataViewFilterResult<T extends FilterArtifact> = [
 	meta: { isEmpty?: boolean },
 ]
 
+/** The store is keyed by filter name, so the artifact's concrete type is the caller's claim. */
+function narrowArtifact<T extends FilterArtifact>(artifact: FilterArtifact | undefined): T | undefined {
+	return artifact as T | undefined
+}
+
 export function useDataViewFilter<T extends FilterArtifact>(key: string): UseDataViewFilterResult<T> {
 	const { filtering } = useDataViewContext()
-	const state = filtering.getArtifact(key) as T | undefined
+	const state = narrowArtifact<T>(filtering.getArtifact(key))
 	const filter = filtering.filters.get(key)
 	const isEmpty = state ? !filter?.handler.isActive(state) : true
 
 	const setFilter = useCallback(
 		(filterOrUpdater: SetStateAction<T | undefined>): void => {
 			if (typeof filterOrUpdater === 'function') {
-				const current = filtering.getArtifact(key) as T | undefined
-				const next = (filterOrUpdater as (prev: T | undefined) => T | undefined)(current)
-				if (next !== undefined) {
-					filtering.setArtifact(key, next)
-				} else {
-					filtering.resetFilter(key)
-				}
+				// Handed to the state layer unresolved — resolving it here would use the render snapshot.
+				const updater = filterOrUpdater
+				filtering.setArtifact(key, current => updater(narrowArtifact<T>(current)))
 			} else if (filterOrUpdater !== undefined) {
 				filtering.setArtifact(key, filterOrUpdater)
 			} else {

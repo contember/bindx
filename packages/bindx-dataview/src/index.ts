@@ -110,6 +110,7 @@ export {
 	usePagingState,
 	useSelectionState,
 	type FilteringState,
+	type FilterArtifactUpdate,
 	type RegisteredFilter,
 	type UseFilteringOptions,
 	type UseSortingOptions,
