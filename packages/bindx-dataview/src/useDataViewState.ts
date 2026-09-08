@@ -73,20 +73,21 @@ export function useFilteringState(options: UseFilteringOptions): FilteringState 
 		[artifacts],
 	)
 
+	// Functional form: two writes batched into one commit must compose, not clobber.
 	const setArtifact = useCallback(
 		(name: string, artifact: FilterArtifact): void => {
-			setArtifacts({ ...artifacts, [name]: artifact })
+			setArtifacts(current => ({ ...current, [name]: artifact }))
 		},
-		[artifacts, setArtifacts],
+		[setArtifacts],
 	)
 
 	const resetFilter = useCallback(
 		(name: string): void => {
 			const def = filterDefs.get(name)
 			if (!def) return
-			setArtifacts({ ...artifacts, [name]: def.handler.defaultArtifact() })
+			setArtifacts(current => ({ ...current, [name]: def.handler.defaultArtifact() }))
 		},
-		[filterDefs, artifacts, setArtifacts],
+		[filterDefs, setArtifacts],
 	)
 
 	const resetAll = useCallback((): void => {
@@ -186,24 +187,23 @@ export function useSortingState(options: UseSortingOptions): SortingStateResult 
 			// Dotted path, not the leaf — `sortableFields` is keyed the same way (see #68).
 			const fieldName = extractFieldName(field)
 			if (fieldName === null || !sortableFields.has(fieldName)) return
-			const currentDir = directions[fieldName] ?? null
-			const newDir = resolveSortAction(currentDir, action)
 
-			if (append) {
-				const next = { ...directions }
+			// Functional form: two writes batched into one commit must compose, not clobber.
+			setDirections((current): SortingDirections => {
+				const newDir = resolveSortAction(current[fieldName] ?? null, action)
+				if (!append) {
+					return newDir ? { [fieldName]: newDir } : {}
+				}
+				const next = { ...current }
 				if (newDir) {
 					next[fieldName] = newDir
 				} else {
 					delete next[fieldName]
 				}
-				setDirections(next)
-			} else if (newDir) {
-				setDirections({ [fieldName]: newDir })
-			} else {
-				setDirections({})
-			}
+				return next
+			})
 		},
-		[sortableFields, directions, setDirections],
+		[sortableFields, setDirections],
 	)
 
 	const clear = useCallback((): void => {
