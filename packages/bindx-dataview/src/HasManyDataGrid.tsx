@@ -30,7 +30,6 @@ import type {
 import { FIELD_REF_META } from '@contember/bindx'
 import {
 	buildQueryFromSelection,
-	generateHasManyAlias,
 	EntityHandle,
 	setEntityData,
 } from '@contember/bindx'
@@ -40,8 +39,9 @@ import {
 	useBindxContext,
 } from '@contember/bindx-react'
 import { useDataViewKey } from './DataViewKeyProvider.js'
-import { DataViewProvider, type DataViewContextValue, type DataViewLoaderState } from './DataViewContext.js'
+import { DataViewProvider, type DataViewContextValue, type DataViewFetchAllData, type DataViewLoaderState } from './DataViewContext.js'
 import { useDataGridSetup } from './useDataGridSetup.js'
+import { buildHasManyRelationQuery, extractHasManyRelationRows } from './hasManyRelationQuery.js'
 
 // ============================================================================
 // Props
@@ -133,17 +133,6 @@ function HasManyDataGridImpl<TEntity extends object>({
 	const [loaderState, setLoaderState] = useState<DataViewLoaderState>('initial')
 	const [listState, setListState] = useState<ListState>(INITIAL_LIST_STATE)
 
-	// ---- Build relation query spec ----
-	const alias = useMemo(
-		() => generateHasManyAlias(fieldName, {
-			filter: setup.combinedFilter,
-			orderBy: setup.sorting.resolvedOrderBy as unknown[],
-			limit: setup.paging.queryLimit,
-			offset: setup.paging.queryOffset,
-		}),
-		[fieldName, setup.combinedFilter, setup.sorting.resolvedOrderBy, setup.paging.queryLimit, setup.paging.queryOffset],
-	)
-
 	const optionsKey = useMemo(
 		() => JSON.stringify({
 			filter: setup.combinedFilter ?? {},
@@ -161,7 +150,6 @@ function HasManyDataGridImpl<TEntity extends object>({
 
 		const fetchData = async (): Promise<void> => {
 			try {
-				const targetSpec = buildQueryFromSelection(setup.selection)
 				const currentOptions = JSON.parse(optionsKey) as {
 					filter: Record<string, unknown>
 					orderBy: readonly Record<string, unknown>[]
@@ -169,32 +157,18 @@ function HasManyDataGridImpl<TEntity extends object>({
 					offset?: number
 				}
 
-				const parentSpec = {
-					fields: [
-						{ name: 'id', sourcePath: ['id'] },
-						{
-							name: alias,
-							sourcePath: [fieldName],
-							isArray: true as const,
-							totalCount: true,
-							filter: Object.keys(currentOptions.filter).length > 0 ? currentOptions.filter : undefined,
-							orderBy: currentOptions.orderBy.length > 0 ? currentOptions.orderBy : undefined,
-							limit: currentOptions.limit,
-							offset: currentOptions.offset,
-							nested: targetSpec,
-						},
-					],
-				}
+				const { alias, query } = buildHasManyRelationQuery({
+					parentEntityType,
+					parentEntityId,
+					fieldName,
+					filter: currentOptions.filter,
+					orderBy: currentOptions.orderBy,
+					limit: currentOptions.limit,
+					offset: currentOptions.offset,
+					targetSpec: buildQueryFromSelection(setup.selection),
+				})
 
-				const result = await batcher.enqueue(
-					{
-						type: 'get',
-						entityType: parentEntityType,
-						by: { id: parentEntityId },
-						spec: parentSpec,
-					},
-					{ signal: abortController.signal },
-				)
+				const result = await batcher.enqueue(query, { signal: abortController.signal })
 
 				if (abortController.signal.aborted) return
 
@@ -203,17 +177,13 @@ function HasManyDataGridImpl<TEntity extends object>({
 					return
 				}
 
-				const relationData = (result.data[alias] ?? result.data[fieldName]) as Array<Record<string, unknown>> | undefined
-				const totalCount = Array.isArray(relationData) && 'totalCount' in relationData
-					? (relationData as Array<Record<string, unknown>> & { totalCount: number }).totalCount
-					: undefined
-
-				if (!Array.isArray(relationData)) {
-					setListState({ status: 'ready', items: [], totalCount })
+				const relation = extractHasManyRelationRows(result.data, { alias, fieldName })
+				if (!relation) {
+					setListState({ status: 'ready', items: [] })
 					return
 				}
 
-				const items = relationData.map((data: Record<string, unknown>) => {
+				const items = relation.rows.map((data: Record<string, unknown>) => {
 					const id = data['id'] as string
 					dispatcher.dispatch(
 						setEntityData(targetEntityType, id, data, true),
@@ -221,7 +191,7 @@ function HasManyDataGridImpl<TEntity extends object>({
 					return { id, data: data as object }
 				})
 
-				setListState({ status: 'ready', items, totalCount })
+				setListState({ status: 'ready', items, totalCount: relation.totalCount })
 			} catch (error) {
 				if (abortController.signal.aborted) return
 				setListState({ status: 'error', items: [] })
@@ -233,7 +203,7 @@ function HasManyDataGridImpl<TEntity extends object>({
 		return () => {
 			abortController.abort()
 		}
-	}, [parentEntityType, parentEntityId, fieldName, targetEntityType, alias, optionsKey, setup.selection, batcher, dispatcher, store])
+	}, [parentEntityType, parentEntityId, fieldName, targetEntityType, optionsKey, setup.selection, batcher, dispatcher, store])
 
 	// ---- Build items from state ----
 	const items = useMemo((): EntityAccessor<TEntity>[] => {
@@ -285,6 +255,23 @@ function HasManyDataGridImpl<TEntity extends object>({
 		setHighlightIndex(null)
 	}, [items])
 
+	// ---- Unpaged read of the same parent-scoped relation ----
+	const fetchAllData = useCallback<DataViewFetchAllData>(async () => {
+		const { alias, query } = buildHasManyRelationQuery({
+			parentEntityType,
+			parentEntityId,
+			fieldName,
+			filter: setup.combinedFilter,
+			orderBy: setup.sorting.resolvedOrderBy,
+			targetSpec: buildQueryFromSelection(setup.selection),
+		})
+
+		const result = await batcher.enqueue(query)
+		if (result.type !== 'get' || !result.data) return null
+
+		return extractHasManyRelationRows(result.data, { alias, fieldName })?.rows ?? null
+	}, [parentEntityType, parentEntityId, fieldName, setup.combinedFilter, setup.sorting.resolvedOrderBy, setup.selection, batcher])
+
 	const contextValue = useMemo((): DataViewContextValue => ({
 		filtering: setup.filtering,
 		sorting: setup.sorting,
@@ -299,10 +286,11 @@ function HasManyDataGridImpl<TEntity extends object>({
 		highlightIndex,
 		setHighlightIndex,
 		selectionMeta: setup.selection,
+		fetchAllData,
 		toolbarContent: setup.toolbarContent,
 		layoutRenders: setup.layoutRenders,
 		layoutElements: setup.layoutElements,
-	}), [setup.filtering, setup.sorting, setup.paging, setup.selectionState, setup.columns, targetEntityType, items, itemCount, loaderState, reload, highlightIndex, setup.selection, setup.toolbarContent, setup.layoutRenders, setup.layoutElements])
+	}), [setup.filtering, setup.sorting, setup.paging, setup.selectionState, setup.columns, targetEntityType, items, itemCount, loaderState, reload, highlightIndex, setup.selection, fetchAllData, setup.toolbarContent, setup.layoutRenders, setup.layoutElements])
 
 	return (
 		<DataViewProvider value={contextValue}>
