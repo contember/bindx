@@ -1,8 +1,8 @@
 import { useMemo, type ReactNode } from 'react'
-import type { EntityRef, HasOneRef, SelectionFieldMeta, SelectionMeta } from '@contember/bindx'
+import type { SelectionFieldMeta, SelectionMeta } from '@contember/bindx'
 import { FIELD_REF_META } from '@contember/bindx'
 import { BINDX_COMPONENT, type SelectionProvider, createEmptySelection } from '@contember/bindx-react'
-import type { FileType } from '../types.js'
+import type { FileType, PrepareUploadTarget, UploaderEvents, UploaderFillTarget } from '../types.js'
 import {
 	UploaderOptionsContext,
 	UploaderStateContext,
@@ -13,24 +13,27 @@ import { useUploaderDoUpload } from '../internal/hooks/useUploaderDoUpload.js'
 import { useFillEntity } from '../internal/hooks/useFillEntity.js'
 import { uploaderErrorHandler } from '../internal/utils/uploaderErrorHandler.js'
 
-export interface UploaderProps<TEntity = Record<string, unknown>> {
+export interface UploaderProps<TEntity = Record<string, unknown>> extends Partial<UploaderEvents> {
 	/**
 	 * The entity to fill with uploaded file data.
 	 * Can be an EntityRef or HasOneRef.
 	 */
-	entity: EntityRef<TEntity> | HasOneRef<TEntity>
+	entity: UploaderFillTarget<TEntity>
 	/**
 	 * File type configuration defining accepted files and extractors.
 	 * Must be created with the same entity type as the entity prop.
 	 */
 	fileType: FileType<TEntity>
 	/**
+	 * Resolves the target of the dropped files before the uploader disconnects or fills anything.
+	 * Return another target to fork first (copy-on-write); returning nothing keeps the entity prop.
+	 */
+	prepareTarget?: PrepareUploadTarget<UploaderFillTarget<TEntity>>
+	/**
 	 * Children to render within the uploader context.
 	 */
 	children?: ReactNode
 }
-
-const noop = (): Promise<undefined> => Promise.resolve(undefined)
 
 /**
  * Single file upload component for bindx.
@@ -63,25 +66,39 @@ const noop = (): Promise<undefined> => Promise.resolve(undefined)
  *   </UploaderEachFile>
  * </Uploader>
  * ```
+ *
+ * @example Copy-on-write: fork a shared asset so the upload lands on a fresh one
+ * ```tsx
+ * <Uploader
+ *   entity={block.asset.image}
+ *   fileType={imageFileType}
+ *   prepareTarget={() => {
+ *     block.asset.$disconnect()
+ *     block.asset.$create()
+ *     return block.asset.image
+ *   }}
+ * >
+ *   <DropZone />
+ * </Uploader>
+ * ```
  */
 export function Uploader<TEntity extends Record<string, unknown>>({
 	entity,
 	fileType,
+	prepareTarget,
 	children,
+	...events
 }: UploaderProps<TEntity>): ReactNode {
-	const fillEntityEvents = useFillEntity({
+	const { prepareUpload, ...fillEntityEvents } = useFillEntity({
 		entity,
 		fileType,
-		onError: uploaderErrorHandler,
-		onStartUpload: noop,
-		onBeforeUpload: noop,
-		onProgress: noop,
-		onAfterUpload: noop,
-		onSuccess: noop,
+		prepareTarget,
+		...events,
+		onError: events.onError ?? uploaderErrorHandler,
 	})
 
 	const { files, ...stateEvents } = useUploadState(fillEntityEvents)
-	const onDrop = useUploaderDoUpload(stateEvents)
+	const onDrop = useUploaderDoUpload({ ...stateEvents, onPrepareUpload: prepareUpload })
 
 	const options = useMemo(
 		() => ({

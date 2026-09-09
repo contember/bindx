@@ -4,6 +4,13 @@ import { UploaderError } from '../../UploaderError.js'
 import { useUploaderClient } from '../../contexts.js'
 import { useGetPreviewUrls } from './useGetPreviewUrls.js'
 
+export interface UseUploaderDoUploadArgs extends Partial<UploaderEvents> {
+	/**
+	 * Runs once per batch, before any file is validated, uploaded or written to the target.
+	 */
+	onPrepareUpload?: (files: File[]) => Promise<void> | void
+}
+
 /**
  * Hook that orchestrates the file upload process.
  * Handles file preparation, validation, and upload execution.
@@ -15,7 +22,8 @@ export const useUploaderDoUpload = ({
 	onSuccess,
 	onStartUpload,
 	onAfterUpload,
-}: UploaderEvents): ((files: File[]) => Promise<void>) => {
+	onPrepareUpload,
+}: UseUploaderDoUploadArgs): ((files: File[]) => Promise<void>) => {
 	const getPreviewUrl = useGetPreviewUrls()
 	const defaultUploader = useUploaderClient()
 
@@ -36,6 +44,15 @@ export const useUploaderDoUpload = ({
 					abortController,
 				}
 			})
+
+			try {
+				await onPrepareUpload?.(files)
+			} catch (error) {
+				for (const file of fileWithMeta) {
+					onError?.({ file, error })
+				}
+				return
+			}
 
 			// Validate and prepare files
 			const preparePromises = await Promise.allSettled(
@@ -121,6 +138,7 @@ export const useUploaderDoUpload = ({
 			onAfterUpload,
 			onBeforeUpload,
 			onError,
+			onPrepareUpload,
 			onProgress,
 			onStartUpload,
 			onSuccess,

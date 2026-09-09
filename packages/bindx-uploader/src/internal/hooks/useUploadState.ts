@@ -28,7 +28,7 @@ export const useUploadState = ({
 	onError,
 	onProgress,
 	onAfterUpload,
-}: UploaderEvents): UseUploadStateResult => {
+}: Partial<UploaderEvents>): UseUploadStateResult => {
 	const [files, setFiles] = useState<Record<string, UploaderFileState>>({})
 
 	const purgeFinal = useCallback(() => {
