@@ -1,5 +1,6 @@
 import type { ComponentBrand, AnyBrand } from '../brand/ComponentBrand.js'
 import type { EntityWhere, EntityOrderBy } from './queryTypes.js'
+import type { IsPlainObject } from '../utils/fieldShape.js'
 
 /**
  * Symbol used to store selection metadata on builder objects
@@ -60,7 +61,7 @@ export interface SelectionMeta {
 /**
  * Extract item type from array
  */
-type ArrayItemType<T> = T extends Array<infer U> ? U : never
+type ArrayItemType<T> = T extends readonly (infer U)[] ? U : never
 
 /**
  * A fragment defined with the fluent builder
@@ -267,8 +268,10 @@ export interface HasManyMethod<
  * Maps entity fields to their corresponding builder methods
  */
 type SelectionBuilderMethods<TEntity, TSelected extends object, THasManyParams extends object> = {
-	[K in keyof TEntity]-?: TEntity[K] extends Array<infer U>
-		? HasManyMethod<TEntity, K, U, TSelected, THasManyParams>
+	[K in keyof TEntity]-?: NonNullable<TEntity[K]> extends readonly (infer U)[]
+		? IsPlainObject<U> extends true
+			? HasManyMethod<TEntity, K, U, TSelected, THasManyParams>
+			: ScalarMethod<TEntity, K, TSelected, THasManyParams>
 		: NonNullable<TEntity[K]> extends object
 			? HasOneMethod<TEntity, K, NonNullable<TEntity[K]>, TSelected, THasManyParams>
 			: ScalarMethod<TEntity, K, TSelected, THasManyParams>

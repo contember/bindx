@@ -7,6 +7,7 @@
  */
 
 import { Input } from '@contember/schema'
+import type { IsPlainObject } from '../utils/fieldShape.js'
 
 // ============================================================================
 // Re-export Contember types
@@ -36,23 +37,12 @@ export interface ComposedWhere<TEntity> {
 }
 
 /**
- * Checks if a type is a "plain object" (entity) vs a scalar like Date
- * Date and other built-in objects are not treated as relations
- */
-type IsPlainObject<T> =
-	T extends Date ? false :
-	T extends Array<any> ? false :
-	T extends Function ? false :
-	T extends object ? true :
-	false
-
-/**
  * Field-level where clause for an entity
  * Maps each field to its appropriate condition type using Input.Condition
  */
 export type FieldsWhere<TEntity> = {
 	readonly [K in keyof TEntity]?:
-		NonNullable<TEntity[K]> extends Array<infer U>
+		NonNullable<TEntity[K]> extends readonly (infer U)[]
 			? IsPlainObject<U> extends true
 				? EntityWhere<U> | null  // has-many: filter on related items (array of entities)
 				: Input.Condition<NonNullable<TEntity[K]>> | null  // scalar array: use Input.Condition on the array (supports hasSome, contains, etc.)
@@ -76,7 +66,7 @@ export type EntityWhere<TEntity> = ComposedWhere<TEntity> & FieldsWhere<TEntity>
  */
 export type EntityOrderBy<TEntity> = {
 	readonly [K in keyof TEntity]?:
-		NonNullable<TEntity[K]> extends Array<any>
+		NonNullable<TEntity[K]> extends readonly unknown[]
 			? never  // has-many cannot be ordered by directly
 			: IsPlainObject<NonNullable<TEntity[K]>> extends true
 				? EntityOrderBy<NonNullable<TEntity[K]>> | null  // has-one: nested ordering
@@ -122,12 +112,12 @@ export interface AliasOptions<TAlias extends string = string> {
 /**
  * Extracts the item type from an array type
  */
-export type ArrayItemType<T> = T extends Array<infer U> ? U : never
+export type ArrayItemType<T> = T extends readonly (infer U)[] ? U : never
 
 /**
  * Checks if a type is an array
  */
-export type IsArray<T> = T extends Array<any> ? true : false
+export type IsArray<T> = T extends readonly unknown[] ? true : false
 
 /**
  * Extracts non-nullable type

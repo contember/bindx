@@ -19,6 +19,11 @@ import type {
 	EntityFieldsAccessor,
 	EntityFromProp,
 	SelectionFromProp,
+	ScalarKeys,
+	HasManyKeys,
+	HasOneKeys,
+	FieldAccessor,
+	HasManyAccessor,
 } from '@contember/bindx-react'
 import {
 	createFragment,
@@ -637,5 +642,138 @@ describe('Type Safety - Integration', () => {
 		assertTrue<AssertExtends<'author', keyof ArticleResult>>()
 		assertTrue<AssertExtends<'tags', keyof ArticleResult>>()
 		assertFalse<AssertExtends<'content', keyof ArticleResult>>()
+	})
+})
+
+// Regression test for https://github.com/contember/bindx/issues/58
+//
+// A native list/array scalar column (e.g. a Contember `enumColumn(...).list()` —
+// typed as `readonly T[]` where `T` is a string enum, NOT an entity) is misclassified
+// by the accessor field-type mapping: the key-set helpers test `T[K] extends (infer U)[]`,
+// which no readonly array matches, so a list column falls through to the has-one branch.
+// The accessor proxy then exposes no `FieldAccessor` for it: `.value` / `.setValue` don't
+// exist on the type, even though the runtime `FieldHandle` handles array columns fine.
+// Reading or writing such a column from `createComponent` explicit selection therefore
+// fails to compile.
+interface Lesson {
+	id: string
+	title: string
+	// Native list/array scalar column — array of a string enum, not a relation.
+	groupSize: readonly ('whole' | 'group' | 'individual')[]
+}
+
+type JsonValue = string | number | boolean | null | readonly JsonValue[] | { readonly [key: string]: JsonValue }
+
+interface Chapter {
+	id: string
+	name: string
+}
+
+interface Course {
+	id: string
+	// Mutable list scalar column.
+	weekdays: number[]
+	// Nullable list scalar column.
+	tags: readonly string[] | null
+	// JSON column whose type mixes objects and primitives.
+	metadata: JsonValue
+	published: boolean | null
+	// Mutable and readonly has-many relations.
+	chapters: Chapter[]
+	archivedChapters: readonly Chapter[]
+	// Nullable and non-nullable has-one relations.
+	author: Chapter | null
+	owner: Chapter
+}
+
+describe('Type Safety - list/array scalar columns', () => {
+	test('a list scalar column is classified as a scalar key', () => {
+		// EXPECTED: `groupSize` is a scalar field key (it is a column, just array-valued).
+		// ACTUAL (bug): `ScalarKeys<Lesson>` is `'id' | 'title'` — `groupSize` is missing.
+		assertTrue<AssertExtends<'groupSize', ScalarKeys<Lesson>>>()
+	})
+
+	test('a list scalar column accessor exposes .value / .setValue', () => {
+		type LessonAcc = EntityAccessor<Lesson, { groupSize: readonly string[] }>
+		type GroupSizeField = LessonAcc['$fields']['groupSize']
+
+		// EXPECTED: the field is a FieldAccessor carrying the array value.
+		// ACTUAL (bug): it resolves to a HasOne-style accessor with no `.value`.
+		// `FieldAccessor<T>` is invariant in `T` (`inputProps.setValue` is a function-typed
+		// property), so the accessor is compared against the column's own type.
+		assertTrue<AssertExtends<GroupSizeField, FieldAccessor<Lesson['groupSize']>>>()
+		assertTrue<AssertExtends<GroupSizeField['value'], Lesson['groupSize'] | null>>()
+		assertTrue<AssertExtends<GroupSizeField['setValue'], (value: Lesson['groupSize'] | null) => void>>()
+	})
+
+	test('a list scalar column is selectable with a zero-arg builder method', () => {
+		// The same root cause surfaces in the selection builder: `SelectionBuilderMethods`
+		// routes `TEntity[K] extends Array<infer U>` to a relation method, which requires a
+		// nested-selection / fragment argument. A readonly list column misses that test and
+		// lands on `HasOneMethod`, so `e.groupSize()` (zero args) is rejected with
+		// "Expected 1-4 arguments, but got 0".
+		const lessonSchema = defineSchema<{ Lesson: Lesson }>({
+			entities: {
+				Lesson: {
+					fields: {
+						id: scalar(),
+						title: scalar(),
+						groupSize: scalar(),
+					},
+				},
+			},
+		})
+		void lessonSchema
+		const LessonDef = entityDef<Lesson>('Lesson')
+
+		// EXPECTED to compile: `groupSize` is a scalar column, selectable with zero args.
+		// ACTUAL (bug): `e.groupSize()` errors "Expected 1-4 arguments, but got 0".
+		const Comp = createComponent()
+			.entity('lesson', LessonDef, e => e.id().groupSize())
+			.render(() => null)
+		void Comp
+	})
+
+	test('array-shaped columns are scalar keys regardless of mutability or nullability', () => {
+		assertTrue<AssertExtends<'weekdays', ScalarKeys<Course>>>()
+		assertTrue<AssertExtends<'tags', ScalarKeys<Course>>>()
+		assertTrue<AssertExtends<'metadata', ScalarKeys<Course>>>()
+		assertTrue<AssertExtends<'published', ScalarKeys<Course>>>()
+		assertTrue<AssertExtends<'id', ScalarKeys<Course>>>()
+	})
+
+	test('a list scalar column is neither a has-one nor a has-many key', () => {
+		assertFalse<AssertExtends<'groupSize', HasOneKeys<Lesson>>>()
+		assertFalse<AssertExtends<'groupSize', HasManyKeys<Lesson>>>()
+		assertFalse<AssertExtends<'weekdays', HasOneKeys<Course>>>()
+		assertFalse<AssertExtends<'weekdays', HasManyKeys<Course>>>()
+		assertFalse<AssertExtends<'tags', HasOneKeys<Course>>>()
+		assertFalse<AssertExtends<'tags', HasManyKeys<Course>>>()
+		// A JSON column's type includes `readonly JsonValue[]`; `U extends object` would
+		// distribute over that union and misread the column as a has-many.
+		assertFalse<AssertExtends<'metadata', HasManyKeys<Course>>>()
+		assertFalse<AssertExtends<'metadata', HasOneKeys<Course>>>()
+	})
+
+	test('a readonly has-many relation is still a has-many key', () => {
+		assertTrue<AssertExtends<'chapters', HasManyKeys<Course>>>()
+		assertTrue<AssertExtends<'archivedChapters', HasManyKeys<Course>>>()
+		assertFalse<AssertExtends<'chapters', ScalarKeys<Course>>>()
+		assertFalse<AssertExtends<'archivedChapters', ScalarKeys<Course>>>()
+		assertFalse<AssertExtends<'archivedChapters', HasOneKeys<Course>>>()
+	})
+
+	test('has-one relations keep their classification', () => {
+		assertTrue<AssertExtends<'author', HasOneKeys<Course>>>()
+		assertTrue<AssertExtends<'owner', HasOneKeys<Course>>>()
+		assertFalse<AssertExtends<'author', ScalarKeys<Course>>>()
+		assertFalse<AssertExtends<'owner', HasManyKeys<Course>>>()
+	})
+
+	test('a readonly has-many relation resolves to a HasManyAccessor', () => {
+		type CourseAcc = EntityAccessor<Course, { archivedChapters: { id: string }[] }>
+		type ArchivedField = CourseAcc['$fields']['archivedChapters']
+
+		assertTrue<AssertExtends<ArchivedField, HasManyAccessor<Chapter, { id: string }>>>()
 	})
 })
