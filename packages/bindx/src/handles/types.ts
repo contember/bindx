@@ -9,6 +9,7 @@
  * - EntityRef / EntityAccessor
  */
 
+import type { IsPlainObject } from '@contember/bindx-client'
 import type { FieldHandle } from './FieldHandle.js'
 
 // ============================================================================
@@ -51,8 +52,10 @@ export type { UnsubscribeType as Unsubscribe }
 // ============================================================================
 
 export type ScalarKeys<T> = {
-	[K in keyof T]: T[K] extends (infer _U)[]
-		? never
+	[K in keyof T]: NonNullable<T[K]> extends readonly (infer U)[]
+		? IsPlainObject<U> extends true
+			? never
+			: K
 		: NonNullable<T[K]> extends object
 			? K extends 'id'
 				? K
@@ -61,15 +64,15 @@ export type ScalarKeys<T> = {
 }[keyof T]
 
 export type HasManyKeys<T> = {
-	[K in keyof T]: T[K] extends (infer U)[]
-		? U extends object
+	[K in keyof T]: NonNullable<T[K]> extends readonly (infer U)[]
+		? IsPlainObject<U> extends true
 			? K
 			: never
 		: never
 }[keyof T]
 
 export type HasOneKeys<T> = {
-	[K in keyof T]: T[K] extends (infer _U)[]
+	[K in keyof T]: NonNullable<T[K]> extends readonly (infer _U)[]
 		? never
 		: NonNullable<T[K]> extends object
 			? K extends 'id'
@@ -413,8 +416,8 @@ export type EntityAccessorLike<TEntity> = EntityRefLike<TEntity> & {
 export type EntityFields<T> = {
 	[K in ScalarKeys<T>]: FieldHandle<T[K]>
 } & {
-	[K in HasManyKeys<T>]: T[K] extends (infer U)[]
-		? U extends object
+	[K in HasManyKeys<T>]: NonNullable<T[K]> extends readonly (infer U)[]
+		? IsPlainObject<U> extends true
 			? HasManyAccessor<U>
 			: never
 		: never
@@ -427,9 +430,9 @@ export type EntityFields<T> = {
  */
 type FieldRefType<TEntity, TSelected, TSchema extends Record<string, object>, K extends keyof TEntity & keyof TSelected> =
 	K extends ScalarKeys<TEntity> ? FieldRef<TEntity[K]> :
-	K extends HasManyKeys<TEntity> ? (TEntity[K] extends (infer U)[]
-		? U extends object
-			? HasManyRef<U, ExtractNestedSelection<TSelected, K> extends (infer S)[] ? S : U, AnyBrand, EntityNameFromType<TSchema, U>, TSchema>
+	K extends HasManyKeys<TEntity> ? (NonNullable<TEntity[K]> extends readonly (infer U)[]
+		? IsPlainObject<U> extends true
+			? HasManyRef<U, ExtractNestedSelection<TSelected, K> extends readonly (infer S)[] ? S : U, AnyBrand, EntityNameFromType<TSchema, U>, TSchema>
 			: never
 		: never) :
 	K extends HasOneKeys<TEntity> ? HasOneRef<
@@ -446,9 +449,9 @@ type FieldRefType<TEntity, TSelected, TSchema extends Record<string, object>, K 
  */
 type FieldAccessorType<TEntity, TSelected, TSchema extends Record<string, object>, K extends keyof TEntity & keyof TSelected> =
 	K extends ScalarKeys<TEntity> ? FieldAccessor<TEntity[K]> :
-	K extends HasManyKeys<TEntity> ? (TEntity[K] extends (infer U)[]
-		? U extends object
-			? HasManyAccessor<U, ExtractNestedSelection<TSelected, K> extends (infer S)[] ? S : U, AnyBrand, EntityNameFromType<TSchema, U>, TSchema>
+	K extends HasManyKeys<TEntity> ? (NonNullable<TEntity[K]> extends readonly (infer U)[]
+		? IsPlainObject<U> extends true
+			? HasManyAccessor<U, ExtractNestedSelection<TSelected, K> extends readonly (infer S)[] ? S : U, AnyBrand, EntityNameFromType<TSchema, U>, TSchema>
 			: never
 		: never) :
 	K extends HasOneKeys<TEntity> ? HasOneAccessor<

@@ -97,6 +97,7 @@ export type { AnyBrand } from './brand/ComponentBrand.js'
 
 // Utils
 export { generateHasManyAlias } from './utils/aliasGenerator.js'
+export type { IsPlainObject } from './utils/fieldShape.js'
 
 // Query Builder (static qb module)
 export * as qb from './qb/index.js'

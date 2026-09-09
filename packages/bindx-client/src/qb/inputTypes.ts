@@ -6,17 +6,11 @@
  * from a separate EntityTypeLike shape.
  */
 
+import type { IsPlainObject } from '../utils/fieldShape.js'
+
 // ============================================================================
 // Helpers for discriminating field types from entity model
 // ============================================================================
-
-/** Detects if T is a plain object (not Date, Function, Array, etc.) */
-type IsPlainObject<T> =
-	T extends Date ? false
-	: T extends Function ? false
-	: T extends readonly unknown[] ? false
-	: T extends object ? true
-	: false
 
 /** Extract scalar (non-relation) keys from an entity */
 type ScalarKeys<T> = {
