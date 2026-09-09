@@ -672,3 +672,142 @@ describe('Sparse Order Values', () => {
 		expect(getByTestId(container, 'order-article-3').textContent).toBe('2')
 	})
 })
+
+// Regression test for the follow-up to #93: rendering no longer assigns order values,
+// so an item joining the list must get one from the connect event instead.
+describe('Order Of Newly Added Items', () => {
+	function createSparseData(): MockDataStore {
+		return {
+			Author: {
+				'author-1': {
+					id: 'author-1',
+					name: 'John Doe',
+					articles: [
+						{ id: 'article-1', title: 'First Article', order: 10 },
+						{ id: 'article-2', title: 'Second Article', order: 20 },
+					],
+				},
+			},
+			Article: {},
+		}
+	}
+
+	function renderWithDirectAdd(addCount: number): Promise<Element> {
+		let addDirectly: (() => void) | null = null
+
+		function TestComponent(): React.ReactElement {
+			const author = useEntity(authorDef, { by: { id: 'author-1' } }, e =>
+				e.id().articles(a => a.id().title().order()),
+			)
+
+			if (author.$isLoading) return <div data-testid="loading">Loading</div>
+			if (author.$isError || author.$isNotFound) return <div>Error</div>
+
+			// Deliberately bypasses Repeater's own addItem — plain has-many API.
+			addDirectly = () => {
+				for (let i = 0; i < addCount; i++) {
+					author.articles.add()
+				}
+			}
+
+			return (
+				<Repeater field={author.articles} sortableBy="order">
+					{(items) => (
+						<>
+							{items.map((article, { index }) => (
+								<div key={article.id} data-testid={`row-${index}`}>{String(article.order.value)}</div>
+							))}
+						</>
+					)}
+				</Repeater>
+			)
+		}
+
+		const adapter = new MockAdapter(createSparseData(), { delay: 0 })
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={schema}>
+				<TestComponent />
+			</BindxProvider>,
+		)
+
+		return waitFor(() => {
+			expect(queryByTestId(container, 'row-0')).not.toBeNull()
+		}).then(() => {
+			act(() => {
+				addDirectly!()
+			})
+			return container
+		})
+	}
+
+	test('an item added outside addItem gets the next free order', async () => {
+		const container = await renderWithDirectAdd(1)
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'row-2')).not.toBeNull()
+		})
+
+		// Existing rows keep their sparse values; the new one lands after them.
+		expect(getByTestId(container, 'row-0').textContent).toBe('10')
+		expect(getByTestId(container, 'row-1').textContent).toBe('20')
+		expect(getByTestId(container, 'row-2').textContent).toBe('21')
+	})
+
+	test('two items added in one tick get distinct orders', async () => {
+		const container = await renderWithDirectAdd(2)
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'row-3')).not.toBeNull()
+		})
+
+		expect(getByTestId(container, 'row-2').textContent).toBe('21')
+		expect(getByTestId(container, 'row-3').textContent).toBe('22')
+	})
+
+	test('addItem still produces a densely ordered list', async () => {
+		const adapter = new MockAdapter(createSparseData(), { delay: 0 })
+
+		function TestComponent(): React.ReactElement {
+			const author = useEntity(authorDef, { by: { id: 'author-1' } }, e =>
+				e.id().articles(a => a.id().title().order()),
+			)
+
+			if (author.$isLoading) return <div data-testid="loading">Loading</div>
+			if (author.$isError || author.$isNotFound) return <div>Error</div>
+
+			return (
+				<Repeater field={author.articles} sortableBy="order">
+					{(items, { addItem }) => (
+						<>
+							{items.map((article, { index }) => (
+								<div key={article.id} data-testid={`row-${index}`}>{String(article.order.value)}</div>
+							))}
+							<button data-testid="add-first" onClick={() => addItem('first')}>Add</button>
+						</>
+					)}
+				</Repeater>
+			)
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={schema}>
+				<TestComponent />
+			</BindxProvider>,
+		)
+		await waitFor(() => {
+			expect(queryByTestId(container, 'row-0')).not.toBeNull()
+		})
+
+		act(() => {
+			fireEvent.click(getByTestId(container, 'add-first'))
+		})
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'row-2')).not.toBeNull()
+		})
+
+		expect(getByTestId(container, 'row-0').textContent).toBe('0')
+		expect(getByTestId(container, 'row-1').textContent).toBe('1')
+		expect(getByTestId(container, 'row-2').textContent).toBe('2')
+	})
+})
