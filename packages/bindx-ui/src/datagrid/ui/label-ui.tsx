@@ -1,5 +1,7 @@
 import { uic } from '../../utils/uic.js'
 
+// Focusable so the filter affordance and its tooltip are reachable without a mouse.
 export const DataGridTooltipLabel = uic('span', {
-	baseClass: 'cursor-pointer underline decoration-dashed decoration-gray-400 underline-offset-4 hover:decoration-gray-800',
+	defaultProps: { tabIndex: 0 },
+	baseClass: 'cursor-pointer underline decoration-dashed decoration-transparent underline-offset-4 transition-colors hover:decoration-gray-400 focus-visible:decoration-gray-800 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring rounded-xs',
 })
