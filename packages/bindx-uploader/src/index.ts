@@ -23,6 +23,9 @@ export type {
 	AfterUploadEvent,
 	ErrorEvent,
 	UploaderEvents,
+	// Upload target
+	UploaderFillTarget,
+	PrepareUploadTarget,
 	// Extractors
 	FileDataExtractor,
 	FileDataExtractorPopulator,
