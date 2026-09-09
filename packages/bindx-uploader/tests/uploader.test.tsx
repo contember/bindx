@@ -113,11 +113,18 @@ const imageFileType: FileType<Image> = {
 	extractors: [getFileUrlDataExtractor<Image>({ urlField: 'url' })],
 }
 
+const jpegOnlyFileType: FileType<Image> = {
+	accept: { 'image/jpeg': ['.jpg'] },
+	extractors: [getFileUrlDataExtractor<Image>({ urlField: 'url' })],
+}
+
 const uploadClient: UploadClient = {
 	upload: async () => ({ publicUrl: UPLOADED_URL }),
 }
 
 const createTestFile = (): File => new File(['binary'], 'photo.jpg', { type: 'image/jpeg' })
+
+const createTextFile = (): File => new File(['text'], 'notes.txt', { type: 'text/plain' })
 
 function getByTestId(container: Element, testId: string): Element {
 	const el = container.querySelector(`[data-testid="${testId}"]`)
@@ -146,6 +153,45 @@ function SharedAssetProbe(): ReactNode {
 		<>
 			<span data-testid="shared-image-url">{asset.image.url.value ?? ''}</span>
 			<span data-testid="shared-image-id">{asset.image.$id}</span>
+		</>
+	)
+}
+
+interface ForkingUploaderProps {
+	fileType: FileType<Image>
+	files: File[]
+	onPrepare: () => void
+	onError?: (event: ErrorEvent) => void
+}
+
+/** Forks the shared asset in prepareTarget, so the upload must land on the fresh one. */
+function ForkingUploader({ fileType, files, onPrepare, onError }: ForkingUploaderProps): ReactNode {
+	const block = useEntity(entityDefs.Block, { by: { id: 'block-1' } }, e =>
+		e.id().asset(a => a.id().title().image(i => i.id().url())),
+	)
+
+	if (block.$isLoading || block.$isError || block.$isNotFound) {
+		return null
+	}
+
+	return (
+		<>
+			<Uploader
+				entity={block.asset.image}
+				fileType={fileType}
+				onError={onError}
+				prepareTarget={() => {
+					onPrepare()
+					block.asset.$disconnect()
+					block.asset.$create({ title: 'Forked asset' })
+					return block.asset.image
+				}}
+			>
+				<UploadTrigger files={files} />
+			</Uploader>
+			<span data-testid="block-image-url">{block.asset.image.url.value ?? ''}</span>
+			<span data-testid="block-image-id">{block.asset.image.$id}</span>
+			<span data-testid="block-asset-id">{block.asset.$id}</span>
 		</>
 	)
 }
@@ -332,7 +378,7 @@ describe('Uploader prepareTarget', () => {
 		expect(getByTestId(container, 'shared-image-id').textContent).toBe('image-1')
 	})
 
-	test('an async prepareTarget runs before the target is touched', async () => {
+	test('prepareTarget runs after the accept check and before the target is written', async () => {
 		const order: string[] = []
 
 		function TestApp(): ReactNode {
@@ -373,7 +419,60 @@ describe('Uploader prepareTarget', () => {
 		await waitFor(() => {
 			expect(getByTestId(container, 'block-image-url').textContent).toBe(UPLOADED_URL)
 		})
-		expect(order).toEqual(['prepare', 'before', 'start'])
+		expect(order).toEqual(['before', 'prepare', 'start'])
+	})
+
+	test('a batch rejected by the accept check never forks the target', async () => {
+		const onPrepare = mock(() => {})
+		const errors: ErrorEvent[] = []
+
+		const { container } = await renderMedia(
+			<>
+				<ForkingUploader
+					fileType={jpegOnlyFileType}
+					files={[createTextFile()]}
+					onPrepare={onPrepare}
+					onError={event => errors.push(event)}
+				/>
+				<SharedAssetProbe />
+			</>,
+		)
+		await uploadFile(container)
+
+		expect(errors).toHaveLength(1)
+		expect(errors[0]?.error).toBeInstanceOf(UploaderError)
+		expect(onPrepare).toHaveBeenCalledTimes(0)
+		expect(getByTestId(container, 'block-asset-id').textContent).toBe('asset-1')
+		expect(getByTestId(container, 'block-image-id').textContent).toBe('image-1')
+		expect(getByTestId(container, 'block-image-url').textContent).toBe(ORIGINAL_URL)
+		expect(getByTestId(container, 'shared-image-url').textContent).toBe(ORIGINAL_URL)
+	})
+
+	test('a mixed batch forks once and lands the accepted file on the prepared target', async () => {
+		const onPrepare = mock(() => {})
+		const errors: ErrorEvent[] = []
+
+		const { container } = await renderMedia(
+			<>
+				<ForkingUploader
+					fileType={jpegOnlyFileType}
+					files={[createTestFile(), createTextFile()]}
+					onPrepare={onPrepare}
+					onError={event => errors.push(event)}
+				/>
+				<SharedAssetProbe />
+			</>,
+		)
+		await uploadFile(container)
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'block-image-url').textContent).toBe(UPLOADED_URL)
+		})
+		expect(errors).toHaveLength(1)
+		expect(onPrepare).toHaveBeenCalledTimes(1)
+		expect(getByTestId(container, 'block-asset-id').textContent).not.toBe('asset-1')
+		expect(getByTestId(container, 'shared-image-url').textContent).toBe(ORIGINAL_URL)
+		expect(getByTestId(container, 'shared-image-id').textContent).toBe('image-1')
 	})
 })
 

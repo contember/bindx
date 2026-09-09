@@ -15,7 +15,7 @@ export interface UseFillEntityArgs<TEntity = Record<string, unknown>> extends Pa
 	entity: FillTarget<TEntity>
 	fileType: FileType<TEntity>
 	/**
-	 * Resolves the target of an incoming batch, before the upload disconnects or fills anything.
+	 * Resolves the target of a validated batch, before the upload disconnects or fills anything.
 	 */
 	prepareTarget?: PrepareUploadTarget<FillTarget<TEntity>>
 }

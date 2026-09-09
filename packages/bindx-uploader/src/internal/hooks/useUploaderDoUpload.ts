@@ -6,7 +6,8 @@ import { useGetPreviewUrls } from './useGetPreviewUrls.js'
 
 export interface UseUploaderDoUploadArgs extends Partial<UploaderEvents> {
 	/**
-	 * Runs once per batch, before any file is validated, uploaded or written to the target.
+	 * Runs once per batch with the files that passed validation, before any of them is
+	 * uploaded or written to the target. Skipped when no file passed.
 	 */
 	onPrepareUpload?: (files: File[]) => Promise<void> | void
 }
@@ -45,15 +46,6 @@ export const useUploaderDoUpload = ({
 				}
 			})
 
-			try {
-				await onPrepareUpload?.(files)
-			} catch (error) {
-				for (const file of fileWithMeta) {
-					onError?.({ file, error })
-				}
-				return
-			}
-
 			// Validate and prepare files
 			const preparePromises = await Promise.allSettled(
 				fileWithMeta.map(async file => {
@@ -89,6 +81,19 @@ export const useUploaderDoUpload = ({
 					): p is T => p.status === 'fulfilled',
 				)
 				.map(p => p.value)
+
+			if (preparedFiles.length === 0) {
+				return
+			}
+
+			try {
+				await onPrepareUpload?.(preparedFiles.map(({ file }) => file.file))
+			} catch (error) {
+				for (const { file } of preparedFiles) {
+					onError?.({ file, error })
+				}
+				return
+			}
 
 			// Upload files
 			await Promise.allSettled(
