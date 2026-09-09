@@ -577,6 +577,15 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		return this.relations.getHasMany(key)?.plannedRemovals
 	}
 
+	/**
+	 * Whether some relation plans to delete {@link entityId} through its parent, i.e.
+	 * the row goes away with the parent's update rather than with a mutation of its
+	 * own (see issue #91).
+	 */
+	isPlannedForDeleteByParent(entityId: string): boolean {
+		return this.relations.isPlannedForDeleteByParent(entityId)
+	}
+
 	planHasManyConnection(
 		parentType: string,
 		parentId: string,

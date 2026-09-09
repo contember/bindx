@@ -598,6 +598,11 @@ export class BatchPersister {
 		for (const entity of entities) {
 			let data: Record<string, unknown> | null = null
 
+			// The parent's update carries this row's nested `delete`, so a standalone
+			// update would target a row that no longer exists (issue #91). The entity
+			// stays in the dirty set so a persisting interceptor can still veto it.
+			if (entity.changeType === 'update' && this.store.isPlannedForDeleteByParent(entity.entityId)) continue
+
 			if (entity.changeType === 'delete') {
 				mutations.push({
 					entityType: entity.entityType,
@@ -1186,7 +1191,37 @@ export class BatchPersister {
 			)
 			if (outcome === 'conflict') addConflict(ownerKey, relationConflictMessage(change.entityType, change.entityId, change.fieldName))
 		}
+		this.purgeChildrenDeletedByParent(execution, keys)
 		return conflicts
+	}
+
+	/**
+	 * Drops the entities whose rows a confirmed parent mutation deleted through a
+	 * nested `delete`, the way a top-level delete already does — otherwise the
+	 * snapshot lingers and the next save writes a row that is gone (issue #91).
+	 */
+	private purgeChildrenDeletedByParent(execution: PersistExecution, ownerKeys: ReadonlySet<string>): void {
+		const targets = targetEntityTypesByRelation(execution)
+		const deleted = new Set<string>()
+		const collect = (entityType: string, entityId: string, fieldName: string, childId: string): void => {
+			const targetType = targets.get(relationIdentityKey(entityType, entityId, fieldName))
+			if (targetType) deleted.add(entityIdentityKey(targetType, childId))
+		}
+		for (const change of execution.hasOneChanges) {
+			if (!ownerKeys.has(entityIdentityKey(change.entityType, change.entityId))) continue
+			if (change.transition.operation !== 'delete') continue
+			collect(change.entityType, change.entityId, change.fieldName, change.transition.targetId)
+		}
+		for (const change of execution.hasManyChanges) {
+			if (!ownerKeys.has(entityIdentityKey(change.entityType, change.entityId))) continue
+			for (const removal of change.removals) {
+				if (removal.type === 'delete') collect(change.entityType, change.entityId, change.fieldName, removal.itemId)
+			}
+		}
+		for (const key of deleted) {
+			const child = splitExecutionKey(key)
+			this.store.removeEntity(child.entityType, child.entityId)
+		}
 	}
 
 	private mapConfirmedIds(
@@ -1564,4 +1599,17 @@ function splitExecutionKey(key: string): { entityType: string; entityId: string 
 		entityType: separator < 0 ? '' : key.slice(0, separator),
 		entityId: separator < 0 ? key : key.slice(separator + 1),
 	}
+}
+
+function relationIdentityKey(entityType: string, entityId: string, fieldName: string): string {
+	return `${entityIdentityKey(entityType, entityId)}:${fieldName}`
+}
+
+/** Relation key → the entity type its children have, the only source of a nested child's type. */
+function targetEntityTypesByRelation(execution: PersistExecution): ReadonlyMap<string, string> {
+	const targets = new Map<string, string>()
+	for (const field of execution.relationFields) {
+		targets.set(relationIdentityKey(field.entityType, field.entityId, field.fieldName), field.targetEntityType)
+	}
+	return targets
 }

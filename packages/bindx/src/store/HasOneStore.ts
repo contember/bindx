@@ -1,6 +1,7 @@
 import type { HasOneRelationState } from '../handles/types.js'
 import type { EntitySnapshot } from './snapshots.js'
 import { parentKeyFromOwnerPrefix, parentKeyFromRelationKey } from './relationKey.js'
+import { PlannedDeleteIndex } from './PlannedDeleteIndex.js'
 import { RelationEdgeIndex } from './RelationEdgeIndex.js'
 
 /**
@@ -48,6 +49,12 @@ export class HasOneStore {
 	 */
 	private readonly edges = new RelationEdgeIndex()
 
+	/**
+	 * Targets this store plans to delete through their parent's mutation, maintained
+	 * by {@link writeRelation} / {@link deleteRelation}, like {@link edges}.
+	 */
+	private readonly plannedDeletes = new PlannedDeleteIndex()
+
 	private mutationVersion = 0
 
 	/**
@@ -73,7 +80,8 @@ export class HasOneStore {
 	 * tracking the reverse direction itself.
 	 */
 	private writeRelation(key: string, state: StoredRelationState): void {
-		const oldChild = liveHasOneChildId(this.relationStates.get(key))
+		const previous = this.relationStates.get(key)
+		const oldChild = liveHasOneChildId(previous)
 		const newChild = liveHasOneChildId(state)
 		this.relationStates.set(key, state)
 		if (oldChild !== newChild) {
@@ -81,6 +89,7 @@ export class HasOneStore {
 			if (oldChild !== null) this.edges.removeEdge(parentKey, oldChild)
 			if (newChild !== null) this.edges.addEdge(parentKey, newChild)
 		}
+		this.reconcilePlannedDelete(plannedDeleteChildId(previous), plannedDeleteChildId(state))
 		this.mutationVersion++
 	}
 
@@ -94,7 +103,20 @@ export class HasOneStore {
 		const child = liveHasOneChildId(existing)
 		if (child !== null) this.edges.removeEdge(parentKeyFromRelationKey(key), child)
 		this.relationStates.delete(key)
+		this.reconcilePlannedDelete(plannedDeleteChildId(existing), null)
 		this.mutationVersion++
+	}
+
+	/** Applies one relation's planned-delete diff to the refcounted index. */
+	private reconcilePlannedDelete(previous: string | null, next: string | null): void {
+		if (previous === next) return
+		if (previous !== null) this.plannedDeletes.release(previous)
+		if (next !== null) this.plannedDeletes.retain(next)
+	}
+
+	/** Whether this store plans to delete {@link childId} through its parent. */
+	isPlannedForDelete(childId: string): boolean {
+		return this.plannedDeletes.has(childId)
 	}
 
 	/**
@@ -376,6 +398,7 @@ export class HasOneStore {
 	clear(): void {
 		this.relationStates.clear()
 		this.edges.clear()
+		this.plannedDeletes.clear()
 		this.mutationVersion++
 	}
 }
@@ -388,6 +411,16 @@ export class HasOneStore {
 function liveHasOneChildId(state: StoredRelationState | undefined): string | null {
 	if (!state) return null
 	return state.currentId !== null && state.state !== 'deleted' ? state.currentId : null
+}
+
+/**
+ * The id the parent's `{ delete: true }` removes — `serverId`, not `currentId`,
+ * because that is the row MutationCollector deletes for a `deleted` relation, and a
+ * null serverId emits no delete at all.
+ */
+function plannedDeleteChildId(state: StoredRelationState | undefined): string | null {
+	if (!state || state.state !== 'deleted') return null
+	return state.serverId
 }
 
 interface HasOneReconciliation {

@@ -158,6 +158,16 @@ export class RelationStore implements Rekeyable {
 		return this.hasMany.getHasManyOrderedIds(key)
 	}
 
+	/**
+	 * Whether some relation plans to delete {@link childId} through its parent's
+	 * mutation — a has-many `delete` removal or a has-one target marked `deleted`.
+	 * Such a row goes away with the parent's update, so the child must not be
+	 * written on its own (see issue #91).
+	 */
+	isPlannedForDeleteByParent(childId: string): boolean {
+		return this.hasOne.isPlannedForDelete(childId) || this.hasMany.isPlannedForDelete(childId)
+	}
+
 	// ==================== Reachability / Reverse Lookup ====================
 
 	/**
