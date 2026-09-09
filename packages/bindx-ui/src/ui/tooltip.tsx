@@ -27,6 +27,7 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(({
 			<div
 				className={cn(
 					'invisible opacity-0 group-hover/tooltip:visible group-hover/tooltip:opacity-100',
+					'group-focus-within/tooltip:visible group-focus-within/tooltip:opacity-100',
 					'transition-all duration-150 absolute z-50 left-1/2 -translate-x-1/2',
 					'rounded-md border border-gray-200 bg-white/90 backdrop-blur-sm shadow-md px-2 py-1.5',
 					'whitespace-nowrap',
