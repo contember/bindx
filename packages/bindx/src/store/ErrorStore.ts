@@ -1,5 +1,5 @@
-import type { ErrorState, FieldError } from '../errors/types.js'
-import { filterStickyErrors } from '../errors/types.js'
+import type { ErrorState, FieldError, FieldErrorFilter } from '../errors/types.js'
+import { filterStickyErrors, matchesErrorFilter } from '../errors/types.js'
 import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
 
 /**
@@ -39,21 +39,24 @@ export class ErrorStore implements Rekeyable {
 	}
 
 	/**
-	 * Clears field errors, optionally filtering by source.
+	 * Clears field errors, optionally narrowed to those matching the filter.
 	 */
-	clearFieldErrors(fieldKey: string, source?: 'client' | 'server'): void {
+	clearFieldErrors(fieldKey: string, filter?: FieldErrorFilter): void {
 		const existing = this.fieldErrors.get(fieldKey)
 		if (!existing) return
 
-		if (source === undefined) {
+		if (filter === undefined) {
+			this.fieldErrors.delete(fieldKey)
+			return
+		}
+
+		const filtered = existing.errors.filter(e => !matchesErrorFilter(e, filter))
+		if (filtered.length === existing.errors.length) return
+
+		if (filtered.length === 0) {
 			this.fieldErrors.delete(fieldKey)
 		} else {
-			const filtered = existing.errors.filter(e => e.source !== source)
-			if (filtered.length === 0) {
-				this.fieldErrors.delete(fieldKey)
-			} else {
-				this.fieldErrors.set(fieldKey, { errors: filtered, version: existing.version + 1 })
-			}
+			this.fieldErrors.set(fieldKey, { errors: filtered, version: existing.version + 1 })
 		}
 	}
 
@@ -162,7 +165,7 @@ export class ErrorStore implements Rekeyable {
 
 		for (const key of this.fieldErrors.keys()) {
 			if (key.startsWith(keyPrefix)) {
-				this.clearFieldErrors(key, 'server')
+				this.clearFieldErrors(key, { source: 'server' })
 			}
 		}
 

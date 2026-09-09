@@ -23,7 +23,7 @@ export type HasOneRelationState =
 	| 'creating'
 
 import type { ComponentBrand, AnyBrand } from '../brand/ComponentBrand.js'
-import type { FieldError, ErrorInput } from '../errors/types.js'
+import type { FieldError, FieldErrorFilter, ErrorInput } from '../errors/types.js'
 import type {
 	FieldChangedEvent,
 	FieldChangingEvent,
@@ -143,7 +143,7 @@ export interface FieldRef<T> {
 	readonly errors: readonly FieldError[]
 	readonly hasError: boolean
 	addError(error: ErrorInput): void
-	clearErrors(): void
+	clearErrors(filter?: FieldErrorFilter): void
 	onChange(listener: EventListener<FieldChangedEvent>): UnsubscribeType
 	onChanging(interceptor: Interceptor<FieldChangingEvent>): UnsubscribeType
 }

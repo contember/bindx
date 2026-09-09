@@ -65,7 +65,11 @@ async function renderForm(): Promise<{ input: HTMLInputElement; container: Eleme
 	await waitFor(() => {
 		expect(queryByTestId(container, 'input')).not.toBeNull()
 	})
-	return { input: getByTestId(container, 'input') as HTMLInputElement, container }
+	const input = getByTestId(container, 'input')
+	if (!(input instanceof HTMLInputElement)) {
+		throw new Error('Rendered element is not an input')
+	}
+	return { input, container }
 }
 
 function errorsOf(container: Element): string {

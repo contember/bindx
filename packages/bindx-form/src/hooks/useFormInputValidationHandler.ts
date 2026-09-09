@@ -1,5 +1,20 @@
 import { useRef, useState, useCallback, useEffect, type RefObject, type FocusEventHandler } from 'react'
-import type { FieldRef } from '@contember/bindx'
+import type { FieldErrorFilter, FieldRef } from '@contember/bindx'
+
+/**
+ * Code carried by the errors this hook adds, so they can be told apart from
+ * server errors and from validation raised elsewhere.
+ */
+export const HTML5_VALIDATION_ERROR_CODE = 'html5-validity'
+
+const ownErrors: FieldErrorFilter = { source: 'client', code: HTML5_VALIDATION_ERROR_CODE }
+
+function syncValidationError<T>(field: FieldRef<T>, message: string | undefined): void {
+	field.clearErrors(ownErrors)
+	if (message) {
+		field.addError({ message, code: HTML5_VALIDATION_ERROR_CODE })
+	}
+}
 
 /**
  * Result from useFormInputValidationHandler hook.
@@ -20,7 +35,8 @@ export interface ValidationHandlerResult {
  * - Marks field as touched on blur
  * - Reads HTML5 validation message on blur
  * - Syncs validation errors with field handle
- * - Clears validation errors on focus
+ * - Only ever clears the error it added itself, so server errors and validation
+ *   raised by other code survive a blur
  *
  * @example
  * ```tsx
@@ -59,10 +75,7 @@ export function useFormInputValidationHandler<T>(
 		const message = input.validity.valid ? undefined : input.validationMessage
 		validationMessageRef.current = message
 
-		field.clearErrors()
-		if (message) {
-			field.addError(message)
-		}
+		syncValidationError(field, message)
 	}, [field])
 
 	// Effect to sync validation state when value changes
@@ -73,10 +86,7 @@ export function useFormInputValidationHandler<T>(
 		const message = input.validity.valid ? undefined : input.validationMessage
 		if (message !== validationMessageRef.current) {
 			validationMessageRef.current = message
-			field.clearErrors()
-			if (message) {
-				field.addError(message)
-			}
+			syncValidationError(field, message)
 		}
 	})
 

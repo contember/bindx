@@ -1,5 +1,5 @@
 import type { HasOneRelationState } from '../handles/types.js'
-import type { FieldError } from '../errors/types.js'
+import type { FieldError, FieldErrorFilter } from '../errors/types.js'
 
 /**
  * Action types for the ActionDispatcher.
@@ -231,7 +231,7 @@ export interface ClearFieldErrorsAction {
 	readonly entityType: string
 	readonly entityId: string
 	readonly fieldName: string
-	readonly source?: 'client' | 'server'
+	readonly filter?: FieldErrorFilter
 }
 
 /**
@@ -471,9 +471,9 @@ export function clearFieldErrors(
 	entityType: string,
 	entityId: string,
 	fieldName: string,
-	source?: 'client' | 'server',
+	filter?: FieldErrorFilter,
 ): ClearFieldErrorsAction {
-	return { type: 'CLEAR_FIELD_ERRORS', entityType, entityId, fieldName, source }
+	return { type: 'CLEAR_FIELD_ERRORS', entityType, entityId, fieldName, filter }
 }
 
 /**
