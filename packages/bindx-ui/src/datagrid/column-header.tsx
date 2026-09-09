@@ -24,9 +24,10 @@ export interface DataGridColumnHeaderUIProps {
 	className?: string
 }
 
-function DataGridColumnFilterIcon({ filterName }: { filterName: string }): ReactElement | null {
+// Muted when idle so a filterable column advertises itself; blue keeps an active filter distinct.
+function DataGridColumnFilterIcon({ filterName }: { filterName: string }): ReactElement {
 	const [, , { isEmpty }] = useDataViewFilter(filterName)
-	return isEmpty ? null : <FilterIcon className="h-4 w-4 text-blue-600" />
+	return <FilterIcon className={cn('h-4 w-4', isEmpty ? 'text-muted-foreground/50' : 'text-blue-600')} />
 }
 
 export function DataGridColumnHeaderUI({
