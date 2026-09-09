@@ -28,6 +28,10 @@ export interface FormFieldState {
 export interface FormInputHandlerContext<State = unknown> {
 	readonly state?: State
 	readonly setState: (state: State) => void
+	/** Current field value, so a handler can keep it when the input does not parse */
+	readonly currentValue: unknown
+	/** Reports a validation error; the input adds it to the field after writing the value */
+	readonly setError: (message: string) => void
 }
 
 /**
@@ -40,12 +44,22 @@ export interface FormInputHandler<State = unknown> {
 	readonly formatValue: (value: unknown, ctx: FormInputHandlerContext<State>) => string
 	/** Default HTML input attributes for this type */
 	readonly defaultInputProps?: InputHTMLAttributes<HTMLInputElement>
+	/** Called when the input loses focus, to reformat the raw input or re-report an error */
+	readonly onBlur?: (ctx: FormInputHandlerContext<State>) => void
 }
 
 /**
  * Factory function that creates a FormInputHandler
  */
 export type FormInputHandlerFactory<State = unknown> = () => FormInputHandler<State>
+
+/**
+ * JSON column value. Structurally identical to the JSONValue emitted by bindx-generator.
+ */
+export type JSONPrimitive = string | number | boolean | null
+export type JSONValue = JSONPrimitive | JSONObject | JSONArray
+export type JSONObject = { readonly [K in string]?: JSONValue }
+export type JSONArray = readonly JSONValue[]
 
 /**
  * Column types from Contember schema
@@ -99,6 +113,8 @@ export interface FormInputProps<T> {
 	readonly formatValue?: (value: T | null) => string
 	/** Custom value parser */
 	readonly parseValue?: (value: string) => T | null
+	/** Handler override, takes precedence over the column-type handler */
+	readonly handler?: FormInputHandler
 }
 
 /**
