@@ -45,6 +45,7 @@ import {
 import { useSelectOptions } from './selectContext.js'
 import { DataViewProvider, type DataViewContextValue, type DataViewLoaderState } from '../DataViewContext.js'
 import { useFilteringState, useSortingState, usePagingState, useSelectionState } from '../useDataViewState.js'
+import { useListFetchAllData } from '../useListFetchAllData.js'
 
 export interface SelectDataViewProps {
 	/** Children rendered inside the DataView context */
@@ -212,6 +213,13 @@ function SelectDataViewImpl({
 
 	const emptyMap = useMemo(() => new Map(), [])
 
+	const fetchAllData = useListFetchAllData({
+		entityType,
+		filter: combinedFilter,
+		orderBy: sorting.resolvedOrderBy,
+		selection,
+	})
+
 	const contextValue = useMemo((): DataViewContextValue => ({
 		filtering,
 		sorting,
@@ -226,10 +234,11 @@ function SelectDataViewImpl({
 		highlightIndex,
 		setHighlightIndex,
 		selectionMeta: selection,
+		fetchAllData,
 		toolbarContent: undefined,
 		layoutRenders: emptyMap,
 		layoutElements: emptyMap,
-	}), [filtering, sorting, paging, selectionState, entityType, items, itemCount, loaderState, reload, highlightIndex, selection, emptyMap])
+	}), [filtering, sorting, paging, selectionState, entityType, items, itemCount, loaderState, reload, highlightIndex, selection, fetchAllData, emptyMap])
 
 	return (
 		<DataViewProvider value={contextValue}>
