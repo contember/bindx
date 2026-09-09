@@ -25,8 +25,10 @@ export interface UploaderProps<TEntity = Record<string, unknown>> extends Partia
 	 */
 	fileType: FileType<TEntity>
 	/**
-	 * Resolves the target of the dropped files before the uploader disconnects or fills anything.
-	 * Return another target to fork first (copy-on-write); returning nothing keeps the entity prop.
+	 * Resolves the target of an upload batch: it runs once, after the files pass the accept
+	 * check and before the uploader disconnects or fills anything, and receives the accepted
+	 * files. A rejected batch never reaches it. Return another target to fork first
+	 * (copy-on-write); returning nothing keeps the entity prop.
 	 */
 	prepareTarget?: PrepareUploadTarget<UploaderFillTarget<TEntity>>
 	/**

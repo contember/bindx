@@ -126,8 +126,8 @@ export interface ErrorEvent {
 export type UploaderFillTarget<TEntity = Record<string, unknown>> = EntityRef<TEntity> | HasOneRef<TEntity>
 
 /**
- * Resolves the target of an incoming upload batch before the uploader touches it.
- * Returning nothing keeps the target the uploader was given.
+ * Resolves the target of an upload batch after the files pass validation and before
+ * the target is written. Returning nothing keeps the target the uploader was given.
  */
 export type PrepareUploadTarget<TTarget> = (files: File[]) => TTarget | undefined | Promise<TTarget | undefined>
 
