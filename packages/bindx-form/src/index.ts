@@ -36,6 +36,7 @@ export {
 	getDefaultInputProps,
 	type UseFormInputHandlerOptions,
 	useFormInputValidationHandler,
+	HTML5_VALIDATION_ERROR_CODE,
 	type ValidationHandlerResult,
 } from './hooks/index.js'
 

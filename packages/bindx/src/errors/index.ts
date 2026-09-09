@@ -8,6 +8,8 @@ export {
 	type FieldError,
 	type ErrorState,
 	type ErrorInput,
+	type FieldErrorFilter,
+	matchesErrorFilter,
 	ExecutionErrorTypes,
 	isExecutionErrorType,
 	classifyError,

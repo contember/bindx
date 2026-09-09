@@ -4,7 +4,7 @@ import type { SnapshotStore } from '../store/SnapshotStore.js'
 import { addFieldError, clearFieldErrors, setField } from '../core/actions.js'
 import { FIELD_REF_META, type FieldAccessor, type FieldRefMeta, type InputProps, type Unsubscribe } from './types.js'
 import { deepEqual } from '../utils/deepEqual.js'
-import { createClientError, type ErrorInput, type FieldError } from '../errors/types.js'
+import { createClientError, type ErrorInput, type FieldError, type FieldErrorFilter } from '../errors/types.js'
 import type {
 	FieldChangedEvent,
 	FieldChangingEvent,
@@ -186,11 +186,11 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	}
 
 	/**
-	 * Clears all errors from this field.
+	 * Clears errors from this field, or only those matching the filter.
 	 */
-	clearErrors(): void {
+	clearErrors(filter?: FieldErrorFilter): void {
 		this.dispatcher.dispatch(
-			clearFieldErrors(this.entityType, this.entityId, this.fieldName),
+			clearFieldErrors(this.entityType, this.entityId, this.fieldName, filter),
 		)
 	}
 
