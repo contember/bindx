@@ -6,6 +6,8 @@
 export { DefaultDataGrid, type DefaultDataGridProps, DefaultHasManyDataGrid, type DefaultHasManyDataGridProps } from '#bindx-ui/datagrid/datagrid'
 export { DefaultDataGridLayout, type DefaultDataGridLayoutProps } from '#bindx-ui/datagrid/layout'
 export { DataGridToolbarUI, type DataGridToolbarUIProps } from '#bindx-ui/datagrid/toolbar'
+// Custom toolbars need this to keep the mobile filters toggle working
+export { DataGridShowFiltersContext } from '#bindx-ui/datagrid/filters/mobile'
 export { DataGridPaginationUI, type DataGridPaginationUIProps, DataGridPerPageSelector } from '#bindx-ui/datagrid/pagination'
 export { DataGridColumnHeaderUI, type DataGridColumnHeaderUIProps } from '#bindx-ui/datagrid/column-header'
 export {

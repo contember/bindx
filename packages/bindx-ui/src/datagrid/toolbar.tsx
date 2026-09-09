@@ -27,9 +27,11 @@ export interface DataGridToolbarUIProps {
 	children?: ReactNode
 	className?: string
 	sticky?: boolean
+	/** Export control. Default: `<DataGridAutoExport />`. Pass null to hide it. */
+	exportControl?: ReactNode | null
 }
 
-export function DataGridToolbarUI({ children, className, sticky }: DataGridToolbarUIProps): ReactElement {
+export function DataGridToolbarUI({ children, className, sticky, exportControl }: DataGridToolbarUIProps): ReactElement {
 	const [showFilters, setShowFilters] = useState(false)
 
 	return (
@@ -61,7 +63,7 @@ export function DataGridToolbarUI({ children, className, sticky }: DataGridToolb
 						</PopoverContent>
 					</Popover>
 
-					<DataGridAutoExport />
+					{exportControl === undefined ? <DataGridAutoExport /> : exportControl}
 					<DataViewReloadTrigger>
 						<Button variant="outline" size="sm" className="group gap-2">
 							<RefreshCcwIcon className="w-4 h-4 group-data-[state=refreshing]:animate-spin" />
