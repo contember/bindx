@@ -1,4 +1,4 @@
-// Regression test for <issue-url — filled in after Step 7>
+// Regression test for https://github.com/contember/bindx/issues/91
 //
 // An item that is dirty AND planned for removal (`delete`) from its parent's has-many
 // must not get its own top-level `update` mutation: the parent's update carries the
@@ -124,4 +124,85 @@ describe('BatchPersister — has-many item planned for delete', () => {
 		expect(result.success).toBe(true)
 		expect(result.failedCount).toBe(0)
 	})
+
+	// Without this the save succeeds once, the next `commitAllRelations` clears the
+	// planned removal, the item turns dirty again and the following save updates a
+	// row the server has already dropped.
+	test('should drop an item deleted through its parent from the store', async () => {
+		const { adapter } = createSequentialAdapter(['tag-1', 'tag-2', 'tag-3'])
+		const persister = createPersister(store, dispatcher, adapter)
+		seedArticleWithTags(store)
+
+		store.setFieldValue('Tag', 'tag-2', ['order'], 0)
+		store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-2', 'delete')
+
+		const result = await persister.persistAll()
+
+		expect(result.success).toBe(true)
+		expect(store.getEntitySnapshot('Tag', 'tag-2')).toBeUndefined()
+		expect(store.getAllDirtyEntities()).toEqual([])
+	})
+
+	test('should keep the standalone update of an item removed with disconnect', async () => {
+		const { adapter, calls } = createSequentialAdapter(['tag-1', 'tag-2', 'tag-3'])
+		const persister = createPersister(store, dispatcher, adapter)
+		seedArticleWithTags(store)
+
+		store.setFieldValue('Tag', 'tag-2', ['order'], 0)
+		store.planHasManyRemoval('Article', 'a-1', 'tags', 'tag-2', 'disconnect')
+
+		const result = await persister.persistAll()
+
+		// The row survives a disconnect, so its scalar edit still has to be written.
+		const tag2Update = calls.find(c => c.operation === 'update' && c.entityType === 'Tag' && c.id === 'tag-2')
+		expect(tag2Update?.data).toEqual({ order: 0 })
+		const articleUpdate = calls.find(c => c.operation === 'update' && c.entityType === 'Article')
+		expect(tagOperations(articleUpdate)).toContainEqual(expect.objectContaining({ disconnect: { id: 'tag-2' } }))
+		expect(store.getEntitySnapshot('Tag', 'tag-2')).toBeDefined()
+		expect(result.success).toBe(true)
+	})
+
+	test('should leave a created-then-removed item out of the persist', async () => {
+		const { adapter, calls } = createSequentialAdapter(['tag-1', 'tag-2', 'tag-3'])
+		const persister = createPersister(store, dispatcher, adapter)
+		seedArticleWithTags(store)
+
+		const newId = store.createEntity('Tag', { name: 'Four', order: 40 })
+		store.addToHasMany('Article', 'a-1', 'tags', newId)
+		store.removeFromHasMany('Article', 'a-1', 'tags', newId, 'delete')
+
+		// removeFromHasMany cancels the addition instead of planning a removal, so a
+		// never-persisted item never reaches the planned-delete index.
+		expect(store.isPlannedForDeleteByParent(newId)).toBe(false)
+
+		const result = await persister.persistAll()
+
+		expect(calls.filter(c => c.entityType === 'Tag')).toEqual([])
+		const articleUpdate = calls.find(c => c.operation === 'update' && c.entityType === 'Article')
+		expect(tagOperations(articleUpdate)).toEqual([])
+		expect(result.success).toBe(true)
+	})
 })
+
+function createPersister(store: SnapshotStore, dispatcher: ActionDispatcher, adapter: BackendAdapter): BatchPersister {
+	const mutationCollector = new MutationCollector(store, new ContemberSchemaMutationAdapter(testSchema))
+	return new BatchPersister(adapter, store, dispatcher, { mutationCollector })
+}
+
+/** Server state: an article with three ordered tags. */
+function seedArticleWithTags(store: SnapshotStore): void {
+	store.setEntityData('Article', 'a-1', {
+		id: 'a-1',
+		title: 'Article',
+		tags: [{ id: 'tag-1' }, { id: 'tag-2' }, { id: 'tag-3' }],
+	}, true)
+	store.setEntityData('Tag', 'tag-1', { id: 'tag-1', name: 'One', order: 10 }, true)
+	store.setEntityData('Tag', 'tag-2', { id: 'tag-2', name: 'Two', order: 20 }, true)
+	store.setEntityData('Tag', 'tag-3', { id: 'tag-3', name: 'Three', order: 30 }, true)
+	store.setHasManyServerIds('Article', 'a-1', 'tags', ['tag-1', 'tag-2', 'tag-3'])
+}
+
+function tagOperations(call: Call | undefined): unknown[] {
+	const tags = call?.data?.['tags']
+	return Array.isArray(tags) ? tags : []
+}

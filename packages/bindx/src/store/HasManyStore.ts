@@ -117,6 +117,13 @@ export class HasManyStore {
 	 */
 	private readonly edges = new RelationEdgeIndex()
 
+	/**
+	 * childId → number of has-many relations that plan to remove it with `delete`.
+	 * Refcounted because several relations may plan the same child's deletion.
+	 * Maintained by {@link writeHasMany} / {@link deleteHasMany}, like {@link edges}.
+	 */
+	private readonly plannedDeletes = new Map<string, number>()
+
 	private mutationVersion = 0
 
 	/**
@@ -143,12 +150,14 @@ export class HasManyStore {
 	 * keeps the index correct without tracking the reverse direction itself.
 	 */
 	private writeHasMany(key: string, state: StoredHasManyState): void {
-		const oldLive = liveHasManyChildIds(this.hasManyStates.get(key))
+		const previous = this.hasManyStates.get(key)
+		const oldLive = liveHasManyChildIds(previous)
 		const newLive = liveHasManyChildIds(state)
 		this.hasManyStates.set(key, state)
 		const parentKey = parentKeyFromRelationKey(key)
 		for (const id of newLive) if (!oldLive.has(id)) this.edges.addEdge(parentKey, id)
 		for (const id of oldLive) if (!newLive.has(id)) this.edges.removeEdge(parentKey, id)
+		this.reconcilePlannedDeletes(plannedDeleteChildIds(previous), plannedDeleteChildIds(state))
 		this.mutationVersion++
 	}
 
@@ -162,7 +171,27 @@ export class HasManyStore {
 		const parentKey = parentKeyFromRelationKey(key)
 		for (const id of liveHasManyChildIds(existing)) this.edges.removeEdge(parentKey, id)
 		this.hasManyStates.delete(key)
+		this.reconcilePlannedDeletes(plannedDeleteChildIds(existing), new Set())
 		this.mutationVersion++
+	}
+
+	/** Applies one relation's planned-delete diff to the refcounted index. */
+	private reconcilePlannedDeletes(previous: ReadonlySet<string>, next: ReadonlySet<string>): void {
+		for (const id of next) {
+			if (!previous.has(id)) this.plannedDeletes.set(id, (this.plannedDeletes.get(id) ?? 0) + 1)
+		}
+		for (const id of previous) {
+			if (next.has(id)) continue
+			const count = this.plannedDeletes.get(id)
+			if (count === undefined) continue
+			if (count > 1) this.plannedDeletes.set(id, count - 1)
+			else this.plannedDeletes.delete(id)
+		}
+	}
+
+	/** Whether any has-many relation plans to remove {@link childId} with `delete`. */
+	isPlannedForDelete(childId: string): boolean {
+		return this.plannedDeletes.has(childId)
 	}
 
 	/**
@@ -733,6 +762,7 @@ export class HasManyStore {
 	clear(): void {
 		this.hasManyStates.clear()
 		this.edges.clear()
+		this.plannedDeletes.clear()
 		this.mutationVersion++
 	}
 }
@@ -752,6 +782,15 @@ function liveHasManyChildIds(state: StoredHasManyState | undefined): Set<string>
 		if (!state.plannedRemovals.has(id)) live.add(id)
 	}
 	return live
+}
+
+function plannedDeleteChildIds(state: StoredHasManyState | undefined): Set<string> {
+	const ids = new Set<string>()
+	if (!state) return ids
+	for (const [id, type] of state.plannedRemovals) {
+		if (type === 'delete') ids.add(id)
+	}
+	return ids
 }
 
 interface HasManyReconciliation {
