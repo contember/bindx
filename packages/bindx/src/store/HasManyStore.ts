@@ -1,4 +1,5 @@
 import { parentKeyFromOwnerPrefix, parentKeyFromRelationKey } from './relationKey.js'
+import { PlannedDeleteIndex } from './PlannedDeleteIndex.js'
 import { RelationEdgeIndex } from './RelationEdgeIndex.js'
 
 type ReconciliationResult = 'applied' | 'conflict'
@@ -118,11 +119,10 @@ export class HasManyStore {
 	private readonly edges = new RelationEdgeIndex()
 
 	/**
-	 * childId → number of has-many relations that plan to remove it with `delete`.
-	 * Refcounted because several relations may plan the same child's deletion.
-	 * Maintained by {@link writeHasMany} / {@link deleteHasMany}, like {@link edges}.
+	 * Children some relation plans to remove with `delete`, maintained by
+	 * {@link writeHasMany} / {@link deleteHasMany}, like {@link edges}.
 	 */
-	private readonly plannedDeletes = new Map<string, number>()
+	private readonly plannedDeletes = new PlannedDeleteIndex()
 
 	private mutationVersion = 0
 
@@ -177,16 +177,8 @@ export class HasManyStore {
 
 	/** Applies one relation's planned-delete diff to the refcounted index. */
 	private reconcilePlannedDeletes(previous: ReadonlySet<string>, next: ReadonlySet<string>): void {
-		for (const id of next) {
-			if (!previous.has(id)) this.plannedDeletes.set(id, (this.plannedDeletes.get(id) ?? 0) + 1)
-		}
-		for (const id of previous) {
-			if (next.has(id)) continue
-			const count = this.plannedDeletes.get(id)
-			if (count === undefined) continue
-			if (count > 1) this.plannedDeletes.set(id, count - 1)
-			else this.plannedDeletes.delete(id)
-		}
+		for (const id of next) if (!previous.has(id)) this.plannedDeletes.retain(id)
+		for (const id of previous) if (!next.has(id)) this.plannedDeletes.release(id)
 	}
 
 	/** Whether any has-many relation plans to remove {@link childId} with `delete`. */
