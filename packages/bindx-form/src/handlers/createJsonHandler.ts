@@ -80,11 +80,8 @@ export function createJsonHandler(options: JsonHandlerOptions = {}): FormInputHa
 		onBlur: (ctx: FormInputHandlerContext): void => {
 			const state = readState(ctx.state)
 			if (state === undefined) return
-			// Blur validation clears the field errors, so a broken input has to re-report itself.
-			if (state.error !== null) {
-				ctx.setError(state.error)
-				return
-			}
+			// The error parseValue added now survives the blur, so re-reporting it would double it.
+			if (state.error !== null) return
 			if (formatOnBlur && state.rawValue !== state.formatted) {
 				ctx.setState({ ...state, rawValue: state.formatted })
 			}

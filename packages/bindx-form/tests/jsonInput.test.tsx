@@ -17,6 +17,7 @@ import {
 	type JsonHandlerOptions,
 	type JSONValue,
 } from '../src/index.js'
+import type { FieldError } from '@contember/bindx'
 import { getByTestId, queryByTestId } from './testUtils.js'
 
 afterEach(() => {
@@ -43,6 +44,9 @@ const settingsSchema = defineSchema<{ Settings: Settings }>({
 
 const settingsDef = entityDef<Settings>('Settings')
 
+/** Reads the field errors as the store holds them; the rendered span can lag behind. */
+let readFieldErrors: (() => readonly FieldError[]) | undefined
+
 interface JsonFormProps {
 	/** Omitted to let FormInput resolve the handler from the Json column type */
 	readonly handlerOptions?: JsonHandlerOptions
@@ -59,6 +63,8 @@ function JsonForm({ handlerOptions }: JsonFormProps): React.ReactNode {
 
 	if (settings.$isLoading) return <div>Loading...</div>
 	if (settings.$isError || settings.$isNotFound) return <div>Error</div>
+
+	readFieldErrors = () => settings.payload.errors
 
 	return (
 		<div>
@@ -87,6 +93,7 @@ interface RenderedJsonForm {
 	readonly container: HTMLElement
 	readonly input: HTMLTextAreaElement
 	readonly store: Record<string, unknown>
+	readonly fieldErrors: () => readonly FieldError[]
 }
 
 async function renderJsonForm(
@@ -108,7 +115,7 @@ async function renderJsonForm(
 
 	const input = getByTestId(container, 'input')
 	if (!(input instanceof HTMLTextAreaElement)) throw new Error('Expected a textarea')
-	return { container, input, store }
+	return { container, input, store, fieldErrors: () => readFieldErrors?.() ?? [] }
 }
 
 function textOf(container: HTMLElement, testId: string): string {
@@ -168,6 +175,16 @@ describe('Json form input', () => {
 		fireEvent.blur(input)
 
 		expect(textOf(container, 'errors')).toContain('Invalid JSON')
+	})
+
+	test('does not stack another copy of the error on every blur', async () => {
+		const { input, fieldErrors } = await renderJsonForm({ theme: 'dark' }, {})
+
+		fireEvent.change(input, { target: { value: '{"theme":' } })
+		fireEvent.blur(input)
+		fireEvent.blur(input)
+
+		expect(fieldErrors()).toHaveLength(1)
 	})
 
 	test('clears the error once the text parses again', async () => {
