@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from 'bun:test'
+import { describe, test, expect, beforeEach, spyOn } from 'bun:test'
 import {
 	SnapshotStore,
 	ActionDispatcher,
@@ -83,6 +83,48 @@ describe('HasManyListHandle item handle cache', () => {
 		if (item === undefined) throw new Error(`no item at index ${index}`)
 		return item
 	}
+
+	describe('lookup complexity', () => {
+		for (const warm of [false, true]) {
+			test(`${warm ? 'cached' : 'initial'} list iteration resolves a linear number of item ids`, () => {
+				const count = 200
+				loadTags(Array.from({ length: count }, (_, i) => ({ id: `t-${i}`, name: `Tag ${i}` })))
+				const handle = createListHandle()
+				if (warm) {
+					expect(handle.items).toHaveLength(count)
+					store.setFieldValue('Tag', 't-0', ['name'], 'Edited')
+				}
+				const resolve = spyOn(store, 'resolveEntityId')
+				try {
+					expect(handle.items).toHaveLength(count)
+					const itemResolutions = resolve.mock.calls.filter(([type]) => type === 'Tag').length
+					expect(itemResolutions).toBeLessThan(count * 10)
+				} finally {
+					resolve.mockRestore()
+				}
+			})
+		}
+
+		test('direct lookups stay linear after a cached item rekeys', () => {
+			const count = 200
+			loadTags(Array.from({ length: count }, (_, i) => ({ id: `t-${i}`, name: `Tag ${i}` })))
+			const handle = createListHandle()
+			expect(handle.items).toHaveLength(count)
+			const tempId = handle.add({ name: 'Draft' })
+			const draft = handle.getById(tempId)
+			store.mapTempIdToPersistedId('Tag', tempId, 'persisted-tag')
+			const resolve = spyOn(store, 'resolveEntityId')
+			try {
+				for (let i = 0; i < count; i++) {
+					expect(handle.getById(i % 2 === 0 ? tempId : 'persisted-tag')).toBe(draft)
+				}
+				const itemResolutions = resolve.mock.calls.filter(([type]) => type === 'Tag').length
+				expect(itemResolutions).toBeLessThan(count * 10)
+			} finally {
+				resolve.mockRestore()
+			}
+		})
+	})
 
 	describe('eviction', () => {
 		test('releases the cache entry for ids that left the list', () => {

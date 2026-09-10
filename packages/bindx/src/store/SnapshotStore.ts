@@ -194,6 +194,11 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		return this.rekeyOrchestrator.resolveId(entityType, id)
 	}
 
+	/** Identity caches only need reconciliation when redirects change, including on clear. */
+	getRekeyVersion(): number {
+		return this.rekeyOrchestrator.getMutationVersion()
+	}
+
 	/** Attaches identity-keyed state to the store's single rekey fan-out. */
 	attachRekeyParticipant(participant: Rekeyable): void {
 		this.rekeyOrchestrator.registerParticipant(participant)

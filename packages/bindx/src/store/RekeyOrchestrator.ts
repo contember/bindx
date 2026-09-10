@@ -42,6 +42,7 @@ export interface Rekeyable {
 export class RekeyOrchestrator {
 	/** "entityType:tempId" → persistedId. The single identity-redirect map. */
 	private readonly tempToPersisted = new Map<string, string>()
+	private mutationVersion = 0
 	private readonly participants: Rekeyable[] = []
 	private readonly participantSet = new Set<Rekeyable>()
 
@@ -64,6 +65,10 @@ export class RekeyOrchestrator {
 	resolveKey(entityType: string, id: string): string {
 		const persisted = this.tempToPersisted.get(`${entityType}:${id}`)
 		return persisted !== undefined ? `${entityType}:${persisted}` : `${entityType}:${id}`
+	}
+
+	getMutationVersion(): number {
+		return this.mutationVersion
 	}
 
 	/** Resolves an entity id to its persisted id if it has been rekeyed. */
@@ -111,6 +116,7 @@ export class RekeyOrchestrator {
 		}
 
 		this.tempToPersisted.set(ctx.oldKey, persistedId)
+		this.mutationVersion++
 
 		for (const participant of this.participants) {
 			participant.rekey(ctx)
@@ -119,5 +125,6 @@ export class RekeyOrchestrator {
 
 	clear(): void {
 		this.tempToPersisted.clear()
+		this.mutationVersion++
 	}
 }

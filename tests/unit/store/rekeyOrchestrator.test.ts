@@ -102,6 +102,24 @@ describe('RekeyOrchestrator', () => {
 		expect(o.getPersistedId('Article', TEMP)).toBeNull()
 	})
 
+	test('invalidates identity caches before rekey participants run and across clear', () => {
+		const store = new SnapshotStore()
+		const initial = store.getRekeyVersion()
+		let observed = initial
+		store.attachRekeyParticipant({ rekey: () => { observed = store.getRekeyVersion() } })
+		const tempId = store.createEntity('Article', { title: 'Draft' })
+		expect(store.getRekeyVersion()).toBe(initial)
+		store.mapTempIdToPersistedId('Article', tempId, 'server-1')
+		expect(observed).toBeGreaterThan(initial)
+		expect(store.getRekeyVersion()).toBe(observed)
+		store.clear()
+		expect(store.getRekeyVersion()).toBeGreaterThan(observed)
+		const afterClear = store.getRekeyVersion()
+		const nextId = store.createEntity('Article', { title: 'Next' })
+		store.mapTempIdToPersistedId('Article', nextId, 'server-2')
+		expect(store.getRekeyVersion()).toBeGreaterThan(afterClear)
+	})
+
 	test('end-to-end: SnapshotStore resolves a created entity after persist via the orchestrator', () => {
 		const store = new SnapshotStore()
 		const tempId = store.createEntity('Article', { title: 'Draft' })

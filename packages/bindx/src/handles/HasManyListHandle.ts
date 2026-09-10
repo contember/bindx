@@ -38,6 +38,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	// proxy is the only reference to. Kept bounded by syncItemHandleCache, which drops ids
 	// that have left the list.
 	private itemHandleCacheProxy = new Map<string, EntityAccessor<TEntity, TSelected>>()
+	private itemHandleCacheRekeyVersion = -1
 
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
@@ -197,6 +198,10 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	}
 
 	private canonicalizeItemHandleCache(): void {
+		const version = this.store.getRekeyVersion()
+		if (this.itemHandleCacheRekeyVersion === version) return
+		this.itemHandleCacheRekeyVersion = version
+
 		for (const [key, proxy] of [...this.itemHandleCacheProxy]) {
 			const canonicalKey = this.resolveItemKey(key)
 			if (canonicalKey === key) continue
