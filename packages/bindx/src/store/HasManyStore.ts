@@ -1,6 +1,7 @@
 import { parentKeyFromOwnerPrefix, parentKeyFromRelationKey } from './relationKey.js'
 import { PlannedDeleteIndex } from './PlannedDeleteIndex.js'
 import { RelationEdgeIndex } from './RelationEdgeIndex.js'
+import { RelationOwnerIndex } from './RelationOwnerIndex.js'
 
 type ReconciliationResult = 'applied' | 'conflict'
 
@@ -110,6 +111,7 @@ export function computeDefaultOrderedIds(state: StoredHasManyState): string[] {
 export class HasManyStore {
 	/** Has-many list states keyed by "parentType:parentId:fieldName" */
 	private readonly hasManyStates = new Map<string, StoredHasManyState>()
+	private readonly owners = new RelationOwnerIndex()
 
 	/**
 	 * Bidirectional live-edge index, maintained by {@link writeHasMany} /
@@ -154,6 +156,7 @@ export class HasManyStore {
 		const oldLive = liveHasManyChildIds(previous)
 		const newLive = liveHasManyChildIds(state)
 		this.hasManyStates.set(key, state)
+		if (!previous) this.owners.add(key)
 		const parentKey = parentKeyFromRelationKey(key)
 		for (const id of newLive) if (!oldLive.has(id)) this.edges.addEdge(parentKey, id)
 		for (const id of oldLive) if (!newLive.has(id)) this.edges.removeEdge(parentKey, id)
@@ -171,6 +174,7 @@ export class HasManyStore {
 		const parentKey = parentKeyFromRelationKey(key)
 		for (const id of liveHasManyChildIds(existing)) this.edges.removeEdge(parentKey, id)
 		this.hasManyStates.delete(key)
+		this.owners.delete(key)
 		this.reconcilePlannedDeletes(plannedDeleteChildIds(existing), new Set())
 		this.mutationVersion++
 	}
@@ -629,8 +633,8 @@ export class HasManyStore {
 	 * Collects the field names of dirty has-many relations for an entity.
 	 */
 	collectDirtyRelations(keyPrefix: string, dirtyRelations: string[]): void {
-		for (const [key, state] of this.hasManyStates) {
-			if (!key.startsWith(keyPrefix)) continue
+		for (const key of this.owners.get(parentKeyFromOwnerPrefix(keyPrefix))) {
+			const state = this.hasManyStates.get(key)!
 			const fieldName = key.slice(keyPrefix.length)
 
 			if (state.plannedRemovals.size > 0 || state.plannedAdditions.size > 0) {
@@ -753,6 +757,7 @@ export class HasManyStore {
 	 */
 	clear(): void {
 		this.hasManyStates.clear()
+		this.owners.clear()
 		this.edges.clear()
 		this.plannedDeletes.clear()
 		this.mutationVersion++
