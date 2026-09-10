@@ -3,6 +3,7 @@ import type { EntitySnapshot } from './snapshots.js'
 import { parentKeyFromOwnerPrefix, parentKeyFromRelationKey } from './relationKey.js'
 import { PlannedDeleteIndex } from './PlannedDeleteIndex.js'
 import { RelationEdgeIndex } from './RelationEdgeIndex.js'
+import { RelationOwnerIndex } from './RelationOwnerIndex.js'
 
 /**
  * Relation state stored in SnapshotStore
@@ -41,6 +42,7 @@ function cloneRelationState(state: StoredRelationState): StoredRelationState {
 export class HasOneStore {
 	/** Relation states keyed by "parentType:parentId:fieldName" */
 	private readonly relationStates = new Map<string, StoredRelationState>()
+	private readonly owners = new RelationOwnerIndex()
 
 	/**
 	 * Bidirectional live-edge index, maintained by {@link writeRelation} /
@@ -84,6 +86,7 @@ export class HasOneStore {
 		const oldChild = liveHasOneChildId(previous)
 		const newChild = liveHasOneChildId(state)
 		this.relationStates.set(key, state)
+		if (!previous) this.owners.add(key)
 		if (oldChild !== newChild) {
 			const parentKey = parentKeyFromRelationKey(key)
 			if (oldChild !== null) this.edges.removeEdge(parentKey, oldChild)
@@ -103,6 +106,7 @@ export class HasOneStore {
 		const child = liveHasOneChildId(existing)
 		if (child !== null) this.edges.removeEdge(parentKeyFromRelationKey(key), child)
 		this.relationStates.delete(key)
+		this.owners.delete(key)
 		this.reconcilePlannedDelete(plannedDeleteChildId(existing), null)
 		this.mutationVersion++
 	}
@@ -311,8 +315,8 @@ export class HasOneStore {
 	 * Collects the field names of dirty has-one relations for an entity.
 	 */
 	collectDirtyRelations(keyPrefix: string, dirtyRelations: string[]): void {
-		for (const [key, state] of this.relationStates) {
-			if (!key.startsWith(keyPrefix)) continue
+		for (const key of this.owners.get(parentKeyFromOwnerPrefix(keyPrefix))) {
+			const state = this.relationStates.get(key)!
 			const fieldName = key.slice(keyPrefix.length)
 
 			if (
@@ -397,6 +401,7 @@ export class HasOneStore {
 	 */
 	clear(): void {
 		this.relationStates.clear()
+		this.owners.clear()
 		this.edges.clear()
 		this.plannedDeletes.clear()
 		this.mutationVersion++
