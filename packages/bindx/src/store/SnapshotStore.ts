@@ -1,6 +1,6 @@
 import type { EntitySnapshot, LoadStatus } from './snapshots.js'
 import { createEntitySnapshot } from './snapshots.js'
-import type { FieldError } from '../errors/types.js'
+import type { FieldError, FieldErrorFilter } from '../errors/types.js'
 import { SubscriptionManager, type SnapshotVersionBumper } from './SubscriptionManager.js'
 import { ErrorStore } from './ErrorStore.js'
 import {
@@ -823,10 +823,10 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		entityType: string,
 		id: string,
 		fieldName: string,
-		source?: 'client' | 'server',
+		filter?: FieldErrorFilter,
 	): void {
 		const key = this.getRelationKey(entityType, id, fieldName)
-		this.errors.clearFieldErrors(key, source)
+		this.errors.clearFieldErrors(key, filter)
 		this.notifyEntitySubscribers(this.getEntityKey(entityType, id))
 	}
 

@@ -805,11 +805,23 @@ describe('SnapshotStore', () => {
 				store.addFieldError('Article', 'a-1', 'title', { message: 'Client error', source: 'client' })
 				store.addFieldError('Article', 'a-1', 'title', createServerError('Server error'))
 
-				store.clearFieldErrors('Article', 'a-1', 'title', 'client')
+				store.clearFieldErrors('Article', 'a-1', 'title', { source: 'client' })
 
 				const errors = store.getFieldErrors('Article', 'a-1', 'title')
 				expect(errors.length).toBe(1)
 				expect(errors[0]?.source).toBe('server')
+			})
+
+			test('should clear errors by code', () => {
+				store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
+				store.addFieldError('Article', 'a-1', 'title', { message: 'Own error', source: 'client', code: 'own' })
+				store.addFieldError('Article', 'a-1', 'title', { message: 'Foreign error', source: 'client', code: 'foreign' })
+				store.addFieldError('Article', 'a-1', 'title', { message: 'Untagged error', source: 'client' })
+
+				store.clearFieldErrors('Article', 'a-1', 'title', { source: 'client', code: 'own' })
+
+				const errors = store.getFieldErrors('Article', 'a-1', 'title')
+				expect(errors.map(e => e.message)).toEqual(['Foreign error', 'Untagged error'])
 			})
 
 			test('should clear non-sticky errors', () => {

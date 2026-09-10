@@ -15,7 +15,7 @@ import { resolveAcceptingSingleType } from '../internal/utils/resolveAccept.js'
 import { executeExtractors } from '../internal/utils/executeExtractors.js'
 import { uploaderErrorHandler } from '../internal/utils/uploaderErrorHandler.js'
 
-export interface MultiUploaderProps<TEntity = Record<string, unknown>> {
+export interface MultiUploaderProps<TEntity = Record<string, unknown>> extends Partial<UploaderEvents> {
 	/**
 	 * The has-many relation to add uploaded files to.
 	 */
@@ -53,6 +53,7 @@ export function MultiUploader<TEntity extends Record<string, unknown>>({
 	field,
 	fileType,
 	children,
+	...events
 }: MultiUploaderProps<TEntity>): ReactNode {
 	const fieldAccessor = useHasMany(field)
 	// Map file ID -> entity ID
@@ -71,7 +72,7 @@ export function MultiUploader<TEntity extends Record<string, unknown>>({
 
 	// Create entity for file and track mapping
 	const useCreateRepeaterEntityEvents = useCallback(
-		(events: UploaderEvents): UploaderEvents => ({
+		(events: Partial<UploaderEvents>): Partial<UploaderEvents> => ({
 			...events,
 			onBeforeUpload: async event => {
 				if (!(await resolveAcceptingSingleType(event.file, fileType as FileType))) {
@@ -115,19 +116,10 @@ export function MultiUploader<TEntity extends Record<string, unknown>>({
 		[field, fileType, getEntityForFile],
 	)
 
-	const baseEvents: UploaderEvents = useMemo(
-		() => ({
-			onError: uploaderErrorHandler,
-			onStartUpload: () => {},
-			onBeforeUpload: async () => undefined,
-			onProgress: () => {},
-			onAfterUpload: async () => {},
-			onSuccess: () => {},
-		}),
-		[],
-	)
-
-	const fillEntityEvents = useCreateRepeaterEntityEvents(baseEvents)
+	const fillEntityEvents = useCreateRepeaterEntityEvents({
+		...events,
+		onError: events.onError ?? uploaderErrorHandler,
+	})
 	const { files, ...stateEvents } = useUploadState(fillEntityEvents)
 	const onDrop = useUploaderDoUpload(stateEvents)
 

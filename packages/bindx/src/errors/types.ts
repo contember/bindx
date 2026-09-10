@@ -126,6 +126,23 @@ export interface LoadError extends BindxError {
 export type FieldError = ClientError | ServerError | LoadError
 
 /**
+ * Selects which errors a clear operation removes. An omitted key matches any error.
+ */
+export interface FieldErrorFilter {
+	readonly source?: FieldError['source']
+	readonly code?: string
+}
+
+/**
+ * Checks whether an error matches every key present in the filter.
+ */
+export function matchesErrorFilter(error: FieldError, filter: FieldErrorFilter): boolean {
+	if (filter.source !== undefined && error.source !== filter.source) return false
+	if (filter.code !== undefined && error.code !== filter.code) return false
+	return true
+}
+
+/**
  * Error state stored in the SnapshotStore.
  */
 export interface ErrorState {

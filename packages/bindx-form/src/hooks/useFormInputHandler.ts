@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { FormInputHandler, FormInputHandlerContext, ColumnType } from '../types.js'
+import { createJsonHandler } from '../handlers/createJsonHandler.js'
 
 /**
  * Default handler for string fields
@@ -146,6 +147,7 @@ const defaultTypeHandlers: Partial<Record<ColumnType, HandlerFactory>> = {
 	Time: createTimeHandler,
 	Uuid: createStringHandler,
 	Enum: createStringHandler,
+	Json: () => createJsonHandler(),
 }
 
 function resolveColumnType(columnType: string | undefined): ColumnType | undefined {
@@ -163,6 +165,8 @@ export interface UseFormInputHandlerOptions {
 	formatValue?: FormInputHandler['formatValue']
 	/** Column type for auto-detection */
 	columnType?: ColumnType
+	/** Base handler, takes precedence over the column-type handler */
+	handler?: FormInputHandler
 }
 
 /**
@@ -170,20 +174,21 @@ export interface UseFormInputHandlerOptions {
  * Can be overridden with custom parse/format functions.
  */
 export function useFormInputHandler(options: UseFormInputHandlerOptions = {}): FormInputHandler {
-	const { parseValue, formatValue, columnType } = options
+	const { parseValue, formatValue, columnType, handler } = options
 
 	return useMemo(() => {
-		// Get base handler from column type or default to string
+		// Get base handler from the override, the column type, or default to string
 		const resolved = resolveColumnType(columnType)
 		const factory = (resolved && defaultTypeHandlers[resolved]) || createStringHandler
-		const baseHandler = factory()
+		const baseHandler = handler ?? factory()
 
 		return {
 			parseValue: parseValue ?? baseHandler.parseValue,
 			formatValue: formatValue ?? baseHandler.formatValue,
 			defaultInputProps: baseHandler.defaultInputProps,
+			onBlur: baseHandler.onBlur,
 		}
-	}, [parseValue, formatValue, columnType])
+	}, [parseValue, formatValue, columnType, handler])
 }
 
 /**

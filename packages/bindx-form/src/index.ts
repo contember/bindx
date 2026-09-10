@@ -11,6 +11,10 @@ export type {
 	FormInputHandlerContext,
 	FormInputHandlerFactory,
 	ColumnType,
+	JSONPrimitive,
+	JSONValue,
+	JSONObject,
+	JSONArray,
 	TypeHandlerMap,
 	FormFieldScopeProps,
 	FormFieldStateProviderProps,
@@ -36,8 +40,12 @@ export {
 	getDefaultInputProps,
 	type UseFormInputHandlerOptions,
 	useFormInputValidationHandler,
+	HTML5_VALIDATION_ERROR_CODE,
 	type ValidationHandlerResult,
 } from './hooks/index.js'
+
+// Handlers
+export { createJsonHandler, type JsonHandlerOptions } from './handlers/createJsonHandler.js'
 
 // Components
 export {

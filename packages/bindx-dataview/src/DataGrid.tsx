@@ -23,6 +23,7 @@ import {
 import { useDataViewKey } from './DataViewKeyProvider.js'
 import { DataViewProvider, type DataViewContextValue, type DataViewLoaderState } from './DataViewContext.js'
 import { useDataGridSetup, QUERY_FILTER_NAME } from './useDataGridSetup.js'
+import { useListFetchAllData } from './useListFetchAllData.js'
 
 export { QUERY_FILTER_NAME }
 
@@ -152,6 +153,14 @@ function DataGridImpl<TRoleMap extends Record<string, object>>({
 		setHighlightIndex(null)
 	}, [items])
 
+	// ---- Unpaged fetch of the same list the grid loads ----
+	const fetchAllData = useListFetchAllData({
+		entityType,
+		filter: setup.combinedFilter,
+		orderBy: setup.sorting.resolvedOrderBy,
+		selection: setup.selection,
+	})
+
 	const contextValue = useMemo((): DataViewContextValue => ({
 		filtering: setup.filtering,
 		sorting: setup.sorting,
@@ -166,10 +175,11 @@ function DataGridImpl<TRoleMap extends Record<string, object>>({
 		highlightIndex,
 		setHighlightIndex,
 		selectionMeta: setup.selection,
+		fetchAllData,
 		toolbarContent: setup.toolbarContent,
 		layoutRenders: setup.layoutRenders,
 		layoutElements: setup.layoutElements,
-	}), [setup.filtering, setup.sorting, setup.paging, setup.selectionState, setup.columns, entityType, items, itemCount, loaderState, reload, highlightIndex, setup.selection, setup.toolbarContent, setup.layoutRenders, setup.layoutElements])
+	}), [setup.filtering, setup.sorting, setup.paging, setup.selectionState, setup.columns, entityType, items, itemCount, loaderState, reload, highlightIndex, setup.selection, fetchAllData, setup.toolbarContent, setup.layoutRenders, setup.layoutElements])
 
 	return (
 		<DataViewProvider value={contextValue}>

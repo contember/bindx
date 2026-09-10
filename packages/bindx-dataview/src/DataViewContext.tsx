@@ -18,6 +18,9 @@ export interface DataViewElementData {
 	readonly fallback?: boolean
 }
 
+/** Fetches every row in the view's scope, unpaged. Resolves to null when the query returned an unexpected result. */
+export type DataViewFetchAllData = () => Promise<readonly Record<string, unknown>[] | null>
+
 export interface DataViewContextValue {
 	readonly filtering: FilteringState
 	readonly sorting: SortingStateResult
@@ -32,6 +35,8 @@ export interface DataViewContextValue {
 	readonly highlightIndex: number | null
 	readonly setHighlightIndex: (index: number | null) => void
 	readonly selectionMeta: SelectionMeta
+	/** Owned by each view, so the query keeps the scope the view loads with (static filter, parent relation). */
+	readonly fetchAllData: DataViewFetchAllData
 	readonly toolbarContent?: React.ReactNode
 	/** Named layout render callbacks — analyzed during collection, called per item at runtime */
 	readonly layoutRenders: ReadonlyMap<string, (item: DataViewItem) => React.ReactNode>

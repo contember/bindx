@@ -127,6 +127,7 @@ export {
 	useOptionalDataViewContext,
 	DataViewProvider,
 	type DataViewContextValue,
+	type DataViewFetchAllData,
 	type DataViewItem,
 	type DataViewLoaderState as DataViewLoaderStateType,
 	type DataViewElementData,

@@ -3,7 +3,7 @@ import { SlotInput } from './SlotInput.js'
 import { useFormFieldState } from '../contexts.js'
 import { useFormInputHandler } from '../hooks/useFormInputHandler.js'
 import { useFormInputValidationHandler } from '../hooks/useFormInputValidationHandler.js'
-import type { FormInputProps } from '../types.js'
+import type { FormInputHandlerContext, FormInputProps } from '../types.js'
 import { useField } from '@contember/bindx-react'
 
 /**
@@ -11,6 +11,13 @@ import { useField } from '@contember/bindx-react'
  */
 function dataAttribute(value: boolean): '' | undefined {
 	return value ? '' : undefined
+}
+
+/**
+ * Collects the error a handler reports for the current input.
+ */
+interface HandlerErrorReport {
+	message: string | null
 }
 
 /**
@@ -35,6 +42,7 @@ export function FormInput<T>({
 	children,
 	formatValue: formatValueProp,
 	parseValue: parseValueProp,
+	handler: handlerProp,
 }: FormInputProps<T>): ReactElement {
 	const formState = useFormFieldState()
 	const id = formState?.htmlId
@@ -47,14 +55,25 @@ export function FormInput<T>({
 		formatValue: formatValueProp as ((value: unknown) => string) | undefined,
 		parseValue: parseValueProp as ((value: string) => unknown) | undefined,
 		columnType: formState?.field?.columnType as import('../types.js').ColumnType | undefined,
+		handler: handlerProp,
 	})
 
 	// Get validation handler for HTML5 validation + touch tracking
 	const validation = useFormInputValidationHandler(field)
 
-	const handlerContext = { state: handlerState, setState: setHandlerState }
-
 	const accessor = useField(field)
+
+	const createHandlerContext = useCallback(
+		(report: HandlerErrorReport): FormInputHandlerContext => ({
+			state: handlerState,
+			setState: setHandlerState,
+			currentValue: accessor.value,
+			setError: message => {
+				report.message = message
+			},
+		}),
+		[handlerState, accessor.value],
+	)
 
 	// Compute derived state
 	const hasErrors = (formState?.errors.length ?? field.errors.length) > 0
@@ -63,15 +82,19 @@ export function FormInput<T>({
 	const touched = field.isTouched
 
 	// Format current value for display
-	const displayValue = handler.formatValue(accessor.value, handlerContext)
+	const displayValue = handler.formatValue(accessor.value, createHandlerContext({ message: null }))
 
 	// Handle input changes
 	const handleChange = useCallback<ChangeEventHandler<HTMLInputElement>>(
 		(e) => {
-			const parsedValue = handler.parseValue(e.target.value, handlerContext)
+			const report: HandlerErrorReport = { message: null }
+			const parsedValue = handler.parseValue(e.target.value, createHandlerContext(report))
 			field.setValue(parsedValue as T | null)
+			if (report.message !== null) {
+				field.addError(report.message)
+			}
 		},
-		[field, handler, handlerContext],
+		[field, handler, createHandlerContext],
 	)
 
 	// Combine focus handler with validation
@@ -86,8 +109,13 @@ export function FormInput<T>({
 	const handleBlur = useCallback<FocusEventHandler<HTMLInputElement>>(
 		(e) => {
 			validation.onBlur(e)
+			const report: HandlerErrorReport = { message: null }
+			handler.onBlur?.(createHandlerContext(report))
+			if (report.message !== null) {
+				field.addError(report.message)
+			}
 		},
-		[validation],
+		[field, handler, createHandlerContext, validation],
 	)
 
 	return (

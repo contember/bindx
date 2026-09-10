@@ -120,6 +120,17 @@ export interface ErrorEvent {
 	fileType?: FileType
 }
 
+/**
+ * Fill target of a single-file uploader: an entity, or a has-one relation pointing at one.
+ */
+export type UploaderFillTarget<TEntity = Record<string, unknown>> = EntityRef<TEntity> | HasOneRef<TEntity>
+
+/**
+ * Resolves the target of an upload batch after the files pass validation and before
+ * the target is written. Returning nothing keeps the target the uploader was given.
+ */
+export type PrepareUploadTarget<TTarget> = (files: File[]) => TTarget | undefined | Promise<TTarget | undefined>
+
 export interface UploaderEvents {
 	onBeforeUpload: (event: BeforeUploadEvent) => Promise<FileType | undefined>
 	onStartUpload: (event: StartUploadEvent) => void
