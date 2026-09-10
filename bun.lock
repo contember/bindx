@@ -24,7 +24,7 @@
     },
     "packages/bindx": {
       "name": "@contember/bindx",
-      "version": "0.1.50",
+      "version": "0.1.51",
       "dependencies": {
         "@contember/bindx-client": "workspace:*",
         "@contember/graphql-client": "^2.1.0-beta.1",
@@ -32,7 +32,7 @@
     },
     "packages/bindx-client": {
       "name": "@contember/bindx-client",
-      "version": "0.1.50",
+      "version": "0.1.51",
       "dependencies": {
         "@contember/graphql-builder": "^2.1.0-beta.1",
         "@contember/graphql-client": "^2.1.0-beta.1",
@@ -41,7 +41,7 @@
     },
     "packages/bindx-dataview": {
       "name": "@contember/bindx-dataview",
-      "version": "0.1.50",
+      "version": "0.1.51",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-react": "workspace:*",
@@ -54,7 +54,7 @@
     },
     "packages/bindx-editor": {
       "name": "@contember/bindx-editor",
-      "version": "0.1.50",
+      "version": "0.1.51",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-react": "workspace:*",
@@ -70,7 +70,7 @@
     },
     "packages/bindx-form": {
       "name": "@contember/bindx-form",
-      "version": "0.1.50",
+      "version": "0.1.51",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@radix-ui/react-slot": "^1.2.4",
@@ -81,7 +81,7 @@
     },
     "packages/bindx-generator": {
       "name": "@contember/bindx-generator",
-      "version": "0.1.50",
+      "version": "0.1.51",
       "dependencies": {
         "@contember/schema": "^2.1.0-beta.1",
         "@contember/schema-utils": "^2.1.0-beta.1",
@@ -92,7 +92,7 @@
     },
     "packages/bindx-react": {
       "name": "@contember/bindx-react",
-      "version": "0.1.50",
+      "version": "0.1.51",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-client": "workspace:*",
@@ -106,7 +106,7 @@
     },
     "packages/bindx-repeater": {
       "name": "@contember/bindx-repeater",
-      "version": "0.1.50",
+      "version": "0.1.51",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-react": "workspace:*",
@@ -117,7 +117,7 @@
     },
     "packages/bindx-ui": {
       "name": "@contember/bindx-ui",
-      "version": "0.1.50",
+      "version": "0.1.51",
       "bin": {
         "bindx-ui": "./dist/cli/cli.js",
       },
@@ -157,7 +157,7 @@
     },
     "packages/bindx-uploader": {
       "name": "@contember/bindx-uploader",
-      "version": "0.1.50",
+      "version": "0.1.51",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-react": "workspace:*",
@@ -171,7 +171,7 @@
     },
     "packages/example": {
       "name": "@contember/bindx-example",
-      "version": "0.1.50",
+      "version": "0.1.51",
       "dependencies": {
         "@contember/bindx": "workspace:*",
         "@contember/bindx-dataview": "workspace:*",
@@ -916,7 +916,7 @@
 
     "@tailwindcss/oxide-wasm32-wasi/@emnapi/wasi-threads": ["@emnapi/wasi-threads@1.2.3", "", { "dependencies": { "tslib": "^2.4.0" }, "bundled": true }, "sha512-ELEBe8PsLvvJ6QMr0zLt8ffvOHW/dc1m3CEzNMg7aJUv3bMaoDtw2TXyDAwkYBuroxxuHEwhRTLJSe5sya547g=="],
 
-    "@tailwindcss/oxide-wasm32-wasi/@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.3", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || ^2.0.0-alpha.4", "@emnapi/runtime": "^1.7.1 || ^2.0.0-alpha.4" }, "bundled": true }, "sha512-UMduMbqO5s5zF2NkNacMT/yK5Y5QiKvWr2+50bzIIxFDwVJ2h49b+oyjaCGPhJxd2/gC2x39EHv/gHVuu36x2Q=="],
+    "@tailwindcss/oxide-wasm32-wasi/@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.4", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || ^2.0.0-alpha.4", "@emnapi/runtime": "^1.7.1 || ^2.0.0-alpha.4" }, "bundled": true }, "sha512-AJxoUD2/15ESHbvpcyjU274nsAPLuOtPHCk0vKJM5pj//Fg/B1FXNWjPnXTT9PymCYYiHo4zPj0ZomXBKhoy7g=="],
 
     "@tailwindcss/oxide-wasm32-wasi/@tybys/wasm-util": ["@tybys/wasm-util@0.10.3", "", { "dependencies": { "tslib": "^2.4.0" }, "bundled": true }, "sha512-F3fo1MYrRJYL3zER0OUOmkutjr1Vp23m7OsSgp7nq4SP6OqX6C/56XFIPAl5bt3zaBRjmW7SGz3u/6LwFpYcOg=="],
 
