@@ -456,19 +456,20 @@ export function useEntityList(
 					throw new Error('Unexpected query result type')
 				}
 
-				const items = result.data.map((data: Record<string, unknown>) => {
-					const id = data['id'] as string
-					// Revalidation: advance the server baseline but keep local dirty
-					// edits intact (see EntitySnapshotStore.refreshServerData).
-					dispatcher.dispatch(
-						refreshServerData(entityType, id, data),
-					)
-					return { id, data: data as object }
-				})
+				store.batchNotifications(() => {
+					const items = result.data.map((data: Record<string, unknown>) => {
+						const id = data['id'] as string
+						// Revalidation preserves local edits while advancing the server baseline.
+						dispatcher.dispatch(
+							refreshServerData(entityType, id, data),
+						)
+						return { id, data: data as object }
+					})
 
-				listStateRef.current = { status: 'ready', items, isRefetching: false }
-				versionRef.current++
-				store.notify()
+					listStateRef.current = { status: 'ready', items, isRefetching: false }
+					versionRef.current++
+					store.notify()
+				})
 			} catch (error) {
 				if (abortController.signal.aborted) return
 

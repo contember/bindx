@@ -176,6 +176,11 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		}
 	}
 
+	/** Coalesces synchronous notifications, even on failure, without changing undo boundaries. */
+	batchNotifications<T>(fn: () => T): T {
+		return this.subscriptions.batchNotifications(fn)
+	}
+
 	// ==================== Key Generation ====================
 
 	private getEntityKey(entityType: string, id: string): string {

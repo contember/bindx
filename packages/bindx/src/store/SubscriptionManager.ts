@@ -45,6 +45,48 @@ export class SubscriptionManager implements Rekeyable {
 
 	/** Global version number for change detection */
 	private globalVersion = 0
+	private notificationBatchDepth = 0
+	private pendingEntities = new Set<string>()
+	private pendingRelations = new Set<string>()
+	private pendingGlobal = false
+
+	/** Versions advance immediately; callbacks observe the completed synchronous batch. */
+	batchNotifications<T>(fn: () => T): T {
+		this.notificationBatchDepth++
+		try {
+			return fn()
+		} finally {
+			if (--this.notificationBatchDepth === 0) this.flushNotifications()
+		}
+	}
+
+	private flushNotifications(): void {
+		const entities = this.pendingEntities
+		const relations = this.pendingRelations
+		const global = this.pendingGlobal
+		this.pendingEntities = new Set()
+		this.pendingRelations = new Set()
+		this.pendingGlobal = false
+		const notified = new Set<Subscriber>()
+		const deliver = (subscribers: Set<Subscriber> | undefined): void => {
+			for (const sub of subscribers ?? []) {
+				if (notified.has(sub)) continue
+				notified.add(sub)
+				sub()
+			}
+		}
+		for (const key of entities) deliver(this.entitySubscribers.get(this.resolveKey(key)))
+		for (const key of relations) deliver(this.relationSubscribers.get(this.resolveKey(key)))
+		if (global) deliver(this.globalSubscribers)
+	}
+
+	private notifyGlobalSubscribers(): void {
+		if (this.notificationBatchDepth > 0) {
+			this.pendingGlobal = true
+			return
+		}
+		for (const sub of this.globalSubscribers) sub()
+	}
 
 	/**
 	 * Resolves a child's parents from live relation edges. Injected after
@@ -127,9 +169,7 @@ export class SubscriptionManager implements Rekeyable {
 	 */
 	notify(): void {
 		this.globalVersion++
-		for (const sub of this.globalSubscribers) {
-			sub()
-		}
+		this.notifyGlobalSubscribers()
 	}
 
 	/**
@@ -145,13 +185,9 @@ export class SubscriptionManager implements Rekeyable {
 		// Iterate the live sets, as the per-key paths do: a subscriber that unsubscribes a
 		// not-yet-visited sibling removes it from the iteration, whereas a copied array would
 		// still invoke it after its unsubscribe() returned.
-		for (const subs of this.entitySubscribers.values()) {
-			for (const sub of subs) sub()
-		}
-		for (const subs of this.relationSubscribers.values()) {
-			for (const sub of subs) sub()
-		}
-		for (const sub of this.globalSubscribers) sub()
+		for (const key of this.entitySubscribers.keys()) this.notifyEntityDirect(key)
+		for (const key of this.relationSubscribers.keys()) this.notifyRelationDirect(key)
+		this.notifyGlobalSubscribers()
 	}
 
 	// ==================== Parent-Child Relationships ====================
@@ -221,12 +257,7 @@ export class SubscriptionManager implements Rekeyable {
 		notifiedKeys.add(key)
 
 		// Notify entity-specific subscribers
-		const entitySubs = this.entitySubscribers.get(key)
-		if (entitySubs) {
-			for (const sub of entitySubs) {
-				sub()
-			}
-		}
+		this.notifyEntityDirect(key)
 
 		// Notify parent entity subscribers (propagate change up the tree).
 		// Parents are derived from the relation store's LIVE edges, so a
@@ -243,9 +274,7 @@ export class SubscriptionManager implements Rekeyable {
 		// Notify global subscribers (only once, from the root invocation — not
 		// again for each parent reached via propagation)
 		if (isRoot) {
-			for (const sub of this.globalSubscribers) {
-				sub()
-			}
+			this.notifyGlobalSubscribers()
 		}
 	}
 
@@ -262,12 +291,7 @@ export class SubscriptionManager implements Rekeyable {
 		this.globalVersion++
 
 		// Notify relation-specific subscribers
-		const relationSubs = this.relationSubscribers.get(key)
-		if (relationSubs) {
-			for (const sub of relationSubs) {
-				sub()
-			}
-		}
+		this.notifyRelationDirect(key)
 
 		// Bump entity snapshot version so isEqual detects a change
 		bumper.bumpEntitySnapshotVersion(entityKey)
@@ -280,6 +304,10 @@ export class SubscriptionManager implements Rekeyable {
 	 * Used during batch imports (e.g., undo/redo).
 	 */
 	notifyEntityDirect(key: string): void {
+		if (this.notificationBatchDepth > 0) {
+			this.pendingEntities.add(key)
+			return
+		}
 		const subs = this.entitySubscribers.get(key)
 		if (subs) {
 			for (const sub of subs) {
@@ -293,6 +321,10 @@ export class SubscriptionManager implements Rekeyable {
 	 * Used during batch imports (e.g., undo/redo).
 	 */
 	notifyRelationDirect(key: string): void {
+		if (this.notificationBatchDepth > 0) {
+			this.pendingRelations.add(key)
+			return
+		}
 		const subs = this.relationSubscribers.get(key)
 		if (subs) {
 			for (const sub of subs) {
@@ -306,9 +338,7 @@ export class SubscriptionManager implements Rekeyable {
 	 */
 	notifyGlobal(): void {
 		this.globalVersion++
-		for (const sub of this.globalSubscribers) {
-			sub()
-		}
+		this.notifyGlobalSubscribers()
 	}
 
 	/**
