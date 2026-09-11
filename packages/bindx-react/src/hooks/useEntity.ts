@@ -290,12 +290,13 @@ export function useEntity(
 				if (result.type === 'get' && result.data === null) {
 					dispatcher.dispatch(setLoadState(entityType, id, 'not_found'))
 				} else if (result.type === 'get' && result.data) {
+					const data = result.data
 					// Revalidation: advance the server baseline but keep local dirty
 					// edits intact (see EntitySnapshotStore.refreshServerData).
-					dispatcher.dispatch(
-						refreshServerData(entityType, id, result.data),
-					)
-					dispatcher.dispatch(setLoadState(entityType, id, 'success'))
+					store.batchNotifications(() => {
+						dispatcher.dispatch(refreshServerData(entityType, id, data))
+						dispatcher.dispatch(setLoadState(entityType, id, 'success'))
+					})
 				}
 			} catch (error) {
 				if (abortController.signal.aborted) return

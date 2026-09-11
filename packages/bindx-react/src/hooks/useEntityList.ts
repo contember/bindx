@@ -96,6 +96,12 @@ function createLoadingListResult(): LoadingEntityListResult {
 	}
 }
 
+function getRowId(entityType: string, row: Record<string, unknown>): string {
+	const id = row['id']
+	if (typeof id !== 'string') throw new Error(`${entityType} list row has no string id`)
+	return id
+}
+
 function createErrorListResult(error: FieldError): ErrorEntityListResult {
 	return {
 		$status: 'error',
@@ -456,16 +462,12 @@ export function useEntityList(
 					throw new Error('Unexpected query result type')
 				}
 
+				const items = result.data.map(data => ({ id: getRowId(entityType, data), data }))
 				store.batchNotifications(() => {
-					const items = result.data.map((data: Record<string, unknown>) => {
-						const id = data['id'] as string
+					for (const item of items) {
 						// Revalidation preserves local edits while advancing the server baseline.
-						dispatcher.dispatch(
-							refreshServerData(entityType, id, data),
-						)
-						return { id, data: data as object }
-					})
-
+						dispatcher.dispatch(refreshServerData(entityType, item.id, item.data))
+					}
 					listStateRef.current = { status: 'ready', items, isRefetching: false }
 					versionRef.current++
 					store.notify()

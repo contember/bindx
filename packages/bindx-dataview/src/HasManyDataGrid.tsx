@@ -84,6 +84,12 @@ interface ListState {
 
 const INITIAL_LIST_STATE: ListState = { status: 'loading', items: [] }
 
+function getRowId(entityType: string, row: Record<string, unknown>): string {
+	const id = row['id']
+	if (typeof id !== 'string') throw new Error(`${entityType} relation row has no string id`)
+	return id
+}
+
 // ============================================================================
 // Implementation
 // ============================================================================
@@ -183,12 +189,11 @@ function HasManyDataGridImpl<TEntity extends object>({
 					return
 				}
 
-				const items = relation.rows.map((data: Record<string, unknown>) => {
-					const id = data['id'] as string
-					dispatcher.dispatch(
-						setEntityData(targetEntityType, id, data, true),
-					)
-					return { id, data: data as object }
+				const items = relation.rows.map(data => ({ id: getRowId(targetEntityType, data), data }))
+				store.batchNotifications(() => {
+					for (const item of items) {
+						dispatcher.dispatch(setEntityData(targetEntityType, item.id, item.data, true))
+					}
 				})
 
 				setListState({ status: 'ready', items, totalCount: relation.totalCount })
