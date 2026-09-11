@@ -1,7 +1,7 @@
 import type { EntitySnapshot, LoadStatus } from './snapshots.js'
 import { createEntitySnapshot } from './snapshots.js'
 import type { FieldError, FieldErrorFilter } from '../errors/types.js'
-import { SubscriptionManager, type SnapshotVersionBumper } from './SubscriptionManager.js'
+import { SubscriptionManager, type SnapshotVersionBumper, type SynchronousResult } from './SubscriptionManager.js'
 import { ErrorStore } from './ErrorStore.js'
 import {
 	RelationStore,
@@ -177,7 +177,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	}
 
 	/** Coalesces synchronous notifications, even on failure, without changing undo boundaries. */
-	batchNotifications<T>(fn: () => T): T {
+	batchNotifications<T>(fn: () => SynchronousResult<T>): T {
 		return this.subscriptions.batchNotifications(fn)
 	}
 
@@ -1110,23 +1110,16 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		hasManyStates: Map<string, StoredHasManyState>
 		entityMetas: Map<string, EntityMeta>
 	}): void {
-		const notifiedEntityKeys = this.entitySnapshots.importSnapshots(snapshot.entitySnapshots)
+		this.subscriptions.batchNotifications(() => {
+			const entityKeys = this.entitySnapshots.importSnapshots(snapshot.entitySnapshots)
+			this.meta.importMetas(snapshot.entityMetas)
+			const relationKeys = this.relations.importRelationStates(snapshot.relationStates)
+			const hasManyKeys = this.relations.importHasManyStates(snapshot.hasManyStates)
 
-		this.meta.importMetas(snapshot.entityMetas)
-
-		const relationKeys = this.relations.importRelationStates(snapshot.relationStates)
-		const hasManyKeys = this.relations.importHasManyStates(snapshot.hasManyStates)
-		const notifiedRelationKeys = new Set([...relationKeys, ...hasManyKeys])
-
-		this.subscriptions.notifyGlobal()
-
-		for (const key of notifiedEntityKeys) {
-			this.subscriptions.notifyEntityDirect(key)
-		}
-
-		for (const key of notifiedRelationKeys) {
-			this.subscriptions.notifyRelationDirect(key)
-		}
+			this.subscriptions.notify()
+			for (const key of entityKeys) this.subscriptions.notifyEntityDirect(key)
+			for (const key of [...relationKeys, ...hasManyKeys]) this.subscriptions.notifyRelationDirect(key)
+		})
 	}
 
 	// ==================== Undo Journal Target (cell capture / restore) ====================
@@ -1241,9 +1234,6 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	 * then present relations, then un-creates, then dropped relations.
 	 */
 	applyJournalImages(images: JournalCellImage[]): void {
-		const notifyEntities = new Set<string>()
-		const notifyRelations = new Set<string>()
-
 		const presentEntities: EntityCellImage[] = []
 		const presentRelations: Array<RelationCellImage | HasManyCellImage> = []
 		const absentEntities: EntityCellImage[] = []
@@ -1251,29 +1241,37 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 
 		for (const img of images) {
 			if (img.kind === 'entity') {
-				notifyEntities.add(img.key)
 				;(img.present ? presentEntities : absentEntities).push(img)
 			} else {
-				notifyRelations.add(img.key)
-				notifyEntities.add(entityKeyOfRelationKey(img.key))
 				;(img.present ? presentRelations : absentRelations).push(img)
 			}
 		}
 
-		for (const img of presentEntities) this.applyEntityImage(img)
-		for (const img of presentRelations) this.applyRelationImage(img)
-		for (const img of absentEntities) {
-			const [type, id] = splitEntityKey(img.key)
-			this.removeEntity(type, id)
-		}
-		for (const img of absentRelations) {
-			if (img.kind === 'relation') this.relations.removeRelationState(img.key)
-			else this.relations.removeHasManyState(img.key)
-		}
+		// removeEntity notifies; the batch holds that back until the restore is complete.
+		this.subscriptions.batchNotifications(() => {
+			for (const img of presentEntities) this.applyEntityImage(img)
+			for (const img of presentRelations) this.applyRelationImage(img)
+			for (const img of absentEntities) {
+				const [type, id] = splitEntityKey(img.key)
+				this.removeEntity(type, id)
+			}
+			for (const img of absentRelations) {
+				if (img.kind === 'relation') this.relations.removeRelationState(img.key)
+				else this.relations.removeHasManyState(img.key)
+			}
 
-		this.subscriptions.notifyGlobal()
-		for (const key of notifyEntities) this.subscriptions.notifyEntityDirect(key)
-		for (const key of notifyRelations) this.subscriptions.notifyRelationDirect(key)
+			this.subscriptions.notify()
+			for (const img of images) this.notifyRestoredCell(img)
+		})
+	}
+
+	private notifyRestoredCell(img: JournalCellImage): void {
+		if (img.kind === 'entity') {
+			this.subscriptions.notifyEntityDirect(img.key)
+			return
+		}
+		this.subscriptions.notifyRelationDirect(img.key)
+		this.subscriptions.notifyEntityDirect(entityKeyOfRelationKey(img.key))
 	}
 
 	private applyEntityImage(img: EntityCellImage): void {

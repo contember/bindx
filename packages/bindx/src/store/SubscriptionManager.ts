@@ -2,6 +2,9 @@ import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
 
 type Subscriber = () => void
 
+/** Rejects async callbacks at compile time: a notification batch would end at the first `await`. */
+export type SynchronousResult<T> = T extends PromiseLike<unknown> ? never : T
+
 /**
  * Callback interface for SubscriptionManager to request snapshot version bumps.
  * This decouples notification logic from entity snapshot storage.
@@ -18,6 +21,8 @@ export interface SnapshotVersionBumper {
  */
 export interface ParentKeyLookup {
 	getParentKeysForChild(childId: string): Set<string>
+	/** Increases on every relation write, so an unchanged value proves the edges are unchanged. */
+	getMutationVersion(): number
 }
 
 /**
@@ -49,35 +54,48 @@ export class SubscriptionManager implements Rekeyable {
 	private pendingEntities = new Set<string>()
 	private pendingRelations = new Set<string>()
 	private pendingGlobal = false
+	/** Keys the current batch has already walked; valid only while the relation edges are unchanged. */
+	private readonly batchWalkedKeys = new Set<string>()
+	private batchWalkedEdgeVersion = -1
 
 	/** Versions advance immediately; callbacks observe the completed synchronous batch. */
-	batchNotifications<T>(fn: () => T): T {
+	batchNotifications<T>(fn: () => SynchronousResult<T>): T {
 		this.notificationBatchDepth++
+		let completed = false
 		try {
-			return fn()
+			const result = fn()
+			completed = true
+			return result
 		} finally {
-			if (--this.notificationBatchDepth === 0) this.flushNotifications()
+			if (--this.notificationBatchDepth === 0) this.flushNotifications(completed)
 		}
 	}
 
-	private flushNotifications(): void {
+	private flushNotifications(callbackCompleted: boolean): void {
 		const entities = this.pendingEntities
 		const relations = this.pendingRelations
 		const global = this.pendingGlobal
 		this.pendingEntities = new Set()
 		this.pendingRelations = new Set()
 		this.pendingGlobal = false
+		this.batchWalkedKeys.clear()
 		const notified = new Set<Subscriber>()
+		const errors: unknown[] = []
 		const deliver = (subscribers: Set<Subscriber> | undefined): void => {
 			for (const sub of subscribers ?? []) {
 				if (notified.has(sub)) continue
 				notified.add(sub)
-				sub()
+				try {
+					sub()
+				} catch (error) {
+					errors.push(error)
+				}
 			}
 		}
-		for (const key of entities) deliver(this.entitySubscribers.get(this.resolveKey(key)))
-		for (const key of relations) deliver(this.relationSubscribers.get(this.resolveKey(key)))
+		for (const key of entities) deliver(this.entitySubscribers.get(key))
+		for (const key of relations) deliver(this.relationSubscribers.get(key))
 		if (global) deliver(this.globalSubscribers)
+		throwSubscriberErrors(errors, callbackCompleted)
 	}
 
 	private notifyGlobalSubscribers(): void {
@@ -229,7 +247,19 @@ export class SubscriptionManager implements Rekeyable {
 		bumper: SnapshotVersionBumper,
 	): void {
 		this.globalVersion++
-		this.notifyEntityAndParentSubscribers(key, bumper, new Set())
+		this.notifyEntityAndParentSubscribers(key, bumper, this.getWalkedKeys())
+		this.notifyGlobalSubscribers()
+	}
+
+	/** A batch shares one walked set, so rows under a common hub walk it once instead of once per row. */
+	private getWalkedKeys(): Set<string> {
+		if (this.notificationBatchDepth === 0) return new Set()
+		const edgeVersion = this.parentKeyLookup?.getMutationVersion() ?? 0
+		if (edgeVersion !== this.batchWalkedEdgeVersion) {
+			this.batchWalkedKeys.clear()
+			this.batchWalkedEdgeVersion = edgeVersion
+		}
+		return this.batchWalkedKeys
 	}
 
 	/**
@@ -245,36 +275,21 @@ export class SubscriptionManager implements Rekeyable {
 	private notifyEntityAndParentSubscribers(
 		key: string,
 		bumper: SnapshotVersionBumper,
-		notifiedKeys: Set<string>,
+		walkedKeys: Set<string>,
 	): void {
-		// Prevent infinite recursion
-		if (notifiedKeys.has(key)) return
-		// Capture "am I the root invocation" BEFORE adding/recursing — the parent
-		// propagation below grows the shared `notifiedKeys` set, so checking its
-		// size after recursion would misclassify any child-with-parent as non-root
-		// and skip the global notification (see issue #51).
-		const isRoot = notifiedKeys.size === 0
-		notifiedKeys.add(key)
+		if (walkedKeys.has(key)) return
+		walkedKeys.add(key)
 
-		// Notify entity-specific subscribers
 		this.notifyEntityDirect(key)
 
-		// Notify parent entity subscribers (propagate change up the tree).
 		// Parents are derived from the relation store's LIVE edges, so a
 		// disconnected child no longer reaches its former parent.
-		const parents = this.getParentKeys(key)
-		for (const parentKey of parents) {
+		for (const parentKey of this.getParentKeys(key)) {
 			// An ancestor reachable through several edges is bumped and walked once.
-			if (notifiedKeys.has(parentKey)) continue
+			if (walkedKeys.has(parentKey)) continue
 			// Bump parent snapshot version so useSyncExternalStore detects a change
 			bumper.bumpEntitySnapshotVersion(parentKey)
-			this.notifyEntityAndParentSubscribers(parentKey, bumper, notifiedKeys)
-		}
-
-		// Notify global subscribers (only once, from the root invocation — not
-		// again for each parent reached via propagation)
-		if (isRoot) {
-			this.notifyGlobalSubscribers()
+			this.notifyEntityAndParentSubscribers(parentKey, bumper, walkedKeys)
 		}
 	}
 
@@ -296,7 +311,8 @@ export class SubscriptionManager implements Rekeyable {
 		// Bump entity snapshot version so isEqual detects a change
 		bumper.bumpEntitySnapshotVersion(entityKey)
 
-		this.notifyEntityAndParentSubscribers(entityKey, bumper, new Set())
+		this.notifyEntityAndParentSubscribers(entityKey, bumper, this.getWalkedKeys())
+		this.notifyGlobalSubscribers()
 	}
 
 	/**
@@ -334,14 +350,6 @@ export class SubscriptionManager implements Rekeyable {
 	}
 
 	/**
-	 * Bumps global version and notifies global subscribers.
-	 */
-	notifyGlobal(): void {
-		this.globalVersion++
-		this.notifyGlobalSubscribers()
-	}
-
-	/**
 	 * Moves entity and relation subscriptions from oldKey to newKey.
 	 * Also rekeys relation subscribers under oldKeyPrefix to newKeyPrefix.
 	 * Registers redirects so unsubscribe closures can find migrated callbacks.
@@ -358,6 +366,7 @@ export class SubscriptionManager implements Rekeyable {
 			}
 		}
 		this.rekeyedKeys.set(oldKey, newKey)
+		this.movePendingNotifications(ctx)
 
 		// Move entity subscribers, merging into anything already subscribed under the new key
 		this.moveSubscribers(this.entitySubscribers, oldKey, newKey)
@@ -384,6 +393,16 @@ export class SubscriptionManager implements Rekeyable {
 		}
 	}
 
+	/** Queued keys follow their subscribers, so a flush never reads the long-lived redirect map. */
+	private movePendingNotifications({ oldKey, newKey, oldKeyPrefix, newKeyPrefix }: RekeyContext): void {
+		if (this.pendingEntities.delete(oldKey)) this.pendingEntities.add(newKey)
+		for (const key of [...this.pendingRelations]) {
+			if (!key.startsWith(oldKeyPrefix)) continue
+			this.pendingRelations.delete(key)
+			this.pendingRelations.add(newKeyPrefix + key.slice(oldKeyPrefix.length))
+		}
+	}
+
 	/**
 	 * Re-homes a subscriber set under a new key. The destination may already hold
 	 * subscribers (a component mounted on the persisted id before the draft was rekeyed
@@ -401,4 +420,13 @@ export class SubscriptionManager implements Rekeyable {
 		}
 		for (const sub of moved) existing.add(sub)
 	}
+}
+
+/** The first subscriber error propagates, as it would unbatched, and the rest are logged; a failed callback's own error wins. */
+function throwSubscriberErrors(errors: readonly unknown[], callbackCompleted: boolean): void {
+	const [first, ...rest] = errors
+	for (const error of callbackCompleted ? rest : errors) {
+		console.error('[Bindx SubscriptionManager] Subscriber error:', error)
+	}
+	if (callbackCompleted && errors.length > 0) throw first
 }

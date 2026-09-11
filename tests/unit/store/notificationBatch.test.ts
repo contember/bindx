@@ -1,6 +1,36 @@
-import { describe, expect, test } from 'bun:test'
-import { SnapshotStore } from '@contember/bindx'
-import { SubscriptionManager } from '../../../packages/bindx/src/store/SubscriptionManager.js'
+import { describe, expect, spyOn, test, type Mock } from 'bun:test'
+import { ActionDispatcher, SnapshotStore, UndoManager } from '@contember/bindx'
+import {
+	SubscriptionManager,
+	type ParentKeyLookup,
+	type SynchronousResult,
+} from '../../../packages/bindx/src/store/SubscriptionManager.js'
+
+class FakeParentLookup implements ParentKeyLookup {
+	calls = 0
+	version = 0
+
+	constructor(private readonly parents: Map<string, readonly string[]>) {}
+
+	getParentKeysForChild(childId: string): Set<string> {
+		this.calls++
+		return new Set(this.parents.get(childId) ?? [])
+	}
+
+	getMutationVersion(): number {
+		return this.version
+	}
+}
+
+type AssertEqual<T, U> = [T] extends [U] ? ([U] extends [T] ? true : false) : false
+
+function assertType<T extends true>(): void {
+	// compile-time only
+}
+
+function loggedMessages(logged: Mock<typeof console.error>): string[] {
+	return logged.mock.calls.map(([, error]) => error instanceof Error ? error.message : String(error))
+}
 
 describe('notification batches', () => {
 	test('nested refreshes expose final data and preserve local edits', () => {
@@ -29,7 +59,7 @@ describe('notification batches', () => {
 		const manager = new SubscriptionManager()
 		const bumped: string[] = []
 		const bumper = { bumpEntitySnapshotVersion: (key: string): void => { bumped.push(key) } }
-		manager.setParentKeyLookup({ getParentKeysForChild: id => new Set(id === 'child' ? ['Article:parent'] : []) })
+		manager.setParentKeyLookup(new FakeParentLookup(new Map([['child', ['Article:parent']]])))
 		let calls = 0
 		const subscriber = (): void => {
 			calls++
@@ -119,5 +149,123 @@ describe('notification batches', () => {
 		})
 		manager.batchNotifications(() => manager.notify())
 		expect(calls).toBe(2)
+	})
+
+	test('a throwing subscriber does not drop the rest of the batch', () => {
+		const store = new SnapshotStore()
+		store.setEntityData('Article', 'a', { title: 'A' }, true)
+		store.setEntityData('Article', 'b', { title: 'B' }, true)
+		let otherCalls = 0
+		let globalCalls = 0
+		store.subscribeToEntity('Article', 'a', () => { throw new Error('Subscriber a failed') })
+		store.subscribeToEntity('Article', 'b', () => { otherCalls++ })
+		store.subscribe(() => { globalCalls++ })
+		expect(() => store.batchNotifications(() => {
+			store.refreshServerData('Article', 'a', { title: 'A2' })
+			store.refreshServerData('Article', 'b', { title: 'B2' })
+		})).toThrow('Subscriber a failed')
+		expect(otherCalls).toBe(1)
+		expect(globalCalls).toBe(1)
+	})
+
+	test('rethrows the first subscriber error and logs the rest', () => {
+		const manager = new SubscriptionManager()
+		const logged = spyOn(console, 'error').mockImplementation(() => {})
+		try {
+			manager.subscribeToEntity('Article:a', () => { throw new Error('First') })
+			manager.subscribe(() => { throw new Error('Second') })
+			expect(() => manager.batchNotifications(() => {
+				manager.notifyEntityDirect('Article:a')
+				manager.notify()
+			})).toThrow('First')
+			expect(loggedMessages(logged)).toEqual(['Second'])
+		} finally {
+			logged.mockRestore()
+		}
+	})
+
+	test('a failing callback keeps its own error and logs subscriber errors', () => {
+		const manager = new SubscriptionManager()
+		const logged = spyOn(console, 'error').mockImplementation(() => {})
+		try {
+			manager.subscribe(() => { throw new Error('Subscriber failed') })
+			expect(() => manager.batchNotifications(() => {
+				manager.notify()
+				throw new Error('Write failed')
+			})).toThrow('Write failed')
+			expect(loggedMessages(logged)).toEqual(['Subscriber failed'])
+		} finally {
+			logged.mockRestore()
+		}
+	})
+
+	test('after clear(), a batched write reaches a reused id like an immediate write does', () => {
+		const store = new SnapshotStore()
+		const tempId = store.createEntity('Article', { title: 'Draft' })
+		store.mapTempIdToPersistedId('Article', tempId, 'persisted')
+		store.clear()
+		store.createEntity('Article', { id: tempId, title: 'Again' })
+		let calls = 0
+		store.subscribeToEntity('Article', tempId, () => { calls++ })
+		store.setFieldValue('Article', tempId, ['title'], 'Immediate')
+		store.batchNotifications(() => store.setFieldValue('Article', tempId, ['title'], 'Batched'))
+		expect(calls).toBe(2)
+	})
+
+	test('rows under a shared ancestor walk it once per batch', () => {
+		const rows = Array.from({ length: 50 }, (_, i) => `r${i}`)
+		const parents = new Map<string, readonly string[]>([['hub', rows.map(id => `Article:${id}`)]])
+		for (const id of rows) parents.set(id, ['Category:hub'])
+		const lookup = new FakeParentLookup(parents)
+		const manager = new SubscriptionManager()
+		manager.setParentKeyLookup(lookup)
+		let bumps = 0
+		let hubCalls = 0
+		manager.subscribeToEntity('Category:hub', () => { hubCalls++ })
+		manager.batchNotifications(() => {
+			for (const id of rows) manager.notifyEntitySubscribers(`Article:${id}`, { bumpEntitySnapshotVersion: () => { bumps++ } })
+		})
+		expect(lookup.calls).toBe(rows.length + 1)
+		expect(bumps).toBe(rows.length)
+		expect(hubCalls).toBe(1)
+	})
+
+	test('a relation write inside a batch re-walks ancestors through the new edge', () => {
+		const parents = new Map<string, readonly string[]>([['child', ['Article:a']]])
+		const lookup = new FakeParentLookup(parents)
+		const manager = new SubscriptionManager()
+		manager.setParentKeyLookup(lookup)
+		const bumped: string[] = []
+		const bumper = { bumpEntitySnapshotVersion: (key: string): void => { bumped.push(key) } }
+		let newParentCalls = 0
+		manager.subscribeToEntity('Article:b', () => { newParentCalls++ })
+		manager.batchNotifications(() => {
+			manager.notifyEntitySubscribers('Item:child', bumper)
+			parents.set('child', ['Article:a', 'Article:b'])
+			lookup.version++
+			manager.notifyEntitySubscribers('Item:child', bumper)
+		})
+		expect(bumped).toContain('Article:b')
+		expect(newParentCalls).toBe(1)
+	})
+
+	test('undoing several creates notifies once, after the restore is complete', () => {
+		const store = new SnapshotStore()
+		const dispatcher = new ActionDispatcher(store)
+		const undo = new UndoManager(store, { debounceMs: 0 })
+		dispatcher.addMiddleware(undo.createMiddleware())
+		const ids = ['c0', 'c1', 'c2', 'c3']
+		store.transaction(() => {
+			for (const id of ids) store.createEntity('Article', { id, title: id })
+		})
+		const remaining: number[] = []
+		store.subscribe(() => remaining.push(ids.filter(id => store.hasEntity('Article', id)).length))
+		undo.undo()
+		expect(remaining).toEqual([0])
+	})
+
+	test('async callbacks are rejected at compile time', () => {
+		assertType<AssertEqual<SynchronousResult<Promise<void>>, never>>()
+		assertType<AssertEqual<SynchronousResult<number>, number>>()
 	})
 })
