@@ -124,13 +124,13 @@ export class EntityLoader {
 				}
 			}
 
-			// Store each entity in snapshot store
-			for (const item of result.data) {
-				const record = item as Record<string, unknown>
-				if (typeof record['id'] === 'string') {
-					this.store.setEntityData(entityType, record['id'], record, true)
+			this.store.batchNotifications(() => {
+				for (const record of result.data) {
+					if (typeof record['id'] === 'string') {
+						this.store.setEntityData(entityType, record['id'], record, true)
+					}
 				}
-			}
+			})
 
 			return { status: 'success', data: result.data as T[] }
 		} catch (error) {
