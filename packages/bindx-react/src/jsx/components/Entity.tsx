@@ -2,7 +2,8 @@ import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, 
 import { useBindxContext, useSchemaRegistry } from '../../hooks/BackendAdapterContext.js'
 import { annotateElement } from '../devAnnotations.js'
 import { useEntity } from '../../hooks/useEntity.js'
-import { useSelectionCollection } from '../../hooks/useSelectionCollection.js'
+import { useRootSelection } from '../../hooks/useRootSelection.js'
+import type { CompiledSelection } from '../compiledSelection.js'
 import type { EntityAccessor, EntityRef, SelectionMeta } from '../types.js'
 import { type EntityDef, type EntityUniqueWhere, type AnyBrand, type FieldError, EntityHandle, type SnapshotStore, type ActionDispatcher, type SchemaRegistry, type CommonEntity } from '@contember/bindx'
 
@@ -19,6 +20,12 @@ interface EntityBaseProps<TRoleMap extends Record<string, object>> {
 	children: (entity: EntityRef<CommonEntity<TRoleMap>>) => React.ReactNode
 	/** Error fallback */
 	error?: (error: FieldError) => React.ReactNode
+	/**
+	 * Precompiled root selection — injected by the bindx compiler, do not hand-write.
+	 * When present the root selection is built statically (fields under the fixed
+	 * `entity` key + resolved holes) and `children` is not invoked with a collector.
+	 */
+	compiledSelection?: CompiledSelection
 }
 
 /**
@@ -72,6 +79,7 @@ interface EntityByModeProps {
 	loading?: React.ReactNode
 	error?: (error: FieldError) => React.ReactNode
 	notFound?: React.ReactNode
+	compiledSelection?: CompiledSelection
 }
 
 interface EntityCreateModeProps {
@@ -79,6 +87,7 @@ interface EntityCreateModeProps {
 	children: (entity: EntityAccessor<unknown>) => React.ReactNode
 	error?: (error: FieldError) => React.ReactNode
 	onPersisted?: (id: string) => void
+	compiledSelection?: CompiledSelection
 }
 
 // ==================== EntityByMode Component ====================
@@ -94,6 +103,7 @@ function EntityByMode({
 	loading,
 	error: errorFallback,
 	notFound,
+	compiledSelection,
 }: EntityByModeProps): ReactElement | null {
 	const { store, dispatcher } = useBindxContext()
 	const schemaRegistry = useSchemaRegistry()
@@ -101,11 +111,13 @@ function EntityByMode({
 	// Stable key for the 'by' clause
 	const byKey = useMemo(() => JSON.stringify(by), [by])
 
-	// Phase 1: Collect JSX selection
-	const { selection, queryKey: selectionQueryKey } = useSelectionCollection({
+	// Phase 1: Build the root selection — statically when compiled, else via the
+	// children-collector walk.
+	const { selection, queryKey: selectionQueryKey } = useRootSelection({
 		entityType,
 		depsKey: byKey,
-		collect: collector => children(collector as EntityAccessor<unknown>),
+		children,
+		compiledSelection,
 	})
 
 	// Combine internal selection key with user-supplied invalidation key so
@@ -181,6 +193,7 @@ function EntityCreateMode({
 	entityType,
 	children,
 	onPersisted,
+	compiledSelection,
 }: EntityCreateModeProps): ReactElement {
 	const { store } = useBindxContext()
 	const tempIdRef = useRef<string | null>(null)
@@ -216,7 +229,7 @@ function EntityCreateMode({
 	}
 
 	return (
-		<EntityCreateModeInner entityType={entityType} tempId={tempId} onPersisted={onPersisted}>
+		<EntityCreateModeInner entityType={entityType} tempId={tempId} onPersisted={onPersisted} compiledSelection={compiledSelection}>
 			{children}
 		</EntityCreateModeInner>
 	)
@@ -232,11 +245,13 @@ function EntityCreateModeInner({
 	tempId,
 	children,
 	onPersisted,
+	compiledSelection,
 }: {
 	entityType: string
 	tempId: string
 	children: (entity: EntityAccessor<unknown>) => React.ReactNode
 	onPersisted?: (id: string) => void
+	compiledSelection?: CompiledSelection
 }): ReactElement {
 	const { store, dispatcher } = useBindxContext()
 	const schemaRegistry = useSchemaRegistry()
@@ -283,11 +298,13 @@ function EntityCreateModeInner({
 		}
 	}, [persistedId, onPersisted])
 
-	// Selection collection still works for building mutations
-	useSelectionCollection({
+	// Selection collection still works for building mutations. A compiled selection
+	// skips the children(collector) walk here too.
+	useRootSelection({
 		entityType,
 		depsKey: tempId,
-		collect: collector => children(collector as EntityAccessor<unknown>),
+		children,
+		compiledSelection,
 	})
 
 	// Create EntityHandle (no selection for create mode - all fields accessible)
@@ -414,6 +431,7 @@ function EntityImpl<TRoleMap extends Record<string, object>>(
 				children={createProps.children as (entity: EntityAccessor<unknown>) => React.ReactNode}
 				error={createProps.error}
 				onPersisted={createProps.onPersisted}
+				compiledSelection={createProps.compiledSelection}
 			/>
 		)
 	}
@@ -428,6 +446,7 @@ function EntityImpl<TRoleMap extends Record<string, object>>(
 			loading={byProps.loading}
 			error={byProps.error}
 			notFound={byProps.notFound}
+			compiledSelection={byProps.compiledSelection}
 		/>
 	)
 }

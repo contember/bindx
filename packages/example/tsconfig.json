@@ -10,6 +10,7 @@
 		{"path": "../bindx-react"},
 		{"path": "../bindx-dataview"},
 		{"path": "../bindx-ui"},
-		{"path": "../bindx-editor"}
+		{"path": "../bindx-editor"},
+		{"path": "../bindx-compiler"}
 	]
 }

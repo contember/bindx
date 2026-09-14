@@ -31,6 +31,8 @@ import type { SelectionProvider, SelectionFieldMeta } from './types.js'
 import { FIELD_REF_META, BINDX_COMPONENT, SCOPE_REF } from './types.js'
 import { createCollectorProxy } from './proxy.js'
 import { collectSelection } from './analyzer.js'
+import { createFragment, createScalarPropMock } from './collectionHelpers.js'
+import { applyCompiledSelection, isValidCompiledSelection, type CompiledSelection } from './compiledSelection.js'
 import { type Condition, evaluateCondition } from './conditions.js'
 import { useRefSubscription } from '../hooks/useFields.js'
 
@@ -52,6 +54,42 @@ export const COMPONENT_BRAND = Symbol('COMPONENT_BRAND')
  * Symbol for stored selection metadata
  */
 export const COMPONENT_SELECTIONS = Symbol('COMPONENT_SELECTIONS')
+
+// ============================================================================
+// Static Selection Validation
+// ============================================================================
+
+/**
+ * When enabled, components carrying a precompiled static selection ALSO run the
+ * runtime proxy pass and warn on any per-prop mismatch. Trust-building mode for
+ * dev/CI; off by default so production skips the proxy pass entirely.
+ */
+let staticSelectionValidationEnabled = false
+
+/**
+ * Enables or disables static-selection validate mode (module-level flag).
+ */
+export function setStaticSelectionValidation(enabled: boolean): void {
+	staticSelectionValidationEnabled = enabled
+}
+
+/** Reads the module-level validate-mode flag (used by <Entity>'s root compilation). */
+export function isStaticSelectionValidationEnabled(): boolean {
+	return staticSelectionValidationEnabled
+}
+
+/** Killswitch: when off, all consumers ignore compiled literals and use the runtime proxy path. */
+let compiledSelectionsEnabled = true
+
+/** Disables compiled selections at runtime — incident mitigation without a rebuild. */
+export function setCompiledSelectionsEnabled(enabled: boolean): void {
+	compiledSelectionsEnabled = enabled
+}
+
+/** Reads the module-level compiled-selections killswitch (used by both consumers). */
+export function isCompiledSelectionsEnabled(): boolean {
+	return compiledSelectionsEnabled
+}
 
 // ============================================================================
 // Entity Config (Runtime)
@@ -103,6 +141,8 @@ export function buildComponent<TProps extends object>(
 	conditionFn: ((props: TProps) => Condition) | null,
 	slotNames: readonly string[],
 	useFns: readonly ((props: TProps) => object)[],
+	mockValues: Record<string, unknown>,
+	compiled: CompiledSelection | null,
 ): unknown {
 	const selectionsMap = new Map<string, SelectionPropMeta>()
 	const componentDisplayName = `BindxComponent(${[...entityConfigs.keys()].join(', ')})`
@@ -129,10 +169,65 @@ export function buildComponent<TProps extends object>(
 	// Interface props are appended during lazy collection, before the first runtime render.
 	const entityPropNames = [...entityConfigs.keys()]
 
+	// Selector-backed props are the only ones step 1 seeds into selectionsMap; anything
+	// else there came from a collection pass and must not survive a reset.
+	const explicitEntityPropNames = [...entityConfigs.entries()]
+		.filter(([_, c]) => c.selector)
+		.map(([name]) => name)
+
 	// 2. Implicit entities - collect lazily to avoid TDZ errors
 	const implicitConfigs = [...entityConfigs.entries()].filter(([_, c]) => !c.selector)
 	// Tri-state: 'collecting' terminates self-recursive components
 	let collectionState: 'idle' | 'collecting' | 'done' = 'idle'
+
+	// Drops any implicit/hole-derived entries so a partial compiled pass can't leak into the fallback.
+	function resetToExplicitSelections(): void {
+		for (const key of [...selectionsMap.keys()]) {
+			if (!explicitEntityPropNames.includes(key)) {
+				selectionsMap.delete(key)
+			}
+		}
+	}
+
+	// Applies the compiled literal; returns false (⇒ caller falls back to the proxy pass) on a
+	// malformed literal or a top-level throw. Per-hole failures stay contained inside applyCompiledSelection.
+	function tryApplyCompiled(): boolean {
+		if (!isValidCompiledSelection(compiled)) {
+			console.warn(
+				`[bindx] compiled selection for <${componentDisplayName}> is malformed (version/shape check failed) — `
+				+ 'falling back to runtime collection.',
+			)
+			return false
+		}
+		try {
+			applyCompiledSelection({
+				compiled,
+				selectionsMap,
+				componentBrand,
+				roles,
+				implicitConfigs,
+				schemaRegistry,
+				componentDisplayName,
+				validateMode: staticSelectionValidationEnabled,
+			})
+		} catch (error) {
+			resetToExplicitSelections()
+			console.warn(
+				`[bindx] compiled selection for <${componentDisplayName}> failed to resolve — `
+				+ 'falling back to runtime collection.',
+				error,
+			)
+			return false
+		}
+		if (staticSelectionValidationEnabled) {
+			validateCompiledSelection(
+				selectionsMap, componentDisplayName,
+				implicitConfigs, renderFn, componentBrand, roles,
+				hasInterfacesMode, schemaRegistry, conditionFn, mockValues,
+			)
+		}
+		return true
+	}
 
 	// Runs only from the static-analysis surface (getSelection, $propName fragment
 	// getters) — never from render. Render bodies stay pure runtime code.
@@ -145,7 +240,12 @@ export function buildComponent<TProps extends object>(
 		}
 		collectionState = 'collecting'
 		try {
-			collectImplicitSelections(implicitConfigs, renderFn, selectionsMap, componentBrand, roles, hasInterfacesMode, schemaRegistry, conditionFn)
+			// Precompiled selection present ⇒ build entries from it, skip the proxy pass.
+			// Killswitch off or a malformed/throwing literal falls back to the proxy pass wholesale (never under-fetch).
+			if (compiled && isCompiledSelectionsEnabled() && tryApplyCompiled()) {
+				return
+			}
+			collectImplicitSelections(implicitConfigs, renderFn, selectionsMap, componentBrand, roles, hasInterfacesMode, schemaRegistry, conditionFn, mockValues)
 		} catch (error) {
 			// Analysis is deterministic, so retrying is pointless — degrade loudly
 			// to the fields captured before the throw (scopes record eagerly).
@@ -292,34 +392,6 @@ function createExplicitPropMock(): unknown {
 }
 
 /**
- * Creates a tolerant stand-in for scalar (non-entity) props during collection.
- * Render bodies may call it (`t('key')`), read nested properties
- * (`labels.heading`) or coerce it to a primitive — all are no-ops so the
- * collection pass keeps capturing entity field accesses (see issue #57).
- */
-function createScalarPropMock(): unknown {
-	const mock: unknown = new Proxy(function () {}, {
-		get(_target, prop): unknown {
-			if (prop === Symbol.toPrimitive || prop === 'toString' || prop === 'valueOf') {
-				return (): string => ''
-			}
-			if (prop === Symbol.iterator) {
-				return function* (): Generator<never> {}
-			}
-			// undefined keeps JSON.stringify from recursing via a callable toJSON
-			if (prop === 'toJSON') {
-				return undefined
-			}
-			return mock
-		},
-		apply(): unknown {
-			return mock
-		},
-	})
-	return mock
-}
-
-/**
  * Collects selections from JSX for implicit entity props.
  *
  * In interfaces mode (hasInterfacesMode=true), any prop that is accessed
@@ -334,6 +406,7 @@ function collectImplicitSelections<TProps extends object>(
 	hasInterfacesMode: boolean,
 	schemaRegistry: SchemaRegistry<Record<string, object>> | null,
 	conditionFn: ((props: TProps) => Condition) | null,
+	mockValues: Record<string, unknown>,
 ): void {
 	const propScopes = new Map<string, SelectionScope>()
 	const implicitConfigsMap = new Map(implicitConfigs)
@@ -371,6 +444,12 @@ function collectImplicitSelections<TProps extends object>(
 					? new SchemaRegistry(config.schema)
 					: schemaRegistry
 				return createCollectorProxy(scope, entityName, resolvedRegistry)
+			}
+
+			// Deterministic analysis-time value; must win over the interfaces-mode
+			// branch so a mocked scalar is never mistaken for an interface entity prop.
+			if (propName in mockValues) {
+				return mockValues[propName]
 			}
 
 			// In interfaces mode, any unknown prop could be an interface entity prop
@@ -430,26 +509,108 @@ function collectImplicitSelections<TProps extends object>(
 }
 
 // ============================================================================
-// Fragment Creation
+// Static Selection Application & Validation
 // ============================================================================
 
 /**
- * Creates a FluentFragment from selection metadata.
+ * Validate mode: also run the proxy pass (which resolves nested holes by
+ * rendering them inline) and warn (once) when the compiled selection
+ * under-fetches relative to what runtime collection would produce. Diffs over
+ * the runtime props so hole-derived entity props are covered too.
  */
-function createFragment(
-	selection: SelectionMeta,
+function validateCompiledSelection<TProps extends object>(
+	compiledMap: Map<string, SelectionPropMeta>,
+	componentDisplayName: string,
+	implicitConfigs: [string, EntityConfig][],
+	renderFn: (props: TProps) => ReactNode,
 	componentBrand: ComponentBrand,
 	roles: readonly string[],
-): FluentFragment<unknown, object, AnyBrand> {
-	return {
-		__meta: selection,
-		__resultType: {} as object,
-		__modelType: undefined as unknown,
-		__isFragment: true,
-		__brand: componentBrand,
-		__brands: new Set([componentBrand.brandSymbol]),
-		__roles: roles.length > 0 ? roles : undefined,
+	hasInterfacesMode: boolean,
+	schemaRegistry: SchemaRegistry<Record<string, object>> | null,
+	conditionFn: ((props: TProps) => Condition) | null,
+	mockValues: Record<string, unknown>,
+): void {
+	const runtimeMap = new Map<string, SelectionPropMeta>()
+	try {
+		collectImplicitSelections(implicitConfigs, renderFn, runtimeMap, componentBrand, roles, hasInterfacesMode, schemaRegistry, conditionFn, mockValues)
+	} catch {
+		// Proxy pass crashed — the compiled selection already stands; nothing to compare.
+		return
 	}
+
+	const lines: string[] = []
+	for (const propName of runtimeMap.keys()) {
+		const compiledSelectionMeta = compiledMap.get(propName)?.selection
+		const runtimeSelectionMeta = runtimeMap.get(propName)?.selection
+		diffUnderfetchedFields(compiledSelectionMeta, runtimeSelectionMeta, [propName], lines)
+	}
+
+	if (lines.length > 0) {
+		console.warn(
+			`[bindx] static selection under-fetches for <${componentDisplayName}>:\n${lines.join('\n')}`,
+		)
+	}
+}
+
+/**
+ * Validate mode for a compiled <Entity> root: warn (once per collection) on fields
+ * the runtime children-collector walk requests but the compiled root omits. Reuses
+ * the same under-fetch-only diff as createComponent; the warn names the entity type.
+ */
+export function validateCompiledRootSelection(
+	compiledSelection: SelectionMeta,
+	runtimeSelection: SelectionMeta,
+	entityType: string,
+): void {
+	const lines: string[] = []
+	diffUnderfetchedFields(compiledSelection, runtimeSelection, [entityType], lines)
+	if (lines.length > 0) {
+		console.warn(
+			`[bindx] static selection under-fetches for <Entity ${entityType}>:\n${lines.join('\n')}`,
+		)
+	}
+}
+
+/**
+ * Under-fetch diff: warn only for fields the runtime (proxy) selection requests
+ * that the static selection omits — the sole mismatch class that is a fetch bug.
+ * Fields present only in static (branch unions) and params/alias/isArray-only
+ * differences are intentionally NOT reported: the compiler unions all branches
+ * and the runtime never records has-many params in implicit collection. Keyed by
+ * `fieldName` (not alias) so a params-driven alias never reads as a missing field.
+ */
+function diffUnderfetchedFields(
+	staticMeta: SelectionMeta | undefined,
+	runtimeMeta: SelectionMeta | undefined,
+	path: string[],
+	lines: string[],
+): void {
+	if (!runtimeMeta) {
+		return
+	}
+	const staticByField = indexByFieldName(staticMeta)
+	for (const runtimeField of runtimeMeta.fields.values()) {
+		const staticField = staticByField.get(runtimeField.fieldName)
+		if (!staticField) {
+			lines.push(`  missing from static (under-fetch): ${[...path, runtimeField.fieldName].join('.')}`)
+			continue
+		}
+		// Both sides fetch this relation — recurse into what the runtime nests.
+		if (runtimeField.nested) {
+			diffUnderfetchedFields(staticField.nested, runtimeField.nested, [...path, runtimeField.fieldName], lines)
+		}
+	}
+}
+
+/** Index a selection's top-level fields by field name (aliases collapse). */
+function indexByFieldName(meta: SelectionMeta | undefined): Map<string, SelectionFieldMeta> {
+	const byField = new Map<string, SelectionFieldMeta>()
+	if (meta) {
+		for (const field of meta.fields.values()) {
+			byField.set(field.fieldName, field)
+		}
+	}
+	return byField
 }
 
 // ============================================================================
