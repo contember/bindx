@@ -58,7 +58,8 @@ export interface DataGridAutoTableProps {
 }
 
 export function DataGridAutoTable({ onSelectHighlighted }: DataGridAutoTableProps): ReactElement {
-	const { columns } = useDataViewContext()
+	const { columns: allColumns } = useDataViewContext()
+	const columns = allColumns.filter(col => !col.virtual)
 
 	return (
 		<DataViewKeyboardEventHandler onSelectHighlighted={onSelectHighlighted}>
@@ -71,7 +72,7 @@ export function DataGridAutoTable({ onSelectHighlighted }: DataGridAutoTableProp
 									<DataGridHeaderCell data-testid={`datagrid-header-${col.name}`}>
 										<DataGridColumnHeaderUI
 											sortingField={col.sortingField && col.fieldRef ? col.fieldRef : undefined}
-											hidingName={col.fieldName ?? undefined}
+											hidingName={col.name}
 											filterName={col.filterName ?? undefined}
 											filter={col.filterName && col.renderFilter
 												? <ColumnFilterRenderer filterName={col.filterName} renderFilter={col.renderFilter} />

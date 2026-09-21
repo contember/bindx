@@ -5,7 +5,7 @@
 
 import React, { createContext, useContext } from 'react'
 import type { FilteringState, SortingStateResult, PagingStateResult, SelectionStateResult } from './useDataViewState.js'
-import type { ColumnLeafProps } from './columnLeaf.js'
+import type { DataViewColumn } from './columnLeaf.js'
 import type { EntityAccessor, SelectionMeta } from '@contember/bindx'
 
 export type DataViewLoaderState = 'initial' | 'loaded' | 'refreshing' | 'failed'
@@ -26,7 +26,7 @@ export interface DataViewContextValue {
 	readonly sorting: SortingStateResult
 	readonly paging: PagingStateResult
 	readonly selection: SelectionStateResult
-	readonly columns: readonly ColumnLeafProps[]
+	readonly columns: readonly DataViewColumn[]
 	readonly entityType: string
 	readonly items: readonly DataViewItem[]
 	readonly itemCount: number

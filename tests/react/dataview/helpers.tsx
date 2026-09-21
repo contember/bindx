@@ -31,12 +31,11 @@ export function TestTable(): ReactElement {
 			<thead>
 				<tr data-testid="datagrid-header">
 					{columns.map((col, i) => {
-						const name = col.fieldName ?? `col-${i}`
-						if (!selection.isVisible(name)) return null
+						if (col.virtual || !selection.isVisible(col.name)) return null
 						return (
 							<th
 								key={i}
-								data-testid={`datagrid-header-${name}`}
+								data-testid={`datagrid-header-${col.name}`}
 								onClick={col.sortingField && col.fieldRef
 									? () => sorting.setOrderBy(col.fieldRef!, 'next')
 									: undefined}
@@ -60,12 +59,11 @@ export function TestTable(): ReactElement {
 						onClick={() => setHighlightIndex(rowIndex)}
 					>
 						{columns.map((col, colIndex) => {
-							const name = col.fieldName ?? `col-${colIndex}`
-							if (!selection.isVisible(name)) return null
+							if (col.virtual || !selection.isVisible(col.name)) return null
 							return (
 								<td
 									key={colIndex}
-									data-testid={`datagrid-row-${rowIndex}-col-${name}`}
+									data-testid={`datagrid-row-${rowIndex}-col-${col.name}`}
 								>
 									{col.renderCell(item)}
 								</td>

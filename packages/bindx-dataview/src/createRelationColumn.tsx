@@ -60,8 +60,12 @@ export interface RelationCellWrapperContext {
 
 export interface RelationColumnProps<TEntity, TSelected> {
 	field: object
+	/** Column identity. Defaults to the bound field name — pass it when two columns bind one relation. */
+	name?: string
 	header?: React.ReactNode
 	filter?: boolean
+	/** Register the relation without showing a column. */
+	virtual?: boolean
 	renderCellWrapper?: (content: React.ReactNode, item: EntityAccessor<object>) => React.ReactNode
 	children: (entity: EntityAccessor<TEntity, TSelected>) => React.ReactNode
 }
@@ -149,7 +153,8 @@ export function createRelationColumn<TFilterArtifact extends FilterArtifact>(
 				: undefined)
 
 		return {
-			name: fieldName ?? `col-${Math.random().toString(36).slice(2, 8)}`,
+			name: props['name'] as string | undefined,
+			virtual: props['virtual'] as boolean | undefined,
 			fieldName,
 			fieldRef: fieldRef ?? null,
 			sortingField: null,

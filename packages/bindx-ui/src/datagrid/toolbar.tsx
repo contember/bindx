@@ -29,9 +29,20 @@ export interface DataGridToolbarUIProps {
 	sticky?: boolean
 	/** Export control. Default: `<DataGridAutoExport />`. Pass null to hide it. */
 	exportControl?: ReactNode | null
+	/** Contents of the settings popover. Default: layout switcher, visible fields, page size. Pass null to hide the popover. */
+	settings?: ReactNode | null
 }
 
-export function DataGridToolbarUI({ children, className, sticky, exportControl }: DataGridToolbarUIProps): ReactElement {
+const defaultSettings = (
+	<div className="flex flex-col gap-4">
+		<DataGridLayoutSwitcher />
+		<DataGridToolbarVisibleElements />
+		<DataGridPerPageSelector />
+	</div>
+)
+
+export function DataGridToolbarUI({ children, className, sticky, exportControl, settings }: DataGridToolbarUIProps): ReactElement {
+	const resolvedSettings = settings === undefined ? defaultSettings : settings
 	const [showFilters, setShowFilters] = useState(false)
 
 	return (
@@ -48,20 +59,18 @@ export function DataGridToolbarUI({ children, className, sticky, exportControl }
 						<FilterIcon className="w-4 h-4" /> {dict.datagrid.filters}
 					</Button>
 
-					<Popover>
-						<PopoverTrigger asChild>
-							<Button variant="outline" size="sm" className="gap-2">
-								<SettingsIcon className="w-4 h-4" />
-							</Button>
-						</PopoverTrigger>
-						<PopoverContent className="w-auto min-w-48">
-							<div className="flex flex-col gap-4">
-								<DataGridLayoutSwitcher />
-								<DataGridToolbarVisibleElements />
-								<DataGridPerPageSelector />
-							</div>
-						</PopoverContent>
-					</Popover>
+					{resolvedSettings !== null && (
+						<Popover>
+							<PopoverTrigger asChild>
+								<Button variant="outline" size="sm" className="gap-2">
+									<SettingsIcon className="w-4 h-4" />
+								</Button>
+							</PopoverTrigger>
+							<PopoverContent className="w-auto min-w-48">
+								{resolvedSettings}
+							</PopoverContent>
+						</Popover>
+					)}
 
 					{exportControl === undefined ? <DataGridAutoExport /> : exportControl}
 					<DataViewReloadTrigger>
