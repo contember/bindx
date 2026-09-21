@@ -24,6 +24,8 @@ export {
 export {
 	ColumnLeaf,
 	type ColumnLeafProps,
+	type DataViewColumn,
+	resolveColumnNames,
 	extractColumnLeaves,
 	analyzeChildren,
 	type ChildrenAnalysisResult,

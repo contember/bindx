@@ -23,13 +23,25 @@ export type ColumnType = 'text' | 'number' | 'date' | 'dateTime' | 'boolean' | '
 
 export interface ColumnLeafProps {
 	// ── Core ──
-	readonly name: string
+	/**
+	 * Identity of the column: the key its visibility is stored under and the key
+	 * its header and cells are rendered by. Optional here because most call sites
+	 * let it be derived — see {@link resolveColumnNames}. Pass it explicitly when
+	 * two columns bind the same field, which would otherwise derive one name.
+	 */
+	readonly name?: string
 	readonly fieldName: string | null
 	readonly fieldRef: FieldRef<unknown> | null
 	readonly sortingField: string | null
 	readonly filterName: string | null
 	readonly filterHandler: FilterHandler<FilterArtifact> | undefined
 	readonly isTextSearchable: boolean
+	/**
+	 * The leaf exists only to register its field — for full-text search, or to
+	 * pull the field into the query. It is not a column: neither the table nor
+	 * the visibility list shows it.
+	 */
+	readonly virtual?: boolean
 	readonly columnType?: ColumnType
 	readonly collectSelection?: (collectorProxy: unknown) => void
 
@@ -62,6 +74,44 @@ export function isRelationColumn(col: ColumnLeafProps): col is ColumnLeafProps &
  */
 export function ColumnLeaf(_props: ColumnLeafProps): null {
 	return null
+}
+
+// ============================================================================
+// Column Identity
+// ============================================================================
+
+/** A column leaf once its identity is settled — what the view exposes. */
+export interface DataViewColumn extends ColumnLeafProps {
+	readonly name: string
+}
+
+/**
+ * Settle each leaf's identity: the declared name, else the bound field, else the
+ * position.
+ *
+ * Position is the last resort rather than the first, because it is only stable
+ * while the column order is — and the name is a persisted visibility key, so a
+ * reordered grid would read a stale one. That is also why duplicates are
+ * reported instead of being suffixed away.
+ */
+export function resolveColumnNames(leaves: readonly ColumnLeafProps[]): DataViewColumn[] {
+	const columns = leaves.map((leaf, index): DataViewColumn => ({
+		...leaf,
+		name: leaf.name ?? leaf.fieldName ?? `col-${index}`,
+	}))
+
+	const duplicates = columns
+		.map(it => it.name)
+		.filter((name, index, names) => names.indexOf(name) !== index)
+	if (duplicates.length > 0) {
+		console.warn(
+			`[bindx] DataGrid columns share the name ${[...new Set(duplicates)].map(it => `"${it}"`).join(', ')}. ` +
+			`A name keys a column's cells and stores its visibility, so the columns act as one. ` +
+			`Give each of them a \`name\` prop.`,
+		)
+	}
+
+	return columns
 }
 
 // ============================================================================

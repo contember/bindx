@@ -154,13 +154,22 @@ export function useDataViewElements(): readonly DataViewElementData[] {
 			if (elements) return elements
 		}
 
-		// Fallback: derive elements from columns (table layout or no layout markers)
-		return columns
-			.filter(c => c.fieldName !== null)
-			.map(c => ({
-				name: c.name,
-				label: c.header,
+		// Fallback: derive elements from columns (table layout or no layout markers).
+		// Every column is offered — `name` is what the table hides by, so a column
+		// with no field of its own is reachable just the same. An empty header is
+		// left unset so the label falls back to the formatted name.
+		//
+		// Columns sharing a name share one visibility flag, so they are listed once
+		// rather than as rows that look independent and are not.
+		const byName = new Map<string, DataViewElementData>()
+		for (const column of columns) {
+			if (column.virtual || byName.has(column.name)) continue
+			byName.set(column.name, {
+				name: column.name,
+				label: column.header === '' ? undefined : column.header,
 				fallback: true,
-			}))
+			})
+		}
+		return [...byName.values()]
 	}, [columns, currentLayout, layoutElements])
 }

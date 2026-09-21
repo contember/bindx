@@ -186,6 +186,8 @@ export const DataGridHasManyColumn: {
 
 export interface DataGridActionColumnProps {
 	children: React.ReactNode | ((entity: EntityAccessor<object>) => React.ReactNode)
+	/** Column identity. An action column binds no field, so without this it is named by its position. */
+	name?: string
 	header?: React.ReactNode
 }
 
@@ -203,7 +205,7 @@ export const DataGridActionColumn = Object.assign(
 
 			const leafProps: ColumnLeafProps = {
 				columnType: 'action',
-				name: `action-${Math.random().toString(36).slice(2, 8)}`,
+				name: props['name'] as string | undefined,
 				fieldName: null,
 				fieldRef: null,
 				sortingField: null,
@@ -225,10 +227,14 @@ export const DataGridActionColumn = Object.assign(
 
 export interface DataGridColumnProps<T> {
 	field?: FieldRef<T>
+	/** Column identity. Defaults to the bound field name — pass it when two columns bind one field, or when there is no field. */
+	name?: string
 	header?: React.ReactNode
 	sortable?: boolean
 	filter?: boolean
 	filterHandler?: FilterHandler<FilterArtifact>
+	/** Register the field without showing a column (e.g. to make it full-text searchable). */
+	virtual?: boolean
 	children?: (value: T | null, accessor: EntityAccessor<object>) => React.ReactNode
 }
 
@@ -247,7 +253,8 @@ export const DataGridColumn = Object.assign(
 			const children = props['children'] as ((value: unknown, accessor: EntityAccessor<object>) => React.ReactNode) | undefined
 
 			const leafProps: ColumnLeafProps = {
-				name: fieldName ?? `col-${Math.random().toString(36).slice(2, 8)}`,
+				name: props['name'] as string | undefined,
+				virtual: props['virtual'] as boolean | undefined,
 				fieldName,
 				fieldRef: fieldRef ?? null,
 				sortingField: sortable && fieldName ? fieldName : null,

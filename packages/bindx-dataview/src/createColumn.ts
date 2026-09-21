@@ -45,9 +45,13 @@ export interface CreateColumnConfig<TValue, TFilterArtifact extends FilterArtifa
 
 export interface ColumnComponentProps<TValue = unknown> {
 	field: FieldRef<TValue>
+	/** Column identity. Defaults to the bound field name — pass it when two columns bind one field. */
+	name?: string
 	header?: React.ReactNode
 	sortable?: boolean
 	filter?: boolean
+	/** Register the field without showing a column (e.g. to make it full-text searchable). */
+	virtual?: boolean
 	children?: (value: TValue | null, accessor: EntityAccessor<object>) => React.ReactNode
 }
 
@@ -106,7 +110,8 @@ export function createColumnStaticRender<TValue, TFilterArtifact extends FilterA
 			}
 
 		const leafProps = {
-			name: fieldName ?? `col-${Math.random().toString(36).slice(2, 8)}`,
+			name: props['name'] as string | undefined,
+			virtual: props['virtual'] as boolean | undefined,
 			fieldName,
 			fieldRef: fieldRef ?? null,
 			sortingField: sortable && fieldName ? fieldName : null,

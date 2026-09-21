@@ -21,7 +21,7 @@ import {
 	mergeSelections,
 	collectSelection,
 } from '@contember/bindx-react'
-import { ColumnLeaf, type ColumnLeafProps, analyzeChildren } from './columnLeaf.js'
+import { ColumnLeaf, type ColumnLeafProps, type DataViewColumn, analyzeChildren, resolveColumnNames } from './columnLeaf.js'
 import { DataGridToolbarContent, type DataGridToolbarContentProps } from './markers.js'
 import { DataGridLayout, type DataGridLayoutProps } from './markers.js'
 import { useFilteringState, useSortingState, usePagingState, useSelectionState } from './useDataViewState.js'
@@ -63,7 +63,7 @@ export interface DataGridCommonProps<TEntity extends object> {
 
 export interface DataGridSetupResult {
 	childrenJsx: ReactNode
-	columns: ColumnLeafProps[]
+	columns: DataViewColumn[]
 	selection: SelectionMeta
 	queryKey: string
 	toolbarContent: ReactNode | undefined
@@ -141,7 +141,7 @@ export function useDataGridSetup<TEntity extends object>({
 			return runtimeColumns
 		}
 
-		const runtimeBoundColumns = cols.map((column, index): ColumnLeafProps => ({
+		const runtimeBoundColumns = resolveColumnNames(cols).map((column, index): DataViewColumn => ({
 			...column,
 			renderCell: accessor => {
 				const runtimeColumn = getRuntimeColumns(accessor)[index]
