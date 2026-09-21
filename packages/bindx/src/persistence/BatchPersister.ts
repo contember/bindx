@@ -327,16 +327,18 @@ export class BatchPersister {
 			}
 
 			const transactionResult = await this.executeTransaction(execution, options?.signal)
-			result = this.processExecutionResult(execution, transactionResult, options)
+			result = this.store.batchNotifications(() => this.processExecutionResult(execution, transactionResult, options))
 			result = this.mergeCancelled(result, execution.vetoed)
 			return result
 
 		} finally {
-			this.releaseEntities([...claimed.values()])
-			this.undoManager?.unblock()
-			if (result?.success) {
-				this.store.sweepUnreachableCreated()
-			}
+			this.store.batchNotifications(() => {
+				this.releaseEntities([...claimed.values()])
+				this.undoManager?.unblock()
+				if (result?.success) {
+					this.store.sweepUnreachableCreated()
+				}
+			})
 		}
 
 		// Unreachable, but keeps the return type explicit when control-flow analysis changes.
@@ -991,11 +993,13 @@ export class BatchPersister {
 		const fresh = entities.filter(entity => !claimed.has(entityIdentityKey(entity.entityType, entity.entityId)))
 		if (fresh.length === 0) return
 		this.changeRegistry.markInFlight(fresh)
-		for (const entity of fresh) {
-			claimed.set(entityIdentityKey(entity.entityType, entity.entityId), entity)
-			this.dispatcher.dispatch(setPersisting(entity.entityType, entity.entityId, true, updateMode === 'pessimistic'))
-			this.dispatcher.dispatch(clearAllServerErrors(entity.entityType, entity.entityId))
-		}
+		this.store.batchNotifications(() => {
+			for (const entity of fresh) {
+				claimed.set(entityIdentityKey(entity.entityType, entity.entityId), entity)
+				this.dispatcher.dispatch(setPersisting(entity.entityType, entity.entityId, true, updateMode === 'pessimistic'))
+				this.dispatcher.dispatch(clearAllServerErrors(entity.entityType, entity.entityId))
+			}
+		})
 	}
 
 	private releaseEntities(entities: readonly DirtyEntity[]): void {
