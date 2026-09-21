@@ -32,6 +32,7 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(({
 }, ref) => {
 	const [open, setOpen] = useState(false)
 	const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const interaction = useRef({ pointer: false, focus: false })
 	// Focus moves into the panel only when the keyboard opened it. A hover must
 	// leave focus wherever the user put it.
 	const openedByFocus = useRef(false)
@@ -43,13 +44,18 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(({
 		}
 	}, [])
 
-	const scheduleClose = useCallback((): void => {
+	const scheduleClose = useCallback((source: 'pointer' | 'focus'): void => {
+		interaction.current[source] = false
 		cancelClose()
-		closeTimer.current = setTimeout(() => setOpen(false), CLOSE_DELAY_MS)
+		closeTimer.current = setTimeout(() => {
+			closeTimer.current = null
+			if (!interaction.current.pointer && !interaction.current.focus) setOpen(false)
+		}, CLOSE_DELAY_MS)
 	}, [cancelClose])
 
 	const openFor = useCallback((source: 'pointer' | 'focus'): void => {
 		cancelClose()
+		interaction.current[source] = true
 		openedByFocus.current = source === 'focus'
 		setOpen(true)
 	}, [cancelClose])
@@ -57,7 +63,13 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(({
 	useEffect(() => cancelClose, [cancelClose])
 
 	return (
-		<PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+		<PopoverPrimitive.Root open={open} onOpenChange={nextOpen => {
+			if (!nextOpen) {
+				cancelClose()
+				interaction.current = { pointer: false, focus: false }
+			}
+			setOpen(nextOpen)
+		}}>
 			{/* Trigger rather than Anchor: Radix excludes the trigger's subtree from
 			    its outside-dismissal, so focusing the label does not close the panel. */}
 			<PopoverPrimitive.Trigger asChild>
@@ -66,9 +78,9 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(({
 					data-bindx-tooltip=""
 					className={cn('inline-block', className)}
 					onPointerEnter={() => openFor('pointer')}
-					onPointerLeave={scheduleClose}
+					onPointerLeave={() => scheduleClose('pointer')}
 					onFocus={() => openFor('focus')}
-					onBlur={scheduleClose}
+					onBlur={() => scheduleClose('focus')}
 				>
 					{children}
 				</div>
@@ -81,10 +93,17 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(({
 					onOpenAutoFocus={event => {
 						if (!openedByFocus.current) event.preventDefault()
 					}}
-					onPointerEnter={cancelClose}
-					onPointerLeave={scheduleClose}
-					onFocus={cancelClose}
-					onBlur={scheduleClose}
+					onCloseAutoFocus={event => {
+						// Restoring focus after hover/blur closure would open the panel again.
+						if (!interaction.current.focus) event.preventDefault()
+					}}
+					onPointerEnter={() => openFor('pointer')}
+					onPointerLeave={() => scheduleClose('pointer')}
+					onFocus={() => openFor('focus')}
+					onBlur={() => scheduleClose('focus')}
+					onFocusOutside={event => {
+						if (interaction.current.pointer) event.preventDefault()
+					}}
 					className={cn(
 						'z-50 rounded-md border border-gray-200 bg-white/90 backdrop-blur-sm shadow-md px-2 py-1.5',
 						'whitespace-nowrap outline-hidden',

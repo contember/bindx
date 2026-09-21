@@ -14,8 +14,11 @@ import { DataGridAutoTable, DataGridHasOneColumn } from '@contember/bindx-ui'
 import { schema, testSchema } from '../../shared/index.js'
 import { getByTestId, queryByTestId } from './helpers.js'
 
-afterEach(() => {
-	cleanup()
+afterEach(async () => {
+	await act(async () => {
+		cleanup()
+		await sleep(0)
+	})
 })
 
 /** Comfortably past the panel's close delay, so a missed `cancel` would show. */
@@ -70,6 +73,56 @@ function renderGrid(): HTMLElement {
 }
 
 describe('relation column filter affordance', () => {
+	test('should keep a focused action open after the pointer leaves', async () => {
+		const container = renderGrid()
+		const { getByText } = render(<button>Outside</button>)
+		await waitFor(() => {
+			expect(queryByTestId(container, 'datagrid-cell-author')).not.toBeNull()
+		})
+		const label = getByTestId(container, 'datagrid-cell-author').querySelector<HTMLElement>('[tabindex="0"]')!
+		act(() => label.focus())
+		await waitFor(() => expect(document.activeElement?.textContent).toBe('Filter'))
+		const panel = document.querySelector('[data-bindx-tooltip-panel]')!
+
+		fireEvent.pointerEnter(panel)
+		fireEvent.pointerLeave(panel)
+		await act(async () => {
+			await sleep(PAST_CLOSE_DELAY_MS)
+		})
+
+		expect(document.querySelector('[data-bindx-tooltip-panel]')).not.toBeNull()
+		expect(document.activeElement?.textContent).toBe('Filter')
+
+		act(() => getByText('Outside').focus())
+		await waitFor(() => expect(document.querySelector('[data-bindx-tooltip-panel]')).toBeNull())
+	})
+
+	test('should keep a hovered panel open after focus leaves, then close when the pointer leaves', async () => {
+		const container = renderGrid()
+		const { getByText } = render(<button>Outside</button>)
+		await waitFor(() => {
+			expect(queryByTestId(container, 'datagrid-cell-author')).not.toBeNull()
+		})
+		const label = getByTestId(container, 'datagrid-cell-author').querySelector<HTMLElement>('[tabindex="0"]')!
+		act(() => label.focus())
+		await waitFor(() => expect(document.activeElement?.textContent).toBe('Filter'))
+		const panel = document.querySelector('[data-bindx-tooltip-panel]')!
+
+		fireEvent.pointerEnter(panel)
+		act(() => getByText('Outside').focus())
+		await act(async () => {
+			await sleep(PAST_CLOSE_DELAY_MS)
+		})
+		expect(document.querySelector('[data-bindx-tooltip-panel]')).not.toBeNull()
+		expect(document.activeElement === getByText('Outside')).toBe(true)
+
+		fireEvent.pointerLeave(panel)
+		await act(async () => {
+			await sleep(PAST_CLOSE_DELAY_MS)
+		})
+		expect(document.querySelector('[data-bindx-tooltip-panel]')).toBeNull()
+	})
+
 	test('should render the tooltip panel outside the cell', async () => {
 		const container = renderGrid()
 
