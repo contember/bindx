@@ -1,4 +1,4 @@
-// Regression test for <issue-url>
+// Regression test for https://github.com/contember/bindx/issues/119
 //
 // Since the relation cell's filter affordance became a Radix popover (#116),
 // keyboard focus on the cell label is moved into the panel. The panel then
