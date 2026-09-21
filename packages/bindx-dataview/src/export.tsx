@@ -123,7 +123,7 @@ export const DataViewExportTrigger = forwardRef<HTMLButtonElement, DataViewExpor
 
 			try {
 				const visibleColumns = onlyVisible
-					? columns.filter((c, i) => selection.isVisible(c.fieldName ?? `col-${i}`))
+					? columns.filter(c => selection.isVisible(c.name))
 					: columns
 
 				const data = await fetchAllData()
@@ -133,7 +133,7 @@ export const DataViewExportTrigger = forwardRef<HTMLButtonElement, DataViewExpor
 				}
 
 				const exportColumns = visibleColumns
-					.filter(c => c.fieldName !== null)
+					.filter(c => !c.virtual && c.fieldName !== null)
 					.map(c => ({ name: String(c.header ?? c.fieldName ?? ''), fieldName: c.fieldName }))
 
 				const { blob, extension } = exportFactory.create({
