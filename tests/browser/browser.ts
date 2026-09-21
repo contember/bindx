@@ -82,6 +82,7 @@ export interface ElementHandle {
 	attr(name: string): string
 	count(): number
 	click(): void
+	hover(): void
 	fill(value: string): void
 	select(optionText: string): void
 }
@@ -112,6 +113,9 @@ export function el(selector: string): ElementHandle {
 			exec(`agent-browser scrollintoview ${quoted}`)
 			exec(`agent-browser click ${quoted}`)
 			Bun.sleepSync(500)
+		},
+		hover(): void {
+			exec(`agent-browser hover ${quoted}`)
 		},
 		fill(value: string): void {
 			exec(`agent-browser scrollintoview ${quoted}`)
@@ -197,6 +201,10 @@ export function browserTest(name: string, fn: () => void, hash?: string): void {
 
 export function evalJs(js: string): string {
 	return exec(`agent-browser eval ${q(js)}`)
+}
+
+export function press(key: string): void {
+	exec(`agent-browser press ${q(key)}`)
 }
 
 export function screenshot(path?: string): string {

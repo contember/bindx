@@ -81,6 +81,8 @@ describe('relation column filter affordance', () => {
 		})
 		const label = getByTestId(container, 'datagrid-cell-author').querySelector<HTMLElement>('[tabindex="0"]')!
 		act(() => label.focus())
+		await waitFor(() => expect(document.querySelector('[data-bindx-tooltip-panel] button')).not.toBeNull())
+		act(() => document.querySelector<HTMLButtonElement>('[data-bindx-tooltip-panel] button')!.focus())
 		await waitFor(() => expect(document.activeElement?.textContent).toBe('Filter'))
 		const panel = document.querySelector('[data-bindx-tooltip-panel]')!
 
@@ -105,6 +107,8 @@ describe('relation column filter affordance', () => {
 		})
 		const label = getByTestId(container, 'datagrid-cell-author').querySelector<HTMLElement>('[tabindex="0"]')!
 		act(() => label.focus())
+		await waitFor(() => expect(document.querySelector('[data-bindx-tooltip-panel] button')).not.toBeNull())
+		act(() => document.querySelector<HTMLButtonElement>('[data-bindx-tooltip-panel] button')!.focus())
 		await waitFor(() => expect(document.activeElement?.textContent).toBe('Filter'))
 		const panel = document.querySelector('[data-bindx-tooltip-panel]')!
 
