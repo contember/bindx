@@ -577,6 +577,22 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		return this.relations.getHasManyRelation(key)
 	}
 
+	/** Whether the relation carries writes the next persist would send. */
+	hasPendingHasManyWrites(parentType: string, parentId: string, fieldName: string): boolean {
+		return this.relations.hasPendingHasManyWrites(this.getRelationKey(parentType, parentId, fieldName))
+	}
+
+	/** Whether one view carries an order its user arranged rather than the default one. */
+	hasExplicitHasManyOrder(
+		parentType: string,
+		parentId: string,
+		fieldName: string,
+		alias?: string,
+	): boolean {
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		return this.relations.hasExplicitHasManyOrder(key, alias ?? fieldName)
+	}
+
 	/** The relation as ONE mounted has-many handle sees it. */
 	getHasManyView(
 		parentType: string,
@@ -1178,13 +1194,8 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	 * journal's rekey to rebase a pre-image when a just-persisted create became a
 	 * permanent member of the list (membership rebase for sealed creates).
 	 */
-	getLiveHasManyServerIds(relationKey: string): ReadonlyMap<string, Set<string>> {
-		const state = this.relations.getHasManyState(relationKey)
-		const byView = new Map<string, Set<string>>()
-		if (state) {
-			for (const [alias, view] of state.views) byView.set(alias, view.serverIds)
-		}
-		return byView
+	getLiveHasManyServerIds(relationKey: string): ReadonlyMap<string, ReadonlySet<string>> {
+		return this.relations.collectHasManyViewServerIds(relationKey)
 	}
 
 	exportHasManyCell(key: string): HasManyCellImage {

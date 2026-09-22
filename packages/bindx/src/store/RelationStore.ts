@@ -134,6 +134,18 @@ export class RelationStore implements Rekeyable {
 		return this.hasMany.getViewProjection(key, alias)
 	}
 
+	hasPendingHasManyWrites(key: string): boolean {
+		return this.hasMany.hasPendingWrites(key)
+	}
+
+	hasExplicitHasManyOrder(key: string, alias: string): boolean {
+		return this.hasMany.hasExplicitOrder(key, alias)
+	}
+
+	collectHasManyViewServerIds(key: string): ReadonlyMap<string, ReadonlySet<string>> {
+		return this.hasMany.collectViewServerIds(key)
+	}
+
 	setHasManyServerIds(key: string, alias: string, serverIds: string[]): void {
 		this.hasMany.setHasManyServerIds(key, alias, serverIds)
 	}

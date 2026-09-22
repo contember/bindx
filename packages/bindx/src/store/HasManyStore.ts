@@ -203,6 +203,35 @@ export class HasManyStore {
 		return toViewProjection(this.hasManyStates.get(key), alias)
 	}
 
+	/** Whether the relation carries writes the next persist would send. */
+	hasPendingWrites(key: string): boolean {
+		const state = this.hasManyStates.get(key)
+		if (!state) return false
+		return state.plannedRemovals.size > 0 || state.plannedAdditions.size > 0
+	}
+
+	/** Whether one view carries an order its user arranged rather than the default one. */
+	hasExplicitOrder(key: string, alias: string): boolean {
+		const orderedIds = this.hasManyStates.get(key)?.views.get(alias)?.orderedIds
+		return orderedIds !== null && orderedIds !== undefined
+	}
+
+	/**
+	 * Per-view server baselines by reference, for callers that only read them.
+	 *
+	 * Not cloned, deliberately: every mutator builds on {@link editableState}, so a
+	 * stored Set is never mutated in place — only replaced. A handed-out reference can
+	 * therefore go stale but can never be written through.
+	 */
+	collectViewServerIds(key: string): ReadonlyMap<string, ReadonlySet<string>> {
+		const byView = new Map<string, ReadonlySet<string>>()
+		const state = this.hasManyStates.get(key)
+		if (state) {
+			for (const [alias, view] of state.views) byView.set(alias, view.serverIds)
+		}
+		return byView
+	}
+
 	/** Replaces one view's server baseline. */
 	setHasManyServerIds(key: string, alias: string, serverIds: string[]): void {
 		const state = this.editableState(key, alias)

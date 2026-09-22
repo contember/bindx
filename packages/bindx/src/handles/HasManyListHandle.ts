@@ -415,20 +415,9 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	get isDirty(): boolean {
 		this.materializeEmbeddedItems()
 
-		const relation = this.store.getHasMany(this.entityType, this.entityId, this.fieldName)
-		if (!relation) return false
-
-		const view = this.store.getHasManyView(
-			this.entityType,
-			this.entityId,
-			this.fieldName,
-			this.alias,
-		)
-
 		return (
-			relation.plannedRemovals.size > 0 ||
-			relation.plannedAdditions.size > 0 ||
-			view.orderedIds !== null
+			this.store.hasPendingHasManyWrites(this.entityType, this.entityId, this.fieldName)
+			|| this.store.hasExplicitHasManyOrder(this.entityType, this.entityId, this.fieldName, this.alias)
 		)
 	}
 

@@ -19,7 +19,7 @@ import type { JournalEntry, JournalCellImage } from './UndoJournal.js'
  * args-view. Lets the rekey rebase a pre-image when the just-persisted create has
  * become a permanent member of that list.
  */
-export type LiveServerIdsLookup = (relationKey: string) => ReadonlyMap<string, Set<string>>
+export type LiveServerIdsLookup = (relationKey: string) => ReadonlyMap<string, ReadonlySet<string>>
 
 export function rekeyJournalEntry(
 	entry: JournalEntry,
