@@ -125,14 +125,14 @@ export interface HasManyRelationProjection {
 	version: number
 }
 
-/** What one mounted has-many handle sees. */
+/**
+ * What is this view's own, as opposed to the relation's: the server rows its args
+ * returned and the order its user arranged. The pending writes are not here — they
+ * belong to the relation, so consumers read {@link HasManyRelationProjection}.
+ */
 export interface HasManyViewProjection {
-	exists: boolean
 	serverIds: Set<string>
 	orderedIds: string[] | null
-	plannedRemovals: Map<string, HasManyRemovalType>
-	/** The additions that render in THIS view. */
-	plannedAdditions: Map<string, HasManyAdditionKind>
 }
 
 export function createHasManyView(
@@ -293,28 +293,10 @@ export function toViewProjection(
 	state: StoredHasManyState | undefined,
 	alias: string,
 ): HasManyViewProjection {
-	if (!state) {
-		return {
-			exists: false,
-			serverIds: new Set(),
-			orderedIds: null,
-			plannedRemovals: new Map(),
-			plannedAdditions: new Map(),
-		}
-	}
-
-	const view = state.views.get(alias)
-	const plannedAdditions = new Map<string, HasManyAdditionKind>()
-	for (const [id, addition] of state.plannedAdditions) {
-		if (additionRendersIn(state.views, alias, addition)) plannedAdditions.set(id, addition.kind)
-	}
-
+	const view = state?.views.get(alias)
 	return {
-		exists: view !== undefined,
 		serverIds: new Set(view?.serverIds),
 		orderedIds: view?.orderedIds ? [...view.orderedIds] : null,
-		plannedRemovals: new Map(state.plannedRemovals),
-		plannedAdditions,
 	}
 }
 

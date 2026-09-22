@@ -21,27 +21,27 @@ describe('HasMany planned-addition kind', () => {
 		test('planHasManyConnection does not downgrade a created addition', () => {
 			const relations = new RelationStore()
 			relations.addToHasMany(KEY, 'tags', 'temp-1')
-			expect(relations.getHasMany(KEY)?.plannedAdditions.get('temp-1')?.kind).toBe('created')
+			expect(relations.getHasManyState(KEY)?.plannedAdditions.get('temp-1')?.kind).toBe('created')
 
 			// connect() after add() on the SAME id must keep it a create.
 			relations.planHasManyConnection(KEY, 'tags', 'temp-1')
-			expect(relations.getHasMany(KEY)?.plannedAdditions.get('temp-1')?.kind).toBe('created')
+			expect(relations.getHasManyState(KEY)?.plannedAdditions.get('temp-1')?.kind).toBe('created')
 		})
 
 		test('connectExistingToHasMany does not downgrade a created addition', () => {
 			const relations = new RelationStore()
 			relations.addToHasMany(KEY, 'tags', 'temp-1')
-			expect(relations.getHasMany(KEY)?.plannedAdditions.get('temp-1')?.kind).toBe('created')
+			expect(relations.getHasManyState(KEY)?.plannedAdditions.get('temp-1')?.kind).toBe('created')
 
 			// The embedded-connect materialization path must not downgrade either.
 			relations.connectExistingToHasMany(KEY, 'tags', 'temp-1')
-			expect(relations.getHasMany(KEY)?.plannedAdditions.get('temp-1')?.kind).toBe('created')
+			expect(relations.getHasManyState(KEY)?.plannedAdditions.get('temp-1')?.kind).toBe('created')
 		})
 
 		test('a genuine connect of a never-added id is recorded as connected', () => {
 			const relations = new RelationStore()
 			relations.connectExistingToHasMany(KEY, 'tags', 'persisted-1')
-			expect(relations.getHasMany(KEY)?.plannedAdditions.get('persisted-1')?.kind).toBe('connected')
+			expect(relations.getHasManyState(KEY)?.plannedAdditions.get('persisted-1')?.kind).toBe('connected')
 		})
 	})
 
@@ -53,7 +53,7 @@ describe('HasMany planned-addition kind', () => {
 			relations.connectExistingToHasMany(KEY, 'tags', 'persisted-1')
 
 			expect(relations.getHasManyOrderedIds(KEY, 'tags')).toEqual(['persisted-1'])
-			expect(relations.getHasMany(KEY)?.plannedAdditions.get('persisted-1')?.kind).toBe('connected')
+			expect(relations.getHasManyState(KEY)?.plannedAdditions.get('persisted-1')?.kind).toBe('connected')
 		})
 
 		test('connecting an id already present as a server member does not duplicate it', () => {

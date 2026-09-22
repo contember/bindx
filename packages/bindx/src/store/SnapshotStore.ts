@@ -697,11 +697,10 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		parentId: string,
 		fieldName: string,
 		itemId: string,
-		alias?: string,
 	): void {
 		const key = this.getRelationKey(parentType, parentId, fieldName)
 		this.journal?.recordHasMany(key)
-		this.relations.connectExistingToHasMany(key, alias ?? fieldName, itemId)
+		this.relations.connectExistingToHasMany(key, fieldName, itemId)
 		this.notifyRelationSubscribers(key)
 	}
 
@@ -1180,7 +1179,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	 * permanent member of the list (membership rebase for sealed creates).
 	 */
 	getLiveHasManyServerIds(relationKey: string): ReadonlyMap<string, Set<string>> {
-		const state = this.relations.getHasMany(relationKey)
+		const state = this.relations.getHasManyState(relationKey)
 		const byView = new Map<string, Set<string>>()
 		if (state) {
 			for (const [alias, view] of state.views) byView.set(alias, view.serverIds)
@@ -1189,7 +1188,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	}
 
 	exportHasManyCell(key: string): HasManyCellImage {
-		const state = this.relations.getHasMany(key)
+		const state = this.relations.getHasManyState(key)
 		if (!state) return { kind: 'hasMany', key, present: false }
 		return {
 			kind: 'hasMany',
@@ -1337,7 +1336,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 			}]]))
 		} else {
 			const s = img.state!
-			const live = this.relations.getHasMany(img.key)
+			const live = this.relations.getHasManyState(img.key)
 			// The editable layer (planned writes, manual ordering) comes from the image;
 			// the server baseline always from the live state, which may have advanced
 			// since the gesture. A view the image does not know was created afterwards,

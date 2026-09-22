@@ -117,7 +117,12 @@ export class RelationStore implements Rekeyable {
 		this.hasMany.getOrCreateHasMany(key, alias, serverIds)
 	}
 
-	getHasMany(key: string): StoredHasManyState | undefined {
+	/**
+	 * The raw stored state, views and all. Named apart from the projections above it:
+	 * {@link SnapshotStore.getHasMany} hands out a relation projection with no views,
+	 * and the undo / export paths that need the real thing must not get that by mistake.
+	 */
+	getHasManyState(key: string): StoredHasManyState | undefined {
 		return this.hasMany.getHasMany(key)
 	}
 
