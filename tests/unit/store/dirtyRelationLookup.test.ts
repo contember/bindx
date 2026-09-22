@@ -1,6 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import { HasOneStore, type StoredRelationState } from '../../../packages/bindx/src/store/HasOneStore.js'
-import { HasManyStore, type StoredHasManyState } from '../../../packages/bindx/src/store/HasManyStore.js'
+import { HasManyStore } from '../../../packages/bindx/src/store/HasManyStore.js'
+import type { StoredHasManyState } from '../../../packages/bindx/src/store/hasManyState.js'
 
 function hasOneState(): StoredRelationState {
 	return {

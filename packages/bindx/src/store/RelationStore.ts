@@ -5,14 +5,14 @@ import {
 	type SentHasOneTransition,
 	type StoredRelationState,
 } from './HasOneStore.js'
+import { HasManyStore } from './HasManyStore.js'
 import {
-	HasManyStore,
 	computeDefaultOrderedIds,
 	type HasManyAdditionKind,
 	type HasManyRemovalType,
 	type SentHasManyDelta,
 	type StoredHasManyState,
-} from './HasManyStore.js'
+} from './hasManyState.js'
 
 // Re-exported so existing imports from './RelationStore.js' keep resolving.
 export type { StoredRelationState } from './HasOneStore.js'
@@ -24,8 +24,8 @@ export type {
 	SentHasManyDelta,
 	SentHasManyRemoval,
 	StoredHasManyState,
-} from './HasManyStore.js'
-export { computeDefaultOrderedIds } from './HasManyStore.js'
+} from './hasManyState.js'
+export { computeDefaultOrderedIds } from './hasManyState.js'
 
 export type RelationReconciliationResult = 'applied' | 'conflict'
 
