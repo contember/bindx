@@ -299,7 +299,7 @@ export class HasManyStore {
 		const existing = this.hasManyStates.get(key)
 		if (!existing) return 'conflict'
 
-		const next = reconcileHasManyState(existing, delta)
+		const next = reconcileHasManyState(existing, delta, fieldFromRelationKey(key))
 		this.writeHasMany(key, next.state)
 		return next.result
 	}

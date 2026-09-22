@@ -197,6 +197,37 @@ export function additionRendersIn(
 	return views.get(alias)?.membership === 'total'
 }
 
+/** The aliases of views whose args cannot exclude any member of the relation. */
+function totalAliases(views: ReadonlyMap<string, HasManyView>): string[] {
+	const aliases: string[] = []
+	for (const [alias, view] of views) {
+		if (view.membership === 'total') aliases.push(alias)
+	}
+	return aliases
+}
+
+/**
+ * The aliases a confirmed member should render in, never empty.
+ *
+ * {@link preferred} is what the local record says; when nothing is left of it the row
+ * falls back to the views that cannot exclude it. If there are none — every mounted
+ * view is filtered — it is parked in the unparameterized view, created here if absent:
+ * the relation's baseline is the UNION across views, so a row that joins no view is a
+ * server row the store has lost. That view is `total` by definition, so parking shows
+ * it to nobody it does not belong to.
+ */
+function renderTargets(
+	views: Map<string, HasManyView>,
+	fieldName: string,
+	preferred: string[],
+): string[] {
+	if (preferred.length > 0) return preferred
+	const totals = totalAliases(views)
+	if (totals.length > 0) return totals
+	if (!views.has(fieldName)) views.set(fieldName, createHasManyView('total'))
+	return [fieldName]
+}
+
 /** The aliases of existing views a confirmed addition folds into. */
 export function additionFoldTargets(
 	state: StoredHasManyState,
@@ -332,6 +363,7 @@ export interface HasManyReconciliation {
 export function reconcileHasManyState(
 	existing: StoredHasManyState,
 	delta: SentHasManyDelta,
+	fieldName: string,
 ): HasManyReconciliation {
 	const currentLive = liveHasManyChildIds(existing)
 	const views = cloneViews(existing.views)
@@ -343,9 +375,7 @@ export function reconcileHasManyState(
 		// Read the origins before dropping the record. A locally cancelled addition
 		// leaves none, and the row then joins only the views that cannot exclude it.
 		const planned = plannedAdditions.get(addition.itemId)
-		const targets = planned
-			? additionFoldTargets(existing, planned)
-			: [...views].filter(([, view]) => view.membership === 'total').map(([alias]) => alias)
+		const targets = renderTargets(views, fieldName, planned ? additionFoldTargets(existing, planned) : [])
 		for (const alias of targets) views.get(alias)?.serverIds.add(addition.itemId)
 
 		plannedAdditions.delete(addition.itemId)
@@ -359,7 +389,12 @@ export function reconcileHasManyState(
 	}
 
 	for (const removal of delta.removals) {
-		for (const view of views.values()) view.serverIds.delete(removal.itemId)
+		// Which views listed the row, read as the baseline drops it: a rebase below must
+		// not claim membership in a filtered view that never showed it.
+		const shownIn: string[] = []
+		for (const [alias, view] of views) {
+			if (view.serverIds.delete(removal.itemId)) shownIn.push(alias)
+		}
 
 		const currentRemoval = plannedRemovals.get(removal.itemId)
 		if (currentRemoval === removal.type) plannedRemovals.delete(removal.itemId)
@@ -371,11 +406,11 @@ export function reconcileHasManyState(
 		if (removal.type === 'delete') {
 			result = 'conflict'
 		} else if (!plannedAdditions.has(removal.itemId)) {
-			// Re-plan the connection in every view that showed the row, so the rebase is
-			// visible where the user is looking.
+			// Re-plan the connection where the row actually was, so the rebase is visible
+			// where the user is looking without inventing membership elsewhere.
 			plannedAdditions.set(removal.itemId, {
 				kind: 'connected',
-				origins: new Set(existing.views.keys()),
+				origins: new Set(renderTargets(views, fieldName, shownIn)),
 			})
 		}
 	}
