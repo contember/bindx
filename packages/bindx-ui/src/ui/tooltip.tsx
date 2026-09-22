@@ -11,6 +11,7 @@
  */
 import * as PopoverPrimitive from '@radix-ui/react-popover'
 import { forwardRef, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { tabbable, type FocusableElement } from 'tabbable'
 import { cn } from '../utils/cn.js'
 
 export interface TooltipProps {
@@ -33,9 +34,10 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(({
 	const [open, setOpen] = useState(false)
 	const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const interaction = useRef({ pointer: false, focus: false })
-	// Focus moves into the panel only when the keyboard opened it. A hover must
-	// leave focus wherever the user put it.
-	const openedByFocus = useRef(false)
+	const panelRef = useRef<HTMLDivElement>(null)
+	const focusOrigin = useRef<FocusableElement | null>(null)
+	const enterOnMount = useRef(false)
+	const restoringFocus = useRef(false)
 
 	const cancelClose = useCallback((): void => {
 		if (closeTimer.current !== null) {
@@ -56,46 +58,101 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(({
 	const openFor = useCallback((source: 'pointer' | 'focus'): void => {
 		cancelClose()
 		interaction.current[source] = true
-		openedByFocus.current = source === 'focus'
 		setOpen(true)
 	}, [cancelClose])
+
+	const closePanel = (): void => {
+		cancelClose()
+		interaction.current = { pointer: false, focus: false }
+		enterOnMount.current = false
+		setOpen(false)
+	}
+
+	const returnToTrigger = (): void => {
+		closePanel()
+		restoringFocus.current = true
+		focusOrigin.current?.focus({ preventScroll: true })
+		restoringFocus.current = false
+	}
+
+	const focusPanel = (): void => {
+		const panel = panelRef.current
+		if (!panel) return
+		const target = tabbable(panel)[0] ?? panel
+		target.focus({ preventScroll: true })
+	}
 
 	useEffect(() => cancelClose, [cancelClose])
 
 	return (
 		<PopoverPrimitive.Root open={open} onOpenChange={nextOpen => {
-			if (!nextOpen) {
-				cancelClose()
-				interaction.current = { pointer: false, focus: false }
-			}
-			setOpen(nextOpen)
+			if (nextOpen) setOpen(true)
+			else closePanel()
 		}}>
 			{/* Trigger rather than Anchor: Radix excludes the trigger's subtree from
 			    its outside-dismissal, so focusing the label does not close the panel. */}
 			<PopoverPrimitive.Trigger asChild>
 				<div
 					ref={ref}
+					tabIndex={-1}
 					data-bindx-tooltip=""
 					className={cn('inline-block', className)}
-					onPointerEnter={() => openFor('pointer')}
+					onPointerEnter={event => {
+						if (!event.currentTarget.contains(document.activeElement)) {
+							focusOrigin.current = tabbable(event.currentTarget)[0] ?? event.currentTarget
+						}
+						openFor('pointer')
+					}}
 					onPointerLeave={() => scheduleClose('pointer')}
-					onFocus={() => openFor('focus')}
+					onFocus={event => {
+						focusOrigin.current = event.target
+						if (!restoringFocus.current) openFor('focus')
+					}}
 					onBlur={() => scheduleClose('focus')}
+					onKeyDown={event => {
+						if (event.key !== 'ArrowDown' || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return
+						if (!(event.target instanceof HTMLElement)) return
+						if (event.target.closest('a,button,input,select,textarea,[contenteditable="true"]')) return
+						event.preventDefault()
+						event.stopPropagation()
+						focusOrigin.current = event.target
+						if (panelRef.current) focusPanel()
+						else {
+							enterOnMount.current = true
+							openFor('focus')
+						}
+					}}
 				>
 					{children}
 				</div>
 			</PopoverPrimitive.Trigger>
 			<PopoverPrimitive.Portal>
 				<PopoverPrimitive.Content
+					ref={panelRef}
 					data-bindx-tooltip-panel=""
 					side={side}
 					sideOffset={6}
 					onOpenAutoFocus={event => {
-						if (!openedByFocus.current) event.preventDefault()
+						event.preventDefault()
+						if (enterOnMount.current) {
+							enterOnMount.current = false
+							focusPanel()
+						}
 					}}
-					onCloseAutoFocus={event => {
-						// Restoring focus after hover/blur closure would open the panel again.
-						if (!interaction.current.focus) event.preventDefault()
+					onCloseAutoFocus={event => event.preventDefault()}
+					onEscapeKeyDown={event => {
+						event.preventDefault()
+						if (panelRef.current?.contains(document.activeElement)) returnToTrigger()
+						else closePanel()
+					}}
+					onKeyDownCapture={event => {
+						if (event.key !== 'Tab' || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return
+						const stops = tabbable(event.currentTarget)
+						const edge = event.shiftKey ? stops[0] : stops[stops.length - 1]
+						if (event.target !== edge && event.target !== event.currentTarget) return
+						// Bypass Radix's loop; native Tab continues from the original cell.
+						event.stopPropagation()
+						returnToTrigger()
 					}}
 					onPointerEnter={() => openFor('pointer')}
 					onPointerLeave={() => scheduleClose('pointer')}

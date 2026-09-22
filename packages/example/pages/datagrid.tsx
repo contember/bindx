@@ -59,7 +59,7 @@ export function DataGridPage(): ReactElement {
 							<DataGridTextColumn field={it.content} />
 							<DataGridDateColumn field={it.publishedAt} sortable filter />
 							<DataGridHasOneColumn field={it.author}>
-								{author => author.name.value ?? '\u2014'}
+								{author => <a href="#entity-lists" data-testid="datagrid-author-link">{author.name.value ?? '\u2014'}</a>}
 							</DataGridHasOneColumn>
 							<DataGridHasManyColumn field={it.tags}>
 								{tag => tag.name.value ?? ''}
