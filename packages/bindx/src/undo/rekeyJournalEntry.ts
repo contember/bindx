@@ -1,7 +1,7 @@
 import type { RekeyContext } from '../store/RekeyOrchestrator.js'
 import { createEntitySnapshot } from '../store/snapshots.js'
 import type { EntitySnapshot } from '../store/snapshots.js'
-import type { StoredHasManyState } from '../store/RelationStore.js'
+import { cloneHasManyState, type StoredHasManyState } from '../store/hasManyState.js'
 import type { JournalEntry, JournalCellImage } from './UndoJournal.js'
 
 /**
@@ -15,11 +15,11 @@ import type { JournalEntry, JournalCellImage } from './UndoJournal.js'
  *     server-backed row — only later edits to it remain undoable.
  */
 /**
- * Looks up the live server-member ids of a has-many list by its key. Lets the
- * rekey rebase a pre-image when the just-persisted create has become a permanent
- * member of that list.
+ * Looks up the live server-member ids of a has-many relation by its key, per
+ * args-view. Lets the rekey rebase a pre-image when the just-persisted create has
+ * become a permanent member of that list.
  */
-export type LiveServerIdsLookup = (relationKey: string) => Set<string>
+export type LiveServerIdsLookup = (relationKey: string) => ReadonlyMap<string, Set<string>>
 
 export function rekeyJournalEntry(
 	entry: JournalEntry,
@@ -77,19 +77,19 @@ function rekeyCell(
 
 	const key = rekeyKey(cell.key, ctx)
 	if (!cell.state) return { ...cell, key }
-	let state = rekeyHasManyState(cell.state, ctx)
+	const state = rekeyHasManyState(cell.state, ctx)
 	// Membership rebase: when the just-persisted create became a permanent member of
-	// this live list, fold it into the (older) pre-image so undo keeps it instead of
-	// dropping it. Default order picks it up automatically; an explicit order needs
-	// the id appended.
-	if (liveServerIds(key).has(ctx.newId) && !state.serverIds.has(ctx.newId)) {
-		const serverIds = new Set(state.serverIds)
-		serverIds.add(ctx.newId)
-		let orderedIds = state.orderedIds
-		if (orderedIds && !orderedIds.includes(ctx.newId)) {
-			orderedIds = [...orderedIds, ctx.newId]
+	// a live view, fold it into the (older) pre-image of that view so undo keeps it
+	// instead of dropping it. Default order picks it up automatically; an explicit
+	// order needs the id appended. Views born after the gesture are left alone —
+	// the pre-image says nothing about them.
+	const live = liveServerIds(key)
+	for (const [alias, view] of state.views) {
+		if (!live.get(alias)?.has(ctx.newId) || view.serverIds.has(ctx.newId)) continue
+		view.serverIds.add(ctx.newId)
+		if (view.orderedIds && !view.orderedIds.includes(ctx.newId)) {
+			view.orderedIds = [...view.orderedIds, ctx.newId]
 		}
-		state = { ...state, serverIds, orderedIds }
 	}
 	return { ...cell, key, state }
 }
@@ -105,41 +105,29 @@ function rekeySnapshotId(snapshot: EntitySnapshot, ctx: RekeyContext): EntitySna
 	)
 }
 
-function swapInSet(set: Set<string>, oldId: string, newId: string): Set<string> {
-	if (!set.has(oldId)) return set
-	const next = new Set(set)
-	next.delete(oldId)
-	next.add(newId)
-	return next
-}
-
+/** Returns a deep copy with oldId swapped for newId everywhere it appears. */
 function rekeyHasManyState(state: StoredHasManyState, ctx: RekeyContext): StoredHasManyState {
-	const serverIds = swapInSet(state.serverIds, ctx.oldId, ctx.newId)
+	const next = cloneHasManyState(state)
 
-	let orderedIds = state.orderedIds
-	if (orderedIds) {
-		const idx = orderedIds.indexOf(ctx.oldId)
-		if (idx !== -1) {
-			orderedIds = [...orderedIds]
-			orderedIds[idx] = ctx.newId
+	for (const view of next.views.values()) {
+		if (view.serverIds.delete(ctx.oldId)) view.serverIds.add(ctx.newId)
+		if (view.orderedIds) {
+			const idx = view.orderedIds.indexOf(ctx.oldId)
+			if (idx !== -1) view.orderedIds[idx] = ctx.newId
 		}
 	}
 
-	let plannedAdditions = state.plannedAdditions
-	const additionKind = plannedAdditions.get(ctx.oldId)
-	if (additionKind !== undefined) {
-		plannedAdditions = new Map(plannedAdditions)
-		plannedAdditions.delete(ctx.oldId)
-		plannedAdditions.set(ctx.newId, additionKind)
+	const addition = next.plannedAdditions.get(ctx.oldId)
+	if (addition) {
+		next.plannedAdditions.delete(ctx.oldId)
+		next.plannedAdditions.set(ctx.newId, addition)
 	}
 
-	let plannedRemovals = state.plannedRemovals
-	const removalType = plannedRemovals.get(ctx.oldId)
+	const removalType = next.plannedRemovals.get(ctx.oldId)
 	if (removalType !== undefined) {
-		plannedRemovals = new Map(plannedRemovals)
-		plannedRemovals.delete(ctx.oldId)
-		plannedRemovals.set(ctx.newId, removalType)
+		next.plannedRemovals.delete(ctx.oldId)
+		next.plannedRemovals.set(ctx.newId, removalType)
 	}
 
-	return { serverIds, orderedIds, plannedRemovals, plannedAdditions, version: state.version }
+	return next
 }

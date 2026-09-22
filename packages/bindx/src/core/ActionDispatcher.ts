@@ -360,7 +360,6 @@ export class ActionDispatcher {
 					action.fieldName,
 					action.itemKey,
 					action.removalType,
-					action.alias,
 				)
 				break
 

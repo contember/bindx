@@ -85,7 +85,7 @@ describe('undo journal — deep coverage', () => {
 			expect(store.getHasManyOrderedIds('Article', 'p', 'items')).toEqual(['s', 'ctemp'])
 
 			// Persist: commit list (C becomes a server member) and rekey C.
-			store.commitHasMany('Article', 'p', 'items', ['s', 'ctemp'])
+			store.commitAllRelations('Article', 'p')
 			store.commitEntity('Item', 'ctemp')
 			store.setExistsOnServer('Item', 'ctemp', true)
 			store.mapTempIdToPersistedId('Item', 'ctemp', 'cp')
@@ -116,7 +116,7 @@ describe('undo journal — deep coverage', () => {
 			undo.endGroup(groupId)
 
 			// Persist everything: commit list + sibling, rekey C.
-			store.commitHasMany('Article', 'p', 'items', ['s', 'ctemp'])
+			store.commitAllRelations('Article', 'p')
 			store.commitEntity('Item', 's')
 			store.commitEntity('Item', 'ctemp')
 			store.setExistsOnServer('Item', 'ctemp', true)
@@ -151,7 +151,7 @@ describe('undo journal — deep coverage', () => {
 			expect(store.getHasManyOrderedIds('Article', 'p', 'items')).toEqual(['s2', 's1', 'ctemp'])
 
 			// Persist: commit + rekey C.
-			store.commitHasMany('Article', 'p', 'items', ['s1', 's2', 'ctemp'])
+			store.commitAllRelations('Article', 'p')
 			store.commitEntity('Item', 'ctemp')
 			store.setExistsOnServer('Item', 'ctemp', true)
 			store.mapTempIdToPersistedId('Item', 'ctemp', 'cp')

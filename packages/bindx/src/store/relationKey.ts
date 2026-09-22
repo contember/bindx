@@ -10,6 +10,15 @@ export function parentKeyFromRelationKey(relationKey: string): string {
 }
 
 /**
+ * Derives the field name from a relation key ("parentType:parentId:fieldName").
+ * The counterpart of {@link parentKeyFromRelationKey}: entity ids and field names
+ * never contain ':', so the field is everything after the last separator.
+ */
+export function fieldFromRelationKey(relationKey: string): string {
+	return relationKey.slice(relationKey.lastIndexOf(':') + 1)
+}
+
+/**
  * Derives the parent composite key ("parentType:parentId") from an owner key
  * prefix ("parentType:parentId:") by dropping the trailing separator. Callers
  * pass the owner prefix used for relation-key lookups; this maps it to the key

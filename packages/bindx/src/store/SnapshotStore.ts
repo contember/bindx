@@ -5,7 +5,9 @@ import { SubscriptionManager, type SnapshotVersionBumper, type SynchronousResult
 import { ErrorStore } from './ErrorStore.js'
 import {
 	RelationStore,
+	type HasManyRelationProjection,
 	type HasManyRemovalType,
+	type HasManyViewProjection,
 	type RelationReconciliationResult,
 	type SentHasManyDelta,
 	type SentHasOneTransition,
@@ -32,7 +34,12 @@ import type {
 } from '../undo/UndoJournal.js'
 
 export type {
+	HasManyAdditionKind,
+	HasManyRelationProjection,
 	HasManyRemovalType,
+	HasManyView,
+	HasManyViewProjection,
+	PlannedHasManyAddition,
 	RelationReconciliationResult,
 	SentHasManyAddition,
 	SentHasManyDelta,
@@ -530,25 +537,44 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 
 	// ==================== Has-Many State (delegated to RelationStore) ====================
 
+	/**
+	 * Materializes the relation and one args-view of it, refreshing that view's
+	 * server baseline when one is supplied.
+	 *
+	 * `alias` addresses a VIEW inside the relation state, never a key of its own:
+	 * the state is always keyed by the schema field name, so everything that names
+	 * the relation the way the schema and the server do finds it.
+	 */
 	getOrCreateHasMany(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
 		serverIds?: string[],
 		alias?: string,
-	): StoredHasManyState {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		return this.relations.getOrCreateHasMany(key, serverIds)
+	): void {
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		this.relations.getOrCreateHasMany(key, alias ?? fieldName, serverIds)
 	}
 
+	/** The relation as persistence and dirty tracking see it — server baseline unioned across views. */
 	getHasMany(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
+	): HasManyRelationProjection | undefined {
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		return this.relations.getHasManyRelation(key)
+	}
+
+	/** The relation as ONE mounted has-many handle sees it. */
+	getHasManyView(
+		parentType: string,
+		parentId: string,
+		fieldName: string,
 		alias?: string,
-	): StoredHasManyState | undefined {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		return this.relations.getHasMany(key)
+	): HasManyViewProjection {
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		return this.relations.getHasManyView(key, alias ?? fieldName)
 	}
 
 	setHasManyServerIds(
@@ -558,8 +584,8 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		serverIds: string[],
 		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		this.relations.setHasManyServerIds(key, serverIds)
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		this.relations.setHasManyServerIds(key, alias ?? fieldName, serverIds)
 		this.notifyRelationSubscribers(key)
 	}
 
@@ -569,9 +595,8 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		fieldName: string,
 		itemId: string,
 		type: HasManyRemovalType,
-		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		const key = this.getRelationKey(parentType, parentId, fieldName)
 		this.journal?.recordHasMany(key)
 		this.relations.planHasManyRemoval(key, itemId, type)
 		this.notifyRelationSubscribers(key)
@@ -581,10 +606,9 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		parentType: string,
 		parentId: string,
 		fieldName: string,
-		alias?: string,
 	): Map<string, HasManyRemovalType> | undefined {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		return this.relations.getHasMany(key)?.plannedRemovals
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		return this.relations.getHasManyRelation(key)?.plannedRemovals
 	}
 
 	/**
@@ -603,34 +627,22 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		itemId: string,
 		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		const key = this.getRelationKey(parentType, parentId, fieldName)
 		this.journal?.recordHasMany(key)
-		this.relations.planHasManyConnection(key, itemId)
+		this.relations.planHasManyConnection(key, alias ?? fieldName, itemId)
 		this.notifyRelationSubscribers(key)
 	}
 
+	/** The connections the next persist will send — relation-level, not per view. */
 	getHasManyPlannedConnections(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
-		alias?: string,
 	): Set<string> | undefined {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		const state = this.relations.getHasMany(key)
-		if (!state) return undefined
-		return new Set(state.plannedAdditions.keys())
-	}
-
-	commitHasMany(
-		parentType: string,
-		parentId: string,
-		fieldName: string,
-		newServerIds: string[],
-		alias?: string,
-	): void {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		this.relations.commitHasMany(key, newServerIds)
-		this.notifyRelationSubscribers(key)
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const relation = this.relations.getHasManyRelation(key)
+		if (!relation) return undefined
+		return new Set(relation.plannedAdditions.keys())
 	}
 
 	reconcileSentHasMany(
@@ -638,9 +650,8 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		parentId: string,
 		fieldName: string,
 		delta: SentHasManyDelta,
-		alias?: string,
 	): RelationReconciliationResult {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		const key = this.getRelationKey(parentType, parentId, fieldName)
 		const result = this.relations.reconcileSentHasMany(key, delta)
 		this.notifyRelationSubscribers(key)
 		return result
@@ -650,9 +661,8 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		parentType: string,
 		parentId: string,
 		fieldName: string,
-		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		const key = this.getRelationKey(parentType, parentId, fieldName)
 		this.journal?.recordHasMany(key)
 		this.relations.resetHasMany(key)
 		this.notifyRelationSubscribers(key)
@@ -665,9 +675,9 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		itemId: string,
 		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		const key = this.getRelationKey(parentType, parentId, fieldName)
 		this.journal?.recordHasMany(key)
-		this.relations.addToHasMany(key, itemId)
+		this.relations.addToHasMany(key, alias ?? fieldName, itemId)
 		this.notifyRelationSubscribers(key)
 	}
 
@@ -676,10 +686,11 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		parentId: string,
 		fieldName: string,
 		itemId: string,
+		alias?: string,
 	): void {
 		const key = this.getRelationKey(parentType, parentId, fieldName)
 		this.journal?.recordHasMany(key)
-		this.relations.connectExistingToHasMany(key, itemId)
+		this.relations.connectExistingToHasMany(key, alias ?? fieldName, itemId)
 		this.notifyRelationSubscribers(key)
 	}
 
@@ -689,9 +700,8 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		fieldName: string,
 		itemId: string,
 		removalType: HasManyRemovalType,
-		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		const key = this.getRelationKey(parentType, parentId, fieldName)
 		this.journal?.recordHasMany(key)
 		// Cancelling the add of a never-persisted child just removes it from the
 		// list; its now-unreachable snapshot is no longer reported as a `create` and
@@ -709,9 +719,9 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		toIndex: number,
 		alias?: string,
 	): void {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		const key = this.getRelationKey(parentType, parentId, fieldName)
 		this.journal?.recordHasMany(key)
-		this.relations.moveInHasMany(key, fromIndex, toIndex)
+		this.relations.moveInHasMany(key, alias ?? fieldName, fromIndex, toIndex)
 		this.notifyRelationSubscribers(key)
 	}
 
@@ -721,8 +731,8 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		fieldName: string,
 		alias?: string,
 	): string[] {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		return this.relations.getHasManyOrderedIds(key)
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		return this.relations.getHasManyOrderedIds(key, alias ?? fieldName)
 	}
 
 	getPresentationHasManyOrderedIds(
@@ -731,13 +741,13 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		fieldName: string,
 		alias?: string,
 	): string[] {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const view = alias ?? fieldName
 		if (!this.meta.isPessimisticInFlight(this.getEntityKey(parentType, parentId))) {
-			return this.relations.getHasManyOrderedIds(key)
+			return this.relations.getHasManyOrderedIds(key, view)
 		}
 
-		const state = this.relations.getHasMany(key)
-		return state ? [...state.serverIds] : []
+		return [...this.relations.getHasManyView(key, view).serverIds]
 	}
 
 	isHasManyItemCreated(
@@ -745,24 +755,21 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		parentId: string,
 		fieldName: string,
 		itemId: string,
-		alias?: string,
 	): boolean {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		const state = this.relations.getHasMany(key)
-		return state?.plannedAdditions.get(itemId) === 'created'
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		return this.relations.getHasManyRelation(key)?.plannedAdditions.get(itemId) === 'created'
 	}
 
 	getHasManyCreatedEntities(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
-		alias?: string,
 	): Set<string> | undefined {
-		const key = this.getRelationKey(parentType, parentId, alias ?? fieldName)
-		const state = this.relations.getHasMany(key)
-		if (!state) return undefined
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const relation = this.relations.getHasManyRelation(key)
+		if (!relation) return undefined
 		const created = new Set<string>()
-		for (const [id, kind] of state.plannedAdditions) {
+		for (const [id, kind] of relation.plannedAdditions) {
 			if (kind === 'created') created.add(id)
 		}
 		return created
@@ -1161,9 +1168,13 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	 * journal's rekey to rebase a pre-image when a just-persisted create became a
 	 * permanent member of the list (membership rebase for sealed creates).
 	 */
-	getLiveHasManyServerIds(relationKey: string): Set<string> {
+	getLiveHasManyServerIds(relationKey: string): ReadonlyMap<string, Set<string>> {
 		const state = this.relations.getHasMany(relationKey)
-		return new Set(state?.serverIds ?? [])
+		const byView = new Map<string, Set<string>>()
+		if (state) {
+			for (const [alias, view] of state.views) byView.set(alias, view.serverIds)
+		}
+		return byView
 	}
 
 	exportHasManyCell(key: string): HasManyCellImage {
@@ -1173,13 +1184,8 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 			kind: 'hasMany',
 			key,
 			present: true,
-			state: {
-				serverIds: new Set(state.serverIds),
-				orderedIds: state.orderedIds ? [...state.orderedIds] : null,
-				plannedRemovals: new Map(state.plannedRemovals),
-				plannedAdditions: new Map(state.plannedAdditions),
-				version: state.version,
-			},
+			// getHasMany already returns a deep copy; the image owns it outright.
+			state,
 		}
 	}
 
@@ -1218,7 +1224,9 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 				const image = this.exportHasManyCell(hasManyKey)
 				images.push(image)
 				if (image.state) {
-					if (image.state.orderedIds) worklist.push(...image.state.orderedIds)
+					for (const view of image.state.views.values()) {
+						if (view.orderedIds) worklist.push(...view.orderedIds)
+					}
 					for (const additionId of image.state.plannedAdditions.keys()) worklist.push(additionId)
 				}
 			}
@@ -1319,9 +1327,24 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		} else {
 			const s = img.state!
 			const live = this.relations.getHasMany(img.key)
+			// The editable layer (planned writes, manual ordering) comes from the image;
+			// the server baseline always from the live state, which may have advanced
+			// since the gesture. A view the image does not know was created afterwards,
+			// by a non-journaled materialization, so it keeps its live ordering too.
+			const views = new Map(live?.views ?? [])
+			for (const [alias, view] of views) {
+				const recorded = s.views.get(alias)
+				views.set(alias, {
+					serverIds: new Set(view.serverIds),
+					orderedIds: recorded ? (recorded.orderedIds ? [...recorded.orderedIds] : null) : view.orderedIds,
+					membership: view.membership,
+				})
+			}
+			for (const [alias, recorded] of s.views) {
+				if (!views.has(alias)) views.set(alias, recorded)
+			}
 			this.relations.importHasManyStates(new Map([[img.key, {
-				serverIds: new Set(live ? live.serverIds : s.serverIds),
-				orderedIds: s.orderedIds ? [...s.orderedIds] : null,
+				views,
 				plannedRemovals: new Map(s.plannedRemovals),
 				plannedAdditions: new Map(s.plannedAdditions),
 				version: (live?.version ?? s.version) + 1,

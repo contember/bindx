@@ -65,7 +65,7 @@ describe('RelationStore edge index integration', () => {
 	test('a child reached via has-one AND has-many of one parent survives dropping either', () => {
 		const relations = new RelationStore()
 		relations.setRelation('Author:a1:featured', { currentId: 'art1', state: 'connected' }, undefined, 'featured')
-		relations.addToHasMany('Author:a1:articles', 'art1')
+		relations.addToHasMany('Author:a1:articles', 'articles', 'art1')
 
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set(['Author:a1']))
 
@@ -78,7 +78,7 @@ describe('RelationStore edge index integration', () => {
 
 	test('replaceEntityId migrates the child id in both directions', () => {
 		const relations = new RelationStore()
-		relations.addToHasMany('Author:a1:articles', 'old1')
+		relations.addToHasMany('Author:a1:articles', 'articles', 'old1')
 		relations.setRelation('Author:a1:featured', { currentId: 'old1', state: 'connected' }, undefined, 'featured')
 
 		expect(relations.getParentKeysForChild('old1')).toEqual(new Set(['Author:a1']))
@@ -95,7 +95,7 @@ describe('RelationStore edge index integration', () => {
 
 	test('rekeyOwner migrates the parent key in both directions', () => {
 		const relations = new RelationStore()
-		relations.addToHasMany('Author:a1:articles', 'art1')
+		relations.addToHasMany('Author:a1:articles', 'articles', 'art1')
 		relations.setRelation('Author:a1:featured', { currentId: 'art2', state: 'connected' }, undefined, 'featured')
 
 		relations.rekeyOwner('Author:a1:', 'Author:p1:')
@@ -108,7 +108,7 @@ describe('RelationStore edge index integration', () => {
 
 	test('removeOwnedRelations drops all of an owner edges', () => {
 		const relations = new RelationStore()
-		relations.addToHasMany('Author:a1:articles', 'art1')
+		relations.addToHasMany('Author:a1:articles', 'articles', 'art1')
 		relations.setRelation('Author:a1:featured', { currentId: 'art2', state: 'connected' }, undefined, 'featured')
 
 		relations.removeOwnedRelations('Author:a1:')
@@ -120,12 +120,12 @@ describe('RelationStore edge index integration', () => {
 
 	test('commit and reset keep the index consistent with membership', () => {
 		const relations = new RelationStore()
-		relations.setHasManyServerIds('Author:a1:articles', ['s1', 's2'])
-		relations.addToHasMany('Author:a1:articles', 'c1')
+		relations.setHasManyServerIds('Author:a1:articles', 'articles', ['s1', 's2'])
+		relations.addToHasMany('Author:a1:articles', 'articles', 'c1')
 		expect(new Set(relations.getLiveChildIds('Author:a1:'))).toEqual(new Set(['s1', 's2', 'c1']))
 
 		// commit folds plannedAdditions into serverIds — live membership unchanged.
-		relations.commitHasMany('Author:a1:articles', ['s1', 's2', 'c1'])
+		relations.commitAllRelations('Author:a1:')
 		expect(new Set(relations.getLiveChildIds('Author:a1:'))).toEqual(new Set(['s1', 's2', 'c1']))
 		expect(relations.getParentKeysForChild('c1')).toEqual(new Set(['Author:a1']))
 

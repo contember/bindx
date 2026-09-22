@@ -16,8 +16,7 @@ function hasOneState(): StoredRelationState {
 
 function hasManyState(): StoredHasManyState {
 	return {
-		serverIds: new Set(['child']),
-		orderedIds: null,
+		views: new Map([['articles', { serverIds: new Set(['child']), orderedIds: null, membership: 'total' }]]),
 		plannedRemovals: new Map([['child', 'disconnect']]),
 		plannedAdditions: new Map(),
 		version: 0,

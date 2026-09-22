@@ -7,9 +7,10 @@ import {
 } from './HasOneStore.js'
 import { HasManyStore } from './HasManyStore.js'
 import {
-	computeDefaultOrderedIds,
 	type HasManyAdditionKind,
+	type HasManyRelationProjection,
 	type HasManyRemovalType,
+	type HasManyViewProjection,
 	type SentHasManyDelta,
 	type StoredHasManyState,
 } from './hasManyState.js'
@@ -19,13 +20,16 @@ export type { StoredRelationState } from './HasOneStore.js'
 export type { SentHasOneTransition } from './HasOneStore.js'
 export type {
 	HasManyAdditionKind,
+	HasManyRelationProjection,
 	HasManyRemovalType,
+	HasManyView,
+	HasManyViewProjection,
+	PlannedHasManyAddition,
 	SentHasManyAddition,
 	SentHasManyDelta,
 	SentHasManyRemoval,
 	StoredHasManyState,
 } from './hasManyState.js'
-export { computeDefaultOrderedIds } from './hasManyState.js'
 
 export type RelationReconciliationResult = 'applied' | 'conflict'
 
@@ -103,28 +107,32 @@ export class RelationStore implements Rekeyable {
 
 	// ==================== Has-Many Relations ====================
 
-	getOrCreateHasMany(key: string, serverIds?: string[]): StoredHasManyState {
-		return this.hasMany.getOrCreateHasMany(key, serverIds)
+	getOrCreateHasMany(key: string, alias: string, serverIds?: string[]): void {
+		this.hasMany.getOrCreateHasMany(key, alias, serverIds)
 	}
 
 	getHasMany(key: string): StoredHasManyState | undefined {
 		return this.hasMany.getHasMany(key)
 	}
 
-	setHasManyServerIds(key: string, serverIds: string[]): void {
-		this.hasMany.setHasManyServerIds(key, serverIds)
+	getHasManyRelation(key: string): HasManyRelationProjection | undefined {
+		return this.hasMany.getRelationProjection(key)
+	}
+
+	getHasManyView(key: string, alias: string): HasManyViewProjection {
+		return this.hasMany.getViewProjection(key, alias)
+	}
+
+	setHasManyServerIds(key: string, alias: string, serverIds: string[]): void {
+		this.hasMany.setHasManyServerIds(key, alias, serverIds)
 	}
 
 	planHasManyRemoval(key: string, itemId: string, type: HasManyRemovalType): void {
 		this.hasMany.planHasManyRemoval(key, itemId, type)
 	}
 
-	planHasManyConnection(key: string, itemId: string): void {
-		this.hasMany.planHasManyConnection(key, itemId)
-	}
-
-	commitHasMany(key: string, newServerIds: string[]): void {
-		this.hasMany.commitHasMany(key, newServerIds)
+	planHasManyConnection(key: string, alias: string, itemId: string): void {
+		this.hasMany.planHasManyConnection(key, alias, itemId)
 	}
 
 	reconcileSentHasMany(
@@ -138,24 +146,24 @@ export class RelationStore implements Rekeyable {
 		this.hasMany.resetHasMany(key)
 	}
 
-	addToHasMany(key: string, itemId: string): void {
-		this.hasMany.addToHasMany(key, itemId)
+	addToHasMany(key: string, alias: string, itemId: string): void {
+		this.hasMany.addToHasMany(key, alias, itemId)
 	}
 
-	connectExistingToHasMany(key: string, itemId: string): void {
-		this.hasMany.connectExistingToHasMany(key, itemId)
+	connectExistingToHasMany(key: string, alias: string, itemId: string): void {
+		this.hasMany.connectExistingToHasMany(key, alias, itemId)
 	}
 
 	removeFromHasMany(key: string, itemId: string, removalType: HasManyRemovalType): boolean {
 		return this.hasMany.removeFromHasMany(key, itemId, removalType)
 	}
 
-	moveInHasMany(key: string, fromIndex: number, toIndex: number): void {
-		this.hasMany.moveInHasMany(key, fromIndex, toIndex)
+	moveInHasMany(key: string, alias: string, fromIndex: number, toIndex: number): void {
+		this.hasMany.moveInHasMany(key, alias, fromIndex, toIndex)
 	}
 
-	getHasManyOrderedIds(key: string): string[] {
-		return this.hasMany.getHasManyOrderedIds(key)
+	getHasManyOrderedIds(key: string, alias: string): string[] {
+		return this.hasMany.getHasManyOrderedIds(key, alias)
 	}
 
 	/**

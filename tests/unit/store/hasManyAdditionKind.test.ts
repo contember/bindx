@@ -20,28 +20,28 @@ describe('HasMany planned-addition kind', () => {
 	describe('no downgrade: created stays created', () => {
 		test('planHasManyConnection does not downgrade a created addition', () => {
 			const relations = new RelationStore()
-			relations.addToHasMany(KEY, 'temp-1')
-			expect(relations.getHasMany(KEY)?.plannedAdditions.get('temp-1')).toBe('created')
+			relations.addToHasMany(KEY, 'tags', 'temp-1')
+			expect(relations.getHasMany(KEY)?.plannedAdditions.get('temp-1')?.kind).toBe('created')
 
 			// connect() after add() on the SAME id must keep it a create.
-			relations.planHasManyConnection(KEY, 'temp-1')
-			expect(relations.getHasMany(KEY)?.plannedAdditions.get('temp-1')).toBe('created')
+			relations.planHasManyConnection(KEY, 'tags', 'temp-1')
+			expect(relations.getHasMany(KEY)?.plannedAdditions.get('temp-1')?.kind).toBe('created')
 		})
 
 		test('connectExistingToHasMany does not downgrade a created addition', () => {
 			const relations = new RelationStore()
-			relations.addToHasMany(KEY, 'temp-1')
-			expect(relations.getHasMany(KEY)?.plannedAdditions.get('temp-1')).toBe('created')
+			relations.addToHasMany(KEY, 'tags', 'temp-1')
+			expect(relations.getHasMany(KEY)?.plannedAdditions.get('temp-1')?.kind).toBe('created')
 
 			// The embedded-connect materialization path must not downgrade either.
-			relations.connectExistingToHasMany(KEY, 'temp-1')
-			expect(relations.getHasMany(KEY)?.plannedAdditions.get('temp-1')).toBe('created')
+			relations.connectExistingToHasMany(KEY, 'tags', 'temp-1')
+			expect(relations.getHasMany(KEY)?.plannedAdditions.get('temp-1')?.kind).toBe('created')
 		})
 
 		test('a genuine connect of a never-added id is recorded as connected', () => {
 			const relations = new RelationStore()
-			relations.connectExistingToHasMany(KEY, 'persisted-1')
-			expect(relations.getHasMany(KEY)?.plannedAdditions.get('persisted-1')).toBe('connected')
+			relations.connectExistingToHasMany(KEY, 'tags', 'persisted-1')
+			expect(relations.getHasMany(KEY)?.plannedAdditions.get('persisted-1')?.kind).toBe('connected')
 		})
 	})
 
@@ -49,20 +49,20 @@ describe('HasMany planned-addition kind', () => {
 		test('re-connecting the same id does not duplicate it in the ordered list', () => {
 			const relations = new RelationStore()
 			// The same embedded connect reference can be materialized more than once.
-			relations.connectExistingToHasMany(KEY, 'persisted-1')
-			relations.connectExistingToHasMany(KEY, 'persisted-1')
+			relations.connectExistingToHasMany(KEY, 'tags', 'persisted-1')
+			relations.connectExistingToHasMany(KEY, 'tags', 'persisted-1')
 
-			expect(relations.getHasManyOrderedIds(KEY)).toEqual(['persisted-1'])
-			expect(relations.getHasMany(KEY)?.plannedAdditions.get('persisted-1')).toBe('connected')
+			expect(relations.getHasManyOrderedIds(KEY, 'tags')).toEqual(['persisted-1'])
+			expect(relations.getHasMany(KEY)?.plannedAdditions.get('persisted-1')?.kind).toBe('connected')
 		})
 
 		test('connecting an id already present as a server member does not duplicate it', () => {
 			const relations = new RelationStore()
-			relations.setHasManyServerIds(KEY, ['persisted-1', 'persisted-2'])
+			relations.setHasManyServerIds(KEY, 'tags', ['persisted-1', 'persisted-2'])
 
-			relations.connectExistingToHasMany(KEY, 'persisted-1')
+			relations.connectExistingToHasMany(KEY, 'tags', 'persisted-1')
 
-			expect(relations.getHasManyOrderedIds(KEY)).toEqual(['persisted-1', 'persisted-2'])
+			expect(relations.getHasManyOrderedIds(KEY, 'tags')).toEqual(['persisted-1', 'persisted-2'])
 		})
 	})
 })
