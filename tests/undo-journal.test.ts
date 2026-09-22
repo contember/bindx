@@ -9,6 +9,7 @@ import {
 	disconnectRelation,
 	moveInList,
 	removeFromList,
+	connectToList,
 } from '@contember/bindx'
 
 /**
@@ -264,6 +265,57 @@ describe('undo journal — deep coverage', () => {
 			undo.undo()
 			expect(store.getHasManyOrderedIds('Article', 'p', 'items')).toEqual(['s1', 's2'])
 			expect(store.getHasManyPlannedRemovals('Article', 'p', 'items')?.size ?? 0).toBe(0)
+		})
+	})
+
+	// ============================================================
+	// Gestures made through an args-view of a relation (issue #121)
+	// ============================================================
+	describe('has-many undo through an args-view', () => {
+		// A has-many selected with args is read under a generated alias. The journal
+		// records the relation, so a gesture made in one view undoes as one gesture —
+		// and a manual order belonging to another view survives it.
+		const ORDERED = 'items_ordered'
+		const FILTERED = 'items_filtered'
+
+		beforeEach(() => {
+			store.setEntityData('Article', 'p', { id: 'p' }, true)
+			store.setHasManyServerIds('Article', 'p', 'items', ['s1', 's2'], ORDERED)
+			store.setHasManyServerIds('Article', 'p', 'items', ['s1'], FILTERED)
+		})
+
+		test('a removal made in one view is undone in every view', () => {
+			dispatcher.dispatch(removeFromList('Article', 'p', 'items', 's1', 'disconnect'))
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', ORDERED)).toEqual(['s2'])
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', FILTERED)).toEqual([])
+
+			undo.undo()
+
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', ORDERED)).toEqual(['s1', 's2'])
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', FILTERED)).toEqual(['s1'])
+			expect(store.getHasManyPlannedRemovals('Article', 'p', 'items')?.size ?? 0).toBe(0)
+		})
+
+		test('a move in one view is undone without touching the other view', () => {
+			dispatcher.dispatch(moveInList('Article', 'p', 'items', 0, 1, ORDERED))
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', ORDERED)).toEqual(['s2', 's1'])
+
+			undo.undo()
+
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', ORDERED)).toEqual(['s1', 's2'])
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', FILTERED)).toEqual(['s1'])
+		})
+
+		test('an addition made in one view is undone out of that view', () => {
+			dispatcher.dispatch(connectToList('Article', 'p', 'items', 's3', 'Item', FILTERED))
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', FILTERED)).toEqual(['s1', 's3'])
+			// The other view is filtered, so the client cannot claim membership there.
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', ORDERED)).toEqual(['s1', 's2'])
+
+			undo.undo()
+
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', FILTERED)).toEqual(['s1'])
+			expect(store.getHasManyPlannedConnections('Article', 'p', 'items')?.size ?? 0).toBe(0)
 		})
 	})
 
