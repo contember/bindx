@@ -9,6 +9,8 @@ import {
 	disconnectRelation,
 	moveInList,
 	removeFromList,
+	connectToList,
+	generateHasManyAlias,
 } from '@contember/bindx'
 
 /**
@@ -85,7 +87,7 @@ describe('undo journal — deep coverage', () => {
 			expect(store.getHasManyOrderedIds('Article', 'p', 'items')).toEqual(['s', 'ctemp'])
 
 			// Persist: commit list (C becomes a server member) and rekey C.
-			store.commitHasMany('Article', 'p', 'items', ['s', 'ctemp'])
+			store.commitAllRelations('Article', 'p')
 			store.commitEntity('Item', 'ctemp')
 			store.setExistsOnServer('Item', 'ctemp', true)
 			store.mapTempIdToPersistedId('Item', 'ctemp', 'cp')
@@ -116,7 +118,7 @@ describe('undo journal — deep coverage', () => {
 			undo.endGroup(groupId)
 
 			// Persist everything: commit list + sibling, rekey C.
-			store.commitHasMany('Article', 'p', 'items', ['s', 'ctemp'])
+			store.commitAllRelations('Article', 'p')
 			store.commitEntity('Item', 's')
 			store.commitEntity('Item', 'ctemp')
 			store.setExistsOnServer('Item', 'ctemp', true)
@@ -151,7 +153,7 @@ describe('undo journal — deep coverage', () => {
 			expect(store.getHasManyOrderedIds('Article', 'p', 'items')).toEqual(['s2', 's1', 'ctemp'])
 
 			// Persist: commit + rekey C.
-			store.commitHasMany('Article', 'p', 'items', ['s1', 's2', 'ctemp'])
+			store.commitAllRelations('Article', 'p')
 			store.commitEntity('Item', 'ctemp')
 			store.setExistsOnServer('Item', 'ctemp', true)
 			store.mapTempIdToPersistedId('Item', 'ctemp', 'cp')
@@ -264,6 +266,57 @@ describe('undo journal — deep coverage', () => {
 			undo.undo()
 			expect(store.getHasManyOrderedIds('Article', 'p', 'items')).toEqual(['s1', 's2'])
 			expect(store.getHasManyPlannedRemovals('Article', 'p', 'items')?.size ?? 0).toBe(0)
+		})
+	})
+
+	// ============================================================
+	// Gestures made through an args-view of a relation (issue #121)
+	// ============================================================
+	describe('has-many undo through an args-view', () => {
+		// A has-many selected with args is read under a generated alias. The journal
+		// records the relation, so a gesture made in one view undoes as one gesture —
+		// and a manual order belonging to another view survives it.
+		const WIDE = generateHasManyAlias('items', { filter: { archived: false } })
+		const NARROW = generateHasManyAlias('items', { filter: { starred: true } })
+
+		beforeEach(() => {
+			store.setEntityData('Article', 'p', { id: 'p' }, true)
+			store.setHasManyServerIds('Article', 'p', 'items', ['s1', 's2'], WIDE)
+			store.setHasManyServerIds('Article', 'p', 'items', ['s1'], NARROW)
+		})
+
+		test('a removal made in one view is undone in every view', () => {
+			dispatcher.dispatch(removeFromList('Article', 'p', 'items', 's1', 'disconnect'))
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', WIDE)).toEqual(['s2'])
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', NARROW)).toEqual([])
+
+			undo.undo()
+
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', WIDE)).toEqual(['s1', 's2'])
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', NARROW)).toEqual(['s1'])
+			expect(store.getHasManyPlannedRemovals('Article', 'p', 'items')?.size ?? 0).toBe(0)
+		})
+
+		test('a move in one view is undone without touching the other view', () => {
+			dispatcher.dispatch(moveInList('Article', 'p', 'items', 0, 1, WIDE))
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', WIDE)).toEqual(['s2', 's1'])
+
+			undo.undo()
+
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', WIDE)).toEqual(['s1', 's2'])
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', NARROW)).toEqual(['s1'])
+		})
+
+		test('an addition made in one view is undone out of that view', () => {
+			dispatcher.dispatch(connectToList('Article', 'p', 'items', 's3', 'Item', NARROW))
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', NARROW)).toEqual(['s1', 's3'])
+			// The other view is filtered, so the client cannot claim membership there.
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', WIDE)).toEqual(['s1', 's2'])
+
+			undo.undo()
+
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', NARROW)).toEqual(['s1'])
+			expect(store.getHasManyPlannedConnections('Article', 'p', 'items')?.size ?? 0).toBe(0)
 		})
 	})
 

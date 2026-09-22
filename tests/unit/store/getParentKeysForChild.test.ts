@@ -51,7 +51,7 @@ describe('RelationStore.getParentKeysForChild', () => {
 	test('has-many add returns the parent; remove (disconnect) removes it', () => {
 		const relations = new RelationStore()
 
-		relations.addToHasMany('Author:a1:articles', 'art1')
+		relations.addToHasMany('Author:a1:articles', 'articles', 'art1')
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set(['Author:a1']))
 
 		relations.removeFromHasMany('Author:a1:articles', 'art1', 'disconnect')
@@ -61,7 +61,7 @@ describe('RelationStore.getParentKeysForChild', () => {
 	test('has-many server item is a live parent until removed', () => {
 		const relations = new RelationStore()
 
-		relations.setHasManyServerIds('Author:a1:articles', ['art1', 'art2'])
+		relations.setHasManyServerIds('Author:a1:articles', 'articles', ['art1', 'art2'])
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set(['Author:a1']))
 
 		relations.planHasManyRemoval('Author:a1:articles', 'art1', 'delete')
@@ -77,7 +77,7 @@ describe('RelationStore.getParentKeysForChild', () => {
 			undefined,
 			'featured',
 		)
-		relations.addToHasMany('Tag:t1:articles', 'art1')
+		relations.addToHasMany('Tag:t1:articles', 'articles', 'art1')
 
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set(['Author:a1', 'Tag:t1']))
 	})
@@ -93,7 +93,7 @@ describe('RelationStore.getParentKeysForChild', () => {
 		// must be a deliberate decision (it would also have to move in lockstep with
 		// the forward reachability walk, which matches on the same bare ids).
 		relations.setRelation('Author:a1:featured', { currentId: 'shared', state: 'connected' }, undefined, 'featured')
-		relations.addToHasMany('Tag:t1:articles', 'shared')
+		relations.addToHasMany('Tag:t1:articles', 'articles', 'shared')
 
 		expect(relations.getParentKeysForChild('shared')).toEqual(new Set(['Author:a1', 'Tag:t1']))
 	})
@@ -129,16 +129,16 @@ describe('RelationStore.getParentKeysForChild', () => {
 					relations.setRelation(hasOneKey, { currentId: child, state: 'deleted' }, undefined, 'featured')
 					break
 				case 3:
-					relations.addToHasMany(hasManyKey, child)
+					relations.addToHasMany(hasManyKey, 'articles', child)
 					break
 				case 4:
-					relations.planHasManyConnection(hasManyKey, child)
+					relations.planHasManyConnection(hasManyKey, 'articles', child)
 					break
 				case 5:
 					relations.removeFromHasMany(hasManyKey, child, 'disconnect')
 					break
 				case 6:
-					relations.setHasManyServerIds(hasManyKey, [child])
+					relations.setHasManyServerIds(hasManyKey, 'articles', [child])
 					break
 			}
 

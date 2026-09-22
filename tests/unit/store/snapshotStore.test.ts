@@ -349,25 +349,26 @@ describe('SnapshotStore', () => {
 	describe('Has-Many State', () => {
 		describe('getOrCreateHasMany', () => {
 			test('should create has-many state with server IDs', () => {
-				const state = store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2'])
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2'])
 
-				expect(state.serverIds).toEqual(new Set(['t-1', 't-2']))
-				expect(state.plannedRemovals.size).toBe(0)
-				expect(state.plannedAdditions.size).toBe(0)
+				const state = store.getHasMany('Article', 'a-1', 'tags')
+				expect(state?.serverIds).toEqual(new Set(['t-1', 't-2']))
+				expect(state?.plannedRemovals.size).toBe(0)
+				expect(state?.plannedAdditions.size).toBe(0)
 			})
 
 			test('should update serverIds when called with new values', () => {
 				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
-				const state2 = store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-2'])
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-2'])
 
-				expect(state2.serverIds).toEqual(new Set(['t-2']))
+				expect(store.getHasMany('Article', 'a-1', 'tags')?.serverIds).toEqual(new Set(['t-2']))
 			})
 
 			test('should preserve existing state when called without serverIds', () => {
 				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
-				const state2 = store.getOrCreateHasMany('Article', 'a-1', 'tags')
+				store.getOrCreateHasMany('Article', 'a-1', 'tags')
 
-				expect(state2.serverIds).toEqual(new Set(['t-1']))
+				expect(store.getHasMany('Article', 'a-1', 'tags')?.serverIds).toEqual(new Set(['t-1']))
 			})
 
 			test('returned state mutations do not bypass the store write path', () => {
@@ -393,12 +394,11 @@ describe('SnapshotStore', () => {
 			})
 
 			test('should reset orderedIds when server IDs change', () => {
-				const state = store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
+				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
 				store.moveInHasMany('Article', 'a-1', 'tags', 0, 0) // triggers orderedIds
 				store.setHasManyServerIds('Article', 'a-1', 'tags', ['t-1', 't-2'])
 
-				const newState = store.getHasMany('Article', 'a-1', 'tags')
-				expect(newState?.orderedIds).toBeNull()
+				expect(store.getHasManyView('Article', 'a-1', 'tags').orderedIds).toBeNull()
 			})
 
 			test('ordered id reads cannot mutate the stored explicit order', () => {
@@ -585,11 +585,11 @@ describe('SnapshotStore', () => {
 			})
 		})
 
-		describe('commitHasMany', () => {
+		describe('commitAllRelations', () => {
 			test('should update server IDs and clear planned operations', () => {
 				store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
 				store.planHasManyConnection('Article', 'a-1', 'tags', 't-2')
-				store.commitHasMany('Article', 'a-1', 'tags', ['t-1', 't-2'])
+				store.commitAllRelations('Article', 'a-1')
 
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				expect(state?.serverIds).toEqual(new Set(['t-1', 't-2']))
@@ -607,7 +607,7 @@ describe('SnapshotStore', () => {
 				const state = store.getHasMany('Article', 'a-1', 'tags')
 				expect(state?.plannedRemovals.size).toBe(0)
 				expect(state?.plannedAdditions.size).toBe(0)
-				expect(state?.orderedIds).toBeNull()
+				expect(store.getHasManyView('Article', 'a-1', 'tags').orderedIds).toBeNull()
 			})
 		})
 

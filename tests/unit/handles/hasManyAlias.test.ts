@@ -139,10 +139,19 @@ describe('HasMany with Alias Support', () => {
 		})
 	})
 
-	// ==================== Multiple HasMany with Different Aliases ====================
+	// ==================== Views of one relation ====================
 
-	describe('Multiple HasMany with Different Aliases', () => {
-		test('should store data separately for different aliases', () => {
+	/**
+	 * A has-many selected with params is fetched under an alias, and several such
+	 * VIEWS of one relation can be mounted at once. What the server returned is per
+	 * view; the pending writes are not — the backend has one `tags` relation and one
+	 * mutation input for it.
+	 */
+	describe('Views of one relation', () => {
+		const activeAlias = generateHasManyAlias('tags', { filter: { active: true } })
+		const inactiveAlias = generateHasManyAlias('tags', { filter: { active: false } })
+
+		beforeEach(() => {
 			store.setEntityData('Article', 'a-1', {
 				id: 'a-1',
 				title: 'Test',
@@ -151,126 +160,115 @@ describe('HasMany with Alias Support', () => {
 					{ id: 't-2', name: 'Tag 2', active: false },
 				],
 			}, true)
-
-			// Create two handles with different aliases (simulating different filters)
-			const alias1 = generateHasManyAlias('tags', { filter: { active: true } })
-			const alias2 = generateHasManyAlias('tags', { filter: { active: false } })
-
-			const handle1 = createHasManyHandle(alias1)
-			const handle2 = createHasManyHandle(alias2)
-
-			// Initialize both with different server IDs (simulating different filtered results)
-			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], alias1)
-			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-2'], alias2)
-
-			// Now connect different items to each
-			store.planHasManyConnection('Article', 'a-1', 'tags', 't-3', alias1)
-			store.planHasManyConnection('Article', 'a-1', 'tags', 't-4', alias2)
-
-			// Verify they have different planned connections
-			const connections1 = store.getHasManyPlannedConnections('Article', 'a-1', 'tags', alias1)
-			const connections2 = store.getHasManyPlannedConnections('Article', 'a-1', 'tags', alias2)
-
-			expect(connections1?.has('t-3')).toBe(true)
-			expect(connections1?.has('t-4')).toBe(false)
-			expect(connections2?.has('t-4')).toBe(true)
-			expect(connections2?.has('t-3')).toBe(false)
 		})
 
-		test('should track dirty state independently for different aliases', () => {
-			store.setEntityData('Article', 'a-1', {
-				id: 'a-1',
-				title: 'Test',
-				tags: [
-					{ id: 't-1', name: 'Tag 1', active: true },
-					{ id: 't-2', name: 'Tag 2', active: false },
-				],
-			}, true)
+		test('each view keeps the server rows its own args returned', () => {
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], activeAlias)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-2'], inactiveAlias)
 
-			const alias1 = generateHasManyAlias('tags', { filter: { active: true } })
-			const alias2 = generateHasManyAlias('tags', { filter: { active: false } })
-
-			const handle1 = createHasManyHandle(alias1)
-			const handle2 = createHasManyHandle(alias2)
-
-			// Initialize both
-			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], alias1)
-			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-2'], alias2)
-
-			// Both should be clean initially
-			expect(handle1.isDirty).toBe(false)
-			expect(handle2.isDirty).toBe(false)
-
-			// Make changes only to handle1
-			handle1.connect('t-3')
-
-			// Only handle1 should be dirty
-			expect(handle1.isDirty).toBe(true)
-			expect(handle2.isDirty).toBe(false)
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', activeAlias)).toEqual(['t-1'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', inactiveAlias)).toEqual(['t-2'])
 		})
 
-		test('should maintain separate ordered IDs for different aliases', () => {
-			store.setEntityData('Article', 'a-1', {
-				id: 'a-1',
-				title: 'Test',
-				tags: [
-					{ id: 't-1', name: 'Tag 1' },
-					{ id: 't-2', name: 'Tag 2' },
-					{ id: 't-3', name: 'Tag 3' },
-				],
-			}, true)
+		test('the relation baseline is the union across views', () => {
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], activeAlias)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-2'], inactiveAlias)
 
-			const alias1 = generateHasManyAlias('tags', { orderBy: [{ name: 'asc' }] })
-			const alias2 = generateHasManyAlias('tags', { orderBy: [{ name: 'desc' }] })
-
-			// Initialize with different ordered IDs
-			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2', 't-3'], alias1)
-			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-3', 't-2', 't-1'], alias2)
-
-			// Move in one alias shouldn't affect the other
-			store.moveInHasMany('Article', 'a-1', 'tags', 0, 2, alias1)
-
-			const orderedIds1 = store.getHasManyOrderedIds('Article', 'a-1', 'tags', alias1)
-			const orderedIds2 = store.getHasManyOrderedIds('Article', 'a-1', 'tags', alias2)
-
-			expect(orderedIds1).toEqual(['t-2', 't-3', 't-1'])
-			expect(orderedIds2).toEqual(['t-3', 't-2', 't-1'])
+			expect(store.getHasMany('Article', 'a-1', 'tags')?.serverIds).toEqual(new Set(['t-1', 't-2']))
 		})
 
-		test('should reset each alias independently', () => {
-			store.setEntityData('Article', 'a-1', {
-				id: 'a-1',
-				title: 'Test',
-				tags: [],
-			}, true)
+		test('a connection is one pending write on the relation, not one per view', () => {
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], activeAlias)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-2'], inactiveAlias)
 
-			const alias1 = generateHasManyAlias('tags', { filter: { active: true } })
-			const alias2 = generateHasManyAlias('tags', { filter: { active: false } })
+			store.planHasManyConnection('Article', 'a-1', 'tags', 't-3', activeAlias)
 
-			// Initialize both
-			store.getOrCreateHasMany('Article', 'a-1', 'tags', [], alias1)
-			store.getOrCreateHasMany('Article', 'a-1', 'tags', [], alias2)
+			// What the next persist will send — addressed by the schema field name.
+			expect(store.getHasManyPlannedConnections('Article', 'a-1', 'tags')).toEqual(new Set(['t-3']))
+		})
 
-			// Make changes to both
-			store.planHasManyConnection('Article', 'a-1', 'tags', 't-1', alias1)
-			store.planHasManyConnection('Article', 'a-1', 'tags', 't-2', alias2)
+		test('an addition renders only in the view it was made in', () => {
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], activeAlias)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-2'], inactiveAlias)
 
-			// Reset only alias1
-			store.resetHasMany('Article', 'a-1', 'tags', alias1)
+			store.planHasManyConnection('Article', 'a-1', 'tags', 't-3', activeAlias)
 
-			// alias1 should be reset, alias2 should still have its connection
-			const state1 = store.getHasMany('Article', 'a-1', 'tags', alias1)
-			const state2 = store.getHasMany('Article', 'a-1', 'tags', alias2)
+			// The client cannot evaluate the other view's filter, so it must not guess.
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', activeAlias)).toEqual(['t-1', 't-3'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', inactiveAlias)).toEqual(['t-2'])
+		})
 
-			expect(state1?.plannedAdditions.size).toBe(0)
-			expect(state2?.plannedAdditions.size).toBe(1)
+		test('an addition also renders in a view whose args cannot exclude it', () => {
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], activeAlias)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2'])
+
+			store.planHasManyConnection('Article', 'a-1', 'tags', 't-3', activeAlias)
+
+			// The unparameterized view has no filter to violate.
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags')).toEqual(['t-1', 't-2', 't-3'])
+		})
+
+		test('a view that only orders is not treated as filtered', () => {
+			const orderedAlias = generateHasManyAlias('tags', { orderBy: [{ name: 'asc' }] })
+			// What the selection knows and the alias hash does not: ordering leaves nobody out.
+			store.declareHasManyViewMembership('tags', orderedAlias, 'total')
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], orderedAlias)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], activeAlias)
+
+			store.planHasManyConnection('Article', 'a-1', 'tags', 't-3', activeAlias)
+
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', orderedAlias)).toEqual(['t-1', 't-3'])
+		})
+
+		test('an undeclared view is assumed filtered', () => {
+			const unknownAlias = 'tags_handwritten'
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], unknownAlias)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], activeAlias)
+
+			store.planHasManyConnection('Article', 'a-1', 'tags', 't-3', activeAlias)
+
+			// The safe direction: never claim membership the client cannot prove.
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', unknownAlias)).toEqual(['t-1'])
+		})
+
+		test('a removal hides the item in every view', () => {
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2'], activeAlias)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], inactiveAlias)
+
+			store.planHasManyRemoval('Article', 'a-1', 'tags', 't-1', 'disconnect')
+
+			// The row leaves the relation, so no view may keep showing it — the persist
+			// disconnects it regardless of which view the user was looking at.
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', activeAlias)).toEqual(['t-2'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', inactiveAlias)).toEqual([])
+		})
+
+		test('manual ordering stays per view', () => {
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2', 't-3'], activeAlias)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-3', 't-2', 't-1'], inactiveAlias)
+
+			store.moveInHasMany('Article', 'a-1', 'tags', 0, 2, activeAlias)
+
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', activeAlias)).toEqual(['t-2', 't-3', 't-1'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', inactiveAlias)).toEqual(['t-3', 't-2', 't-1'])
+		})
+
+		test('reset clears the relation, not one view of it', () => {
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', [], activeAlias)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', [], inactiveAlias)
+			store.planHasManyConnection('Article', 'a-1', 'tags', 't-1', activeAlias)
+			store.planHasManyConnection('Article', 'a-1', 'tags', 't-2', inactiveAlias)
+
+			store.resetHasMany('Article', 'a-1', 'tags')
+
+			expect(store.getHasMany('Article', 'a-1', 'tags')?.plannedAdditions.size).toBe(0)
 		})
 	})
 
 	// ==================== Handle with Alias ====================
 
 	describe('HasManyListHandle with Alias', () => {
-		test('should use alias for all store operations', () => {
+		test('a connection made through a view is a pending write of the relation', () => {
 			store.setEntityData('Article', 'a-1', {
 				id: 'a-1',
 				title: 'Test',
@@ -280,19 +278,13 @@ describe('HasMany with Alias Support', () => {
 			const alias = generateHasManyAlias('tags', { filter: { active: true } })
 			const handle = createHasManyHandle(alias)
 
-			// Access items to initialize state
 			handle.items
-
-			// Connect via handle
 			handle.connect('t-2')
 
-			// Should be stored under the alias
-			const connections = store.getHasManyPlannedConnections('Article', 'a-1', 'tags', alias)
-			expect(connections?.has('t-2')).toBe(true)
-
-			// Should NOT be stored under the base fieldName
-			const baseConnections = store.getHasManyPlannedConnections('Article', 'a-1', 'tags')
-			expect(baseConnections).toBeUndefined()
+			// Addressed by the schema field name — this is what the persister reads.
+			expect(store.getHasManyPlannedConnections('Article', 'a-1', 'tags')?.has('t-2')).toBe(true)
+			// And it renders in the view it was made in.
+			expect(handle.items.map(item => `${item.id}`)).toContain('t-2')
 		})
 
 		test('should add new items under the correct alias', () => {
@@ -307,12 +299,11 @@ describe('HasMany with Alias Support', () => {
 
 			const tempId = handle.add({ name: 'New Tag' })
 
-			// Should be tracked under the alias
-			const state = store.getHasMany('Article', 'a-1', 'tags', alias)
-			expect(state?.plannedAdditions.get(tempId) === 'created').toBe(true)
+			expect(store.isHasManyItemCreated('Article', 'a-1', 'tags', tempId)).toBe(true)
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', alias)).toEqual([tempId])
 		})
 
-		test('should remove items from the correct alias', () => {
+		test('should remove items through the relation', () => {
 			store.setEntityData('Article', 'a-1', {
 				id: 'a-1',
 				title: 'Test',
@@ -322,33 +313,37 @@ describe('HasMany with Alias Support', () => {
 			const alias = generateHasManyAlias('tags', { filter: { active: true } })
 			const handle = createHasManyHandle(alias)
 
-			// Initialize state
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], alias)
 
 			handle.remove('t-1')
 
-			const removals = store.getHasManyPlannedRemovals('Article', 'a-1', 'tags', alias)
-			expect(removals?.has('t-1')).toBe(true)
+			expect(store.getHasManyPlannedRemovals('Article', 'a-1', 'tags')?.has('t-1')).toBe(true)
 		})
 
-		test('should get dirty state from the correct alias', () => {
+		test('a view reports the relation as dirty, including a sibling view\'s change', () => {
 			store.setEntityData('Article', 'a-1', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [],
 			}, true)
 
-			const alias = generateHasManyAlias('tags', { filter: { active: true } })
-			const handle = createHasManyHandle(alias)
+			const activeAlias = generateHasManyAlias('tags', { filter: { active: true } })
+			const inactiveAlias = generateHasManyAlias('tags', { filter: { active: false } })
+			const active = createHasManyHandle(activeAlias)
+			const inactive = createHasManyHandle(inactiveAlias)
 
-			// Initialize state
-			store.getOrCreateHasMany('Article', 'a-1', 'tags', [], alias)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', [], activeAlias)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', [], inactiveAlias)
 
-			expect(handle.isDirty).toBe(false)
+			expect(active.isDirty).toBe(false)
+			expect(inactive.isDirty).toBe(false)
 
-			handle.connect('t-1')
+			active.connect('t-1')
 
-			expect(handle.isDirty).toBe(true)
+			// Persisting either view sends the whole relation, so a view claiming to be
+			// clean while pushing its sibling's write would be incoherent.
+			expect(active.isDirty).toBe(true)
+			expect(inactive.isDirty).toBe(true)
 		})
 
 		test('should move items within the correct alias', () => {
@@ -364,16 +359,14 @@ describe('HasMany with Alias Support', () => {
 			const alias = generateHasManyAlias('tags', { orderBy: [{ name: 'asc' }] })
 			const handle = createHasManyHandle(alias)
 
-			// Initialize state
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2'], alias)
 
 			handle.move(0, 1)
 
-			const orderedIds = store.getHasManyOrderedIds('Article', 'a-1', 'tags', alias)
-			expect(orderedIds).toEqual(['t-2', 't-1'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', alias)).toEqual(['t-2', 't-1'])
 		})
 
-		test('should reset the correct alias', () => {
+		test('reset clears the pending writes the view can see', () => {
 			store.setEntityData('Article', 'a-1', {
 				id: 'a-1',
 				title: 'Test',
@@ -383,7 +376,6 @@ describe('HasMany with Alias Support', () => {
 			const alias = generateHasManyAlias('tags', { filter: { active: true } })
 			const handle = createHasManyHandle(alias)
 
-			// Initialize and make changes
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', [], alias)
 			handle.connect('t-1')
 
@@ -394,6 +386,7 @@ describe('HasMany with Alias Support', () => {
 			expect(handle.isDirty).toBe(false)
 		})
 	})
+
 
 	// ==================== Backwards Compatibility ====================
 

@@ -113,7 +113,9 @@ function collectDetachedSeedIds(active: Map<string, JournalCellImage>): Set<stri
 		if (image.kind === 'relation') {
 			if (image.state?.currentId) ids.add(image.state.currentId)
 		} else if (image.kind === 'hasMany' && image.state) {
-			if (image.state.orderedIds) for (const id of image.state.orderedIds) ids.add(id)
+			for (const view of image.state.views.values()) {
+				if (view.orderedIds) for (const id of view.orderedIds) ids.add(id)
+			}
 			for (const id of image.state.plannedAdditions.keys()) ids.add(id)
 			for (const id of image.state.plannedRemovals.keys()) ids.add(id)
 		}

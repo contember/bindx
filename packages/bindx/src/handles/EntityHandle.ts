@@ -13,6 +13,7 @@ import {
 } from '../core/actions.js'
 import { FIELD_REF_META, type FieldRefMeta, type FieldAccessor, type HasOneAccessor, type HasManyAccessor, type EntityFieldsAccessor, type Unsubscribe, type EntityAccessor } from './types.js'
 import { deepEqual } from '../utils/deepEqual.js'
+import { canHasManyParamsExcludeMembers } from '../utils/aliasGenerator.js'
 import { createClientError, type ErrorInput, type FieldError } from '../errors/types.js'
 import type {
 	EventTypeMap,
@@ -511,6 +512,15 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 					// Has-many relation - return HasManyListHandle.
 					// Thread the selected alias so the handle reads data stored under the
 					// auto-generated alias (e.g. `tags_<hash>`) for params-bearing relations.
+					// The alias is a hash of the params, so the store cannot tell a filtered
+					// view from one that only orders — say so here, where the params are.
+					if (fieldMeta && fieldMeta.alias !== schemaFieldName) {
+						this.store.declareHasManyViewMembership(
+							schemaFieldName,
+							fieldMeta.alias,
+							canHasManyParamsExcludeMembers(fieldMeta.hasManyParams) ? 'partial' : 'total',
+						)
+					}
 					return this.hasMany(schemaFieldName, fieldMeta?.alias, nestedSelection)
 				}
 

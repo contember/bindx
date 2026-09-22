@@ -331,7 +331,7 @@ describe('Stale relation data after re-fetch', () => {
 			expect(list2.items.length).toBe(1)
 
 			// T2: Persist succeeds — commit has-many with new serverIds
-			store.commitHasMany('Program', 'prog-1', 'expertGuarantors', ['g-1'])
+			store.commitAllRelations('Program', 'prog-1')
 
 			// Verify committed state via store directly (not through items getter,
 			// which would trigger the bug)

@@ -1,1 +1,1 @@
-export { generateHasManyAlias } from '@contember/bindx-client'
+export { canHasManyParamsExcludeMembers, generateHasManyAlias } from '@contember/bindx-client'
