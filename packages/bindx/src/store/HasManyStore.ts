@@ -119,11 +119,30 @@ export class HasManyStore {
 	}
 
 	/**
+	 * Membership declared for an args-view, keyed by "fieldName:alias" — one entry per
+	 * distinct selection in the application, so it does not grow with the data. The
+	 * alias alone would not do: two fields may carry the same explicit `as`.
+	 *
+	 * Only the caller that selected the relation knows its params, and the alias is a
+	 * hash it cannot reconstruct them from. {@link EntityHandle} declares them before
+	 * it hands out a handle, which is strictly before any path can materialize the view.
+	 */
+	private readonly declaredMembership = new Map<string, HasManyViewMembership>()
+
+	declareViewMembership(fieldName: string, alias: string, membership: HasManyViewMembership): void {
+		this.declaredMembership.set(`${fieldName}:${alias}`, membership)
+	}
+
+	/**
 	 * A view addressed by the field name itself is the unparameterized selection, so
-	 * its args cannot exclude any member of the relation.
+	 * its args cannot exclude any member of the relation. Anything else needs a
+	 * declaration; without one the view is assumed filtered, which is the safe
+	 * direction — the client then never claims membership it cannot prove.
 	 */
 	private viewMembership(key: string, alias: string): HasManyViewMembership {
-		return alias === fieldFromRelationKey(key) ? 'total' : 'partial'
+		const fieldName = fieldFromRelationKey(key)
+		if (alias === fieldName) return 'total'
+		return this.declaredMembership.get(`${fieldName}:${alias}`) ?? 'partial'
 	}
 
 	/**

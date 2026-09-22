@@ -10,6 +10,7 @@ import {
 	type HasManyAdditionKind,
 	type HasManyRelationProjection,
 	type HasManyRemovalType,
+	type HasManyViewMembership,
 	type HasManyViewProjection,
 	type SentHasManyDelta,
 	type StoredHasManyState,
@@ -23,6 +24,7 @@ export type {
 	HasManyRelationProjection,
 	HasManyRemovalType,
 	HasManyView,
+	HasManyViewMembership,
 	HasManyViewProjection,
 	PlannedHasManyAddition,
 	SentHasManyAddition,
@@ -106,6 +108,10 @@ export class RelationStore implements Rekeyable {
 	}
 
 	// ==================== Has-Many Relations ====================
+
+	declareHasManyViewMembership(fieldName: string, alias: string, membership: HasManyViewMembership): void {
+		this.hasMany.declareViewMembership(fieldName, alias, membership)
+	}
 
 	getOrCreateHasMany(key: string, alias: string, serverIds?: string[]): void {
 		this.hasMany.getOrCreateHasMany(key, alias, serverIds)

@@ -208,6 +208,29 @@ describe('HasMany with Alias Support', () => {
 			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags')).toEqual(['t-1', 't-2', 't-3'])
 		})
 
+		test('a view that only orders is not treated as filtered', () => {
+			const orderedAlias = generateHasManyAlias('tags', { orderBy: [{ name: 'asc' }] })
+			// What the selection knows and the alias hash does not: ordering leaves nobody out.
+			store.declareHasManyViewMembership('tags', orderedAlias, 'total')
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], orderedAlias)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], activeAlias)
+
+			store.planHasManyConnection('Article', 'a-1', 'tags', 't-3', activeAlias)
+
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', orderedAlias)).toEqual(['t-1', 't-3'])
+		})
+
+		test('an undeclared view is assumed filtered', () => {
+			const unknownAlias = 'tags_handwritten'
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], unknownAlias)
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], activeAlias)
+
+			store.planHasManyConnection('Article', 'a-1', 'tags', 't-3', activeAlias)
+
+			// The safe direction: never claim membership the client cannot prove.
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', unknownAlias)).toEqual(['t-1'])
+		})
+
 		test('a removal hides the item in every view', () => {
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2'], activeAlias)
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], inactiveAlias)

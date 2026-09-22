@@ -7,6 +7,7 @@ import {
 	RelationStore,
 	type HasManyRelationProjection,
 	type HasManyRemovalType,
+	type HasManyViewMembership,
 	type HasManyViewProjection,
 	type RelationReconciliationResult,
 	type SentHasManyDelta,
@@ -38,6 +39,7 @@ export type {
 	HasManyRelationProjection,
 	HasManyRemovalType,
 	HasManyView,
+	HasManyViewMembership,
 	HasManyViewProjection,
 	PlannedHasManyAddition,
 	RelationReconciliationResult,
@@ -536,6 +538,15 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	}
 
 	// ==================== Has-Many State (delegated to RelationStore) ====================
+
+	/**
+	 * Declares what a view read under {@link alias} can leave out, so the store can tell
+	 * a filtered view from one that merely orders or renames. Only the caller that
+	 * selected the relation knows the params; the alias is a hash of them.
+	 */
+	declareHasManyViewMembership(fieldName: string, alias: string, membership: HasManyViewMembership): void {
+		this.relations.declareHasManyViewMembership(fieldName, alias, membership)
+	}
 
 	/**
 	 * Materializes the relation and one args-view of it, refreshing that view's

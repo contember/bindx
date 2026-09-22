@@ -96,7 +96,7 @@ export { ComponentBrand } from './brand/ComponentBrand.js'
 export type { AnyBrand } from './brand/ComponentBrand.js'
 
 // Utils
-export { generateHasManyAlias } from './utils/aliasGenerator.js'
+export { canHasManyParamsExcludeMembers, generateHasManyAlias } from './utils/aliasGenerator.js'
 export type { IsPlainObject } from './utils/fieldShape.js'
 
 // Query Builder (static qb module)
