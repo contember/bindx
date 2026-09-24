@@ -1,4 +1,4 @@
-// Regression test for <issue-url — filled in after the issue is filed>
+// Regression test for https://github.com/contember/bindx/issues/123
 import '../../../setup'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { cleanup, render, waitFor } from '@testing-library/react'
