@@ -1,5 +1,5 @@
 /**
- * Regression test for <issue-url — filled in after the issue is filed>
+ * Regression test for https://github.com/contember/bindx/issues/126
  *
  * A column type often has to hand the code that consumes `columns` something the
  * leaf has no property for: how an export writes a computed cell, a width, an
