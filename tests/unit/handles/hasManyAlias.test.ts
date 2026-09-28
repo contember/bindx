@@ -277,6 +277,71 @@ describe('HasMany with Alias Support', () => {
 		})
 	})
 
+	// ==================== Explicit order of a sibling view ====================
+
+	/**
+	 * A manual order replaces a view's default order, which is where additions otherwise
+	 * appear. An addition must therefore reach the manual order of every view it renders
+	 * in, not only of the view it was made in.
+	 */
+	describe('Explicit order of a sibling view', () => {
+		const orderedAlias = generateHasManyAlias('tags', { orderBy: [{ name: 'asc' }] })
+		const activeAlias = generateHasManyAlias('tags', { filter: { active: true } })
+
+		beforeEach(() => {
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
+			store.declareHasManyViewMembership('Article', 'tags', orderedAlias, 'total')
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2'])
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2'], orderedAlias)
+		})
+
+		test('an add in one view shows in a sibling view the user reordered', () => {
+			store.moveInHasMany('Article', 'a-1', 'tags', 0, 1, orderedAlias)
+
+			store.addToHasMany('Article', 'a-1', 'tags', 'n-1')
+
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags')).toEqual(['t-1', 't-2', 'n-1'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', orderedAlias)).toEqual(['t-2', 't-1', 'n-1'])
+		})
+
+		test('two views that only order each show the other one\'s add', () => {
+			// add() gives its own view an explicit order, so the second add meets one.
+			store.addToHasMany('Article', 'a-1', 'tags', 'n-1', orderedAlias)
+			store.addToHasMany('Article', 'a-1', 'tags', 'n-2')
+
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags')).toEqual(['t-1', 't-2', 'n-1', 'n-2'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', orderedAlias)).toEqual(['t-1', 't-2', 'n-1', 'n-2'])
+		})
+
+		test('a connection made in a filtered view shows in a total view with a manual order', () => {
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], activeAlias)
+			store.addToHasMany('Article', 'a-1', 'tags', 'n-1')
+
+			store.planHasManyConnection('Article', 'a-1', 'tags', 't-9', activeAlias)
+
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags')).toEqual(['t-1', 't-2', 'n-1', 't-9'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', activeAlias)).toEqual(['t-1', 't-9'])
+		})
+
+		test('a confirmed add stays in a sibling view the user reordered', () => {
+			store.moveInHasMany('Article', 'a-1', 'tags', 0, 1, orderedAlias)
+			store.addToHasMany('Article', 'a-1', 'tags', 'n-1')
+
+			store.reconcileSentHasMany('Article', 'a-1', 'tags', { additions: [{ itemId: 'n-1', kind: 'created' }], removals: [] })
+
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', orderedAlias)).toEqual(['t-2', 't-1', 'n-1'])
+		})
+
+		test('a filtered sibling with a manual order does not gain the addition', () => {
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2'], activeAlias)
+			store.moveInHasMany('Article', 'a-1', 'tags', 0, 1, activeAlias)
+
+			store.addToHasMany('Article', 'a-1', 'tags', 'n-1')
+
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', activeAlias)).toEqual(['t-2', 't-1'])
+		})
+	})
+
 	// ==================== Handle with Alias ====================
 
 	describe('HasManyListHandle with Alias', () => {

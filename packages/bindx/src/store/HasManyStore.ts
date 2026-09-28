@@ -4,6 +4,7 @@ import { RelationEdgeIndex } from './RelationEdgeIndex.js'
 import { RelationOwnerIndex } from './RelationOwnerIndex.js'
 import {
 	additionFoldTargets,
+	additionRendersIn,
 	arraysEqual,
 	cloneHasManyState,
 	computeViewOrderedIds,
@@ -20,6 +21,7 @@ import {
 	type HasManyRemovalType,
 	type HasManyViewMembership,
 	type HasManyViewProjection,
+	type PlannedHasManyAddition,
 	type ReconciliationResult,
 	type SentHasManyDelta,
 	type StoredHasManyState,
@@ -266,7 +268,6 @@ export class HasManyStore {
 	planHasManyConnection(key: string, alias: string, itemId: string): void {
 		const state = this.editableState(key, alias)
 		this.recordAddition(state, alias, itemId, 'connected')
-		this.appendToExplicitOrder(state, alias, itemId)
 		this.commitEdit(key, state)
 		this.editableWriteVersion++
 	}
@@ -297,8 +298,6 @@ export class HasManyStore {
 		this.recordAddition(state, alias, itemId, 'connected')
 		if (fresh) {
 			state.views.get(alias)!.orderedIds = [itemId]
-		} else {
-			this.appendToExplicitOrder(state, alias, itemId)
 		}
 		this.commitEdit(key, state)
 		this.editableWriteVersion++
@@ -316,24 +315,30 @@ export class HasManyStore {
 		kind: 'created' | 'connected',
 	): void {
 		const existing = state.plannedAdditions.get(itemId)
-		if (existing) {
-			existing.origins.add(alias)
-			if (kind === 'created') existing.kind = 'created'
-		} else {
-			state.plannedAdditions.set(itemId, { kind, origins: new Set([alias]) })
-		}
+		const addition = existing ?? { kind, origins: new Set<string>() }
+		addition.origins.add(alias)
+		if (kind === 'created') addition.kind = 'created'
+		state.plannedAdditions.set(itemId, addition)
 		state.plannedRemovals.delete(itemId)
+		this.appendToRenderingExplicitOrders(state, itemId, addition)
 	}
 
 	/**
-	 * Only touches an EXPLICIT order — the default order already derives from
-	 * plannedAdditions. Guards against re-appending an id that is already listed:
-	 * the connect paths re-run whenever an embedded reference is re-materialized.
+	 * An explicit order replaces the default one, which is where additions otherwise
+	 * appear, so every view the addition renders in must list it — not only the view
+	 * it was made in. Guards against re-appending an id that is already listed: the
+	 * connect paths re-run whenever an embedded reference is re-materialized.
 	 */
-	private appendToExplicitOrder(state: StoredHasManyState, alias: string, itemId: string): void {
-		const view = state.views.get(alias)!
-		if (view.orderedIds !== null && !view.orderedIds.includes(itemId)) {
-			view.orderedIds = [...view.orderedIds, itemId]
+	private appendToRenderingExplicitOrders(
+		state: StoredHasManyState,
+		itemId: string,
+		addition: PlannedHasManyAddition,
+	): void {
+		for (const [alias, view] of state.views) {
+			if (view.orderedIds === null || view.orderedIds.includes(itemId)) continue
+			if (additionRendersIn(state.views, alias, addition)) {
+				view.orderedIds = [...view.orderedIds, itemId]
+			}
 		}
 	}
 
