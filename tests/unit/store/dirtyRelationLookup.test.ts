@@ -1,6 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import { HasOneStore, type StoredRelationState } from '../../../packages/bindx/src/store/HasOneStore.js'
-import { HasManyStore, type StoredHasManyState } from '../../../packages/bindx/src/store/HasManyStore.js'
+import { HasManyStore } from '../../../packages/bindx/src/store/HasManyStore.js'
+import type { StoredHasManyState } from '../../../packages/bindx/src/store/hasManyState.js'
 
 function hasOneState(): StoredRelationState {
 	return {
@@ -15,8 +16,7 @@ function hasOneState(): StoredRelationState {
 
 function hasManyState(): StoredHasManyState {
 	return {
-		serverIds: new Set(['child']),
-		orderedIds: null,
+		views: new Map([['articles', { serverIds: new Set(['child']), orderedIds: null, membership: 'total' }]]),
 		plannedRemovals: new Map([['child', 'disconnect']]),
 		plannedAdditions: new Map(),
 		version: 0,

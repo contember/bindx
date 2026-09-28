@@ -165,7 +165,6 @@ export interface RemoveFromListAction {
 	readonly fieldName: string
 	readonly itemKey: string
 	readonly removalType: 'disconnect' | 'delete'
-	readonly alias?: string
 }
 
 /**
@@ -581,9 +580,8 @@ export function removeFromList(
 	fieldName: string,
 	itemKey: string,
 	removalType: 'disconnect' | 'delete',
-	alias?: string,
 ): RemoveFromListAction {
-	return { type: 'REMOVE_FROM_LIST', entityType, entityId, fieldName, itemKey, removalType, alias }
+	return { type: 'REMOVE_FROM_LIST', entityType, entityId, fieldName, itemKey, removalType }
 }
 
 /**

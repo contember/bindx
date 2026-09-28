@@ -54,3 +54,16 @@ export function generateHasManyAlias(fieldName: string, params?: HasManyParams):
 
 	return `${fieldName}_${hashStr}`
 }
+
+/**
+ * Whether a has-many selected with {@link params} can be missing members of the
+ * relation — i.e. whether the server may have left rows out of this read.
+ *
+ * `orderBy` and `totalCount` only shape how the rows come back, so a view that
+ * carries nothing else still contains every member even though it is read under a
+ * generated alias.
+ */
+export function canHasManyParamsExcludeMembers(params?: HasManyParams): boolean {
+	if (!params) return false
+	return params.filter !== undefined || params.limit !== undefined || params.offset !== undefined
+}

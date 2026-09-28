@@ -9,6 +9,9 @@ import {
 	disconnectRelation,
 	moveInList,
 	removeFromList,
+	addToList,
+	connectToList,
+	generateHasManyAlias,
 } from '@contember/bindx'
 
 /**
@@ -85,7 +88,7 @@ describe('undo journal — deep coverage', () => {
 			expect(store.getHasManyOrderedIds('Article', 'p', 'items')).toEqual(['s', 'ctemp'])
 
 			// Persist: commit list (C becomes a server member) and rekey C.
-			store.commitHasMany('Article', 'p', 'items', ['s', 'ctemp'])
+			store.commitAllRelations('Article', 'p')
 			store.commitEntity('Item', 'ctemp')
 			store.setExistsOnServer('Item', 'ctemp', true)
 			store.mapTempIdToPersistedId('Item', 'ctemp', 'cp')
@@ -116,7 +119,7 @@ describe('undo journal — deep coverage', () => {
 			undo.endGroup(groupId)
 
 			// Persist everything: commit list + sibling, rekey C.
-			store.commitHasMany('Article', 'p', 'items', ['s', 'ctemp'])
+			store.commitAllRelations('Article', 'p')
 			store.commitEntity('Item', 's')
 			store.commitEntity('Item', 'ctemp')
 			store.setExistsOnServer('Item', 'ctemp', true)
@@ -151,7 +154,7 @@ describe('undo journal — deep coverage', () => {
 			expect(store.getHasManyOrderedIds('Article', 'p', 'items')).toEqual(['s2', 's1', 'ctemp'])
 
 			// Persist: commit + rekey C.
-			store.commitHasMany('Article', 'p', 'items', ['s1', 's2', 'ctemp'])
+			store.commitAllRelations('Article', 'p')
 			store.commitEntity('Item', 'ctemp')
 			store.setExistsOnServer('Item', 'ctemp', true)
 			store.mapTempIdToPersistedId('Item', 'ctemp', 'cp')
@@ -264,6 +267,164 @@ describe('undo journal — deep coverage', () => {
 			undo.undo()
 			expect(store.getHasManyOrderedIds('Article', 'p', 'items')).toEqual(['s1', 's2'])
 			expect(store.getHasManyPlannedRemovals('Article', 'p', 'items')?.size ?? 0).toBe(0)
+		})
+	})
+
+	// ============================================================
+	// Gestures made through an args-view of a relation (issue #121)
+	// ============================================================
+	describe('has-many undo through an args-view', () => {
+		// A has-many selected with args is read under a generated alias. The journal
+		// records the relation, so a gesture made in one view undoes as one gesture —
+		// and a manual order belonging to another view survives it.
+		const WIDE = generateHasManyAlias('items', { filter: { archived: false } })
+		const NARROW = generateHasManyAlias('items', { filter: { starred: true } })
+
+		beforeEach(() => {
+			store.setEntityData('Article', 'p', { id: 'p' }, true)
+			store.setHasManyServerIds('Article', 'p', 'items', ['s1', 's2'], WIDE)
+			store.setHasManyServerIds('Article', 'p', 'items', ['s1'], NARROW)
+		})
+
+		test('a removal made in one view is undone in every view', () => {
+			dispatcher.dispatch(removeFromList('Article', 'p', 'items', 's1', 'disconnect'))
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', WIDE)).toEqual(['s2'])
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', NARROW)).toEqual([])
+
+			undo.undo()
+
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', WIDE)).toEqual(['s1', 's2'])
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', NARROW)).toEqual(['s1'])
+			expect(store.getHasManyPlannedRemovals('Article', 'p', 'items')?.size ?? 0).toBe(0)
+		})
+
+		test('a move in one view is undone without touching the other view', () => {
+			dispatcher.dispatch(moveInList('Article', 'p', 'items', 0, 1, WIDE))
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', WIDE)).toEqual(['s2', 's1'])
+
+			undo.undo()
+
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', WIDE)).toEqual(['s1', 's2'])
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', NARROW)).toEqual(['s1'])
+		})
+
+		test('an addition made in one view is undone out of that view', () => {
+			dispatcher.dispatch(connectToList('Article', 'p', 'items', 's3', 'Item', NARROW))
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', NARROW)).toEqual(['s1', 's3'])
+			// The other view is filtered, so the client cannot claim membership there.
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', WIDE)).toEqual(['s1', 's2'])
+
+			undo.undo()
+
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', NARROW)).toEqual(['s1'])
+			expect(store.getHasManyPlannedConnections('Article', 'p', 'items')?.size ?? 0).toBe(0)
+		})
+
+		test('an add through a view nothing had read yet is undone out of that view', () => {
+			const UNREAD = generateHasManyAlias('items', { filter: { pinned: true } })
+			// The add itself creates the view, with an explicit order the journal never recorded.
+			dispatcher.dispatch(addToList('Article', 'p', 'items', 'Item', 'n1', UNREAD))
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', UNREAD)).toEqual(['n1'])
+
+			undo.undo()
+
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', UNREAD)).toEqual([])
+			expect(store.getHasManyCreatedEntities('Article', 'p', 'items')?.size ?? 0).toBe(0)
+		})
+	})
+
+	describe('has-many undo across views with manual orders', () => {
+		// Every view carries a manual order, so what undo restores is the recorded
+		// order of each view, not a default recomputed from the restored writes.
+		const SORTED = generateHasManyAlias('items', { orderBy: [{ name: 'asc' }] })
+		const FILTERED = generateHasManyAlias('items', { filter: { starred: true } })
+		const LIMITED = generateHasManyAlias('items', { limit: 2 })
+
+		interface ViewOrders {
+			all: string[]
+			sorted: string[]
+			filtered: string[]
+			limited: string[]
+		}
+
+		function orders(): ViewOrders {
+			return {
+				all: store.getHasManyOrderedIds('Article', 'p', 'items'),
+				sorted: store.getHasManyOrderedIds('Article', 'p', 'items', SORTED),
+				filtered: store.getHasManyOrderedIds('Article', 'p', 'items', FILTERED),
+				limited: store.getHasManyOrderedIds('Article', 'p', 'items', LIMITED),
+			}
+		}
+
+		beforeEach(() => {
+			store.setEntityData('Article', 'p', { id: 'p' }, true)
+			store.declareHasManyViewMembership('Article', 'items', SORTED, 'total')
+			store.setHasManyServerIds('Article', 'p', 'items', ['s1', 's2', 's3'])
+			store.setHasManyServerIds('Article', 'p', 'items', ['s3', 's1', 's2'], SORTED)
+			store.setHasManyServerIds('Article', 'p', 'items', ['s1', 's3'], FILTERED)
+			store.setHasManyServerIds('Article', 'p', 'items', ['s1', 's2'], LIMITED)
+			for (const alias of [undefined, SORTED, FILTERED, LIMITED]) {
+				dispatcher.dispatch(moveInList('Article', 'p', 'items', 0, 1, alias))
+			}
+		})
+
+		test('an add is undone and redone in every view that shows it', () => {
+			const before = orders()
+			dispatcher.dispatch(addToList('Article', 'p', 'items', 'Item', 'n1', SORTED))
+			const after = orders()
+			expect(after.all).toEqual([...before.all, 'n1'])
+			expect(after.sorted).toEqual([...before.sorted, 'n1'])
+			expect(after.filtered).toEqual(before.filtered)
+
+			undo.undo()
+			expect(orders()).toEqual(before)
+
+			undo.redo()
+			expect(orders()).toEqual(after)
+		})
+
+		test('a connect from a filtered view and a later add undo and redo one gesture at a time', () => {
+			const before = orders()
+			dispatcher.dispatch(connectToList('Article', 'p', 'items', 'x9', 'Item', FILTERED))
+			const afterConnect = orders()
+			expect(afterConnect.filtered).toEqual([...before.filtered, 'x9'])
+			expect(afterConnect.all).toEqual([...before.all, 'x9'])
+			expect(afterConnect.sorted).toEqual([...before.sorted, 'x9'])
+
+			dispatcher.dispatch(addToList('Article', 'p', 'items', 'Item', 'n1'))
+			const afterAdd = orders()
+			expect(afterAdd.filtered).toEqual(afterConnect.filtered)
+
+			undo.undo()
+			expect(orders()).toEqual(afterConnect)
+			undo.undo()
+			expect(orders()).toEqual(before)
+			expect(store.getHasManyPlannedConnections('Article', 'p', 'items')?.size ?? 0).toBe(0)
+
+			undo.redo()
+			undo.redo()
+			expect(orders()).toEqual(afterAdd)
+		})
+
+		test('a removal is undone back into the manual order of every view', () => {
+			const before = orders()
+			dispatcher.dispatch(removeFromList('Article', 'p', 'items', 's1', 'disconnect'))
+			expect(orders().filtered).not.toContain('s1')
+
+			undo.undo()
+
+			expect(orders()).toEqual(before)
+		})
+
+		test('undoing an add made in one view keeps a move made in another', () => {
+			dispatcher.dispatch(moveInList('Article', 'p', 'items', 0, 2, SORTED))
+			const moved = orders().sorted
+			dispatcher.dispatch(addToList('Article', 'p', 'items', 'Item', 'n1'))
+			expect(orders().sorted).toEqual([...moved, 'n1'])
+
+			undo.undo()
+
+			expect(orders().sorted).toEqual(moved)
 		})
 	})
 

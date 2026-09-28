@@ -214,7 +214,7 @@ export class UndoManager {
 	 * so stored cells keep valid keys / id references (and sealed creates drop out).
 	 */
 	private rekeyStacks(ctx: RekeyContext): void {
-		const liveServerIds = (key: string): Set<string> => this.store.getLiveHasManyServerIds(key)
+		const liveServerIds = (key: string): ReadonlyMap<string, ReadonlySet<string>> => this.store.getLiveHasManyServerIds(key)
 		const undoCount = this.undoStack.length
 		const redoCount = this.redoStack.length
 		const hadPending = this.pending !== null && this.pending.size > 0

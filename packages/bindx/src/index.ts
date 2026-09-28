@@ -250,6 +250,12 @@ export type {
 export type {
 	StoredRelationState,
 	StoredHasManyState,
+	HasManyView,
+	HasManyViewMembership,
+	PlannedHasManyAddition,
+	HasManyAdditionKind,
+	HasManyRelationProjection,
+	HasManyViewProjection,
 	EntityMeta,
 } from './store/SnapshotStore.js'
 

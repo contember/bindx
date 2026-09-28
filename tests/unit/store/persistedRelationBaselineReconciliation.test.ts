@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { SnapshotStore } from '@contember/bindx'
+import { SnapshotStore, generateHasManyAlias } from '@contember/bindx'
 
 const parentType = 'Article'
 const parentId = 'article-1'
@@ -251,5 +251,54 @@ describe('persisted relation baseline reconciliation', () => {
 
 		expect(hasOneNotifications).toBe(1)
 		expect(hasManyNotifications).toBe(1)
+	})
+})
+
+describe('reconciling a relation read only through args-views', () => {
+	const active = generateHasManyAlias('tags', { filter: { active: true } })
+	const inactive = generateHasManyAlias('tags', { filter: { active: false } })
+
+	test('a confirmed addition no view can claim still joins the baseline', () => {
+		const store = new SnapshotStore()
+		store.getOrCreateHasMany(parentType, parentId, 'tags', ['A'], active)
+		store.planHasManyConnection(parentType, parentId, 'tags', 'B', active)
+		// The user cancels while the request is in flight, so nothing is left to say
+		// which view B belongs to — and every mounted view is filtered.
+		store.removeFromHasMany(parentType, parentId, 'tags', 'B', 'disconnect')
+
+		const result = store.reconcileSentHasMany(parentType, parentId, 'tags', {
+			additions: [{ itemId: 'B', kind: 'connected' }],
+			removals: [],
+		})
+		// Dropping the compensating removal must not lose the row: the server has it.
+		store.resetHasMany(parentType, parentId, 'tags')
+
+		expect(result).toBe('applied')
+		expect(store.getHasMany(parentType, parentId, 'tags')?.serverIds).toEqual(new Set(['A', 'B']))
+		// Parked in the unparameterized view, so no filtered view starts showing it.
+		expect(store.getHasManyOrderedIds(parentType, parentId, 'tags', active)).toEqual(['A'])
+		expect(store.getHasManyOrderedIds(parentType, parentId, 'tags')).toEqual(['B'])
+	})
+
+	test('a rebased disconnect reconnects only where the row was listed', () => {
+		const store = new SnapshotStore()
+		store.getOrCreateHasMany(parentType, parentId, 'tags', ['B'], active)
+		store.getOrCreateHasMany(parentType, parentId, 'tags', [], inactive)
+		store.removeFromHasMany(parentType, parentId, 'tags', 'B', 'disconnect')
+		// Reverting the removal while the disconnect is in flight leaves B live through
+		// the server baseline of the view that listed it, with no planned addition.
+		store.resetHasMany(parentType, parentId, 'tags')
+
+		const result = store.reconcileSentHasMany(parentType, parentId, 'tags', {
+			additions: [],
+			removals: [{ itemId: 'B', type: 'disconnect' }],
+		})
+
+		expect(result).toBe('applied')
+		expect(store.getHasMany(parentType, parentId, 'tags')?.plannedAdditions).toEqual(new Map([['B', 'connected']]))
+		expect(store.getHasManyOrderedIds(parentType, parentId, 'tags', active)).toEqual(['B'])
+		// The other view never showed B and cannot evaluate its filter, so it must not
+		// start claiming membership now.
+		expect(store.getHasManyOrderedIds(parentType, parentId, 'tags', inactive)).toEqual([])
 	})
 })
