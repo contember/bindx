@@ -418,11 +418,13 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			return
 		}
 
+		const occurrence = this.store.resolveServerOccurrence(embeddedData as Record<string, unknown>)
+
 		// Skip if embedded data values match existing serverData — avoids overwriting
 		// unpersisted local mutations when a re-fetch returns the same server data
 		// (e.g. polling). A new reference with identical values means no actual change.
 		const existing = this.store.getEntitySnapshot(this.targetType, id)
-		if (existing?.serverData && embeddedDataMatchesSnapshot(embeddedData as Record<string, unknown>, existing.serverData as Record<string, unknown>)) {
+		if (existing?.serverData && embeddedDataMatchesSnapshot(occurrence, existing.serverData as Record<string, unknown>)) {
 			this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, this.dataFieldName, embeddedData)
 			return
 		}
@@ -435,7 +437,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		this.store.refreshServerData(
 			this.targetType,
 			id,
-			embeddedData as Record<string, unknown>,
+			occurrence,
 			true, // skipNotify - called during render, data already exists embedded in parent
 		)
 		this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, this.dataFieldName, embeddedData)

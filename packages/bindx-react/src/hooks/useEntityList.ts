@@ -473,7 +473,8 @@ export function useEntityList(
 					throw new Error('Unexpected query result type')
 				}
 
-				const items = result.data.map(data => ({ id: getRowId(entityType, data), data }))
+				store.indexServerResponse(entityType, result.data, selectionMeta, schemaRegistry)
+				const items = result.data.map(data => ({ id: getRowId(entityType, data), data: store.resolveServerOccurrence(data) }))
 				store.batchNotifications(() => {
 					for (const item of items) {
 						// Revalidation preserves local edits while advancing the server baseline.
@@ -504,7 +505,7 @@ export function useEntityList(
 		return () => {
 			abortController.abort()
 		}
-	}, [entityType, optionsKey, requestKey, batcher, dispatcher, store, selectionMeta])
+	}, [entityType, optionsKey, requestKey, batcher, dispatcher, store, selectionMeta, schemaRegistry])
 
 	return accessor
 }
