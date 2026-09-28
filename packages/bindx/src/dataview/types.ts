@@ -60,9 +60,9 @@ export interface BooleanFilterArtifact {
 /**
  * Enum filter artifact
  */
-export interface EnumFilterArtifact {
-	readonly values?: readonly string[]
-	readonly notValues?: readonly string[]
+export interface EnumFilterArtifact<TValue extends string = string> {
+	readonly values?: readonly TValue[]
+	readonly notValues?: readonly TValue[]
 	readonly nullCondition?: boolean
 }
 
@@ -78,9 +78,9 @@ export interface RelationFilterArtifact {
 /**
  * Enum list filter artifact - for array enum fields (uses 'includes' condition)
  */
-export interface EnumListFilterArtifact {
-	readonly values?: readonly string[]
-	readonly notValues?: readonly string[]
+export interface EnumListFilterArtifact<TValue extends string = string> {
+	readonly values?: readonly TValue[]
+	readonly notValues?: readonly TValue[]
 	readonly nullCondition?: boolean
 }
 

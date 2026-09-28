@@ -1,5 +1,5 @@
 import React, { type ReactElement, type ReactNode } from 'react'
-import type { EntityAccessor, FieldRef } from '@contember/bindx'
+import type { EntityAccessor, EnumFilterArtifact, EnumListFilterArtifact, FieldRef } from '@contember/bindx'
 import {
 	createColumn,
 	createColumnStaticRender,
@@ -67,6 +67,8 @@ export const DataGridEnumColumn = Object.assign(
 		header?: ReactNode
 		sortable?: boolean
 		filter?: boolean
+		/** Where the column's filter starts when nothing is stored for it. Defaults to no value picked. */
+		filterInitialArtifact?: EnumFilterArtifact<ExtractEnum<F>>
 		children?: (value: ExtractEnum<F> | null, accessor: EntityAccessor<object>) => ReactNode
 		options?: { [K in ExtractEnum<F>]?: ReactNode }
 	}): ReactNode => null,
@@ -88,6 +90,8 @@ export const DataGridEnumListColumn = Object.assign(
 		header?: ReactNode
 		sortable?: boolean
 		filter?: boolean
+		/** Where the column's filter starts when nothing is stored for it. Defaults to no value picked. */
+		filterInitialArtifact?: EnumListFilterArtifact<ExtractEnumList<F>>
 		children?: (value: ExtractEnumList<F>[] | null, accessor: EntityAccessor<object>) => ReactNode
 		options?: { [K in ExtractEnumList<F>]?: ReactNode }
 	}): ReactNode => null,

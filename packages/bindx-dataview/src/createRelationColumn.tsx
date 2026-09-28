@@ -11,7 +11,7 @@
  */
 
 import React from 'react'
-import type { FieldRef, FilterArtifact, FilterHandler, EntityAccessor, SelectionMeta } from '@contember/bindx'
+import type { FieldRef, FilterArtifact, FilterHandler, EntityAccessor, RelationFilterArtifact, SelectionMeta } from '@contember/bindx'
 import { SelectionScope } from '@contember/bindx'
 import { createCollectorProxy, collectSelection as collectJsxSelection, SCOPE_REF } from '@contember/bindx-react'
 import type { ColumnTypeDef } from './columnTypes.js'
@@ -64,6 +64,8 @@ export interface RelationColumnProps<TEntity, TSelected> {
 	name?: string
 	header?: React.ReactNode
 	filter?: boolean
+	/** Where the column's filter starts when nothing is stored for it. Defaults to no related row picked. */
+	filterInitialArtifact?: RelationFilterArtifact
 	/** Register the relation without showing a column. */
 	virtual?: boolean
 	renderCellWrapper?: (content: React.ReactNode, item: EntityAccessor<object>) => React.ReactNode
@@ -162,6 +164,7 @@ export function createRelationColumn<TFilterArtifact extends FilterArtifact>(
 			filterHandler: filterName
 				? columnType.createFilterHandler(fieldName!) as FilterHandler<FilterArtifact>
 				: undefined,
+			filterInitialArtifact: props['filterInitialArtifact'] as FilterArtifact | undefined,
 			isTextSearchable: false,
 			columnType: columnType.name as ColumnLeafProps['columnType'],
 			relatedEntityName,

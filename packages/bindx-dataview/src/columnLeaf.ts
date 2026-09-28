@@ -35,6 +35,11 @@ export interface ColumnLeafProps {
 	readonly sortingField: string | null
 	readonly filterName: string | null
 	readonly filterHandler: FilterHandler<FilterArtifact> | undefined
+	/**
+	 * Where the filter starts when nothing is stored for it. Defaults to the
+	 * handler's (inactive) default artifact.
+	 */
+	readonly filterInitialArtifact?: FilterArtifact
 	readonly isTextSearchable: boolean
 	/**
 	 * The leaf exists only to register its field — for full-text search, or to
