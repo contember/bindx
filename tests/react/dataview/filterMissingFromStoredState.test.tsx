@@ -5,10 +5,21 @@
 // applied either, so a filter meant to start constrained starts unconstrained.
 import '../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
-import { renderHook, cleanup } from '@testing-library/react'
-import { createEnumFilterHandler, createTextFilterHandler } from '@contember/bindx'
+import { renderHook, render, cleanup, act, waitFor } from '@testing-library/react'
+import React, { type ReactElement } from 'react'
+import { BindxProvider, MockAdapter, defineSchema, scalar } from '@contember/bindx-react'
+import { createEnumFilterHandler, createTextFilterHandler, entityDef } from '@contember/bindx'
 import type { EnumFilterArtifact, FilterArtifact, FilterHandler } from '@contember/bindx'
-import { useFilteringState, type StateStorage } from '@contember/bindx-dataview'
+import {
+	DataGrid,
+	DataGridEnumColumn,
+	DataGridTextColumn,
+	useDataViewContext,
+	useFilteringState,
+	type FilteringState,
+	type StateStorage,
+} from '@contember/bindx-dataview'
+import { TestTable, getRowCount, queryByTestId } from './helpers.js'
 
 afterEach(() => {
 	cleanup()
@@ -55,5 +66,131 @@ describe('useFilteringState — stored record that predates a filter', () => {
 		const handler = filterDefs.get('status')?.handler
 		expect(result.current.getArtifact('status')).toEqual(shown)
 		expect(result.current.resolvedWhere).toEqual(shown === undefined ? undefined : handler?.toWhere(shown))
+	})
+})
+
+describe('useFilteringState — a record that omits a registered filter', () => {
+	test('should read a filter omitted by setAllArtifacts at its initial artifact everywhere', () => {
+		const { result } = renderHook(() => useFilteringState({ filters: filterDefs }))
+
+		act(() => result.current.setAllArtifacts({ title: { mode: 'contains', query: 'x' } }))
+
+		expect(result.current.getArtifact('status')).toEqual(publishedOnly)
+		expect(result.current.filters.get('status')?.artifact).toEqual(publishedOnly)
+		expect(result.current.resolvedWhere).toEqual({
+			and: [{ title: { containsCI: 'x' } }, { status: { in: ['published'] } }],
+		})
+	})
+
+	test('should hand an updater the initial artifact of a filter the record omits', () => {
+		const { result } = renderHook(() => useFilteringState({
+			filters: filterDefs,
+			stateStorage: storageWithRecordWithoutStatus(),
+			storageKey: 'grid',
+		}))
+		let seen: FilterArtifact | undefined
+
+		act(() => result.current.setArtifact('status', current => {
+			seen = current
+			return current
+		}))
+
+		expect(seen).toEqual(publishedOnly)
+	})
+
+	test('should clear one filter to the handler default and reset all to the initial artifacts', () => {
+		const { result } = renderHook(() => useFilteringState({ filters: filterDefs }))
+
+		act(() => result.current.resetFilter('status'))
+		expect(result.current.getArtifact('status')).toEqual({})
+		expect(result.current.resolvedWhere).toBeUndefined()
+
+		act(() => result.current.resetAll())
+		expect(result.current.getArtifact('status')).toEqual(publishedOnly)
+	})
+})
+
+// ============================================================================
+// DataGrid: a column declares where its filter starts
+// ============================================================================
+
+interface Article {
+	id: string
+	title: string
+	status: string
+}
+
+const gridSchema = defineSchema<{ Article: Article }>({
+	entities: {
+		Article: {
+			fields: { id: scalar(), title: scalar(), status: scalar() },
+		},
+	},
+})
+
+const ArticleDef = entityDef<Article>('Article')
+
+function createArticles(): Record<string, Record<string, Record<string, unknown>>> {
+	return {
+		Article: {
+			a1: { id: 'a1', title: 'Alpha', status: 'published' },
+			a2: { id: 'a2', title: 'Beta', status: 'draft' },
+			a3: { id: 'a3', title: 'Gamma', status: 'published' },
+		},
+	}
+}
+
+function FilteringProbe({ onFiltering }: { onFiltering: (filtering: FilteringState) => void }): null {
+	onFiltering(useDataViewContext().filtering)
+	return null
+}
+
+function renderGrid(stateStorage?: StateStorage): { container: HTMLElement; filtering: () => FilteringState } {
+	let latest: FilteringState | undefined
+	const adapter = new MockAdapter(createArticles(), { delay: 0 })
+	const grid = (): ReactElement => (
+		<BindxProvider adapter={adapter} schema={gridSchema}>
+			<DataGrid entity={ArticleDef} stateStorage={stateStorage} storageKey="grid">
+				{it => (
+					<>
+						<DataGridTextColumn field={it.title} header="Title" filter />
+						<DataGridEnumColumn field={it.status} header="Status" options={['published', 'draft']} filter filterInitialArtifact={publishedOnly} />
+						<FilteringProbe onFiltering={filtering => { latest = filtering }} />
+						<TestTable />
+					</>
+				)}
+			</DataGrid>
+		</BindxProvider>
+	)
+	const { container } = render(grid())
+	return {
+		container,
+		filtering: () => {
+			if (!latest) throw new Error('DataGrid has not rendered its context yet')
+			return latest
+		},
+	}
+}
+
+describe('DataGrid — a column with an initial filter artifact', () => {
+	test('should start the grid filtered by the column initial artifact', async () => {
+		const { container, filtering } = renderGrid()
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'datagrid-loading')).toBeNull()
+			expect(getRowCount(container)).toBe(2)
+		})
+		expect(filtering().getArtifact('status')).toEqual(publishedOnly)
+		expect(filtering().hasActiveFilters).toBe(true)
+	})
+
+	test('should apply the initial artifact when the stored record predates the filter', async () => {
+		const { container, filtering } = renderGrid(storageWithRecordWithoutStatus())
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'datagrid-loading')).toBeNull()
+			expect(getRowCount(container)).toBe(2)
+		})
+		expect(filtering().filters.get('status')?.artifact).toEqual(publishedOnly)
 	})
 })

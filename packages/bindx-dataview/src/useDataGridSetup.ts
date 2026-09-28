@@ -199,12 +199,12 @@ export function useDataGridSetup<TEntity extends object>({
 	}, [entityType, schemaRegistry, children, layouts])
 
 	// ---- Phase 2: State management ----
-	const filterDefs = useMemo((): ReadonlyMap<string, { handler: FilterHandler<FilterArtifact> }> => {
-		const map = new Map<string, { handler: FilterHandler<FilterArtifact> }>()
+	const filterDefs = useMemo((): ReadonlyMap<string, { handler: FilterHandler<FilterArtifact>; initialArtifact?: FilterArtifact }> => {
+		const map = new Map<string, { handler: FilterHandler<FilterArtifact>; initialArtifact?: FilterArtifact }>()
 		const textFieldPaths: string[] = []
 		for (const col of columns) {
 			if (col.filterName && col.filterHandler) {
-				map.set(col.filterName, { handler: col.filterHandler })
+				map.set(col.filterName, { handler: col.filterHandler, initialArtifact: col.filterInitialArtifact })
 			}
 			if (col.isTextSearchable && col.fieldName) {
 				textFieldPaths.push(col.fieldName)

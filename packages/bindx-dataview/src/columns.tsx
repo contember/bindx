@@ -99,9 +99,15 @@ interface EnumExtraProps<T extends string> {
 	options: readonly T[] | Record<T, ReactNode>
 }
 
-export interface DataGridEnumColumnProps<T extends string> extends DataGridScalarColumnPropsBase<T>, EnumExtraProps<NoInfer<T>> {}
+export interface DataGridEnumColumnProps<T extends string> extends DataGridScalarColumnPropsBase<T>, EnumExtraProps<NoInfer<T>> {
+	/** Where the column's filter starts when nothing is stored for it. Defaults to no value picked. */
+	filterInitialArtifact?: EnumFilterArtifact
+}
 
-export interface DataGridEnumListColumnProps<T extends string> extends DataGridScalarColumnPropsBase<T>, EnumExtraProps<NoInfer<T>> {}
+export interface DataGridEnumListColumnProps<T extends string> extends DataGridScalarColumnPropsBase<T>, EnumExtraProps<NoInfer<T>> {
+	/** Where the column's filter starts when nothing is stored for it. Defaults to no value picked. */
+	filterInitialArtifact?: EnumListFilterArtifact
+}
 
 // ============================================================================
 // Scalar Columns via createColumn()
@@ -233,6 +239,8 @@ export interface DataGridColumnProps<T> {
 	sortable?: boolean
 	filter?: boolean
 	filterHandler?: FilterHandler<FilterArtifact>
+	/** Where the column's filter starts when nothing is stored for it. Defaults to the handler's inactive artifact. */
+	filterInitialArtifact?: FilterArtifact
 	/** Register the field without showing a column (e.g. to make it full-text searchable). */
 	virtual?: boolean
 	children?: (value: T | null, accessor: EntityAccessor<object>) => React.ReactNode
@@ -262,6 +270,7 @@ export const DataGridColumn = Object.assign(
 				filterHandler: filterEnabled && fieldName
 					? (customHandler ?? textColumnDef.createFilterHandler(fieldName) as FilterHandler<FilterArtifact>)
 					: undefined,
+				filterInitialArtifact: props['filterInitialArtifact'] as FilterArtifact | undefined,
 				isTextSearchable: false,
 				header,
 				renderCell: (accessor: EntityAccessor<object>) => {

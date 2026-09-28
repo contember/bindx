@@ -43,9 +43,14 @@ export interface FilteringState {
 	getArtifact(name: string): FilterArtifact | undefined
 	/** An updater sees the live artifact, not a render snapshot; returning `undefined` resets the filter to its default. */
 	setArtifact(name: string, artifact: FilterArtifactUpdate): void
-	/** Replaces the whole artifact record at once — for restoring a saved filter preset. */
+	/**
+	 * Replaces the whole artifact record at once — for restoring a saved filter preset.
+	 * A registered filter the record does not name reads as its initial artifact.
+	 */
 	setAllArtifacts(artifacts: Record<string, FilterArtifact>): void
+	/** Clears one filter: sets it to its handler's default (inactive) artifact. */
 	resetFilter(name: string): void
+	/** Puts every filter back where it starts: its initial artifact, else the handler default. */
 	resetAll(): void
 	readonly hasActiveFilters: boolean
 	readonly resolvedWhere: Record<string, unknown> | undefined
@@ -62,7 +67,7 @@ export interface UseFilteringOptions {
 export function useFilteringState(options: UseFilteringOptions): FilteringState {
 	const { filters: filterDefs, stateStorage = 'null', storageKey = 'dataview' } = options
 
-	const defaultArtifacts = useMemo((): Record<string, FilterArtifact> => {
+	const initialArtifacts = useMemo((): Record<string, FilterArtifact> => {
 		const result: Record<string, FilterArtifact> = {}
 		for (const [name, def] of filterDefs) {
 			result[name] = def.initialArtifact ?? def.handler.defaultArtifact()
@@ -70,10 +75,18 @@ export function useFilteringState(options: UseFilteringOptions): FilteringState 
 		return result
 	}, [filterDefs])
 
-	const [artifacts, setArtifacts] = useStoredState<Record<string, FilterArtifact>>(
+	const [storedArtifacts, setArtifacts] = useStoredState<Record<string, FilterArtifact>>(
 		stateStorage,
 		[storageKey, 'filters'],
-		(stored) => stored ?? defaultArtifacts,
+		(stored) => stored ?? initialArtifacts,
+	)
+
+	// A registered filter the record does not name (a record stored before the filter
+	// existed, or a restored preset that omits it) is where it would start with nothing
+	// stored. Every view below reads this one record, so the UI and the query agree.
+	const artifacts = useMemo(
+		(): Record<string, FilterArtifact> => ({ ...initialArtifacts, ...storedArtifacts }),
+		[initialArtifacts, storedArtifacts],
 	)
 
 	const getArtifact = useCallback(
@@ -85,12 +98,12 @@ export function useFilteringState(options: UseFilteringOptions): FilteringState 
 	const setArtifact = useCallback(
 		(name: string, artifact: FilterArtifactUpdate): void => {
 			setArtifacts(current => {
-				const next = typeof artifact === 'function' ? artifact(current[name]) : artifact
+				const next = typeof artifact === 'function' ? artifact(current[name] ?? initialArtifacts[name]) : artifact
 				const resolved = next ?? filterDefs.get(name)?.handler.defaultArtifact()
 				return resolved === undefined ? current : { ...current, [name]: resolved }
 			})
 		},
-		[filterDefs, setArtifacts],
+		[filterDefs, initialArtifacts, setArtifacts],
 	)
 
 	const resetFilter = useCallback(
@@ -103,8 +116,8 @@ export function useFilteringState(options: UseFilteringOptions): FilteringState 
 	)
 
 	const resetAll = useCallback((): void => {
-		setArtifacts(defaultArtifacts)
-	}, [defaultArtifacts, setArtifacts])
+		setArtifacts(initialArtifacts)
+	}, [initialArtifacts, setArtifacts])
 
 	const hasActiveFilters = useMemo((): boolean => {
 		for (const [name, def] of filterDefs) {
