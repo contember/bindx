@@ -43,13 +43,15 @@ export interface CreateColumnConfig<TValue, TFilterArtifact extends FilterArtifa
 // Column Component Props
 // ============================================================================
 
-export interface ColumnComponentProps<TValue = unknown> {
+export interface ColumnComponentProps<TValue = unknown, TFilterArtifact extends FilterArtifact = FilterArtifact> {
 	field: FieldRef<TValue>
 	/** Column identity. Defaults to the bound field name — pass it when two columns bind one field. */
 	name?: string
 	header?: React.ReactNode
 	sortable?: boolean
 	filter?: boolean
+	/** Where the column's filter starts when nothing is stored for it. Defaults to the handler's inactive artifact. */
+	filterInitialArtifact?: TFilterArtifact
 	/** Register the field without showing a column (e.g. to make it full-text searchable). */
 	virtual?: boolean
 	children?: (value: TValue | null, accessor: EntityAccessor<object>) => React.ReactNode
@@ -59,8 +61,12 @@ export interface ColumnComponentProps<TValue = unknown> {
 // Factory
 // ============================================================================
 
-export interface ColumnComponent<TExtraProps = object> {
-	<T>(props: ColumnComponentProps<T> & TExtraProps): null
+/**
+ * `TFilterArtifact` defaults to `never`: a column whose artifact type is not known takes no
+ * `filterInitialArtifact`, and every column `createColumn` builds is assignable to it.
+ */
+export interface ColumnComponent<TExtraProps = object, TFilterArtifact extends FilterArtifact = never> {
+	<T>(props: ColumnComponentProps<T, TFilterArtifact> & TExtraProps): null
 	staticRender: (props: Record<string, unknown>) => React.ReactNode
 }
 
@@ -119,6 +125,7 @@ export function createColumnStaticRender<TValue, TFilterArtifact extends FilterA
 			filterHandler: filterEnabled && fieldName
 				? columnType.createFilterHandler(fieldName) as FilterHandler<FilterArtifact>
 				: undefined,
+			filterInitialArtifact: props['filterInitialArtifact'] as FilterArtifact | undefined,
 			isTextSearchable: columnType.isTextSearchable,
 			columnType: columnType.name as ColumnLeafProps['columnType'],
 			enumName,
@@ -140,10 +147,10 @@ export function createColumnStaticRender<TValue, TFilterArtifact extends FilterA
 export function createColumn<TValue, TFilterArtifact extends FilterArtifact, TExtraProps = object>(
 	columnType: ColumnTypeDef<TValue, TFilterArtifact>,
 	config: CreateColumnConfig<TValue, TFilterArtifact>,
-): ColumnComponent<TExtraProps> {
-	function Column(_props: ColumnComponentProps<unknown> & TExtraProps): null {
+): ColumnComponent<TExtraProps, TFilterArtifact> {
+	function Column(_props: ColumnComponentProps<unknown, TFilterArtifact> & TExtraProps): null {
 		return null
 	}
 	Column.staticRender = createColumnStaticRender(columnType, config)
-	return Column as ColumnComponent<TExtraProps>
+	return Column as ColumnComponent<TExtraProps, TFilterArtifact>
 }

@@ -93,8 +93,10 @@ export type NotFoundEntityResult = UseEntityResultBase & {
 /**
  * Ready state — full EntityAccessor with status metadata.
  *
- * `$isRefetching` is `true` while a background re-fetch is in flight
- * (triggered by a `queryKey` change while ready data is already present).
+ * `$isRefetching` is `true` while the data answers an earlier query: from the re-fetch
+ * that a `queryKey` change starts, while ready data is already present, until its result
+ * arrives. Unlike `useEntityList`, the flag turns on when the re-fetch starts, one render
+ * after the change, not on the render that changes the query.
  * The accessor identity and field values remain stable until the new data
  * arrives, so the subtree does not unmount — useful for stale-while-revalidate
  * indicators (subtle spinner, "stale" badge, etc.).

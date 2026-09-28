@@ -257,7 +257,7 @@ describe('bulk state setters', () => {
 		})
 		expect(result.current.hasActiveFilters).toBe(true)
 
-		// A saved preset arrives as a whole record; a filter it omits must end up unset.
+		// A saved preset arrives as a whole record; a filter it omits drops its previous value and reads where it starts.
 		act(() => {
 			result.current.setAllArtifacts({
 				title: { mode: 'startsWith', query: 'beta' } satisfies TextFilterArtifact,
@@ -265,7 +265,7 @@ describe('bulk state setters', () => {
 		})
 
 		expect(result.current.getArtifact('title')).toEqual({ mode: 'startsWith', query: 'beta' })
-		expect(result.current.getArtifact('status')).toBeUndefined()
+		expect(result.current.getArtifact('status')).toEqual({})
 		expect(result.current.resolvedWhere).toEqual({ title: { startsWithCI: 'beta' } })
 	})
 })

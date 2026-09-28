@@ -53,7 +53,7 @@ function seedServerParentWithCreatedChild(h: Harness): void {
 	h.entitySnapshots.setData('Article:a1', 'a1', 'Article', { id: 'a1' }, true)
 	h.meta.setExistsOnServer('Article:a1', true)
 	h.entitySnapshots.setData('Comment:c1', 'c1', 'Comment', { id: 'c1' }, false)
-	h.relations.addToHasMany('Article:a1:comments', 'c1')
+	h.relations.addToHasMany('Article:a1:comments', 'comments', 'c1')
 }
 
 const sortedKeys = (set: Set<string>): string[] => [...set].sort()
@@ -95,7 +95,7 @@ describe('reachability memoization', () => {
 		const calls = h.walkCount()
 
 		h.entitySnapshots.setData('Comment:c2', 'c2', 'Comment', { id: 'c2' }, false)
-		h.relations.addToHasMany('Article:a1:comments', 'c2')
+		h.relations.addToHasMany('Article:a1:comments', 'comments', 'c2')
 
 		const result = h.analyzer.computeReachableCreated()
 		expect(h.walkCount()).toBeGreaterThan(calls) // recomputed
@@ -160,7 +160,7 @@ describe('reachability memoization', () => {
 		const v1 = relations.getMutationVersion()
 		expect(v1).toBeGreaterThan(v0) // has-one write counted
 
-		relations.addToHasMany('Article:a1:comments', 'c1')
+		relations.addToHasMany('Article:a1:comments', 'comments', 'c1')
 		const v2 = relations.getMutationVersion()
 		expect(v2).toBeGreaterThan(v1) // has-many write also counted (the sum)
 	})

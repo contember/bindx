@@ -407,23 +407,18 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 
 	/**
 	 * Checks if the list is dirty (items added/removed/moved/connected/disconnected).
+	 *
+	 * Pending writes belong to the relation, not to this view, so a sibling view's
+	 * unsaved change reports here too — persisting either view sends the whole
+	 * relation, and a view claiming to be clean while pushing its sibling's writes
+	 * would be incoherent. Only the manual ordering is this view's own.
 	 */
 	get isDirty(): boolean {
 		this.materializeEmbeddedItems()
 
-		const state = this.store.getHasMany(
-			this.entityType,
-			this.entityId,
-			this.fieldName,
-			this.alias,
-		)
-
-		if (!state) return false
-
 		return (
-			state.plannedRemovals.size > 0 ||
-			state.plannedAdditions.size > 0 ||
-			state.orderedIds !== null
+			this.store.hasPendingHasManyWrites(this.entityType, this.entityId, this.fieldName)
+			|| this.store.hasExplicitHasManyOrder(this.entityType, this.entityId, this.fieldName, this.alias)
 		)
 	}
 
@@ -453,7 +448,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	disconnect(itemId: string): void {
 		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
-			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, 'disconnect', this.alias),
+			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, 'disconnect'),
 		)
 	}
 
@@ -465,7 +460,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	delete(itemId: string): void {
 		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
-			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, 'delete', this.alias),
+			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, 'delete'),
 		)
 	}
 
@@ -504,7 +499,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	remove(itemId: string): void {
 		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
-			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, this.resolveRemovalType(), this.alias),
+			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, this.resolveRemovalType()),
 		)
 	}
 
@@ -542,6 +537,9 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	/**
 	 * Resets the has-many relation to server state.
 	 * Clears all planned connections and removals.
+	 *
+	 * Relation-level, like {@link isDirty}: planned removals carry no view, so a
+	 * per-view reset could not know which of them to drop.
 	 */
 	reset(): void {
 		this.materializeEmbeddedItems()
@@ -549,7 +547,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 			this.entityType,
 			this.entityId,
 			this.fieldName,
-			this.alias,
 		)
 	}
 

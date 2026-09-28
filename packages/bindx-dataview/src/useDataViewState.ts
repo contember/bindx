@@ -5,7 +5,7 @@
  * for persisting state across navigations.
  */
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import type {
 	FilterHandler,
 	FilterArtifact,
@@ -40,12 +40,18 @@ export type FilterArtifactUpdate =
 
 export interface FilteringState {
 	readonly filters: ReadonlyMap<string, RegisteredFilter>
+	/** The filter's current artifact: the stored one, else its initial artifact. `undefined` only for an unregistered filter. */
 	getArtifact(name: string): FilterArtifact | undefined
 	/** An updater sees the live artifact, not a render snapshot; returning `undefined` resets the filter to its default. */
 	setArtifact(name: string, artifact: FilterArtifactUpdate): void
-	/** Replaces the whole artifact record at once — for restoring a saved filter preset. */
+	/**
+	 * Replaces the whole artifact record at once — for restoring a saved filter preset.
+	 * A registered filter the record does not name reads as its initial artifact.
+	 */
 	setAllArtifacts(artifacts: Record<string, FilterArtifact>): void
+	/** Clears one filter: sets it to its handler's default (inactive) artifact. */
 	resetFilter(name: string): void
+	/** Puts every filter back where it starts: its initial artifact, else the handler default. */
 	resetAll(): void
 	readonly hasActiveFilters: boolean
 	readonly resolvedWhere: Record<string, unknown> | undefined
@@ -62,7 +68,7 @@ export interface UseFilteringOptions {
 export function useFilteringState(options: UseFilteringOptions): FilteringState {
 	const { filters: filterDefs, stateStorage = 'null', storageKey = 'dataview' } = options
 
-	const defaultArtifacts = useMemo((): Record<string, FilterArtifact> => {
+	const initialArtifacts = useMemo((): Record<string, FilterArtifact> => {
 		const result: Record<string, FilterArtifact> = {}
 		for (const [name, def] of filterDefs) {
 			result[name] = def.initialArtifact ?? def.handler.defaultArtifact()
@@ -70,10 +76,18 @@ export function useFilteringState(options: UseFilteringOptions): FilteringState 
 		return result
 	}, [filterDefs])
 
-	const [artifacts, setArtifacts] = useStoredState<Record<string, FilterArtifact>>(
+	const [storedArtifacts, setArtifacts] = useStoredState<Record<string, FilterArtifact>>(
 		stateStorage,
 		[storageKey, 'filters'],
-		(stored) => stored ?? defaultArtifacts,
+		(stored) => stored ?? initialArtifacts,
+	)
+
+	// A registered filter the record does not name (a record stored before the filter
+	// existed, or a restored preset that omits it) is where it would start with nothing
+	// stored. Every view below reads this one record, so the UI and the query agree.
+	const artifacts = useMemo(
+		(): Record<string, FilterArtifact> => ({ ...initialArtifacts, ...storedArtifacts }),
+		[initialArtifacts, storedArtifacts],
 	)
 
 	const getArtifact = useCallback(
@@ -85,12 +99,12 @@ export function useFilteringState(options: UseFilteringOptions): FilteringState 
 	const setArtifact = useCallback(
 		(name: string, artifact: FilterArtifactUpdate): void => {
 			setArtifacts(current => {
-				const next = typeof artifact === 'function' ? artifact(current[name]) : artifact
+				const next = typeof artifact === 'function' ? artifact(current[name] ?? initialArtifacts[name]) : artifact
 				const resolved = next ?? filterDefs.get(name)?.handler.defaultArtifact()
 				return resolved === undefined ? current : { ...current, [name]: resolved }
 			})
 		},
-		[filterDefs, setArtifacts],
+		[filterDefs, initialArtifacts, setArtifacts],
 	)
 
 	const resetFilter = useCallback(
@@ -103,8 +117,8 @@ export function useFilteringState(options: UseFilteringOptions): FilteringState 
 	)
 
 	const resetAll = useCallback((): void => {
-		setArtifacts(defaultArtifacts)
-	}, [defaultArtifacts, setArtifacts])
+		setArtifacts(initialArtifacts)
+	}, [initialArtifacts, setArtifacts])
 
 	const hasActiveFilters = useMemo((): boolean => {
 		for (const [name, def] of filterDefs) {
@@ -135,6 +149,7 @@ export function useFilteringState(options: UseFilteringOptions): FilteringState 
 			map.set(name, {
 				name,
 				handler: def.handler,
+				// Stored JSON is not validated, so a `null` entry falls back to the handler default.
 				artifact: artifacts[name] ?? def.handler.defaultArtifact(),
 			})
 		}
@@ -304,7 +319,7 @@ export function usePagingState(options: UsePagingOptions = {}): PagingStateResul
 		storageKey = 'dataview',
 	} = options
 
-	const [pageIndex, setPageIndex] = useStoredState<number>(
+	const [requestedPageIndex, setPageIndex] = useStoredState<number>(
 		currentPageStateStorage,
 		[storageKey, 'pageIndex'],
 		(stored) => stored ?? 0,
@@ -316,11 +331,6 @@ export function usePagingState(options: UsePagingOptions = {}): PagingStateResul
 		(stored) => stored ?? initialItemsPerPage,
 	)
 
-	const state = useMemo((): PagingState => ({
-		pageIndex,
-		itemsPerPage: itemsPerPage ?? 0,
-	}), [pageIndex, itemsPerPage])
-
 	const [totalCount, setTotalCount] = useState<number | null>(null)
 	const [refreshCounter, setRefreshCounter] = useState(0)
 
@@ -328,6 +338,19 @@ export function usePagingState(options: UsePagingOptions = {}): PagingStateResul
 		if (totalCount === null || itemsPerPage === null) return null
 		return Math.max(1, Math.ceil(totalCount / itemsPerPage))
 	}, [totalCount, itemsPerPage])
+
+	// A requested page past the end (the total shrank, or a stored index outlived its result set)
+	// reads as the last page, so the query offset never points past the rows.
+	const pageIndex = totalPages === null ? requestedPageIndex : Math.min(requestedPageIndex, totalPages - 1)
+
+	useEffect(() => {
+		if (pageIndex !== requestedPageIndex) setPageIndex(pageIndex)
+	}, [pageIndex, requestedPageIndex, setPageIndex])
+
+	const state = useMemo((): PagingState => ({
+		pageIndex,
+		itemsPerPage: itemsPerPage ?? 0,
+	}), [pageIndex, itemsPerPage])
 
 	const info: PagingInfo = useMemo(() => ({
 		totalCount,
