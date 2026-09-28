@@ -1,7 +1,7 @@
 // Regression tests for https://github.com/contember/bindx/issues/123
 import { describe, expect, test } from 'bun:test'
 import { __internal } from '@contember/bindx-react'
-import { ResponseOccurrenceIndex, type RelationTargetResolver } from '../../../packages/bindx/src/store/ResponseOccurrenceIndex.js'
+import { planOccurrenceWalk, ResponseOccurrenceIndex, type RelationTargetResolver } from '../../../packages/bindx/src/store/ResponseOccurrenceIndex.js'
 
 const { createSelectionBuilder, getSelectionMeta } = __internal
 
@@ -18,12 +18,18 @@ interface Author {
 	tags: Tag[]
 }
 
+interface Section {
+	id: string
+	article: Article | null
+}
+
 interface Article {
 	id: string
 	title: string
 	author: Author | null
 	coAuthor: Author | null
 	tags: Tag[]
+	sections: Section[]
 }
 
 const relations: Record<string, Record<string, { target: string; isHasMany: boolean }>> = {
@@ -31,6 +37,10 @@ const relations: Record<string, Record<string, { target: string; isHasMany: bool
 		author: { target: 'Author', isHasMany: false },
 		coAuthor: { target: 'Author', isHasMany: false },
 		tags: { target: 'Tag', isHasMany: true },
+		sections: { target: 'Section', isHasMany: true },
+	},
+	Section: {
+		article: { target: 'Article', isHasMany: false },
 	},
 	Author: {
 		tags: { target: 'Tag', isHasMany: true },
@@ -106,12 +116,18 @@ describe('ResponseOccurrenceIndex', () => {
 	})
 
 	test('keeps entity types that share an id apart', () => {
-		const selection = getSelectionMeta(createSelectionBuilder<Article>().id().author(a => a.id().name()).tags(t => t.id().color()))
-		const author = { id: 'shared', name: 'Ann' }
+		const selection = getSelectionMeta(
+			createSelectionBuilder<Article>()
+				.id()
+				.author(a => a.id().name().tags(t => t.id().name()))
+				.coAuthor(a => a.id().email())
+				.tags(t => t.id().color()),
+		)
+		const author = { id: 'shared', name: 'Ann', tags: [{ id: 'tag-1', name: 'News' }] }
 		const tag = { id: 'shared', color: 'red' }
 		const index = new ResponseOccurrenceIndex()
 
-		index.index('Article', { id: 'article-1', author, tags: [tag] }, selection, schema)
+		index.index('Article', { id: 'article-1', author, coAuthor: { id: 'author-2', email: 'bob@example.com' }, tags: [tag] }, selection, schema)
 
 		expect(index.resolve(author)).toBe(author)
 		expect(index.resolve(tag)).toBe(tag)
@@ -155,5 +171,81 @@ describe('ResponseOccurrenceIndex', () => {
 		], selection, schema)
 
 		expect(index.resolve(author)).toEqual({ id: 'author-1', name: 'Ann', email: 'ann@example.com' })
+	})
+
+	describe('fast path', () => {
+		const countingSchema = (): { resolver: RelationTargetResolver; calls: () => number } => {
+			let calls = 0
+			return {
+				resolver: {
+					getRelationTarget: (entityType, fieldName) => {
+						calls++
+						return schema.getRelationTarget(entityType, fieldName)
+					},
+					isHasMany: schema.isHasMany,
+				},
+				calls: () => calls,
+			}
+		}
+		const row = (i: number): { article: Record<string, unknown>; nestedArticle: Record<string, unknown> } => {
+			const nestedArticle = { id: `article-${i}`, author: { id: 'author-1', name: 'Ann' } }
+			const article = { id: `article-${i}`, author: { id: 'author-1', name: 'Ann' }, sections: [{ id: `section-${i}`, article: nestedArticle }] }
+			return { article, nestedArticle }
+		}
+		const rows = (count: number): Record<string, unknown>[] => Array.from({ length: count }, (_, i) => row(i).article)
+
+		test('finds no repeated type in a selection that reaches every type once', () => {
+			const selection = getSelectionMeta(createSelectionBuilder<Article>().id().author(a => a.id().name()).tags(t => t.id().name()))
+
+			expect([...planOccurrenceWalk('Article', selection, schema).repeatedTypes]).toEqual([])
+		})
+
+		test('finds the type a cycle reaches twice', () => {
+			const selection = getSelectionMeta(
+				createSelectionBuilder<Article>().id().tags(t => t.id().name()).sections(s => s.id().article(a => a.id().tags(t => t.id().color()))),
+			)
+			const plan = planOccurrenceWalk('Article', selection, schema)
+
+			expect([...plan.repeatedTypes].sort()).toEqual(['Article', 'Tag'])
+		})
+
+		test('walks only the relations that lead to a repeated type', () => {
+			const selection = getSelectionMeta(
+				createSelectionBuilder<Article>().id().author(a => a.id().name()).sections(s => s.id().article(a => a.id().title())),
+			)
+			const plan = planOccurrenceWalk('Article', selection, schema)
+
+			expect([...plan.repeatedTypes]).toEqual(['Article'])
+			expect(plan.nodesToWalk.has(selection)).toBe(true)
+			expect(plan.nodesToWalk.has(selection.fields.get('sections')!.nested!)).toBe(true)
+			expect(plan.nodesToWalk.has(selection.fields.get('author')!.nested!)).toBe(false)
+		})
+
+		test('skips walking a response whose selection repeats no type', () => {
+			const selection = getSelectionMeta(createSelectionBuilder<Article>().id().author(a => a.id().name()))
+			const { resolver, calls } = countingSchema()
+			const index = new ResponseOccurrenceIndex()
+
+			index.index('Article', rows(100), selection, resolver)
+			const afterFirst = calls()
+			index.index('Article', rows(100), selection, resolver)
+
+			expect(afterFirst).toBeLessThan(10)
+			expect(calls()).toBe(afterFirst)
+		})
+
+		test('walks a response whose selection reaches a type twice', () => {
+			const selection = getSelectionMeta(
+				createSelectionBuilder<Article>().id().author(a => a.id().name()).sections(s => s.id().article(a => a.id().author(u => u.id().name()))),
+			)
+			const { resolver, calls } = countingSchema()
+			const index = new ResponseOccurrenceIndex()
+			const first = row(0)
+
+			index.index('Article', [first.article, ...rows(100).slice(1)], selection, resolver)
+
+			expect(calls()).toBeGreaterThan(100)
+			expect(index.resolve(first.nestedArticle)).toBe(index.resolve(first.article))
+		})
 	})
 })

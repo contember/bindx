@@ -45,9 +45,19 @@ export class ResponseOccurrenceIndex {
 	 * nested occurrence comes from the schema through the selection's field names;
 	 * an occurrence whose type cannot be resolved is left out rather than matched
 	 * by id alone.
+	 *
+	 * Occurrences of one type at one selection node carry the same fields, so
+	 * their union changes nothing. Only types the selection reaches at two or more
+	 * nodes are collected, only the relations leading to them are walked, and a
+	 * selection with none skips the walk entirely (see {@link planOccurrenceWalk}).
 	 */
 	index(entityType: string, data: unknown, selection: SelectionMeta, schema: RelationTargetResolver): void {
-		const occurrencesByType = collectOccurrences({ value: data, entityType, selection, isList: Array.isArray(data) }, schema)
+		const plan = planOccurrenceWalk(entityType, selection, schema)
+		if (plan.repeatedTypes.size === 0) {
+			return
+		}
+		const root: PendingVisit = { value: data, entityType, selection, isList: Array.isArray(data) }
+		const occurrencesByType = collectOccurrences(root, plan, schema)
 		for (const occurrencesById of occurrencesByType.values()) {
 			for (const occurrences of occurrencesById.values()) {
 				if (Array.isArray(occurrences)) {
@@ -77,15 +87,17 @@ export class ResponseOccurrenceIndex {
 /** Occurrences by entity type and id. A lone occurrence is kept as is; an array only appears once an id repeats. */
 type OccurrencesByType = Map<string, Map<unknown, EntityRecord | EntityRecord[]>>
 
-function collectOccurrences(root: PendingVisit, schema: RelationTargetResolver): OccurrencesByType {
+function collectOccurrences(root: PendingVisit, plan: OccurrenceWalkPlan, schema: RelationTargetResolver): OccurrencesByType {
 	const occurrencesByType: OccurrencesByType = new Map()
 	const pending: PendingVisit[] = [root]
 	for (let next = 0; next < pending.length; next++) {
 		const visit = pending[next]!
 		for (const entity of entitiesOf(visit.value, visit.isList)) {
-			addOccurrence(occurrencesByType, visit.entityType, entity)
+			if (plan.repeatedTypes.has(visit.entityType)) {
+				addOccurrence(occurrencesByType, visit.entityType, entity)
+			}
 			for (const fieldMeta of visit.selection.fields.values()) {
-				if (!fieldMeta.isRelation || !fieldMeta.nested || entity[fieldMeta.alias] == null) continue
+				if (!fieldMeta.nested || !plan.nodesToWalk.has(fieldMeta.nested) || entity[fieldMeta.alias] == null) continue
 				const targetType = schema.getRelationTarget(visit.entityType, fieldMeta.fieldName)
 				if (targetType === undefined) continue
 				pending.push({
@@ -98,6 +110,71 @@ function collectOccurrences(root: PendingVisit, schema: RelationTargetResolver):
 		}
 	}
 	return occurrencesByType
+}
+
+/** What walking a response needs from its selection. */
+export interface OccurrenceWalkPlan {
+	/** Entity types the selection reaches at two or more nodes, such as `article` and `article.sections.article`. Only these are united. */
+	readonly repeatedTypes: ReadonlySet<string>
+	/** Selection nodes on a path to a repeated type. The walk descends into no other. */
+	readonly nodesToWalk: ReadonlySet<SelectionMeta>
+}
+
+const planCache = new WeakMap<RelationTargetResolver, WeakMap<SelectionMeta, Map<string, OccurrenceWalkPlan>>>()
+
+/** Depends only on the schema, the selection and its root type, so it is computed once per combination. */
+export function planOccurrenceWalk(entityType: string, selection: SelectionMeta, schema: RelationTargetResolver): OccurrenceWalkPlan {
+	let bySelection = planCache.get(schema)
+	if (!bySelection) {
+		bySelection = new WeakMap()
+		planCache.set(schema, bySelection)
+	}
+	let byRootType = bySelection.get(selection)
+	if (!byRootType) {
+		byRootType = new Map()
+		bySelection.set(selection, byRootType)
+	}
+	let plan = byRootType.get(entityType)
+	if (!plan) {
+		plan = computeOccurrenceWalkPlan(entityType, selection, schema)
+		byRootType.set(entityType, plan)
+	}
+	return plan
+}
+
+interface SelectionNode {
+	readonly entityType: string
+	readonly selection: SelectionMeta
+	readonly parent: number | null
+}
+
+function computeOccurrenceWalkPlan(entityType: string, selection: SelectionMeta, schema: RelationTargetResolver): OccurrenceWalkPlan {
+	const nodes: SelectionNode[] = [{ entityType, selection, parent: null }]
+	const seenTypes = new Set<string>()
+	const repeatedTypes = new Set<string>()
+	for (let index = 0; index < nodes.length; index++) {
+		const node = nodes[index]!
+		if (seenTypes.has(node.entityType)) {
+			repeatedTypes.add(node.entityType)
+		}
+		seenTypes.add(node.entityType)
+		for (const fieldMeta of node.selection.fields.values()) {
+			if (!fieldMeta.isRelation || !fieldMeta.nested) continue
+			const targetType = schema.getRelationTarget(node.entityType, fieldMeta.fieldName)
+			if (targetType !== undefined) {
+				nodes.push({ entityType: targetType, selection: fieldMeta.nested, parent: index })
+			}
+		}
+	}
+	const nodesToWalk = new Set<SelectionMeta>()
+	for (const node of nodes) {
+		if (!repeatedTypes.has(node.entityType)) continue
+		for (let current: SelectionNode | undefined = node; current && !nodesToWalk.has(current.selection);) {
+			nodesToWalk.add(current.selection)
+			current = current.parent === null ? undefined : nodes[current.parent]
+		}
+	}
+	return { repeatedTypes, nodesToWalk }
 }
 
 function addOccurrence(occurrencesByType: OccurrencesByType, entityType: string, entity: EntityRecord): void {

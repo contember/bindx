@@ -60,6 +60,13 @@ export interface LoadEntityListOptions<TEntity = unknown> {
 /**
  * Non-React service for loading entities.
  * Can be used in any JavaScript environment.
+ *
+ * It writes each response as it arrives, without uniting the occurrences of one
+ * entity within it (see `SnapshotStore.indexServerResponse`): that needs the
+ * selection and the schema, and the loader has only a `QuerySpec`. A query that
+ * reaches one entity through two paths with different sub-selections can
+ * therefore lose the wider one's fields, as described in
+ * https://github.com/contember/bindx/issues/123. The React hooks do not go through it.
  */
 export class EntityLoader {
 	constructor(
