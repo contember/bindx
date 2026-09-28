@@ -287,6 +287,13 @@ describe('HasMany with Alias Support', () => {
 	describe('Explicit order of a sibling view', () => {
 		const orderedAlias = generateHasManyAlias('tags', { orderBy: [{ name: 'asc' }] })
 		const activeAlias = generateHasManyAlias('tags', { filter: { active: true } })
+		const limitedAlias = generateHasManyAlias('tags', { limit: 2 })
+		const offsetAlias = generateHasManyAlias('tags', { offset: 1 })
+
+		function materializeReordered(alias: string, serverIds: string[]): void {
+			store.getOrCreateHasMany('Article', 'a-1', 'tags', serverIds, alias)
+			store.moveInHasMany('Article', 'a-1', 'tags', 0, 1, alias)
+		}
 
 		beforeEach(() => {
 			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
@@ -332,13 +339,57 @@ describe('HasMany with Alias Support', () => {
 			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', orderedAlias)).toEqual(['t-2', 't-1', 'n-1'])
 		})
 
-		test('a filtered sibling with a manual order does not gain the addition', () => {
-			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2'], activeAlias)
-			store.moveInHasMany('Article', 'a-1', 'tags', 0, 1, activeAlias)
+		test('a sibling whose args may exclude the addition does not gain it', () => {
+			materializeReordered(activeAlias, ['t-1', 't-2'])
+			materializeReordered(limitedAlias, ['t-1', 't-2'])
+			materializeReordered(offsetAlias, ['t-1', 't-2'])
 
 			store.addToHasMany('Article', 'a-1', 'tags', 'n-1')
+			store.planHasManyConnection('Article', 'a-1', 'tags', 'x-9', orderedAlias)
 
 			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', activeAlias)).toEqual(['t-2', 't-1'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', limitedAlias)).toEqual(['t-2', 't-1'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', offsetAlias)).toEqual(['t-2', 't-1'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags')).toEqual(['t-1', 't-2', 'n-1', 'x-9'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', orderedAlias)).toEqual(['t-1', 't-2', 'n-1', 'x-9'])
+		})
+
+		test('an item added through several views is listed once in each', () => {
+			materializeReordered(activeAlias, ['t-1', 't-2'])
+			store.moveInHasMany('Article', 'a-1', 'tags', 0, 1, orderedAlias)
+
+			store.addToHasMany('Article', 'a-1', 'tags', 'n-1', orderedAlias)
+			store.planHasManyConnection('Article', 'a-1', 'tags', 'x-9', orderedAlias)
+			store.planHasManyConnection('Article', 'a-1', 'tags', 'x-9', orderedAlias)
+			store.planHasManyConnection('Article', 'a-1', 'tags', 'x-9')
+			store.planHasManyConnection('Article', 'a-1', 'tags', 'x-9', activeAlias)
+
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags')).toEqual(['t-1', 't-2', 'n-1', 'x-9'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', orderedAlias)).toEqual(['t-2', 't-1', 'n-1', 'x-9'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', activeAlias)).toEqual(['t-2', 't-1', 'x-9'])
+		})
+
+		test('a server row removed and connected again returns to the filtered view that listed it', () => {
+			materializeReordered(activeAlias, ['t-1', 't-2'])
+
+			store.planHasManyRemoval('Article', 'a-1', 'tags', 't-1', 'disconnect')
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', activeAlias)).toEqual(['t-2'])
+
+			// Connected through the unparameterized view: the filtered view's own server rows hold it.
+			store.planHasManyConnection('Article', 'a-1', 'tags', 't-1')
+
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', activeAlias)).toEqual(['t-2', 't-1'])
+		})
+
+		test('a new row removed and connected again stays out of a filtered view', () => {
+			materializeReordered(activeAlias, ['t-1', 't-2'])
+
+			store.planHasManyConnection('Article', 'a-1', 'tags', 'x-9')
+			store.removeFromHasMany('Article', 'a-1', 'tags', 'x-9', 'disconnect')
+			store.planHasManyConnection('Article', 'a-1', 'tags', 'x-9')
+
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', activeAlias)).toEqual(['t-2', 't-1'])
+			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags')).toEqual(['t-1', 't-2', 'x-9'])
 		})
 	})
 

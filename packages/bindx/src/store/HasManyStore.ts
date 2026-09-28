@@ -320,23 +320,25 @@ export class HasManyStore {
 		if (kind === 'created') addition.kind = 'created'
 		state.plannedAdditions.set(itemId, addition)
 		state.plannedRemovals.delete(itemId)
-		this.appendToRenderingExplicitOrders(state, itemId, addition)
+		this.appendToShowingExplicitOrders(state, itemId, addition)
 	}
 
 	/**
 	 * An explicit order replaces the default one, which is where additions otherwise
-	 * appear, so every view the addition renders in must list it — not only the view
-	 * it was made in. Guards against re-appending an id that is already listed: the
-	 * connect paths re-run whenever an embedded reference is re-materialized.
+	 * appear, so every view that shows the item must list it — not only the view it was
+	 * made in. That includes a view whose own server rows hold it: a removal dropped it
+	 * from every explicit order, and re-connecting it must give it back. Guards against
+	 * re-appending an id that is already listed: the connect paths re-run whenever an
+	 * embedded reference is re-materialized.
 	 */
-	private appendToRenderingExplicitOrders(
+	private appendToShowingExplicitOrders(
 		state: StoredHasManyState,
 		itemId: string,
 		addition: PlannedHasManyAddition,
 	): void {
 		for (const [alias, view] of state.views) {
 			if (view.orderedIds === null || view.orderedIds.includes(itemId)) continue
-			if (additionRendersIn(state.views, alias, addition)) {
+			if (view.serverIds.has(itemId) || additionRendersIn(state.views, alias, addition)) {
 				view.orderedIds = [...view.orderedIds, itemId]
 			}
 		}
