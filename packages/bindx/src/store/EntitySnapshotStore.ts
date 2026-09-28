@@ -134,6 +134,13 @@ export class EntitySnapshotStore implements Rekeyable {
 		return newSnapshot
 	}
 
+	private readonly lookupServerData = (id: string): Readonly<Record<string, unknown>> | undefined => {
+		const key = this.idIndex.get(id)
+		const snapshot = key === undefined ? undefined : this.snapshots.get(key)
+		if (!snapshot) return undefined
+		return (snapshot.serverData ?? snapshot.data) as Readonly<Record<string, unknown>>
+	}
+
 	/**
 	 * Refreshes entity data from a fresh server read (revalidation).
 	 *
@@ -165,7 +172,7 @@ export class EntitySnapshotStore implements Rekeyable {
 
 		const prevData = existing.data as Record<string, unknown>
 		const prevServer = (existing.serverData ?? existing.data) as Record<string, unknown>
-		const incoming = mergeEmbeddedRelationFields(prevServer, data as Record<string, unknown>, selection)
+		const incoming = mergeEmbeddedRelationFields(prevServer, data as Record<string, unknown>, selection, this.lookupServerData)
 
 		const newServerData: Record<string, unknown> = { ...prevServer }
 		const newData: Record<string, unknown> = { ...prevData }
