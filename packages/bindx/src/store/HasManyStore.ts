@@ -1,4 +1,4 @@
-import { fieldFromRelationKey, parentKeyFromOwnerPrefix, parentKeyFromRelationKey } from './relationKey.js'
+import { entityTypeFromRelationKey, fieldFromRelationKey, parentKeyFromOwnerPrefix, parentKeyFromRelationKey } from './relationKey.js'
 import { PlannedDeleteIndex } from './PlannedDeleteIndex.js'
 import { RelationEdgeIndex } from './RelationEdgeIndex.js'
 import { RelationOwnerIndex } from './RelationOwnerIndex.js'
@@ -119,9 +119,10 @@ export class HasManyStore {
 	}
 
 	/**
-	 * Membership declared for an args-view, keyed by "fieldName:alias" — one entry per
-	 * distinct selection in the application, so it does not grow with the data. The
-	 * alias alone would not do: two fields may carry the same explicit `as`.
+	 * Membership declared for an args-view, keyed by "entityType:fieldName:alias" — one
+	 * entry per distinct selection in the application, so it does not grow with the data.
+	 * The alias alone would not do: two fields, or two entities' fields of the same name,
+	 * may carry the same explicit `as`.
 	 *
 	 * Only the caller that selected the relation knows its params, and the alias is a
 	 * hash it cannot reconstruct them from. {@link EntityHandle} declares them before
@@ -129,8 +130,13 @@ export class HasManyStore {
 	 */
 	private readonly declaredMembership = new Map<string, HasManyViewMembership>()
 
-	declareViewMembership(fieldName: string, alias: string, membership: HasManyViewMembership): void {
-		this.declaredMembership.set(`${fieldName}:${alias}`, membership)
+	declareViewMembership(
+		entityType: string,
+		fieldName: string,
+		alias: string,
+		membership: HasManyViewMembership,
+	): void {
+		this.declaredMembership.set(`${entityType}:${fieldName}:${alias}`, membership)
 	}
 
 	/**
@@ -142,7 +148,7 @@ export class HasManyStore {
 	private viewMembership(key: string, alias: string): HasManyViewMembership {
 		const fieldName = fieldFromRelationKey(key)
 		if (alias === fieldName) return 'total'
-		return this.declaredMembership.get(`${fieldName}:${alias}`) ?? 'partial'
+		return this.declaredMembership.get(`${entityTypeFromRelationKey(key)}:${fieldName}:${alias}`) ?? 'partial'
 	}
 
 	/**

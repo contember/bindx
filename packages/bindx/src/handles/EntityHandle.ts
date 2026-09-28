@@ -516,6 +516,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 					// view from one that only orders — say so here, where the params are.
 					if (fieldMeta && fieldMeta.alias !== schemaFieldName) {
 						this.store.declareHasManyViewMembership(
+							this.entityType,
 							schemaFieldName,
 							fieldMeta.alias,
 							canHasManyParamsExcludeMembers(fieldMeta.hasManyParams) ? 'partial' : 'total',

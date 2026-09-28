@@ -544,8 +544,13 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	 * a filtered view from one that merely orders or renames. Only the caller that
 	 * selected the relation knows the params; the alias is a hash of them.
 	 */
-	declareHasManyViewMembership(fieldName: string, alias: string, membership: HasManyViewMembership): void {
-		this.relations.declareHasManyViewMembership(fieldName, alias, membership)
+	declareHasManyViewMembership(
+		entityType: string,
+		fieldName: string,
+		alias: string,
+		membership: HasManyViewMembership,
+	): void {
+		this.relations.declareHasManyViewMembership(entityType, fieldName, alias, membership)
 	}
 
 	/**

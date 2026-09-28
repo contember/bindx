@@ -10,6 +10,14 @@ export function parentKeyFromRelationKey(relationKey: string): string {
 }
 
 /**
+ * Derives the parent entity type from a relation key ("parentType:parentId:fieldName").
+ * Entity type names never contain ':', so the type is everything before the first separator.
+ */
+export function entityTypeFromRelationKey(relationKey: string): string {
+	return relationKey.slice(0, relationKey.indexOf(':'))
+}
+
+/**
  * Derives the field name from a relation key ("parentType:parentId:fieldName").
  * The counterpart of {@link parentKeyFromRelationKey}: entity ids and field names
  * never contain ':', so the field is everything after the last separator.

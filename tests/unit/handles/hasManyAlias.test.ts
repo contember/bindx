@@ -211,7 +211,7 @@ describe('HasMany with Alias Support', () => {
 		test('a view that only orders is not treated as filtered', () => {
 			const orderedAlias = generateHasManyAlias('tags', { orderBy: [{ name: 'asc' }] })
 			// What the selection knows and the alias hash does not: ordering leaves nobody out.
-			store.declareHasManyViewMembership('tags', orderedAlias, 'total')
+			store.declareHasManyViewMembership('Article', 'tags', orderedAlias, 'total')
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], orderedAlias)
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'], activeAlias)
 
@@ -251,6 +251,18 @@ describe('HasMany with Alias Support', () => {
 
 			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', activeAlias)).toEqual(['t-2', 't-3', 't-1'])
 			expect(store.getHasManyOrderedIds('Article', 'a-1', 'tags', inactiveAlias)).toEqual(['t-3', 't-2', 't-1'])
+		})
+
+		test('a declaration classifies the view of one entity only', () => {
+			const orderedAlias = generateHasManyAlias('tags', { orderBy: [{ name: 'asc' }] })
+			store.declareHasManyViewMembership('Article', 'tags', orderedAlias, 'total')
+			store.getOrCreateHasMany('Page', 'p-1', 'tags', ['t-1'], orderedAlias)
+			store.getOrCreateHasMany('Page', 'p-1', 'tags', ['t-1'])
+
+			store.planHasManyConnection('Page', 'p-1', 'tags', 't-3')
+
+			// Another entity's field of the same name may select other args under the same alias.
+			expect(store.getHasManyOrderedIds('Page', 'p-1', 'tags', orderedAlias)).toEqual(['t-1'])
 		})
 
 		test('reset clears the relation, not one view of it', () => {
