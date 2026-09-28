@@ -1,3 +1,4 @@
+// Regression test for https://github.com/contember/bindx/issues/131
 import '../../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
 import { render, waitFor, act, cleanup } from '@testing-library/react'
