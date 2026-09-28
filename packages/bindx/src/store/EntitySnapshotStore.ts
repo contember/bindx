@@ -3,8 +3,6 @@ import {
 	type EntitySnapshot,
 } from './snapshots.js'
 import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
-import type { SelectionMeta } from '../selection/types.js'
-import { mergeEmbeddedRelationFields } from './embeddedRelationMerge.js'
 
 /**
  * Manages entity snapshots — core CRUD for immutable entity data.
@@ -134,13 +132,6 @@ export class EntitySnapshotStore implements Rekeyable {
 		return newSnapshot
 	}
 
-	private readonly lookupServerData = (id: string): Readonly<Record<string, unknown>> | undefined => {
-		const key = this.idIndex.get(id)
-		const snapshot = key === undefined ? undefined : this.snapshots.get(key)
-		if (!snapshot) return undefined
-		return (snapshot.serverData ?? snapshot.data) as Readonly<Record<string, unknown>>
-	}
-
 	/**
 	 * Refreshes entity data from a fresh server read (revalidation).
 	 *
@@ -152,18 +143,12 @@ export class EntitySnapshotStore implements Rekeyable {
 	 * "differs from the new server value" after the refresh.
 	 *
 	 * When no snapshot exists yet this behaves like a plain server load.
-	 *
-	 * Given the selection the data was read with, embedded relation values are
-	 * merged into the stored ones rather than replacing them, so a narrower read
-	 * of the same entity keeps what a wider one fetched
-	 * (see {@link mergeEmbeddedRelationFields}).
 	 */
 	refreshServerData<T extends object>(
 		key: string,
 		id: string,
 		entityType: string,
 		data: T,
-		selection?: SelectionMeta,
 	): EntitySnapshot<T> {
 		const existing = this.snapshots.get(key)
 		if (!existing) {
@@ -172,7 +157,7 @@ export class EntitySnapshotStore implements Rekeyable {
 
 		const prevData = existing.data as Record<string, unknown>
 		const prevServer = (existing.serverData ?? existing.data) as Record<string, unknown>
-		const incoming = mergeEmbeddedRelationFields(prevServer, data as Record<string, unknown>, selection, this.lookupServerData)
+		const incoming = data as Record<string, unknown>
 
 		const newServerData: Record<string, unknown> = { ...prevServer }
 		const newData: Record<string, unknown> = { ...prevData }

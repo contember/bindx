@@ -290,11 +290,12 @@ export function useEntity(
 				if (result.type === 'get' && result.data === null) {
 					dispatcher.dispatch(setLoadState(entityType, id, 'not_found'))
 				} else if (result.type === 'get' && result.data) {
-					const data = result.data
+					store.indexServerResponse(entityType, result.data, selectionMeta, schemaRegistry)
+					const data = store.resolveServerOccurrence(result.data)
 					// Revalidation: advance the server baseline but keep local dirty
 					// edits intact (see EntitySnapshotStore.refreshServerData).
 					store.batchNotifications(() => {
-						dispatcher.dispatch(refreshServerData(entityType, id, data, selectionMeta))
+						dispatcher.dispatch(refreshServerData(entityType, id, data))
 						dispatcher.dispatch(setLoadState(entityType, id, 'success'))
 					})
 				}
@@ -321,7 +322,7 @@ export function useEntity(
 				fetchingRef.current = null
 			}
 		}
-	}, [entityType, id, byKey, effectiveQueryKey, options.cache, batcher, store, dispatcher, selectionMeta])
+	}, [entityType, id, byKey, effectiveQueryKey, options.cache, batcher, store, dispatcher, selectionMeta, schemaRegistry])
 
 	// --- EntityHandle ---
 	// The handle keeps a stable identity across data changes — it is a stateless live view over the

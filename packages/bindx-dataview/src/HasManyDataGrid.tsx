@@ -189,7 +189,8 @@ function HasManyDataGridImpl<TEntity extends object>({
 					return
 				}
 
-				const items = relation.rows.map(data => ({ id: getRowId(targetEntityType, data), data }))
+				store.indexServerResponse(targetEntityType, relation.rows, setup.selection, schemaRegistry)
+				const items = relation.rows.map(data => ({ id: getRowId(targetEntityType, data), data: store.resolveServerOccurrence(data) }))
 				store.batchNotifications(() => {
 					for (const item of items) {
 						dispatcher.dispatch(setEntityData(targetEntityType, item.id, item.data, true))
@@ -208,7 +209,7 @@ function HasManyDataGridImpl<TEntity extends object>({
 		return () => {
 			abortController.abort()
 		}
-	}, [parentEntityType, parentEntityId, fieldName, targetEntityType, optionsKey, setup.selection, batcher, dispatcher, store])
+	}, [parentEntityType, parentEntityId, fieldName, targetEntityType, optionsKey, setup.selection, batcher, dispatcher, store, schemaRegistry])
 
 	// ---- Build items from state ----
 	const items = useMemo((): EntityAccessor<TEntity>[] => {

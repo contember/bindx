@@ -284,7 +284,8 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Only called when parent's embedded data has changed (re-fetch detected).
 	 */
 	private ensureItemSnapshots(listData: Array<Record<string, unknown>>): void {
-		for (const itemData of listData) {
+		for (const embeddedItem of listData) {
+			const itemData = this.store.resolveServerOccurrence(embeddedItem)
 			const itemId = itemData['id'] as string
 			if (!itemId) continue
 
@@ -308,7 +309,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 				itemId,
 				itemData,
 				true, // skipNotify - called during render, data already exists embedded in parent
-				this.selection,
 			)
 		}
 	}

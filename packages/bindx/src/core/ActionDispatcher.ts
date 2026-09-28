@@ -243,8 +243,6 @@ export class ActionDispatcher {
 					action.entityType,
 					action.entityId,
 					action.data,
-					false,
-					action.selection,
 				)
 				break
 

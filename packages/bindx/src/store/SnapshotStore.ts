@@ -19,6 +19,7 @@ import { generateTempId } from './entityId.js'
 import { DirtyTracker } from './DirtyTracker.js'
 import { EntitySnapshotStore } from './EntitySnapshotStore.js'
 import { RootRegistry } from './RootRegistry.js'
+import { ResponseOccurrenceIndex, type RelationTargetResolver } from './ResponseOccurrenceIndex.js'
 import { ReachabilityAnalyzer } from './ReachabilityAnalyzer.js'
 import { RekeyOrchestrator } from './RekeyOrchestrator.js'
 import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
@@ -83,6 +84,8 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	 * Keyed by "parentType:parentId:fieldName".
 	 */
 	private readonly lastPropagatedData = new Map<string, unknown>()
+
+	private readonly responseOccurrences = new ResponseOccurrenceIndex()
 
 	/**
 	 * Optional write-journal. When set (by an attached UndoManager), mutating
@@ -311,6 +314,23 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	}
 
 	/**
+	 * Unites the occurrences of each entity within one server response, so the
+	 * narrower of two occurrences cannot replace fields the wider one carried.
+	 * Call it before any of the response is written. See {@link ResponseOccurrenceIndex}.
+	 */
+	indexServerResponse(entityType: string, data: unknown, selection: SelectionMeta, schema: RelationTargetResolver): void {
+		this.responseOccurrences.index(entityType, data, selection, schema)
+	}
+
+	/**
+	 * What to write for an entity occurrence of a server response: the union of
+	 * its occurrences in that response, or the occurrence itself.
+	 */
+	resolveServerOccurrence(occurrence: Record<string, unknown>): Record<string, unknown> {
+		return this.responseOccurrences.resolve(occurrence)
+	}
+
+	/**
 	 * Refreshes server data from a revalidation read while preserving the user's
 	 * local dirty edits. See {@link EntitySnapshotStore.refreshServerData}.
 	 */
@@ -319,10 +339,9 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		id: string,
 		data: T,
 		skipNotify: boolean = false,
-		selection?: SelectionMeta,
 	): EntitySnapshot<T> {
 		const key = this.getEntityKey(entityType, id)
-		const newSnapshot = this.entitySnapshots.refreshServerData(key, this.resolveEntityId(entityType, id), entityType, data, selection)
+		const newSnapshot = this.entitySnapshots.refreshServerData(key, this.resolveEntityId(entityType, id), entityType, data)
 		this.meta.setExistsOnServer(key, true)
 		if (!skipNotify) {
 			this.notifyEntitySubscribers(key)
