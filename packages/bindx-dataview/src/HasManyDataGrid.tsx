@@ -42,6 +42,7 @@ import { useDataViewKey } from './DataViewKeyProvider.js'
 import { DataViewProvider, type DataViewContextValue, type DataViewFetchAllData, type DataViewLoaderState } from './DataViewContext.js'
 import { useDataGridSetup } from './useDataGridSetup.js'
 import { buildHasManyRelationQuery, extractHasManyRelationRows } from './hasManyRelationQuery.js'
+import { usePagingTotalCount } from './usePagingTotalCount.js'
 
 // ============================================================================
 // Props
@@ -80,6 +81,8 @@ interface ListState {
 	status: 'loading' | 'error' | 'ready'
 	items: Array<{ id: string; data: object }>
 	totalCount?: number
+	/** The query options the items were loaded for. */
+	optionsKey?: string
 }
 
 const INITIAL_LIST_STATE: ListState = { status: 'loading', items: [] }
@@ -185,7 +188,7 @@ function HasManyDataGridImpl<TEntity extends object>({
 
 				const relation = extractHasManyRelationRows(result.data, { alias, fieldName })
 				if (!relation) {
-					setListState({ status: 'ready', items: [] })
+					setListState({ status: 'ready', items: [], optionsKey })
 					return
 				}
 
@@ -196,7 +199,7 @@ function HasManyDataGridImpl<TEntity extends object>({
 					}
 				})
 
-				setListState({ status: 'ready', items, totalCount: relation.totalCount })
+				setListState({ status: 'ready', items, totalCount: relation.totalCount, optionsKey })
 			} catch (error) {
 				if (abortController.signal.aborted) return
 				setListState({ status: 'error', items: [] })
@@ -238,14 +241,16 @@ function HasManyDataGridImpl<TEntity extends object>({
 		}
 	}, [listState.status])
 
-	// Update total count from paginateRelation
-	useEffect(() => {
-		if (listState.totalCount !== undefined) {
-			setup.paging.setTotalCount(listState.totalCount)
-		} else if (listState.status === 'ready' && setup.paging.queryLimit !== undefined && setup.paging.queryOffset !== undefined && itemCount < setup.paging.queryLimit) {
-			setup.paging.setTotalCount(setup.paging.queryOffset + itemCount)
-		}
-	}, [listState.status, listState.totalCount, itemCount, setup.paging.queryLimit, setup.paging.queryOffset, setup.paging.setTotalCount])
+	const countKey = useMemo(
+		() => JSON.stringify([parentEntityType, parentEntityId, fieldName, setup.combinedFilter ?? {}]),
+		[parentEntityType, parentEntityId, fieldName, setup.combinedFilter],
+	)
+	usePagingTotalCount(setup.paging, {
+		countedTotal: listState.totalCount ?? null,
+		countKey,
+		isPageCurrent: listState.status === 'ready' && listState.optionsKey === optionsKey,
+		pageItemCount: itemCount,
+	})
 
 	// ---- Reload ----
 	const [, setReloadCounter] = useState(0)

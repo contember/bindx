@@ -24,6 +24,7 @@ import { useDataViewKey } from './DataViewKeyProvider.js'
 import { DataViewProvider, type DataViewContextValue, type DataViewLoaderState } from './DataViewContext.js'
 import { useDataGridSetup, QUERY_FILTER_NAME } from './useDataGridSetup.js'
 import { useListFetchAllData } from './useListFetchAllData.js'
+import { usePagingTotalCount } from './usePagingTotalCount.js'
 
 export { QUERY_FILTER_NAME }
 
@@ -128,17 +129,13 @@ function DataGridImpl<TRoleMap extends Record<string, object>>({
 		}
 	}, [result.$status])
 
-	// Update total count from the count query. Falls back to the partial-page
-	// heuristic (last page returns fewer rows than the page size) when the count
-	// is not yet known — e.g. before it resolves or with adapters that don't
-	// implement count queries.
-	useEffect(() => {
-		if (totalCount !== null) {
-			setup.paging.setTotalCount(totalCount)
-		} else if (result.$status === 'ready' && setup.paging.queryLimit !== undefined && setup.paging.queryOffset !== undefined && itemCount < setup.paging.queryLimit) {
-			setup.paging.setTotalCount(setup.paging.queryOffset + itemCount)
-		}
-	}, [totalCount, result.$status, itemCount, setup.paging.queryLimit, setup.paging.queryOffset, setup.paging.setTotalCount])
+	const countKey = useMemo(() => JSON.stringify(setup.combinedFilter ?? {}), [setup.combinedFilter])
+	usePagingTotalCount(setup.paging, {
+		countedTotal: totalCount,
+		countKey,
+		isPageCurrent: result.$status === 'ready' && !result.$isRefetching,
+		pageItemCount: itemCount,
+	})
 
 	// ---- Reload ----
 	const [, setReloadCounter] = useState(0)
