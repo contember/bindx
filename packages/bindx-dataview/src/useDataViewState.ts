@@ -40,6 +40,7 @@ export type FilterArtifactUpdate =
 
 export interface FilteringState {
 	readonly filters: ReadonlyMap<string, RegisteredFilter>
+	/** The filter's current artifact: the stored one, else its initial artifact. `undefined` only for an unregistered filter. */
 	getArtifact(name: string): FilterArtifact | undefined
 	/** An updater sees the live artifact, not a render snapshot; returning `undefined` resets the filter to its default. */
 	setArtifact(name: string, artifact: FilterArtifactUpdate): void
@@ -148,6 +149,7 @@ export function useFilteringState(options: UseFilteringOptions): FilteringState 
 			map.set(name, {
 				name,
 				handler: def.handler,
+				// Stored JSON is not validated, so a `null` entry falls back to the handler default.
 				artifact: artifacts[name] ?? def.handler.defaultArtifact(),
 			})
 		}

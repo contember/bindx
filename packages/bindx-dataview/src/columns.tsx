@@ -101,12 +101,12 @@ interface EnumExtraProps<T extends string> {
 
 export interface DataGridEnumColumnProps<T extends string> extends DataGridScalarColumnPropsBase<T>, EnumExtraProps<NoInfer<T>> {
 	/** Where the column's filter starts when nothing is stored for it. Defaults to no value picked. */
-	filterInitialArtifact?: EnumFilterArtifact
+	filterInitialArtifact?: EnumFilterArtifact<NoInfer<T>>
 }
 
 export interface DataGridEnumListColumnProps<T extends string> extends DataGridScalarColumnPropsBase<T>, EnumExtraProps<NoInfer<T>> {
 	/** Where the column's filter starts when nothing is stored for it. Defaults to no value picked. */
-	filterInitialArtifact?: EnumListFilterArtifact
+	filterInitialArtifact?: EnumListFilterArtifact<NoInfer<T>>
 }
 
 // ============================================================================

@@ -61,7 +61,11 @@ export interface ColumnComponentProps<TValue = unknown, TFilterArtifact extends 
 // Factory
 // ============================================================================
 
-export interface ColumnComponent<TExtraProps = object, TFilterArtifact extends FilterArtifact = FilterArtifact> {
+/**
+ * `TFilterArtifact` defaults to `never`: a column whose artifact type is not known takes no
+ * `filterInitialArtifact`, and every column `createColumn` builds is assignable to it.
+ */
+export interface ColumnComponent<TExtraProps = object, TFilterArtifact extends FilterArtifact = never> {
 	<T>(props: ColumnComponentProps<T, TFilterArtifact> & TExtraProps): null
 	staticRender: (props: Record<string, unknown>) => React.ReactNode
 }
