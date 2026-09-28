@@ -1,5 +1,6 @@
 import type { HasOneRelationState } from '../handles/types.js'
 import type { FieldError, FieldErrorFilter } from '../errors/types.js'
+import type { SelectionMeta } from '../selection/types.js'
 
 /**
  * Action types for the ActionDispatcher.
@@ -58,6 +59,8 @@ export interface RefreshServerDataAction {
 	readonly entityType: string
 	readonly entityId: string
 	readonly data: Record<string, unknown>
+	/** The selection `data` was read with; lets embedded relations merge instead of being replaced. */
+	readonly selection?: SelectionMeta
 }
 
 // ==================== Relation Actions ====================
@@ -376,8 +379,9 @@ export function refreshServerData(
 	entityType: string,
 	entityId: string,
 	data: Record<string, unknown>,
+	selection?: SelectionMeta,
 ): RefreshServerDataAction {
-	return { type: 'REFRESH_SERVER_DATA', entityType, entityId, data }
+	return { type: 'REFRESH_SERVER_DATA', entityType, entityId, data, selection }
 }
 
 /**

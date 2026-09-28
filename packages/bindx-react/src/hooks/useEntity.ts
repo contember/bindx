@@ -294,7 +294,7 @@ export function useEntity(
 					// Revalidation: advance the server baseline but keep local dirty
 					// edits intact (see EntitySnapshotStore.refreshServerData).
 					store.batchNotifications(() => {
-						dispatcher.dispatch(refreshServerData(entityType, id, data))
+						dispatcher.dispatch(refreshServerData(entityType, id, data, selectionMeta))
 						dispatcher.dispatch(setLoadState(entityType, id, 'success'))
 					})
 				}

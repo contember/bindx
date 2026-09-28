@@ -308,6 +308,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 				itemId,
 				itemData,
 				true, // skipNotify - called during render, data already exists embedded in parent
+				this.selection,
 			)
 		}
 	}

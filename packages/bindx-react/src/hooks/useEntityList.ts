@@ -466,7 +466,7 @@ export function useEntityList(
 				store.batchNotifications(() => {
 					for (const item of items) {
 						// Revalidation preserves local edits while advancing the server baseline.
-						dispatcher.dispatch(refreshServerData(entityType, item.id, item.data))
+						dispatcher.dispatch(refreshServerData(entityType, item.id, item.data, selectionMeta))
 					}
 					listStateRef.current = { status: 'ready', items, isRefetching: false }
 					versionRef.current++

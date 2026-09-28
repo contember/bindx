@@ -437,6 +437,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			id,
 			embeddedData as Record<string, unknown>,
 			true, // skipNotify - called during render, data already exists embedded in parent
+			this.selection,
 		)
 		this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, this.dataFieldName, embeddedData)
 	}

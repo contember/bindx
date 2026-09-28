@@ -1,6 +1,7 @@
 import type { EntitySnapshot, LoadStatus } from './snapshots.js'
 import { createEntitySnapshot } from './snapshots.js'
 import type { FieldError, FieldErrorFilter } from '../errors/types.js'
+import type { SelectionMeta } from '../selection/types.js'
 import { SubscriptionManager, type SnapshotVersionBumper, type SynchronousResult } from './SubscriptionManager.js'
 import { ErrorStore } from './ErrorStore.js'
 import {
@@ -318,9 +319,10 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		id: string,
 		data: T,
 		skipNotify: boolean = false,
+		selection?: SelectionMeta,
 	): EntitySnapshot<T> {
 		const key = this.getEntityKey(entityType, id)
-		const newSnapshot = this.entitySnapshots.refreshServerData(key, this.resolveEntityId(entityType, id), entityType, data)
+		const newSnapshot = this.entitySnapshots.refreshServerData(key, this.resolveEntityId(entityType, id), entityType, data, selection)
 		this.meta.setExistsOnServer(key, true)
 		if (!skipNotify) {
 			this.notifyEntitySubscribers(key)

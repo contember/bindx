@@ -146,3 +146,40 @@ describe('HasMany - the same entity reached twice with different selections', ()
 		expect(getByTestId(container, 'direct-types').textContent).toBe('learningMaterial')
 	})
 })
+
+function WideRoot(): React.ReactElement {
+	const session = useEntity(entityDefs.Session, { by: { id: 'session-1' } }, e => e.id().attachments(a => a.id().name().type()))
+	if (session.$isLoading || session.$isError || session.$isNotFound) {
+		return <div>Loading...</div>
+	}
+	return <span data-testid="wide-types">{session.attachments.items.map(a => String(a.$fields.type.value)).join(',')}</span>
+}
+
+function NarrowRoot(): React.ReactElement {
+	const session = useEntity(entityDefs.Session, { by: { id: 'session-1' } }, e => e.id().attachments(a => a.id().name()))
+	if (session.$isLoading || session.$isError || session.$isNotFound) {
+		return <div>Loading...</div>
+	}
+	return <span data-testid="narrow-names">{session.attachments.items.map(a => a.$fields.name.value).join(',')}</span>
+}
+
+describe('HasMany - the same entity loaded by two roots with different selections', () => {
+	test('should keep the wider root\'s fields when the narrower root\'s read lands last', async () => {
+		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={schema}>
+				<WideRoot />
+				<NarrowRoot />
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'wide-types')).not.toBeNull()
+			expect(queryByTestId(container, 'narrow-names')).not.toBeNull()
+		})
+
+		expect(getByTestId(container, 'narrow-names').textContent).toBe('Slides')
+		expect(getByTestId(container, 'wide-types').textContent).toBe('learningMaterial')
+	})
+})
