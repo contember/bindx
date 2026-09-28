@@ -186,9 +186,12 @@ function SelectDataViewImpl({
 		}
 	}, [result.$status])
 
-	usePagingTotalCount(paging, totalCount, {
-		isCurrent: result.$status === 'ready' && !result.$isRefetching,
-		itemCount,
+	const countKey = useMemo(() => JSON.stringify(combinedFilter ?? {}), [combinedFilter])
+	usePagingTotalCount(paging, {
+		countedTotal: totalCount,
+		countKey,
+		isPageCurrent: result.$status === 'ready' && !result.$isRefetching,
+		pageItemCount: itemCount,
 	})
 
 	// ---- Reload ----

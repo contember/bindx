@@ -129,9 +129,12 @@ function DataGridImpl<TRoleMap extends Record<string, object>>({
 		}
 	}, [result.$status])
 
-	usePagingTotalCount(setup.paging, totalCount, {
-		isCurrent: result.$status === 'ready' && !result.$isRefetching,
-		itemCount,
+	const countKey = useMemo(() => JSON.stringify(setup.combinedFilter ?? {}), [setup.combinedFilter])
+	usePagingTotalCount(setup.paging, {
+		countedTotal: totalCount,
+		countKey,
+		isPageCurrent: result.$status === 'ready' && !result.$isRefetching,
+		pageItemCount: itemCount,
 	})
 
 	// ---- Reload ----

@@ -44,12 +44,21 @@ function createData(rowCount: number): Record<string, Record<string, Record<stri
 	return { Article }
 }
 
-/** Answers count queries without a count, like an adapter that implements none. */
-class CountlessAdapter implements BackendAdapter {
-	constructor(private readonly inner: MockAdapter) {}
+/**
+ * Records the offset of every list query. Without `answersCount` it answers count queries
+ * without a count, like an adapter that implements none.
+ */
+class RecordingAdapter implements BackendAdapter {
+	public readonly listOffsets: (number | undefined)[] = []
+
+	constructor(private readonly inner: MockAdapter, private readonly answersCount: boolean) {}
 
 	async query(queries: readonly Query[], options?: QueryOptions): Promise<QueryResult[]> {
+		for (const query of queries) {
+			if (query.type === 'list') this.listOffsets.push(query.offset)
+		}
 		const results = await this.inner.query(queries, options)
+		if (this.answersCount) return results
 		return results.map((result): QueryResult => result.type === 'count' ? { type: 'list', data: [] } : result)
 	}
 
@@ -58,12 +67,12 @@ class CountlessAdapter implements BackendAdapter {
 	}
 }
 
-function createCountingAdapter(rowCount: number): BackendAdapter {
-	return new MockAdapter(createData(rowCount), { delay: 0 })
+function createCountingAdapter(rowCount: number): RecordingAdapter {
+	return new RecordingAdapter(new MockAdapter(createData(rowCount), { delay: 0 }), true)
 }
 
-function createCountlessAdapter(rowCount: number): BackendAdapter {
-	return new CountlessAdapter(new MockAdapter(createData(rowCount), { delay: 0 }))
+function createCountlessAdapter(rowCount: number): RecordingAdapter {
+	return new RecordingAdapter(new MockAdapter(createData(rowCount), { delay: 0 }), false)
 }
 
 /** Serializes like the web storages do, starting with a page index stored by an earlier visit. */
@@ -148,27 +157,53 @@ const ALL_SEVEN_TITLES = ['Article 1', 'Article 2', 'Article 3', 'Article 4', 'A
 
 describe('DataGrid — page index beyond the last page', () => {
 	test('a stored page past the end lands on the last page when the adapter counts', async () => {
+		const adapter = createCountingAdapter(7)
 		const storage = createStorageWithPageIndex(14)
-		const { container } = render(<Grid adapter={createCountingAdapter(7)} storage={storage} />)
+		const { container } = render(<Grid adapter={adapter} storage={storage} />)
 
 		await waitFor(() => expect(pageInfo(container)).toBe('Page 4 of 4'))
 		await waitFor(() => expect(getRowCount(container)).toBe(1))
 		expect(getCellText(container, 0, 'title')).toBe('Article 7')
 		expect(totalInfo(container)).toBe('7 total')
 		expect(storage.written.get('dataview:pageIndex')).toBe(3)
+		expect(adapter.listOffsets).toEqual([28, 6])
 	})
 
-	test('a stored page past the end lands on the last page when the adapter does not count', async () => {
+	test('a stored page past the end bisects to the last page when the adapter does not count', async () => {
+		const adapter = createCountlessAdapter(7)
 		const storage = createStorageWithPageIndex(14)
-		const { container } = render(<Grid adapter={createCountlessAdapter(7)} storage={storage} />)
+		const { container } = render(<Grid adapter={adapter} storage={storage} />)
 
 		await waitFor(() => expect(pageInfo(container)).toBe('Page 4 of 4'))
 		await waitFor(() => expect(getRowCount(container)).toBe(1))
 		expect(getCellText(container, 0, 'title')).toBe('Article 7')
 		expect(totalInfo(container)).toBe('7 total')
 		expect(storage.written.get('dataview:pageIndex')).toBe(3)
+		expect(adapter.listOffsets).toEqual([28, 14, 6])
 
 		expect((await readAllPages(container)).sort()).toEqual(ALL_SEVEN_TITLES)
+	})
+
+	test('a stored page far past the end costs a logarithmic number of queries when the adapter does not count', async () => {
+		const adapter = createCountlessAdapter(7)
+		const { container } = render(<Grid adapter={adapter} storage={createStorageWithPageIndex(500)} />)
+
+		await waitFor(() => expect(pageInfo(container)).toBe('Page 4 of 4'))
+		await waitFor(() => expect(getRowCount(container)).toBe(1))
+		expect(totalInfo(container)).toBe('7 total')
+		// The interval of possible totals, [0, 1000] after the first empty page, halves with every query.
+		expect(adapter.listOffsets.length).toBeLessThanOrEqual(1 + Math.ceil(Math.log2(1000)))
+		expect(adapter.listOffsets.at(-1)).toBe(6)
+	})
+
+	test('an adapter with no rows and no count ends on an empty first page', async () => {
+		const adapter = createCountlessAdapter(0)
+		const { container } = render(<Grid adapter={adapter} storage={createStorageWithPageIndex(14)} />)
+
+		await waitFor(() => expect(pageInfo(container)).toBe('Page 1 of 1'))
+		await waitFor(() => expect(queryByTestId(container, 'datagrid-empty')).not.toBeNull())
+		expect(totalInfo(container)).toBe('0 total')
+		expect(adapter.listOffsets).toEqual([28, 14, 6, 2, 0])
 	})
 
 	test('a narrower filter on the last page moves to the new last page when the adapter does not count', async () => {
@@ -181,6 +216,7 @@ describe('DataGrid — page index beyond the last page', () => {
 			await waitFor(() => expect(pageInfo(container)).toStartWith(`Page ${page}`))
 		}
 		await waitFor(() => expect(pageInfo(container)).toBe('Page 5 of 5'))
+		const offsetsBeforeFilter = adapter.listOffsets.length
 
 		rerender(<Grid adapter={adapter} filter={PUBLISHED_ONLY} />)
 
@@ -189,6 +225,7 @@ describe('DataGrid — page index beyond the last page', () => {
 		expect(getCellText(container, 0, 'title')).toBe('Article 3')
 		expect(totalInfo(container)).toBe('3 total')
 		expect(isDisabled(container, 'datagrid-pagination-next')).toBe(true)
+		expect(adapter.listOffsets.slice(offsetsBeforeFilter)).toEqual([8, 4, 2])
 
 		expect((await readAllPages(container)).sort()).toEqual(['Article 1', 'Article 2', 'Article 3'])
 	})

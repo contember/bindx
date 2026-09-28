@@ -241,9 +241,15 @@ function HasManyDataGridImpl<TEntity extends object>({
 		}
 	}, [listState.status])
 
-	usePagingTotalCount(setup.paging, listState.totalCount ?? null, {
-		isCurrent: listState.status === 'ready' && listState.optionsKey === optionsKey,
-		itemCount,
+	const countKey = useMemo(
+		() => JSON.stringify([parentEntityType, parentEntityId, fieldName, setup.combinedFilter ?? {}]),
+		[parentEntityType, parentEntityId, fieldName, setup.combinedFilter],
+	)
+	usePagingTotalCount(setup.paging, {
+		countedTotal: listState.totalCount ?? null,
+		countKey,
+		isPageCurrent: listState.status === 'ready' && listState.optionsKey === optionsKey,
+		pageItemCount: itemCount,
 	})
 
 	// ---- Reload ----
