@@ -269,7 +269,11 @@ export function viewOrderedIds(state: StoredHasManyState, alias: string): string
 	return explicit !== null && explicit !== undefined ? [...explicit] : computeViewOrderedIds(state, alias)
 }
 
-/** The relation's server baseline: the union across views. */
+/**
+ * The relation's server baseline: the union across views.
+ * Known limitation: views are never dropped, so a view nobody refetches any more can
+ * keep a row the server has since removed in it.
+ */
 export function relationServerIds(state: StoredHasManyState): Set<string> {
 	const ids = new Set<string>()
 	for (const view of state.views.values()) {
