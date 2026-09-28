@@ -26,10 +26,15 @@ function Article({ params, publish }: Props) {
 	publish(store)
 
 	if (article.$status !== 'ready') return <div>Loading</div>
-	return <span data-testid="tag-count">{article.tags.length}</span>
+	return (
+		<>
+			<span data-testid="tag-count">{article.tags.length}</span>
+			<span data-testid="tags-dirty">{String(article.tags.isDirty)}</span>
+		</>
+	)
 }
 
-async function mount(params: object): Promise<SnapshotStore> {
+async function mount(params: object): Promise<{ store: SnapshotStore; container: HTMLElement }> {
 	let store: SnapshotStore | null = null
 	const { container } = render(
 		<BindxProvider adapter={new MockAdapter(createMockData(), { delay: 0 })} schema={schema}>
@@ -37,12 +42,12 @@ async function mount(params: object): Promise<SnapshotStore> {
 		</BindxProvider>,
 	)
 	await waitFor(() => expect(queryByTestId(container, 'tag-count')).not.toBeNull())
-	return store!
+	return { store: store!, container }
 }
 
 describe('a has-many view is classified by its args, not by its alias', () => {
 	test('an ordering-only view shows a member added elsewhere', async () => {
-		const store = await mount(orderByParams)
+		const { store } = await mount(orderByParams)
 		const alias = generateHasManyAlias('tags', orderByParams)
 
 		// A connection made through another view of the same relation. `orderBy` cannot
@@ -55,8 +60,8 @@ describe('a has-many view is classified by its args, not by its alias', () => {
 			.toEqual(['tag-1', 'tag-2', 'tag-9'])
 	})
 
-	test('a filtered view does not', async () => {
-		const store = await mount(filterParams)
+	test('a filtered view does not, although it sees the write', async () => {
+		const { store, container } = await mount(filterParams)
 		const alias = generateHasManyAlias('tags', filterParams)
 		const before = store.getHasManyOrderedIds('Article', 'article-1', 'tags', alias)
 
@@ -64,7 +69,9 @@ describe('a has-many view is classified by its args, not by its alias', () => {
 			store.planHasManyConnection('Article', 'article-1', 'tags', 'tag-9')
 		})
 
-		// The client cannot evaluate the filter, so it must not claim membership.
+		// The write reached this view's relation: the view reports it as pending...
+		expect(queryByTestId(container, 'tags-dirty')?.textContent).toBe('true')
+		// ...but the client cannot evaluate the filter, so it must not claim membership.
 		expect(store.getHasManyOrderedIds('Article', 'article-1', 'tags', alias)).toEqual(before)
 	})
 })
