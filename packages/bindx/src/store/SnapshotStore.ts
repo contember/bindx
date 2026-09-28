@@ -1355,14 +1355,15 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 			const live = this.relations.getHasManyState(img.key)
 			// The editable layer (planned writes, manual ordering) comes from the image;
 			// the server baseline always from the live state, which may have advanced
-			// since the gesture. A view the image does not know was created afterwards,
-			// by a non-journaled materialization, so it keeps its live ordering too.
+			// since the gesture. A view the image does not know did not exist before the
+			// gesture — the gesture itself may have created it — so it had no arranged
+			// order to restore and falls back to the default order of the restored writes.
 			const views = new Map(live?.views ?? [])
 			for (const [alias, view] of views) {
 				const recorded = s.views.get(alias)
 				views.set(alias, {
 					serverIds: new Set(view.serverIds),
-					orderedIds: recorded ? (recorded.orderedIds ? [...recorded.orderedIds] : null) : view.orderedIds,
+					orderedIds: recorded?.orderedIds ? [...recorded.orderedIds] : null,
 					membership: view.membership,
 				})
 			}

@@ -9,6 +9,7 @@ import {
 	disconnectRelation,
 	moveInList,
 	removeFromList,
+	addToList,
 	connectToList,
 	generateHasManyAlias,
 } from '@contember/bindx'
@@ -317,6 +318,18 @@ describe('undo journal — deep coverage', () => {
 
 			expect(store.getHasManyOrderedIds('Article', 'p', 'items', NARROW)).toEqual(['s1'])
 			expect(store.getHasManyPlannedConnections('Article', 'p', 'items')?.size ?? 0).toBe(0)
+		})
+
+		test('an add through a view nothing had read yet is undone out of that view', () => {
+			const UNREAD = generateHasManyAlias('items', { filter: { pinned: true } })
+			// The add itself creates the view, with an explicit order the journal never recorded.
+			dispatcher.dispatch(addToList('Article', 'p', 'items', 'Item', 'n1', UNREAD))
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', UNREAD)).toEqual(['n1'])
+
+			undo.undo()
+
+			expect(store.getHasManyOrderedIds('Article', 'p', 'items', UNREAD)).toEqual([])
+			expect(store.getHasManyCreatedEntities('Article', 'p', 'items')?.size ?? 0).toBe(0)
 		})
 	})
 
