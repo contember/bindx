@@ -1,6 +1,6 @@
 // Regression tests for https://github.com/contember/bindx/issues/123
 import { describe, expect, test } from 'bun:test'
-import { __internal } from '@contember/bindx-react'
+import { __internal, createFragment } from '@contember/bindx-react'
 import { planOccurrenceWalk, ResponseOccurrenceIndex, type RelationTargetResolver } from '../../../packages/bindx/src/store/ResponseOccurrenceIndex.js'
 
 const { createSelectionBuilder, getSelectionMeta } = __internal
@@ -21,6 +21,7 @@ interface Author {
 interface Section {
 	id: string
 	article: Article | null
+	reviewer: Author | null
 }
 
 interface Article {
@@ -41,6 +42,7 @@ const relations: Record<string, Record<string, { target: string; isHasMany: bool
 	},
 	Section: {
 		article: { target: 'Article', isHasMany: false },
+		reviewer: { target: 'Author', isHasMany: false },
 	},
 	Author: {
 		tags: { target: 'Tag', isHasMany: true },
@@ -223,15 +225,33 @@ describe('ResponseOccurrenceIndex', () => {
 
 		test('skips walking a response whose selection repeats no type', () => {
 			const selection = getSelectionMeta(createSelectionBuilder<Article>().id().author(a => a.id().name()))
-			const { resolver, calls } = countingSchema()
+			const callsFor = (rowCount: number): number => {
+				const { resolver, calls } = countingSchema()
+				new ResponseOccurrenceIndex().index('Article', rows(rowCount), selection, resolver)
+				return calls()
+			}
+
+			// Only the plan consults the schema, once per selection position; the rows are never walked.
+			expect(callsFor(1000)).toBe(callsFor(10))
+			expect(callsFor(10)).toBeLessThan(10)
+		})
+
+		test('walks the ancestors of every position a reused fragment takes', () => {
+			const PersonFragment = createFragment<Author>()(a => a.id().name())
+			const selection = getSelectionMeta(
+				createSelectionBuilder<Article>().id().author(PersonFragment).sections(s => s.id().reviewer(PersonFragment)),
+			)
+			const plan = planOccurrenceWalk('Article', selection, schema)
+
+			expect([...plan.repeatedTypes]).toEqual(['Author'])
+			expect(plan.nodesToWalk.has(selection.fields.get('sections')!.nested!)).toBe(true)
+
+			const reviewer = { id: 'author-1', name: 'Ann' }
+			const author = { id: 'author-1', name: 'Ann' }
 			const index = new ResponseOccurrenceIndex()
+			index.index('Article', { id: 'article-1', author, sections: [{ id: 'section-1', reviewer }] }, selection, schema)
 
-			index.index('Article', rows(100), selection, resolver)
-			const afterFirst = calls()
-			index.index('Article', rows(100), selection, resolver)
-
-			expect(afterFirst).toBeLessThan(10)
-			expect(calls()).toBe(afterFirst)
+			expect(index.resolve(reviewer)).toBe(index.resolve(author))
 		})
 
 		test('walks a response whose selection reaches a type twice', () => {

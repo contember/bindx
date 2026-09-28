@@ -5,6 +5,7 @@ import { act, cleanup, render, waitFor } from '@testing-library/react'
 import React from 'react'
 import {
 	BindxProvider,
+	createFragment,
 	defineSchema,
 	entityDef,
 	hasMany,
@@ -36,15 +37,28 @@ interface Attachment {
 	file: StoredFile | null
 }
 
+interface Company {
+	id: string
+	address: string
+}
+
+interface Badge {
+	id: string
+	label: string
+}
+
 interface Author {
 	id: string
 	name: string
 	email: string
+	company: Company | null
+	badges: Badge[]
 }
 
 interface Section {
 	id: string
 	article: Article | null
+	reviewer: Author | null
 }
 
 interface Article {
@@ -52,6 +66,7 @@ interface Article {
 	attachments: Attachment[]
 	sections: Section[]
 	author: Author | null
+	editor: Author | null
 }
 
 interface CycleSchema {
@@ -60,6 +75,8 @@ interface CycleSchema {
 	Attachment: Attachment
 	Author: Author
 	StoredFile: StoredFile
+	Company: Company
+	Badge: Badge
 }
 
 const schema = defineSchema<CycleSchema>({
@@ -70,12 +87,14 @@ const schema = defineSchema<CycleSchema>({
 				attachments: hasMany('Attachment'),
 				sections: hasMany('Section'),
 				author: hasOne('Author', { nullable: true }),
+				editor: hasOne('Author', { nullable: true }),
 			},
 		},
 		Section: {
 			fields: {
 				id: scalar(),
 				article: hasOne('Article', { nullable: true }),
+				reviewer: hasOne('Author', { nullable: true }),
 			},
 		},
 		Attachment: {
@@ -91,6 +110,20 @@ const schema = defineSchema<CycleSchema>({
 				id: scalar(),
 				name: scalar(),
 				email: scalar(),
+				company: hasOne('Company', { nullable: true }),
+				badges: hasMany('Badge'),
+			},
+		},
+		Company: {
+			fields: {
+				id: scalar(),
+				address: scalar(),
+			},
+		},
+		Badge: {
+			fields: {
+				id: scalar(),
+				label: scalar(),
 			},
 		},
 		StoredFile: {
@@ -118,16 +151,24 @@ interface MockOptions {
 function createMockData({ type = 'pdf', authorId = 'author-1' }: MockOptions = {}): ConstructorParameters<typeof MockAdapter>[0] {
 	const file = { id: 'file-1', url: '/slides.pdf', size: 42 }
 	const attachment = { id: 'att-1', name: 'Slides', type, file }
-	const author = { id: authorId, name: 'Ann', email: 'ann@example.com' }
-	const article = { id: 'article-1', attachments: [attachment], author, sections: [] as unknown[] }
-	// The section points back at the SAME article: one response reaches it twice.
-	article.sections = [{ id: 'section-1', article }]
+	const author = {
+		id: authorId,
+		name: 'Ann',
+		email: 'ann@example.com',
+		company: { id: 'company-1', address: 'Main St' },
+		badges: [{ id: 'badge-1', label: 'Maintainer' }],
+	}
+	const article = { id: 'article-1', attachments: [attachment], author, editor: author, sections: [] as unknown[] }
+	// The section points back at the SAME article, and at the same person as its author: one response reaches both twice.
+	article.sections = [{ id: 'section-1', article, reviewer: author }]
 	return {
 		Article: { 'article-1': article },
 		Section: {},
 		Attachment: { 'att-1': { ...attachment } },
 		Author: { [authorId]: { ...author } },
 		StoredFile: {},
+		Company: {},
+		Badge: {},
 	}
 }
 
@@ -251,6 +292,38 @@ function PaginatedView({ readNestedFirst }: { readNestedFirst: boolean }): React
 	)
 }
 
+const PersonFragment = createFragment<Author>()(a => a.id().name().company(c => c.id()).badges(b => b.id()))
+
+/**
+ * One person reached three times: through the same fragment as the article's author and as a
+ * section's reviewer (a has-many away), and as the editor with a wider has-one and has-many.
+ * `readNestedFirst` reads the fragment positions before the editor; otherwise the editor is
+ * touched first, the fragment positions next, and the editor's relations last.
+ */
+function SharedFragmentView({ readNestedFirst }: { readNestedFirst: boolean }): React.ReactElement {
+	const article = useEntity(entityDefs.Article, by, e =>
+		e.id()
+			.author(PersonFragment)
+			.editor(p => p.id().company(c => c.id().address()).badges(b => b.id().label()))
+			.sections(s => s.id().reviewer(PersonFragment)),
+	)
+	if (article.$isLoading || article.$isError || article.$isNotFound) {
+		return <div>Loading...</div>
+	}
+	const fragmentNames = (): string => [article.author.name.value, ...article.sections.items.map(s => s.reviewer.name.value)].join(',')
+	const editorWide = (): string => [article.editor.company.address.value, ...article.editor.badges.items.map(b => b.$fields.label.value)].join(',')
+
+	const editorId = readNestedFirst ? null : article.editor.$id
+	const names = fragmentNames()
+	const wide = editorWide()
+	return (
+		<div data-editor={editorId ?? ''}>
+			<span data-testid="nested">{names}</span>
+			<span data-testid="direct">{wide}</span>
+		</div>
+	)
+}
+
 function NarrowRoot(): React.ReactElement {
 	const article = useEntity(entityDefs.Article, by, e => e.id().attachments(a => a.id().name()).author(a => a.id().name()))
 	if (article.$isLoading || article.$isError || article.$isNotFound) {
@@ -295,6 +368,14 @@ for (const readNestedFirst of [true, false]) {
 
 			expect(getByTestId(container, 'nested').textContent).toBe('Slides')
 			expect(getByTestId(container, 'direct').textContent).toBe('pdf')
+		})
+
+		test('keeps the wider has-one and has-many fields of an entity also selected through a reused fragment', async () => {
+			const { container } = renderWithin(new MockAdapter(createMockData(), { delay: 0 }), <SharedFragmentView readNestedFirst={readNestedFirst} />)
+			await waitForTestIds(container, 'direct')
+
+			expect(getByTestId(container, 'nested').textContent).toBe('Ann,Ann')
+			expect(getByTestId(container, 'direct').textContent).toBe('Main St,Maintainer')
 		})
 
 		test('keeps two entity types that share an id apart', async () => {

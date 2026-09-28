@@ -120,26 +120,18 @@ export interface OccurrenceWalkPlan {
 	readonly nodesToWalk: ReadonlySet<SelectionMeta>
 }
 
-const planCache = new WeakMap<RelationTargetResolver, WeakMap<SelectionMeta, Map<string, OccurrenceWalkPlan>>>()
-
-/** Depends only on the schema, the selection and its root type, so it is computed once per combination. */
+/**
+ * Plans the walk of one response. It depends only on the schema, the selection
+ * and its root type, and costs one pass over the selection tree, not over the
+ * response. It is computed per response rather than cached, because a selection
+ * can still grow after its first fetch (`mergeSelections` extends nested
+ * selections in place, and a fragment's selection is shared by every place
+ * that uses it).
+ */
 export function planOccurrenceWalk(entityType: string, selection: SelectionMeta, schema: RelationTargetResolver): OccurrenceWalkPlan {
-	let bySelection = planCache.get(schema)
-	if (!bySelection) {
-		bySelection = new WeakMap()
-		planCache.set(schema, bySelection)
-	}
-	let byRootType = bySelection.get(selection)
-	if (!byRootType) {
-		byRootType = new Map()
-		bySelection.set(selection, byRootType)
-	}
-	let plan = byRootType.get(entityType)
-	if (!plan) {
-		plan = computeOccurrenceWalkPlan(entityType, selection, schema)
-		byRootType.set(entityType, plan)
-	}
-	return plan
+	const nodes = listSelectionNodes(entityType, selection, schema)
+	const repeatedTypes = findRepeatedTypes(nodes)
+	return { repeatedTypes, nodesToWalk: findNodesToWalk(nodes, repeatedTypes) }
 }
 
 interface SelectionNode {
@@ -148,16 +140,11 @@ interface SelectionNode {
 	readonly parent: number | null
 }
 
-function computeOccurrenceWalkPlan(entityType: string, selection: SelectionMeta, schema: RelationTargetResolver): OccurrenceWalkPlan {
+/** Every position in the selection tree, breadth first, each with the index of its parent. */
+function listSelectionNodes(entityType: string, selection: SelectionMeta, schema: RelationTargetResolver): readonly SelectionNode[] {
 	const nodes: SelectionNode[] = [{ entityType, selection, parent: null }]
-	const seenTypes = new Set<string>()
-	const repeatedTypes = new Set<string>()
 	for (let index = 0; index < nodes.length; index++) {
 		const node = nodes[index]!
-		if (seenTypes.has(node.entityType)) {
-			repeatedTypes.add(node.entityType)
-		}
-		seenTypes.add(node.entityType)
 		for (const fieldMeta of node.selection.fields.values()) {
 			if (!fieldMeta.isRelation || !fieldMeta.nested) continue
 			const targetType = schema.getRelationTarget(node.entityType, fieldMeta.fieldName)
@@ -166,15 +153,37 @@ function computeOccurrenceWalkPlan(entityType: string, selection: SelectionMeta,
 			}
 		}
 	}
-	const nodesToWalk = new Set<SelectionMeta>()
+	return nodes
+}
+
+function findRepeatedTypes(nodes: readonly SelectionNode[]): ReadonlySet<string> {
+	const seenTypes = new Set<string>()
+	const repeatedTypes = new Set<string>()
 	for (const node of nodes) {
-		if (!repeatedTypes.has(node.entityType)) continue
-		for (let current: SelectionNode | undefined = node; current && !nodesToWalk.has(current.selection);) {
-			nodesToWalk.add(current.selection)
-			current = current.parent === null ? undefined : nodes[current.parent]
+		if (seenTypes.has(node.entityType)) {
+			repeatedTypes.add(node.entityType)
 		}
+		seenTypes.add(node.entityType)
 	}
-	return { repeatedTypes, nodesToWalk }
+	return repeatedTypes
+}
+
+/**
+ * The selections on a path from the root to a repeated type. The climb tracks
+ * tree positions, not selection objects: a reused fragment is one selection
+ * object at several positions, and each position has ancestors of its own.
+ */
+function findNodesToWalk(nodes: readonly SelectionNode[], repeatedTypes: ReadonlySet<string>): ReadonlySet<SelectionMeta> {
+	const nodesToWalk = new Set<SelectionMeta>()
+	const climbed = new Set<number>()
+	nodes.forEach((node, index) => {
+		if (!repeatedTypes.has(node.entityType)) return
+		for (let position: number | null = index; position !== null && !climbed.has(position); position = nodes[position]!.parent) {
+			climbed.add(position)
+			nodesToWalk.add(nodes[position]!.selection)
+		}
+	})
+	return nodesToWalk
 }
 
 function addOccurrence(occurrencesByType: OccurrencesByType, entityType: string, entity: EntityRecord): void {
