@@ -58,8 +58,8 @@ export type ErrorEntityListResult = EntityListResultBase & {
 }
 
 /**
- * `$isRefetching` is `true` while a background re-fetch is in flight
- * (triggered by a `queryKey` change while ready data is already present).
+ * `$isRefetching` is `true` while the items answer an earlier query: from the render
+ * that changes the options or the `queryKey` until the re-fetch returns.
  * The accessor identity stays stable so the subtree does not unmount —
  * stale-while-revalidate semantics.
  */
@@ -217,16 +217,24 @@ export function useEntityList(
 		return `${entityType}:${selectionContentKey}`
 	}, [options.queryKey, selectionContentKey, entityType])
 
+	const requestKey = useMemo(
+		() => JSON.stringify([effectiveQueryKey, optionsKey]),
+		[effectiveQueryKey, optionsKey],
+	)
+
 	// --- List state tracking ---
 	const listStateRef = useRef<{
 		status: 'loading' | 'error' | 'ready'
 		items: Array<{ id: string; data: object }>
 		error?: FieldError
 		isRefetching: boolean
+		/** The request the items were loaded for. */
+		requestKey: string | null
 	}>({
 		status: 'loading',
 		items: [],
 		isRefetching: false,
+		requestKey: null,
 	})
 
 	const versionRef = useRef(0)
@@ -350,6 +358,9 @@ export function useEntityList(
 		const state = listStateRef.current
 		const version = versionRef.current
 		const storeVersion = store.getVersion()
+		// Until the data-loading effect marks the refetch, the items of the previous request are
+		// already stale on the render that changed it.
+		const isRefetching = state.isRefetching || state.requestKey !== requestKey
 
 		const cache = listCacheRef.current
 		if (
@@ -357,7 +368,7 @@ export function useEntityList(
 			cache.version === version &&
 			cache.storeVersion === storeVersion &&
 			cache.status === state.status &&
-			cache.isRefetching === state.isRefetching &&
+			cache.isRefetching === isRefetching &&
 			cache.accessorCache === itemAccessorCache
 		) {
 			return cache.result
@@ -382,7 +393,7 @@ export function useEntityList(
 			result = {
 				$status: 'ready',
 				$isLoading: false,
-				$isRefetching: state.isRefetching,
+				$isRefetching: isRefetching,
 				$isError: false,
 				$error: null,
 				$isDirty: false,
@@ -398,13 +409,13 @@ export function useEntityList(
 			version,
 			storeVersion,
 			status: state.status,
-			isRefetching: state.isRefetching,
+			isRefetching,
 			accessorCache: itemAccessorCache,
 			result,
 		}
 
 		return result
-	}, [store, itemAccessorCache, addItem, removeItem, moveItem, resolveItemId])
+	}, [store, requestKey, itemAccessorCache, addItem, removeItem, moveItem, resolveItemId])
 
 	const isEqual = useCallback(
 		(a: UseEntityListResult<any>, b: UseEntityListResult<any>): boolean => {
@@ -429,7 +440,7 @@ export function useEntityList(
 		if (prev.status === 'ready') {
 			listStateRef.current = { ...prev, isRefetching: true }
 		} else {
-			listStateRef.current = { status: 'loading', items: [], isRefetching: false }
+			listStateRef.current = { status: 'loading', items: [], isRefetching: false, requestKey: null }
 		}
 		versionRef.current++
 		store.notify()
@@ -468,7 +479,7 @@ export function useEntityList(
 						// Revalidation preserves local edits while advancing the server baseline.
 						dispatcher.dispatch(refreshServerData(entityType, item.id, item.data))
 					}
-					listStateRef.current = { status: 'ready', items, isRefetching: false }
+					listStateRef.current = { status: 'ready', items, isRefetching: false, requestKey }
 					versionRef.current++
 					store.notify()
 				})
@@ -481,6 +492,7 @@ export function useEntityList(
 					items: [],
 					error: createLoadError(normalizedError),
 					isRefetching: false,
+					requestKey,
 				}
 				versionRef.current++
 				store.notify()
@@ -492,7 +504,7 @@ export function useEntityList(
 		return () => {
 			abortController.abort()
 		}
-	}, [entityType, optionsKey, effectiveQueryKey, batcher, dispatcher, store, selectionMeta])
+	}, [entityType, optionsKey, requestKey, batcher, dispatcher, store, selectionMeta])
 
 	return accessor
 }

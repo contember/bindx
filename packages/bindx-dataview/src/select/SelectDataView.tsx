@@ -46,6 +46,7 @@ import { useSelectOptions } from './selectContext.js'
 import { DataViewProvider, type DataViewContextValue, type DataViewLoaderState } from '../DataViewContext.js'
 import { useFilteringState, useSortingState, usePagingState, useSelectionState } from '../useDataViewState.js'
 import { useListFetchAllData } from '../useListFetchAllData.js'
+import { usePagingTotalCount } from '../usePagingTotalCount.js'
 
 export interface SelectDataViewProps {
 	/** Children rendered inside the DataView context */
@@ -185,15 +186,10 @@ function SelectDataViewImpl({
 		}
 	}, [result.$status])
 
-	// Update total count from the count query, falling back to the partial-page
-	// heuristic until the count resolves.
-	useEffect(() => {
-		if (totalCount !== null) {
-			paging.setTotalCount(totalCount)
-		} else if (result.$status === 'ready' && paging.queryLimit !== undefined && paging.queryOffset !== undefined && itemCount < paging.queryLimit) {
-			paging.setTotalCount(paging.queryOffset + itemCount)
-		}
-	}, [totalCount, result.$status, itemCount, paging.queryLimit, paging.queryOffset, paging.setTotalCount])
+	usePagingTotalCount(paging, totalCount, {
+		isCurrent: result.$status === 'ready' && !result.$isRefetching,
+		itemCount,
+	})
 
 	// ---- Reload ----
 	const [, setReloadCounter] = useState(0)
