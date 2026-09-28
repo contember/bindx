@@ -5,7 +5,7 @@
  * for persisting state across navigations.
  */
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import type {
 	FilterHandler,
 	FilterArtifact,
@@ -304,7 +304,7 @@ export function usePagingState(options: UsePagingOptions = {}): PagingStateResul
 		storageKey = 'dataview',
 	} = options
 
-	const [pageIndex, setPageIndex] = useStoredState<number>(
+	const [requestedPageIndex, setPageIndex] = useStoredState<number>(
 		currentPageStateStorage,
 		[storageKey, 'pageIndex'],
 		(stored) => stored ?? 0,
@@ -316,11 +316,6 @@ export function usePagingState(options: UsePagingOptions = {}): PagingStateResul
 		(stored) => stored ?? initialItemsPerPage,
 	)
 
-	const state = useMemo((): PagingState => ({
-		pageIndex,
-		itemsPerPage: itemsPerPage ?? 0,
-	}), [pageIndex, itemsPerPage])
-
 	const [totalCount, setTotalCount] = useState<number | null>(null)
 	const [refreshCounter, setRefreshCounter] = useState(0)
 
@@ -328,6 +323,19 @@ export function usePagingState(options: UsePagingOptions = {}): PagingStateResul
 		if (totalCount === null || itemsPerPage === null) return null
 		return Math.max(1, Math.ceil(totalCount / itemsPerPage))
 	}, [totalCount, itemsPerPage])
+
+	// A requested page past the end (the total shrank, or a stored index outlived its result set)
+	// reads as the last page, so the query offset never points past the rows.
+	const pageIndex = totalPages === null ? requestedPageIndex : Math.min(requestedPageIndex, totalPages - 1)
+
+	useEffect(() => {
+		if (pageIndex !== requestedPageIndex) setPageIndex(pageIndex)
+	}, [pageIndex, requestedPageIndex, setPageIndex])
+
+	const state = useMemo((): PagingState => ({
+		pageIndex,
+		itemsPerPage: itemsPerPage ?? 0,
+	}), [pageIndex, itemsPerPage])
 
 	const info: PagingInfo = useMemo(() => ({
 		totalCount,
