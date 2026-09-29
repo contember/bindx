@@ -1,4 +1,4 @@
-// Regression test for <issue-url — filled in after the issue is filed>
+// Regression test for https://github.com/contember/bindx/issues/136
 //
 // A nullable has-one with no related entity still yields a handle whose `id`
 // is a disconnected placeholder id. The cell must not offer include/exclude
