@@ -31,7 +31,8 @@ function extractScalarFieldNames(selection: unknown): string[] {
 	if (!meta.fields) return []
 	const names: string[] = []
 	for (const [name, field] of meta.fields) {
-		if (!field.nested) names.push(name)
+		// The relation's `id` is always selected, and the engine offers no text search on it.
+		if (!field.nested && name !== 'id') names.push(name)
 	}
 	return names
 }
