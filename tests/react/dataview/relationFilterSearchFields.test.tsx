@@ -1,4 +1,4 @@
-// Regression test for <issue-url — filled in after the issue is filed>
+// Regression test for https://github.com/contember/bindx/issues/138
 //
 // The search box in a relation column's header filter must query only the
 // text fields the cell renders. The column's related selection also holds the
