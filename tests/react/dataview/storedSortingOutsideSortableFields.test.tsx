@@ -1,4 +1,4 @@
-// Regression test for <issue-url — filled in after Step 7>: `useSortingState`
+// Regression test for https://github.com/contember/bindx/issues/149: `useSortingState`
 // refuses a header click on a field outside `sortableFields` (`setOrderBy`), but
 // a sort read from `stateStorage` or written by `setDirections` reaches
 // `resolvedOrderBy` unchecked. A sort persisted before a field was removed from
