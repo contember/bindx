@@ -94,7 +94,10 @@ export interface FluentFragment<
 /**
  * Scalar method on selection builder - selects a scalar field
  */
-export interface ScalarMethod<TEntity, K extends keyof TEntity, TSelected extends object, THasManyParams extends object> {
+// TEntity is declared `in out` on all three *Method interfaces. Measured instead, it cycles through the `-?` mapped
+// type in SelectionBuilderMethods and comes out unmeasurable, so TypeScript 7.1 compares builders structurally:
+// quadratic in the entity's field count, TS2589 on large schemas.
+export interface ScalarMethod<in out TEntity, K extends keyof TEntity, TSelected extends object, THasManyParams extends object> {
 	/** Select field with original name */
 	(): SelectionBuilder<TEntity, TSelected & Pick<TEntity, K>, THasManyParams>
 	/** Select field with alias */
@@ -109,7 +112,7 @@ export interface ScalarMethod<TEntity, K extends keyof TEntity, TSelected extend
  * Has-one method on selection builder - selects a relation to single entity
  */
 export interface HasOneMethod<
-	TEntity,
+	in out TEntity, // see ScalarMethod
 	K extends keyof TEntity,
 	TRelated,
 	TSelected extends object,
@@ -175,7 +178,7 @@ type ResolveAlias<K, TOptions> = TOptions extends { as: infer A extends string }
  * Has-many method on selection builder - selects a relation to multiple entities
  */
 export interface HasManyMethod<
-	TEntity,
+	in out TEntity, // see ScalarMethod
 	K extends keyof TEntity,
 	TItem,
 	TSelected extends object,
