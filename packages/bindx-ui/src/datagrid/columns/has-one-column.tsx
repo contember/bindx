@@ -1,5 +1,6 @@
 import React, { type ReactElement, type ReactNode, useCallback } from 'react'
 import type { EntityAccessor, EntityDef, FieldRef } from '@contember/bindx'
+import { isPersistedId } from '@contember/bindx'
 import {
 	createRelationColumn,
 	hasOneColumnDef,
@@ -106,8 +107,9 @@ const relationUI = {
 		<RelationFilterUI {...ctx} />
 	),
 	renderCellWrapper: ({ content, item, fieldName, filterName, fieldRef }: RelationCellWrapperContext) => {
-		const id = getRelatedAccessor(item, fieldName)?.id ?? null
-		if (!id) return content
+		const id = getRelatedAccessor(item, fieldName)?.id
+		// An empty relation still has a placeholder id; filtering on it is rejected by the server.
+		if (!id || !isPersistedId(id)) return content
 		return (
 			<DataGridHasOneTooltip field={fieldRef} name={filterName} id={id}>
 				<DataGridTooltipLabel>{content}</DataGridTooltipLabel>
