@@ -14,6 +14,13 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run lint
+      # The Contember CLI refuses to migrate when its version differs from @contember/schema.
+      - name: Check Contember image versions match @contember/schema
+        run: |
+          schema=$(jq -r .version node_modules/@contember/schema/package.json)
+          for tag in $(grep -ohE 'contember/(engine|cli):[^ ]+' .github/workflows/ci.yml docker-compose.yaml | cut -d: -f2); do
+            [ "$tag" = "$schema" ] || { echo "Contember image $tag does not match @contember/schema $schema"; exit 1; }
+          done
 
   typecheck:
     name: Typecheck
@@ -61,7 +68,7 @@ jobs:
           - 9000:8000
 
       contember-engine:
-        image: contember/engine:2.1.0-rc.4
+        image: contember/engine:2.1.0-rc.6
         env:
           NODE_ENV: development
           CONTEMBER_PORT: "4000"
@@ -114,7 +121,7 @@ jobs:
             -e CONTEMBER_PROJECT_NAME=example \
             -v ${{ github.workspace }}:/src \
             -w /src/packages/example \
-            contember/cli:2.1.0-rc.4 \
+            contember/cli:2.1.0-rc.6 \
             migrations:execute --yes
           CONTEMBER_API_URL=http://localhost:1581 CONTEMBER_API_TOKEN=0000000000000000000000000000000000000000 bun run packages/example/seed.ts
 
