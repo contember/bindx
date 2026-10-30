@@ -129,20 +129,29 @@ describe('filter handlers', () => {
 
 	describe('date filter', () => {
 		const handler = createDateFilterHandler('publishedAt')
-		const localMidnight = (date: string): string => new Date(date + 'T00:00:00').toISOString()
+		const originalTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+		beforeAll(() => {
+			// Prague used local mean time (+0:57:44) before 1891
+			process.env.TZ = 'Europe/Prague'
+		})
+
+		afterAll(() => {
+			process.env.TZ = originalTimeZone
+		})
 
 		test('start only', () => {
-			const where = handler.toWhere({ start: '2024-01-01', end: null })
-			expect(where).toEqual({ publishedAt: { gte: localMidnight('2024-01-01') } })
+			const where = handler.toWhere({ start: '2024-01-15', end: null })
+			expect(where).toEqual({ publishedAt: { gte: '2024-01-15T00:00:00+01:00' } })
 		})
 
 		test('both start and end', () => {
-			const where = handler.toWhere({ start: '2024-01-01', end: '2024-12-31' })
+			const where = handler.toWhere({ start: '2024-01-15', end: '2024-12-31' })
 			// End date is inclusive: lt the local midnight of the following day
 			expect(where).toEqual({
 				and: [
-					{ publishedAt: { gte: localMidnight('2024-01-01') } },
-					{ publishedAt: { lt: localMidnight('2025-01-01') } },
+					{ publishedAt: { gte: '2024-01-15T00:00:00+01:00' } },
+					{ publishedAt: { lt: '2025-01-01T00:00:00+01:00' } },
 				],
 			})
 		})
@@ -152,34 +161,17 @@ describe('filter handlers', () => {
 				expect(handler.toWhere({ start, end: null })).toBeUndefined()
 			}
 			expect(handler.toWhere({ start: '0202-10-30', end: '2024-10-30' })).toEqual({
-				publishedAt: { lt: localMidnight('2024-10-31') },
+				publishedAt: { lt: '2024-10-31T00:00:00+01:00' },
 			})
 		})
 
-		describe('in a zone with a sub-minute historical offset', () => {
-			const originalTimeZone = process.env.TZ
-
-			beforeAll(() => {
-				// Prague used local mean time (+0:57:44) before 1891
-				process.env.TZ = 'Europe/Prague'
-			})
-
-			afterAll(() => {
-				if (originalTimeZone === undefined) {
-					delete process.env.TZ
-				} else {
-					process.env.TZ = originalTimeZone
-				}
-			})
-
-			test('serializes a valid whole-second UTC timestamp', () => {
-				const where = handler.toWhere({ start: '1890-06-15', end: '1890-06-15' })
-				expect(where).toEqual({
-					and: [
-						{ publishedAt: { gte: '1890-06-14T23:02:16.000Z' } },
-						{ publishedAt: { lt: '1890-06-15T23:02:16.000Z' } },
-					],
-				})
+		test('formats a sub-minute historical offset in whole seconds', () => {
+			const where = handler.toWhere({ start: '1890-06-15', end: '1890-06-15' })
+			expect(where).toEqual({
+				and: [
+					{ publishedAt: { gte: '1890-06-15T00:00:00+00:57:44' } },
+					{ publishedAt: { lt: '1890-06-16T00:00:00+00:57:44' } },
+				],
 			})
 		})
 	})

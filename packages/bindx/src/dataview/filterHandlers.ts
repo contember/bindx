@@ -190,14 +190,14 @@ export function createDateFilterHandler(fieldPath: string): FilterHandler<DateFi
 
 			const start = artifact.start !== null ? parseLocalMidnight(artifact.start) : null
 			if (start !== null) {
-				conditions.push(buildNestedWhere(fieldPath, { gte: start.toISOString() }))
+				conditions.push(buildNestedWhere(fieldPath, { gte: toLocalIsoString(start) }))
 			}
 
 			const end = artifact.end !== null ? parseLocalMidnight(artifact.end) : null
 			if (end !== null) {
 				// End date is inclusive — advance to start of next day
 				end.setDate(end.getDate() + 1)
-				conditions.push(buildNestedWhere(fieldPath, { lt: end.toISOString() }))
+				conditions.push(buildNestedWhere(fieldPath, { lt: toLocalIsoString(end) }))
 			}
 
 			if (artifact.nullCondition !== undefined) {
@@ -417,6 +417,30 @@ function parseLocalMidnight(value: string): Date | null {
 	if (isNaN(date.getTime())) return null
 	const year = date.getFullYear()
 	return year >= 1000 && year <= 9999 ? date : null
+}
+
+/**
+ * Formats a Date as an ISO string with the local timezone offset, e.g. 2024-01-15T00:00:00+01:00.
+ * The local date must stay in the string: `date` columns drop the time and zone.
+ */
+function toLocalIsoString(date: Date): string {
+	// getTimezoneOffset() is fractional or rounded for sub-minute historical offsets (LMT), so derive it from the local fields
+	const localAsUtc = Date.UTC(
+		date.getFullYear(), date.getMonth(), date.getDate(),
+		date.getHours(), date.getMinutes(), date.getSeconds(),
+	)
+	const offsetSeconds = Math.round((localAsUtc - date.getTime()) / 1000)
+	const sign = offsetSeconds >= 0 ? '+' : '-'
+	const absoluteOffset = Math.abs(offsetSeconds)
+	const pad = (n: number, len = 2): string => String(n).padStart(len, '0')
+	const offsetRemainderSeconds = absoluteOffset % 60
+
+	return (
+		pad(date.getFullYear(), 4) + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+		'T' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds()) +
+		sign + pad(Math.floor(absoluteOffset / 3600)) + ':' + pad(Math.floor(absoluteOffset / 60) % 60) +
+		(offsetRemainderSeconds !== 0 ? ':' + pad(offsetRemainderSeconds) : '')
+	)
 }
 
 /**
