@@ -1,5 +1,5 @@
 import '../../setup'
-import { describe, test, expect } from 'bun:test'
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import {
 	createTextFilterHandler,
 	createFullTextFilterHandler,
@@ -129,22 +129,58 @@ describe('filter handlers', () => {
 
 	describe('date filter', () => {
 		const handler = createDateFilterHandler('publishedAt')
+		const localMidnight = (date: string): string => new Date(date + 'T00:00:00').toISOString()
 
 		test('start only', () => {
 			const where = handler.toWhere({ start: '2024-01-01', end: null })
-			// Date filter normalizes to local midnight ISO string
-			expect(where).toHaveProperty('publishedAt')
-			expect((where as any).publishedAt.gte).toContain('2024-01-01')
+			expect(where).toEqual({ publishedAt: { gte: localMidnight('2024-01-01') } })
 		})
 
 		test('both start and end', () => {
 			const where = handler.toWhere({ start: '2024-01-01', end: '2024-12-31' })
-			// Date filter uses AND with gte for start and lt for day after end
-			expect(where).toHaveProperty('and')
-			const parts = (where as any).and as Array<Record<string, unknown>>
-			expect(parts).toHaveLength(2)
-			expect((parts[0] as any).publishedAt.gte).toContain('2024-01-01')
-			expect((parts[1] as any).publishedAt.lt).toContain('2025-01-01')
+			// End date is inclusive: lt the local midnight of the following day
+			expect(where).toEqual({
+				and: [
+					{ publishedAt: { gte: localMidnight('2024-01-01') } },
+					{ publishedAt: { lt: localMidnight('2025-01-01') } },
+				],
+			})
+		})
+
+		test('ignores partial years a date input reports while typing', () => {
+			for (const start of ['0002-10-30', '0020-10-30', '0202-10-30']) {
+				expect(handler.toWhere({ start, end: null })).toBeUndefined()
+			}
+			expect(handler.toWhere({ start: '0202-10-30', end: '2024-10-30' })).toEqual({
+				publishedAt: { lt: localMidnight('2024-10-31') },
+			})
+		})
+
+		describe('in a zone with a sub-minute historical offset', () => {
+			const originalTimeZone = process.env.TZ
+
+			beforeAll(() => {
+				// Prague used local mean time (+0:57:44) before 1891
+				process.env.TZ = 'Europe/Prague'
+			})
+
+			afterAll(() => {
+				if (originalTimeZone === undefined) {
+					delete process.env.TZ
+				} else {
+					process.env.TZ = originalTimeZone
+				}
+			})
+
+			test('serializes a valid whole-second UTC timestamp', () => {
+				const where = handler.toWhere({ start: '1890-06-15', end: '1890-06-15' })
+				expect(where).toEqual({
+					and: [
+						{ publishedAt: { gte: '1890-06-14T23:02:16.000Z' } },
+						{ publishedAt: { lt: '1890-06-15T23:02:16.000Z' } },
+					],
+				})
+			})
 		})
 	})
 

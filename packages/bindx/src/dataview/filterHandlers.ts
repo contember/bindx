@@ -188,20 +188,16 @@ export function createDateFilterHandler(fieldPath: string): FilterHandler<DateFi
 
 			const conditions: Record<string, unknown>[] = []
 
-			if (artifact.start !== null) {
-				const normalized = new Date(artifact.start + 'T00:00:00')
-				if (!isNaN(normalized.getTime())) {
-					conditions.push(buildNestedWhere(fieldPath, { gte: toLocalIsoString(normalized) }))
-				}
+			const start = artifact.start !== null ? parseLocalMidnight(artifact.start) : null
+			if (start !== null) {
+				conditions.push(buildNestedWhere(fieldPath, { gte: start.toISOString() }))
 			}
 
-			if (artifact.end !== null) {
-				const normalized = new Date(artifact.end + 'T00:00:00')
-				if (!isNaN(normalized.getTime())) {
-					// End date is inclusive — advance to start of next day
-					normalized.setDate(normalized.getDate() + 1)
-					conditions.push(buildNestedWhere(fieldPath, { lt: toLocalIsoString(normalized) }))
-				}
+			const end = artifact.end !== null ? parseLocalMidnight(artifact.end) : null
+			if (end !== null) {
+				// End date is inclusive — advance to start of next day
+				end.setDate(end.getDate() + 1)
+				conditions.push(buildNestedWhere(fieldPath, { lt: end.toISOString() }))
 			}
 
 			if (artifact.nullCondition !== undefined) {
@@ -412,19 +408,15 @@ export function createIsDefinedFilterHandler(fieldPath: string): FilterHandler<I
 // ============================================================================
 
 /**
- * Format a Date as ISO string with local timezone offset.
- * e.g. 2024-01-15T00:00:00+01:00
+ * Parses a `YYYY-MM-DD` filter value as local midnight.
+ * Returns null for invalid dates and for years outside 1000–9999: a date input
+ * reports partial years (0002, 0020, 0202) on each keystroke.
  */
-function toLocalIsoString(date: Date): string {
-	const tzo = -date.getTimezoneOffset()
-	const sign = tzo >= 0 ? '+' : '-'
-	const pad = (n: number, len = 2): string => String(n).padStart(len, '0')
-
-	return (
-		pad(date.getFullYear(), 4) + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
-		'T' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds()) +
-		sign + pad(Math.floor(Math.abs(tzo) / 60)) + ':' + pad(Math.abs(tzo) % 60)
-	)
+function parseLocalMidnight(value: string): Date | null {
+	const date = new Date(value + 'T00:00:00')
+	if (isNaN(date.getTime())) return null
+	const year = date.getFullYear()
+	return year >= 1000 && year <= 9999 ? date : null
 }
 
 /**
