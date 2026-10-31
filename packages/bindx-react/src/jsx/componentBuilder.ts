@@ -19,6 +19,7 @@ import type {
 	ComponentBuilderState,
 	CreateComponentOptions,
 } from './componentBuilder.types.js'
+import type { CompiledSelection } from './compiledSelection.js'
 export type { SelectionPropMeta } from './componentBuilder.types.js'
 import type { Condition } from './conditions.js'
 import { buildComponent, type EntityConfig } from './componentFactory.js'
@@ -50,6 +51,7 @@ export class ComponentBuilderImpl<
 		private readonly conditionFn: ((props: Record<string, unknown>) => Condition) | null = null,
 		private readonly slotNames: readonly string[] = ['children'],
 		private readonly useFns: readonly ((props: Record<string, unknown>) => object)[] = [],
+		private readonly mockValues: Record<string, unknown> = {},
 	) {}
 
 	entity(
@@ -69,6 +71,7 @@ export class ComponentBuilderImpl<
 			this.conditionFn,
 			this.slotNames,
 			this.useFns,
+			this.mockValues,
 		)
 	}
 
@@ -99,6 +102,7 @@ export class ComponentBuilderImpl<
 			this.conditionFn,
 			this.slotNames,
 			this.useFns,
+			this.mockValues,
 		)
 	}
 
@@ -112,6 +116,7 @@ export class ComponentBuilderImpl<
 			this.conditionFn,
 			this.slotNames,
 			this.useFns,
+			this.mockValues,
 		)
 	}
 
@@ -124,6 +129,21 @@ export class ComponentBuilderImpl<
 			this.conditionFn,
 			this.slotNames,
 			[...this.useFns, useFn],
+			this.mockValues,
+		)
+	}
+
+	mock(values: Record<string, unknown>): ComponentBuilderImpl<TState> {
+		// Later calls merge over earlier ones
+		return new ComponentBuilderImpl(
+			this.schemaRegistry,
+			this.entityConfigs,
+			this.roles,
+			this.hasInterfacesMode,
+			this.conditionFn,
+			this.slotNames,
+			this.useFns,
+			{ ...this.mockValues, ...values },
 		)
 	}
 
@@ -136,6 +156,7 @@ export class ComponentBuilderImpl<
 			conditionFn,
 			this.slotNames,
 			this.useFns,
+			this.mockValues,
 		)
 	}
 
@@ -148,10 +169,14 @@ export class ComponentBuilderImpl<
 			this.conditionFn,
 			names,
 			this.useFns,
+			this.mockValues,
 		)
 	}
 
-	render(renderFn: (props: Record<string, unknown>) => ReactNode): unknown {
+	render(
+		renderFn: (props: Record<string, unknown>) => ReactNode,
+		compiled?: CompiledSelection,
+	): unknown {
 		return buildComponent(
 			this.entityConfigs,
 			this.roles,
@@ -161,6 +186,8 @@ export class ComponentBuilderImpl<
 			this.conditionFn,
 			this.slotNames,
 			this.useFns,
+			this.mockValues,
+			compiled ?? null,
 		)
 	}
 }

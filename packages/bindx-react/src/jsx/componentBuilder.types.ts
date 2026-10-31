@@ -19,6 +19,7 @@ import type {
 } from '@contember/bindx'
 import type { SelectionProvider } from './types.js'
 import type { Condition } from './conditions.js'
+import type { CompiledSelection } from './compiledSelection.js'
 
 // ============================================================================
 // Symbols (re-exported from createComponent.ts)
@@ -481,6 +482,34 @@ export interface ComponentBuilder<
 	): ComponentBuilder<AddUseProps<TState, TUse>>
 
 	/**
+	 * Supply deterministic stand-in values for scalar / `.use()` props used
+	 * EXCLUSIVELY during static selection analysis — never at runtime render,
+	 * where real props and real `.use()` outputs always win.
+	 *
+	 * The generic tolerant stand-in survives most code but under-collects when a
+	 * mocked value drives control flow: indexing a real object with a mocked key
+	 * (`LABELS[key].x` crashes), branching on a scalar (nondeterministic branch),
+	 * or `.map()` over a scalar array (callback never runs, so entity fields
+	 * accessed inside it are silently missed). A concrete mock fixes all three.
+	 *
+	 * Later calls merge over earlier ones. Entity props cannot be mocked (type error).
+	 * Does not change the builder state type.
+	 *
+	 * @example
+	 * ```typescript
+	 * createComponent()
+	 *   .entity('article', schema.Article)
+	 *   .props<{ labelKey: string; tabs: { key: string }[] }>()
+	 *   .use(() => ({ t: useTranslator() }))
+	 *   .mock({ labelKey: 'k1', tabs: [{ key: 'x' }], t: key => key })
+	 *   .render(({ article, labelKey, tabs, t }) => ...)
+	 * ```
+	 */
+	mock(
+		values: Partial<Omit<BuildRenderProps<TState>, keyof TState['__entityProps']>>,
+	): ComponentBuilder<TState>
+
+	/**
 	 * Add a condition that must be true for the component to render.
 	 * If the condition is false, the component renders null.
 	 *
@@ -531,9 +560,17 @@ export interface ComponentBuilder<
 	 * Build the component with the render function.
 	 *
 	 * @param renderFn - React render function receiving typed props
+	 * @param compiled - Precompiled selection injected by the selection compiler
+	 *   (per-prop static field maps + nested-component holes). Compiler-facing
+	 *   only — do NOT hand-write it. When present, the runtime skips the proxy
+	 *   collection pass and uses this instead; enable
+	 *   {@link setStaticSelectionValidation} in dev/CI to cross-check it.
 	 * @returns Bindx component with fragment properties
 	 */
-	render(renderFn: (props: BuildRenderProps<TState>) => ReactNode): BindxComponent<TState>
+	render(
+		renderFn: (props: BuildRenderProps<TState>) => ReactNode,
+		compiled?: CompiledSelection,
+	): BindxComponent<TState>
 }
 
 // ============================================================================
