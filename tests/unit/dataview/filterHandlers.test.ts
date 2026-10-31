@@ -1,5 +1,5 @@
 import '../../setup'
-import { describe, test, expect } from 'bun:test'
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import {
 	createTextFilterHandler,
 	createFullTextFilterHandler,
@@ -129,22 +129,50 @@ describe('filter handlers', () => {
 
 	describe('date filter', () => {
 		const handler = createDateFilterHandler('publishedAt')
+		const originalTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+		beforeAll(() => {
+			// Prague used local mean time (+0:57:44) before 1891
+			process.env.TZ = 'Europe/Prague'
+		})
+
+		afterAll(() => {
+			process.env.TZ = originalTimeZone
+		})
 
 		test('start only', () => {
-			const where = handler.toWhere({ start: '2024-01-01', end: null })
-			// Date filter normalizes to local midnight ISO string
-			expect(where).toHaveProperty('publishedAt')
-			expect((where as any).publishedAt.gte).toContain('2024-01-01')
+			const where = handler.toWhere({ start: '2024-01-15', end: null })
+			expect(where).toEqual({ publishedAt: { gte: '2024-01-15T00:00:00+01:00' } })
 		})
 
 		test('both start and end', () => {
-			const where = handler.toWhere({ start: '2024-01-01', end: '2024-12-31' })
-			// Date filter uses AND with gte for start and lt for day after end
-			expect(where).toHaveProperty('and')
-			const parts = (where as any).and as Array<Record<string, unknown>>
-			expect(parts).toHaveLength(2)
-			expect((parts[0] as any).publishedAt.gte).toContain('2024-01-01')
-			expect((parts[1] as any).publishedAt.lt).toContain('2025-01-01')
+			const where = handler.toWhere({ start: '2024-01-15', end: '2024-12-31' })
+			// End date is inclusive: lt the local midnight of the following day
+			expect(where).toEqual({
+				and: [
+					{ publishedAt: { gte: '2024-01-15T00:00:00+01:00' } },
+					{ publishedAt: { lt: '2025-01-01T00:00:00+01:00' } },
+				],
+			})
+		})
+
+		test('ignores partial years a date input reports while typing', () => {
+			for (const start of ['0002-10-30', '0020-10-30', '0202-10-30']) {
+				expect(handler.toWhere({ start, end: null })).toBeUndefined()
+			}
+			expect(handler.toWhere({ start: '0202-10-30', end: '2024-10-30' })).toEqual({
+				publishedAt: { lt: '2024-10-31T00:00:00+01:00' },
+			})
+		})
+
+		test('formats a sub-minute historical offset in whole seconds', () => {
+			const where = handler.toWhere({ start: '1890-06-15', end: '1890-06-15' })
+			expect(where).toEqual({
+				and: [
+					{ publishedAt: { gte: '1890-06-15T00:00:00+00:57:44' } },
+					{ publishedAt: { lt: '1890-06-16T00:00:00+00:57:44' } },
+				],
+			})
 		})
 	})
 

@@ -188,20 +188,16 @@ export function createDateFilterHandler(fieldPath: string): FilterHandler<DateFi
 
 			const conditions: Record<string, unknown>[] = []
 
-			if (artifact.start !== null) {
-				const normalized = new Date(artifact.start + 'T00:00:00')
-				if (!isNaN(normalized.getTime())) {
-					conditions.push(buildNestedWhere(fieldPath, { gte: toLocalIsoString(normalized) }))
-				}
+			const start = artifact.start !== null ? parseLocalMidnight(artifact.start) : null
+			if (start !== null) {
+				conditions.push(buildNestedWhere(fieldPath, { gte: toLocalIsoString(start) }))
 			}
 
-			if (artifact.end !== null) {
-				const normalized = new Date(artifact.end + 'T00:00:00')
-				if (!isNaN(normalized.getTime())) {
-					// End date is inclusive — advance to start of next day
-					normalized.setDate(normalized.getDate() + 1)
-					conditions.push(buildNestedWhere(fieldPath, { lt: toLocalIsoString(normalized) }))
-				}
+			const end = artifact.end !== null ? parseLocalMidnight(artifact.end) : null
+			if (end !== null) {
+				// End date is inclusive — advance to start of next day
+				end.setDate(end.getDate() + 1)
+				conditions.push(buildNestedWhere(fieldPath, { lt: toLocalIsoString(end) }))
 			}
 
 			if (artifact.nullCondition !== undefined) {
@@ -412,18 +408,38 @@ export function createIsDefinedFilterHandler(fieldPath: string): FilterHandler<I
 // ============================================================================
 
 /**
- * Format a Date as ISO string with local timezone offset.
- * e.g. 2024-01-15T00:00:00+01:00
+ * Parses a `YYYY-MM-DD` filter value as local midnight.
+ * Returns null for invalid dates and for years outside 1000–9999: a date input
+ * reports partial years (0002, 0020, 0202) on each keystroke.
+ */
+function parseLocalMidnight(value: string): Date | null {
+	const date = new Date(value + 'T00:00:00')
+	if (isNaN(date.getTime())) return null
+	const year = date.getFullYear()
+	return year >= 1000 && year <= 9999 ? date : null
+}
+
+/**
+ * Formats a Date as an ISO string with the local timezone offset, e.g. 2024-01-15T00:00:00+01:00.
+ * The local date must stay in the string: `date` columns drop the time and zone.
  */
 function toLocalIsoString(date: Date): string {
-	const tzo = -date.getTimezoneOffset()
-	const sign = tzo >= 0 ? '+' : '-'
+	// getTimezoneOffset() is fractional or rounded for sub-minute historical offsets (LMT), so derive it from the local fields
+	const localAsUtc = Date.UTC(
+		date.getFullYear(), date.getMonth(), date.getDate(),
+		date.getHours(), date.getMinutes(), date.getSeconds(),
+	)
+	const offsetSeconds = Math.round((localAsUtc - date.getTime()) / 1000)
+	const sign = offsetSeconds >= 0 ? '+' : '-'
+	const absoluteOffset = Math.abs(offsetSeconds)
 	const pad = (n: number, len = 2): string => String(n).padStart(len, '0')
+	const offsetRemainderSeconds = absoluteOffset % 60
 
 	return (
 		pad(date.getFullYear(), 4) + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
 		'T' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds()) +
-		sign + pad(Math.floor(Math.abs(tzo) / 60)) + ':' + pad(Math.abs(tzo) % 60)
+		sign + pad(Math.floor(absoluteOffset / 3600)) + ':' + pad(Math.floor(absoluteOffset / 60) % 60) +
+		(offsetRemainderSeconds !== 0 ? ':' + pad(offsetRemainderSeconds) : '')
 	)
 }
 
