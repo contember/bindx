@@ -12,6 +12,7 @@
 		{ "path": "./packages/bindx-uploader" },
 		{ "path": "./packages/bindx-generator" },
 		{ "path": "./packages/bindx-generator/tests" },
+		{ "path": "./packages/bindx-compiler" },
 		{ "path": "./packages/example" }
 	],
 	"files": []

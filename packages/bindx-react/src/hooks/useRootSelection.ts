@@ -1,0 +1,111 @@
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { buildQueryFromSelection } from '@contember/bindx'
+import type { EntityAccessor } from '../jsx/types.js'
+import { useSchemaRegistry } from './BackendAdapterContext.js'
+import { useSelectionCollection, type SelectionCollectionResult } from './useSelectionCollection.js'
+import { COMPILED_ROOT_KEY, resolveCompiledRootSelection, type CompiledSelection } from '../jsx/compiledSelection.js'
+import { isValidCompiledSelection } from '../jsx/compiledSelectionShape.js'
+import { isCompiledSelectionsEnabled, isStaticSelectionValidationEnabled, validateCompiledRootSelection } from '../jsx/componentFactory.js'
+
+/**
+ * Params for {@link useRootSelection}.
+ */
+export interface UseRootSelectionParams {
+	readonly entityType: string
+	readonly depsKey: string
+	readonly children: (entity: EntityAccessor<unknown>) => ReactNode
+	/** Compiler-injected root selection. Absent ⇒ the runtime children walk runs. */
+	readonly compiledSelection?: CompiledSelection
+}
+
+/**
+ * Root selection for <Entity>. With a compiled selection the root SelectionMeta is
+ * built statically and `children` is NEVER invoked with a collector; without it the
+ * runtime children-collector walk runs as before. Validate mode additionally runs
+ * the walk (contained) and diffs it against the compiled root for under-fetches.
+ */
+export function useRootSelection(params: UseRootSelectionParams): SelectionCollectionResult {
+	const { entityType, depsKey, children, compiledSelection } = params
+	const schemaRegistry = useSchemaRegistry()
+	const validateMode = isStaticSelectionValidationEnabled()
+	const compiledEnabled = isCompiledSelectionsEnabled()
+	// Same query ⇒ same result object, so consumers keyed on the selection keep their handles.
+	const compiledCacheRef = useRef<SelectionCollectionResult | null>(null)
+
+	// Compiled root selection — present ⇒ skip the children(collector) walk (unless validating).
+	// Killswitch off or a malformed/throwing literal yields null ⇒ the runtime walk runs. Decided
+	// INSIDE the memo so the hook sequence below stays identical across the compiled/uncompiled path.
+	const compiledResult = useMemo((): SelectionCollectionResult | null => {
+		if (!compiledSelection || !compiledEnabled) {
+			return null
+		}
+		if (!isValidCompiledSelection(compiledSelection, [COMPILED_ROOT_KEY])) {
+			console.warn(
+				`[bindx] compiled selection for <Entity ${entityType}> is malformed (version/shape check failed) — `
+				+ 'falling back to the runtime children walk.',
+			)
+			return null
+		}
+		try {
+			const selection = resolveCompiledRootSelection({
+				compiled: compiledSelection,
+				entityType,
+				schemaRegistry,
+				validateMode,
+			})
+			const queryKey = JSON.stringify(buildQueryFromSelection(selection))
+			const cached = compiledCacheRef.current
+			if (cached && cached.queryKey === queryKey) {
+				return cached
+			}
+			const result = { selection, queryKey }
+			compiledCacheRef.current = result
+			return result
+		} catch (error) {
+			console.warn(
+				`[bindx] compiled selection for <Entity ${entityType}> failed to resolve — `
+				+ 'falling back to the runtime children walk.',
+				error,
+			)
+			return null
+		}
+	}, [compiledSelection, compiledEnabled, entityType, schemaRegistry, validateMode])
+
+	// Runtime walk. Its collect no-ops when compiled & not validating, so children is
+	// never called with a collector. In validate mode the walk runs to feed the diff;
+	// a crash there is contained so it cannot break the compiled path.
+	// The skip is part of the memo key: leaving the compiled path after mount (killswitch,
+	// prop dropped) must re-run the walk instead of reusing the empty skipped result.
+	const isWalkSkipped = compiledResult !== null && !validateMode
+	const runtimeResult = useSelectionCollection({
+		entityType,
+		depsKey: isWalkSkipped ? `${depsKey}::compiled` : depsKey,
+		collect: collector => {
+			if (isWalkSkipped) {
+				return null
+			}
+			try {
+				return children(collector as EntityAccessor<unknown>)
+			} catch (error) {
+				if (!compiledResult) {
+					throw error
+				}
+				console.error(
+					`[bindx] validate-mode children walk of <Entity ${entityType}> crashed — `
+					+ 'under-fetch diff skipped; the compiled selection still stands.',
+					error,
+				)
+				return null
+			}
+		},
+	})
+
+	// Validate mode: warn on fields the runtime walk requests but the compiled root omits.
+	useEffect(() => {
+		if (compiledResult && validateMode) {
+			validateCompiledRootSelection(compiledResult.selection, runtimeResult.selection, entityType)
+		}
+	}, [compiledResult, runtimeResult, validateMode, entityType])
+
+	return compiledResult ?? runtimeResult
+}

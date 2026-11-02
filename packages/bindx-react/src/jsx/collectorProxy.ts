@@ -12,7 +12,7 @@ import {
 	FIELD_REF_META,
 	SCOPE_REF,
 } from './types.js'
-import { wrapEntityRefWithFieldAccessProxy } from './proxyShared.js'
+import { wrapEntityRefWithFieldAccessProxy, REACT_ELEMENT_PROBE_KEYS } from './proxyShared.js'
 
 /**
  * Combined ref type for collector that satisfies all accessor interfaces.
@@ -297,6 +297,12 @@ function wrapCollectorRefWithFieldAccessProxy(
 		get(target, prop) {
 			// Symbols - pass through
 			if (typeof prop !== 'string') {
+				return Reflect.get(target, prop)
+			}
+
+			// React element probes (e.g. `{article.title}` rendered directly as a
+			// child) must not upgrade this scalar ref to a relation.
+			if (REACT_ELEMENT_PROBE_KEYS.has(prop)) {
 				return Reflect.get(target, prop)
 			}
 

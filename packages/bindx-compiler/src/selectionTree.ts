@@ -1,0 +1,117 @@
+/**
+ * Mutable selection tree mirroring the runtime SelectionScope semantics exactly:
+ * - a field starts scalar and is upgraded to a relation the moment it is nested;
+ * - every relation child implicitly includes `id` (SelectionScope.child adds it);
+ * - `addScalar` is a no-op once the field is a relation.
+ *
+ * See packages/bindx-client/src/selection/SelectionScope.ts.
+ */
+import type { StaticFieldMap, StaticFieldNode, StaticSelection } from './types.js'
+
+export class SelNode {
+	private readonly scalars = new Set<string>()
+	private readonly relations = new Map<string, SelNode>()
+	/** Field → its target's selection, valid only if the field turns out to be a has-one. */
+	private readonly hasOneOnly = new Map<string, SelNode>()
+	private readonly manyFields = new Set<string>()
+	/** Fields the compiled selection is only valid for when they are not a has-one (runtime-checked). */
+	private readonly notHasOne = new Set<string>()
+
+	/** Add a scalar field (ignored if already a relation — matches SelectionScope). */
+	addScalar(fieldName: string): void {
+		if (!this.relations.has(fieldName)) {
+			this.scalars.add(fieldName)
+		}
+	}
+
+	/** Get/create a relation child; auto-includes `id`, drops any scalar of the same name. */
+	child(fieldName: string): SelNode {
+		this.scalars.delete(fieldName)
+		let node = this.relations.get(fieldName)
+		if (!node) {
+			node = new SelNode()
+			node.addScalar('id')
+			this.relations.set(fieldName, node)
+		}
+		return node
+	}
+
+	/**
+	 * The target node of a field read through its ref API (`author.value`): a field of the target
+	 * when the field is a has-one, passthrough otherwise. The field itself stays selected either way.
+	 */
+	hasOneChild(fieldName: string): SelNode {
+		this.addScalar(fieldName)
+		let node = this.hasOneOnly.get(fieldName)
+		if (!node) {
+			node = new SelNode()
+			this.hasOneOnly.set(fieldName, node)
+		}
+		return node
+	}
+
+	assumeNotHasOne(fieldName: string): void {
+		this.addScalar(fieldName)
+		this.notHasOne.add(fieldName)
+	}
+
+	markMany(fieldName: string): void {
+		this.manyFields.add(fieldName)
+	}
+
+	hasFields(): boolean {
+		return this.scalars.size > 0 || this.relations.size > 0
+	}
+
+	toFieldMap(): StaticFieldMap {
+		const map: StaticFieldMap = {}
+		for (const name of this.scalars) {
+			const hasOneOnly = this.hasOneOnly.get(name)
+			const node: Exclude<StaticFieldNode, true> = {}
+			if (hasOneOnly?.hasFields()) {
+				node.hasOneFields = hasOneOnly.toFieldMap()
+			}
+			if (this.notHasOne.has(name)) {
+				node.assumesNotHasOne = true
+			}
+			map[name] = Object.keys(node).length > 0 ? node : true
+		}
+		for (const [name, child] of this.relations) {
+			const node: Exclude<StaticFieldNode, true> = { fields: child.toFieldMap() }
+			const hasOneOnly = this.hasOneOnly.get(name)
+			if (hasOneOnly?.hasFields()) {
+				node.hasOneFields = hasOneOnly.toFieldMap()
+			}
+			if (this.manyFields.has(name)) {
+				node.many = true
+			}
+			if (this.notHasOne.has(name)) {
+				node.assumesNotHasOne = true
+			}
+			map[name] = node
+		}
+		return map
+	}
+}
+
+/**
+ * Normalize a StaticFieldMap to the plain field-tree form used by the equivalence
+ * harness: `true` for scalars, nested objects for relations. `many` is dropped
+ * because the runtime collector does not record it in the implicit path.
+ * Schema-less, like the harness oracle: `hasOneFields` are ref-API passthrough.
+ */
+function fieldMapToPlain(map: StaticFieldMap): Record<string, unknown> {
+	const result: Record<string, unknown> = {}
+	for (const [name, node] of Object.entries(map)) {
+		result[name] = node === true || !node.fields ? true : fieldMapToPlain(node.fields)
+	}
+	return result
+}
+
+export function selectionToPlain(selection: StaticSelection): Record<string, unknown> {
+	const result: Record<string, unknown> = {}
+	for (const [prop, map] of Object.entries(selection)) {
+		result[prop] = fieldMapToPlain(map)
+	}
+	return result
+}
