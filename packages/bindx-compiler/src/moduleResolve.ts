@@ -28,7 +28,7 @@ function isBindxSource(source: string): boolean {
 }
 
 /** Collect local binding names for the bindx symbols imported into `program`. */
-export function makeModuleView(program: t.Program): ModuleView {
+function makeModuleView(program: t.Program): ModuleView {
 	const withCollector = new Set<string>()
 	const itemOf = new Set<string>()
 	const entityOf = new Set<string>()
@@ -99,7 +99,7 @@ export interface BindingResolverOptions {
  * (unwrapped) `const` initializer expression, or a `function`/`class` declaration node — callers
  * narrow (a plain function component vs a `withCollector(...)`/chain call expression).
  */
-export interface ResolvedBinding {
+interface ResolvedBinding {
 	readonly init: t.Node
 	readonly view: ModuleView
 }
@@ -233,13 +233,13 @@ function firstExisting(abs: string): string | null {
 	return null
 }
 
-export interface ImportRef {
+interface ImportRef {
 	readonly source: string
 	readonly importedName: string
 }
 
 /** Find where `local` is imported from and under which imported name (`default` for default). */
-export function findImport(program: t.Program, local: string): ImportRef | null {
+function findImport(program: t.Program, local: string): ImportRef | null {
 	for (const node of program.body) {
 		if (!t.isImportDeclaration(node)) {
 			continue
@@ -262,7 +262,7 @@ export function findImport(program: t.Program, local: string): ImportRef | null 
  * declaration node (searching plain + `export` decls). Used by binding resolution to reach plain
  * function components as well as `const X = withCollector(...)` / chain expressions.
  */
-export function findTopLevelBinding(program: t.Program, name: string): t.Node | null {
+function findTopLevelBinding(program: t.Program, name: string): t.Node | null {
 	for (const node of program.body) {
 		const decl = t.isExportNamedDeclaration(node) ? node.declaration : node
 		if (decl && t.isVariableDeclaration(decl)) {
@@ -285,13 +285,13 @@ export function findTopLevelBinding(program: t.Program, name: string): t.Node | 
  *   (`import { orig } from source; export { orig }`); follow `orig` in `source`.
  * - `star` — the `export * from` sources to search (used only when no explicit export matches).
  */
-export type ExportLookup =
+type ExportLookup =
 	| { readonly kind: 'local'; readonly node: t.Node }
 	| { readonly kind: 'reexport'; readonly source: string; readonly importedName: string }
 	| { readonly kind: 'star'; readonly sources: readonly string[] }
 
 /** Classify how `importedName` is exported from `program`; null when it is not exported here at all. */
-export function lookupExport(program: t.Program, importedName: string): ExportLookup | null {
+function lookupExport(program: t.Program, importedName: string): ExportLookup | null {
 	if (importedName === 'default') {
 		for (const node of program.body) {
 			if (t.isExportDefaultDeclaration(node)) {

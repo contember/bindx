@@ -23,13 +23,11 @@ export type { CallbackContract, CollectorContract }
 /** Resolves a component tag to its declared contract, or null (→ existing hole/bail rules). */
 export type ContractLookup = (tag: string) => CollectorContract | null
 
-export type ContractResolverOptions = BindingResolverOptions
-
 export class ContractResolver {
 	private readonly binding: BindingResolver
 	private readonly memo = new Map<string, CollectorContract | null>()
 
-	constructor(program: t.Program, options: ContractResolverOptions) {
+	constructor(program: t.Program, options: BindingResolverOptions) {
 		this.binding = new BindingResolver(program, options)
 	}
 

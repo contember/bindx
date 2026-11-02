@@ -6,7 +6,7 @@
 import * as t from '@babel/types'
 
 /** Traversal control returned from `enter`: skip this node's children, or stop the whole walk. */
-export type WalkControl = 'skip' | 'stop'
+type WalkControl = 'skip' | 'stop'
 
 /**
  * Depth-first pre-order walk. Return 'skip' from `enter` to skip a node's children, or 'stop'
