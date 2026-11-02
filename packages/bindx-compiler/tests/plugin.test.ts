@@ -41,8 +41,7 @@ describe('babel plugin injection', () => {
 		expect(output).toContain('author: {')
 		expect(output).toContain('fields: {')
 		expect(output).toContain('many: true')
-		expect(output).toContain('params: {')
-		expect(output).toContain('limit: 5')
+		expect(output).not.toContain('params:') // the runtime ignores <HasMany> params inside a component
 		// This chain has no holes → the holes key is omitted.
 		expect(output).not.toContain('holes:')
 	})

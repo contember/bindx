@@ -62,7 +62,7 @@ export class TargetKindResolver {
 function classifyInit(init: t.Node, view: ModuleView): TargetKind {
 	// A plain `function X() {}` / `class X {}` component has no selection surface.
 	if (t.isFunctionDeclaration(init) || t.isClassDeclaration(init)) {
-		return { kind: 'plain' }
+		return plainUnlessAugmented(declaredNameOf(view.program, init), view.program)
 	}
 	const expr = unwrap(init)
 	if (!t.isExpression(expr)) {
@@ -87,10 +87,47 @@ function classifyInit(init: t.Node, view: ModuleView): TargetKind {
 
 	// A plain function/arrow component (not wrapped) has no selection surface.
 	if (t.isArrowFunctionExpression(expr) || t.isFunctionExpression(expr)) {
-		return { kind: 'plain' }
+		return plainUnlessAugmented(declaredNameOf(view.program, init), view.program)
 	}
 
 	return UNKNOWN
+}
+
+/**
+ * `plain` only while nothing can have attached a selection surface: an `X.staticRender = …` /
+ * `X.getSelection = …` assignment, or `X` handed to a call (`Object.assign(X, …)`), makes it unknown.
+ */
+function plainUnlessAugmented(name: string | null, program: t.Program): TargetKind {
+	if (name === null) {
+		return UNKNOWN
+	}
+	let isAugmented = false
+	walkAst(program, node => {
+		const isMemberTarget = t.isAssignmentExpression(node) && t.isMemberExpression(node.left)
+			&& t.isIdentifier(node.left.object) && node.left.object.name === name
+		const isCallArgument = (t.isCallExpression(node) || t.isNewExpression(node))
+			&& node.arguments.some(arg => t.isIdentifier(arg) && arg.name === name)
+		if (isMemberTarget || isCallArgument) {
+			isAugmented = true
+			return 'stop'
+		}
+	})
+	return isAugmented ? UNKNOWN : { kind: 'plain' }
+}
+
+/** The binding name a declaration (or a declarator's initializer) is declared under in `program`. */
+function declaredNameOf(program: t.Program, init: t.Node): string | null {
+	if ((t.isFunctionDeclaration(init) || t.isClassDeclaration(init)) && init.id) {
+		return init.id.name
+	}
+	let name: string | null = null
+	walkAst(program, node => {
+		if (t.isVariableDeclarator(node) && node.init && unwrap(node.init) === init && t.isIdentifier(node.id)) {
+			name = node.id.name
+			return 'stop'
+		}
+	})
+	return name
 }
 
 /** A `createComponent()....render()` fluent chain: extract slot names (or 'unknown'). */

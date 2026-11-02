@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { analyzeSource, isBailed, type BailoutReason } from '../src/index.js'
+import { analyzeEntityRoots, analyzeSource, isBailed, isEntityRootBailed, type BailoutReason } from '../src/index.js'
 import { analyzeFixture } from './harness.js'
 
 const DIR = import.meta.dir
@@ -19,7 +19,7 @@ function selectionOf(code: string): Record<string, unknown> {
 const PRELUDE = `import { createComponent, Field, HasMany, HasOne } from '@contember/bindx-react'\nimport { schema } from './s'\n`
 
 describe('StaticSelection emission (raw, not normalized)', () => {
-	test('has-many literal params + many flag are emitted', () => {
+	test('has-many params are not emitted (the runtime ignores them inside a component)', () => {
 		const results = analyzeFixture(DIR, 'hasManyParams.tsx')
 		const result = results[0]!
 		expect(isBailed(result)).toBe(false)
@@ -31,7 +31,6 @@ describe('StaticSelection emission (raw, not normalized)', () => {
 				tags: {
 					fields: { id: true, name: true, color: true },
 					many: true,
-					params: { limit: 5, offset: 2, orderBy: { name: 'asc' }, totalCount: true },
 				},
 			},
 		})
@@ -89,9 +88,19 @@ describe('bail triggers (direct)', () => {
 		expect(bail(`({ article }) => <Field field={article[key]} />`)).toBe('COMPUTED_MEMBER')
 	})
 
-	test('non-literal HasMany param', () => {
+	test('HasMany params inside a component are ignored, like the runtime collector', () => {
 		expect(bail(`({ article }) => <HasMany field={article.tags} limit={n}>{t => <Field field={t.name} />}</HasMany>`))
-			.toBe('NON_LITERAL_HASMANY_PARAM')
+			.toBeNull()
+	})
+
+	test('HasMany params in an <Entity> root', () => {
+		const [root] = analyzeEntityRoots(
+			`import { Entity, Field, HasMany } from '@contember/bindx-react'\nimport { schema } from './s'\n`
+			+ `export const R = () => <Entity entity={schema.Article} by={{ id: 'a' }}>{a => `
+			+ `<HasMany field={a.tags} limit={1}>{t => <Field field={t.name} />}</HasMany>}</Entity>`,
+			'root.tsx',
+		)
+		expect(root && isEntityRootBailed(root) ? root.bailout.code : null).toBe('HASMANY_PARAMS_AT_ROOT')
 	})
 })
 

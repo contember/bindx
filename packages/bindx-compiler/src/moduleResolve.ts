@@ -384,6 +384,9 @@ export function findTopLevelVarInit(program: t.Program, name: string): t.Express
 }
 
 function varInit(decl: t.VariableDeclaration, name: string): t.Expression | null {
+	if (decl.kind !== 'const') {
+		return null // a reassignable binding may not hold its initializer at render time
+	}
 	for (const d of decl.declarations) {
 		if (t.isIdentifier(d.id) && d.id.name === name && d.init) {
 			const inner = unwrap(d.init)

@@ -452,7 +452,7 @@ run the proxy pass alongside the compiled selection and warn on any **under-fetc
 a field the runtime would fetch that the compiled selection omits. It intentionally
 does not warn on the two legitimate divergences where the compiler is more precise:
 branch unions (the compiler unions all conditional branches) and has-many
-params/many-ness (the runtime never records these in implicit collection).
+many-ness (the runtime records it only when the schema says so).
 
 ### Emit-or-bail
 
@@ -461,7 +461,7 @@ fields) is acceptable; under-approximation is impossible by construction (defaul
 deny). Anything it cannot classify makes the whole component **bail** with a
 machine-readable reason (e.g. `ENTITY_ESCAPES_TO_CALL`, `ENTITY_IN_EXPRESSION_PROP`,
 `FUNCTION_PROP_ON_HOLE`, `RENDER_LOCAL_ON_HOLE`, `ENTITY_REASSIGNMENT`, `ENTITY_SPREAD`,
-`COMPUTED_MEMBER`, `MEMBER_COMPONENT_TAG`, `NON_LITERAL_HASMANY_PARAM`, `INTERFACES_MODE`,
+`COMPUTED_MEMBER`, `MEMBER_COMPONENT_TAG`, `ENTITY_ESCAPES_TO_VALUE`, `HASMANY_PARAMS_AT_ROOT`, `INTERFACES_MODE`,
 `UNCLASSIFIED`). Bailed chains are left untouched and fall back to the runtime proxy pass.
 
 `FUNCTION_PROP_ON_HOLE` / `RENDER_LOCAL_ON_HOLE` guard an under-fetch class: a hole element's

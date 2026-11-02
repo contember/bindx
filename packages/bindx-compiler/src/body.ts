@@ -8,13 +8,25 @@ import type { SelNode } from './selectionTree.js'
 import type { ImportBindings } from './imports.js'
 import { readsInvocationContext, type ModuleScope } from './bindings.js'
 import {
-	BailError, type Scope, childScope, consumeMany, consumeRelation, consumeResolution,
-	paramNamesOf, referencesRoot, resolve, unwrap, type RootRef,
+	BailError, type Resolution, type Scope, childScope, consumeMany, consumeRelation, consumeResolution,
+	itemRefOf, paramNamesOf, referencesRoot, resolve, unwrap, type RootRef,
 } from './resolve.js'
 import { JsxAnalyzer } from './jsx.js'
 import type { ContractLookup } from './contracts.js'
 import type { TargetKindLookup } from './targetKind.js'
 import type { AnalyzedHole } from './types.js'
+
+/**
+ * How an expression's value is used. `read`: consumed in place (rendered, compared, coerced).
+ * `kept`: stored, passed on or returned, so later reads through it are invisible to the walk —
+ * an entity value there escapes and bails (default deny).
+ */
+type ValueUse = 'read' | 'kept'
+
+/** Field-ref API names whose value is plain data, never an entity or ref (safe to keep). */
+const PLAIN_VALUE_KEYS: ReadonlySet<string> = new Set([
+	'value', 'serverValue', 'isDirty', 'isTouched', 'errors', 'hasError', 'length', 'totalCount',
+])
 
 export class BodyAnalyzer {
 	private readonly jsx: JsxAnalyzer
@@ -26,8 +38,9 @@ export class BodyAnalyzer {
 		moduleScope: ModuleScope,
 		contracts: ContractLookup,
 		targetKinds: TargetKindLookup,
+		isSelectionRoot: boolean,
 	) {
-		this.jsx = new JsxAnalyzer(this, bindings, moduleScope, contracts, targetKinds)
+		this.jsx = new JsxAnalyzer(this, bindings, moduleScope, contracts, targetKinds, isSelectionRoot)
 	}
 
 	/** Public so JsxAnalyzer can register a hole it discovered. */
@@ -43,11 +56,7 @@ export class BodyAnalyzer {
 		if (param) {
 			this.registerTopParam(param, scope)
 		}
-		if (t.isBlockStatement(fn.body)) {
-			this.walkStatements(fn.body.body, scope)
-		} else {
-			this.walkValue(fn.body, scope)
-		}
+		this.walkBody(fn, scope)
 	}
 
 	/**
@@ -101,9 +110,9 @@ export class BodyAnalyzer {
 			}
 			this.bindPattern(prop.value, { node: propRoot, path: [], source: key, absPath: [] }, scope)
 		}
-		// Default values run during render and may read entity fields.
+		// Default values run during render and are bound to a name (kept).
 		for (const value of defaults) {
-			this.walkValue(value, scope)
+			this.walkValue(value, scope, 'kept')
 		}
 	}
 
@@ -160,7 +169,7 @@ export class BodyAnalyzer {
 		}
 		if (t.isReturnStatement(stmt)) {
 			if (stmt.argument) {
-				this.walkValue(stmt.argument, scope)
+				this.walkValue(stmt.argument, scope, 'kept') // the caller receives it
 			}
 			return
 		}
@@ -200,6 +209,11 @@ export class BodyAnalyzer {
 			return
 		}
 		const res = resolve(decl.init, scope)
+		if (res.kind === 'ref' && kind !== 'const' && !isEntityValued(res)) {
+			consumeResolution(res) // `let v = article.title.value`: plain data, not an alias
+			this.addLocals(decl.id, scope)
+			return
+		}
 		if (res.kind === 'ref') {
 			if (kind !== 'const') {
 				throw new BailError({ code: 'ENTITY_REASSIGNMENT', message: 'entity alias must be a const binding' })
@@ -213,8 +227,8 @@ export class BodyAnalyzer {
 			consumeResolution(res)
 			return
 		}
-		// Non-entity initializer: may still contain JSX/roots to analyze.
-		this.walkValue(decl.init, scope)
+		// Non-entity initializer: may still contain JSX/roots to analyze; the binding keeps its value.
+		this.walkValue(decl.init, scope, 'kept')
 	}
 
 	/** `const p = props` / `const { article } = props`: the binding stays a view of the props object. */
@@ -242,7 +256,7 @@ export class BodyAnalyzer {
 	// ── Expressions ─────────────────────────────────────────────────────────
 
 	/** Public so JsxAnalyzer (JsxHost) can defer value/JSX-child slots back here. */
-	walkValue(node: t.Node, scope: Scope): void {
+	walkValue(node: t.Node, scope: Scope, use: ValueUse = 'read'): void {
 		if (t.isJSXElement(node) || t.isJSXFragment(node)) {
 			this.jsx.walk(node, scope)
 			return
@@ -257,11 +271,16 @@ export class BodyAnalyzer {
 		}
 		if (t.isConditionalExpression(node)) {
 			this.walkValue(node.test, scope)
-			this.walkValue(node.consequent, scope) // union of both branches
-			this.walkValue(node.alternate, scope)
+			this.walkValue(node.consequent, scope, use) // union of both branches; either is the value
+			this.walkValue(node.alternate, scope, use)
 			return
 		}
-		if (t.isLogicalExpression(node) || t.isBinaryExpression(node)) {
+		if (t.isLogicalExpression(node)) {
+			this.walkValue(node.left, scope, use) // `a ?? b`, `a || b`: either operand is the value
+			this.walkValue(node.right, scope, use)
+			return
+		}
+		if (t.isBinaryExpression(node)) {
 			if (t.isExpression(node.left)) {
 				this.walkValue(node.left, scope)
 			}
@@ -273,9 +292,7 @@ export class BodyAnalyzer {
 			return
 		}
 		if (t.isSequenceExpression(node)) {
-			for (const e of node.expressions) {
-				this.walkValue(e, scope)
-			}
+			node.expressions.forEach((e, i) => this.walkValue(e, scope, i === node.expressions.length - 1 ? use : 'read'))
 			return
 		}
 		if (t.isTemplateLiteral(node)) {
@@ -303,7 +320,7 @@ export class BodyAnalyzer {
 			if (referencesRoot(node, scope)) {
 				throw new BailError({ code: 'ENTITY_REASSIGNMENT', message: 'assignment involving an entity value' })
 			}
-			this.walkValue(node.right, scope)
+			this.walkValue(node.right, scope, 'kept')
 			return
 		}
 		if (t.isNewExpression(node)) {
@@ -319,11 +336,15 @@ export class BodyAnalyzer {
 			return
 		}
 		if (t.isMemberExpression(node) || t.isOptionalMemberExpression(node) || t.isIdentifier(node)
-			|| t.isParenthesizedExpression(node) || t.isTSNonNullExpression(node) || t.isTSAsExpression(node)) {
+			|| t.isParenthesizedExpression(node) || t.isTSNonNullExpression(node) || t.isTSAsExpression(node)
+			|| t.isTSSatisfiesExpression(node)) {
 			const res = resolve(node, scope)
 			if (res.kind === 'none') {
-				this.walkUnresolved(node, scope)
+				this.walkUnresolved(node, scope, use)
 				return
+			}
+			if (use === 'kept' && isEntityValued(res)) {
+				throw new BailError({ code: 'ENTITY_ESCAPES_TO_VALUE', message: 'entity value is stored, passed on or returned' })
 			}
 			consumeResolution(res)
 			return
@@ -338,7 +359,7 @@ export class BodyAnalyzer {
 	 * A value read that is not an entity path. Every part evaluated during render still counts:
 	 * the props object as a value and member access on a computed entity value bail.
 	 */
-	private walkUnresolved(nodeIn: t.Node, scope: Scope): void {
+	private walkUnresolved(nodeIn: t.Node, scope: Scope, use: ValueUse): void {
 		const node = unwrap(nodeIn)
 		if (t.isIdentifier(node)) {
 			if (scope.propsParams.has(node.name)) {
@@ -347,11 +368,11 @@ export class BodyAnalyzer {
 			return
 		}
 		if (!t.isMemberExpression(node) && !t.isOptionalMemberExpression(node)) {
-			this.walkValue(node, scope)
+			this.walkValue(node, scope, use)
 			return
 		}
 		if (node.computed) {
-			this.walkValue(node.object, scope)
+			this.walkValue(node.object, scope, 'kept') // `xs[i]` hands out an element of `xs`
 			this.walkValue(node.property, scope)
 			return
 		}
@@ -360,13 +381,13 @@ export class BodyAnalyzer {
 			return // a scalar prop (`props.label`) or a non-entity binding
 		}
 		if (t.isMemberExpression(object) || t.isOptionalMemberExpression(object)) {
-			this.walkUnresolved(object, scope)
+			this.walkUnresolved(object, scope, 'kept')
 			return
 		}
 		if (!t.isCallExpression(object) && !t.isOptionalCallExpression(object) && referencesRoot(object, scope)) {
 			throw new BailError({ code: 'UNCLASSIFIED', message: `member access on a computed entity value: ${object.type}` })
 		}
-		this.walkValue(object, scope)
+		this.walkValue(object, scope, 'kept')
 	}
 
 	private walkSpreadable(node: t.Node, scope: Scope): void {
@@ -377,7 +398,7 @@ export class BodyAnalyzer {
 			this.walkValue(node.argument, scope)
 			return
 		}
-		this.walkValue(node, scope)
+		this.walkValue(node, scope, 'kept') // an element of the array
 	}
 
 	private walkObjectExpression(node: t.ObjectExpression, scope: Scope): void {
@@ -397,7 +418,7 @@ export class BodyAnalyzer {
 				this.walkValue(prop.key, scope)
 			}
 			if (t.isExpression(prop.value)) {
-				this.walkValue(prop.value, scope)
+				this.walkValue(prop.value, scope, 'kept') // a property of the object
 			}
 		}
 	}
@@ -408,10 +429,27 @@ export class BodyAnalyzer {
 			const p = t.isAssignmentPattern(param) ? param.left : param
 			this.shadowBindings(p, child)
 		}
+		this.walkParamDefaults(fn.params, child)
+		this.walkBody(fn, child)
+	}
+
+	/** Parameter default values run when the function is called and are bound to the param (kept). */
+	private walkParamDefaults(params: ReadonlyArray<t.Node>, scope: Scope): void {
+		const defaults: t.Expression[] = []
+		for (const param of params) {
+			collectDefaults(param, defaults)
+		}
+		for (const value of defaults) {
+			this.walkValue(value, scope, 'kept')
+		}
+	}
+
+	/** A function body; an expression body is its return value (kept). */
+	private walkBody(fn: t.Function, scope: Scope): void {
 		if (t.isBlockStatement(fn.body)) {
-			this.walkStatements(fn.body.body, child)
+			this.walkStatements(fn.body.body, scope)
 		} else {
-			this.walkValue(fn.body, child)
+			this.walkValue(fn.body, scope, 'kept')
 		}
 	}
 
@@ -466,11 +504,11 @@ export class BodyAnalyzer {
 				this.walkValue(arg, scope) // safe: analyzed, not executed with an entity value
 				continue
 			}
-			if (t.isExpression(arg) && resolve(arg, scope).kind === 'ref') {
+			if (t.isExpression(arg) && isEntityValued(resolve(arg, scope))) {
 				throw new BailError({ code: 'ENTITY_ESCAPES_TO_CALL', message: 'entity value passed to an unrecognized call' })
 			}
 			if (t.isExpression(arg)) {
-				this.walkValue(arg, scope)
+				this.walkValue(arg, scope, 'kept') // the callee receives it
 			}
 		}
 	}
@@ -479,7 +517,7 @@ export class BodyAnalyzer {
 		const item = consumeMany(ref)
 		const cb = node.arguments[0]
 		if (cb && (t.isArrowFunctionExpression(cb) || t.isFunctionExpression(cb))) {
-			this.walkCallbackWithItem(cb, { node: item, path: [], source: ref.source, absPath: ref.absPath }, scope)
+			this.walkCallbackWithItem(cb, itemRefOf(ref, item), scope)
 			return
 		}
 		// Non-inline map callback: its field access is invisible → bail.
@@ -502,12 +540,18 @@ export class BodyAnalyzer {
 				child.scalarParams.add(name)
 			}
 		}
-		if (t.isBlockStatement(fn.body)) {
-			this.walkStatements(fn.body.body, child)
-		} else {
-			this.walkValue(fn.body, child)
-		}
+		this.walkParamDefaults(fn.params, child)
+		this.walkBody(fn, child)
 	}
+}
+
+/** True when a resolution is an entity, a relation or a field ref (not plain data read off one). */
+function isEntityValued(res: Resolution): boolean {
+	if (res.kind !== 'ref') {
+		return false // meta reads (`id`, `$isDirty`) are plain values
+	}
+	const last = res.ref.path[res.ref.path.length - 1]
+	return last === undefined || !PLAIN_VALUE_KEYS.has(last)
 }
 
 /** A `function` reading `arguments`/`this` gets values the analyzer cannot bind to roots. */

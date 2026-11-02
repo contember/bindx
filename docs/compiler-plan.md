@@ -58,16 +58,13 @@ type StaticFieldMap = Record<string, StaticFieldNode>
 type StaticFieldNode =
 	| true                     // scalar leaf (or relation touched without nested access)
 	| {
-		fields: StaticFieldMap   // nested selection → this field is a relation
-		many?: true              // has-many (known from <HasMany> usage or collection params)
-		params?: {               // has-many params; only statically-literal values
-			filter?: unknown
-			orderBy?: unknown
-			limit?: number
-			offset?: number
-			totalCount?: boolean
-		}
+		fields?: StaticFieldMap       // nested selection → this field is a relation
+		hasOneFields?: StaticFieldMap // read through ref API names (`.value`, `.length`): fields of
+		                              // the target only if the schema says has-one (collector rule)
+		many?: true                   // has-many (known from <HasMany> / `.map()` usage)
 	}
+// Has-many params are not part of the format: the runtime collector ignores them inside a
+// component, and an <Entity> root with a parameterised <HasMany> bails (HASMANY_PARAMS_AT_ROOT).
 
 /** Emitted as the 2nd argument of .render(): key = implicit entity prop name. */
 type StaticSelection = Record<string, StaticFieldMap>
@@ -143,12 +140,11 @@ irrelevant because union is sound):
   read `packages/bindx-react/src/jsx/proxy.ts` + `SelectionScope` and mirror their skip-list.
 - **Recognized components** (imported from `@contember/bindx*`): `Field`/`Attribute`/`Show`
   (`field={<path>}` → leaf), `HasOne` (relation + children-callback root), `HasMany` (relation,
-  `many: true`, JSX props `limit/offset/orderBy/filter/totalCount` → `params` when the values are
-  **literals** — otherwise bail), `If` and other selection-neutral bindx components → recurse
-  into children only.
+  `many: true`; its params are evaluated like any prop but not emitted, see the format note),
+  `If` and other selection-neutral bindx components → recurse into children only.
 - **Bail triggers** (component-level, with reason codes): entity-rooted value passed to an
   unrecognized function call or as a prop to an unrecognized component; spread of an entity root;
-  computed member access `article[x]`; non-literal HasMany params; `interfaces()`;
+  computed member access `article[x]`; `interfaces()`;
   render body not an inline function literal (imported/renamed render fn); any expression form
   the analyzer cannot confidently classify (**default deny**).
 - Plain JSX/host elements and unknown components: recurse into their **children** (matching
@@ -290,7 +286,9 @@ In `ensureImplicitCollected`, when a compiled selection is present:
   JSX element with a resolvable identifier** (local or imported — the emit references the
   identifier via a thunk in the same module scope). Multiple entity props on one element form one
   hole. Children of the element keep being analyzed statically (not part of the hole).
-- Still bails: entity in a non-JSX call argument (`ENTITY_ESCAPES_TO_CALL`), entity in a
+- Still bails: an entity value that is stored, passed on or returned anywhere — a call argument
+  (also wrapped in an object/array literal), a local through a conditional/`??`/container, a closure's
+  return value, a parameter default (`ENTITY_ESCAPES_TO_CALL` / `ENTITY_ESCAPES_TO_VALUE`); entity in a
   **non-literal expression prop that isn't a plain path** (e.g. `prop={fn(article)}`), spread onto
   an element, member-expression/namespace component tags (v2 keeps it simple: identifier tags only),
   and an **unsafe function prop / render-prop child of a hole element** (`FUNCTION_PROP_ON_HOLE` — see

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { createComponent, Field, HasMany, type EntityRef } from '@contember/bindx-react'
+import { createComponent, Field, type EntityRef } from '@contember/bindx-react'
 import type { FixtureCase } from '../fixtureTypes.js'
 import { schema, type Article } from './_schema.js'
 
@@ -52,17 +52,7 @@ export const BailComputedMember = createComponent()
 	.entity('article', schema.Article)
 	.render(({ article }) => <Field field={article[key]} />)
 
-// 9. NON_LITERAL_HASMANY_PARAM — a HasMany param that is not a static literal
-const dynamicLimit = 3
-export const BailNonLiteralParam = createComponent()
-	.entity('article', schema.Article)
-	.render(({ article }) => (
-		<HasMany field={article.tags} limit={dynamicLimit}>
-			{tag => <Field field={tag.name} />}
-		</HasMany>
-	))
-
-// 10. ENTITY_REASSIGNMENT — entity-rooted binding is not const
+// 9. ENTITY_REASSIGNMENT — entity-rooted binding is not const
 export const BailReassignment = createComponent()
 	.entity('article', schema.Article)
 	.render(({ article }) => {
@@ -80,6 +70,5 @@ export const cases: FixtureCase[] = [
 	{ expect: 'bail', code: 'MEMBER_COMPONENT_TAG' },
 	{ expect: 'bail', code: 'ENTITY_SPREAD' },
 	{ expect: 'bail', code: 'COMPUTED_MEMBER' },
-	{ expect: 'bail', code: 'NON_LITERAL_HASMANY_PARAM' },
 	{ expect: 'bail', code: 'ENTITY_REASSIGNMENT' },
 ]

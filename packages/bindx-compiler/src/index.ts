@@ -17,7 +17,6 @@ export type {
 	StaticSelection,
 	StaticFieldMap,
 	StaticFieldNode,
-	StaticHasManyParams,
 	AnalyzedHole,
 	HoleEntityProp,
 	ChainResult,

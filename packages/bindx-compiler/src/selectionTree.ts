@@ -6,7 +6,7 @@
  *
  * See packages/bindx-client/src/selection/SelectionScope.ts.
  */
-import type { StaticFieldMap, StaticFieldNode, StaticHasManyParams, StaticSelection } from './types.js'
+import type { StaticFieldMap, StaticFieldNode, StaticSelection } from './types.js'
 
 export class SelNode {
 	private readonly scalars = new Set<string>()
@@ -14,7 +14,6 @@ export class SelNode {
 	/** Field → its target's selection, valid only if the field turns out to be a has-one. */
 	private readonly hasOneOnly = new Map<string, SelNode>()
 	private readonly manyFields = new Set<string>()
-	private readonly params = new Map<string, StaticHasManyParams>()
 
 	/** Add a scalar field (ignored if already a relation — matches SelectionScope). */
 	addScalar(fieldName: string): void {
@@ -53,10 +52,6 @@ export class SelNode {
 		this.manyFields.add(fieldName)
 	}
 
-	setParams(fieldName: string, params: StaticHasManyParams): void {
-		this.params.set(fieldName, params)
-	}
-
 	hasFields(): boolean {
 		return this.scalars.size > 0 || this.relations.size > 0
 	}
@@ -76,10 +71,6 @@ export class SelNode {
 			if (this.manyFields.has(name)) {
 				node.many = true
 			}
-			const params = this.params.get(name)
-			if (params && Object.keys(params).length > 0) {
-				node.params = params
-			}
 			map[name] = node
 		}
 		return map
@@ -88,9 +79,8 @@ export class SelNode {
 
 /**
  * Normalize a StaticFieldMap to the plain field-tree form used by the equivalence
- * harness: `true` for scalars, nested objects for relations. `many`/`params` are
- * dropped because the runtime collector does NOT record them in the implicit path
- * (verified against the oracle) — see docs/compiler-plan.md ternary/params notes.
+ * harness: `true` for scalars, nested objects for relations. `many` is dropped
+ * because the runtime collector does not record it in the implicit path.
  * Schema-less, like the harness oracle: `hasOneFields` are ref-API passthrough.
  */
 function fieldMapToPlain(map: StaticFieldMap): Record<string, unknown> {

@@ -8,7 +8,7 @@ import * as t from '@babel/types'
 import { walkAst } from './astWalk.js'
 import { readsInvocationContext, type ModuleScope } from './bindings.js'
 import { SelNode } from './selectionTree.js'
-import type { Bailout, StaticHasManyParams } from './types.js'
+import type { Bailout } from './types.js'
 
 export class BailError extends Error {
 	constructor(public readonly bailout: Bailout) {
@@ -199,18 +199,23 @@ export function consumeRelation(ref: RootRef): SelNode {
 	return owner.child(field)
 }
 
-/** Materialize a has-many relation; marks the field array + params, returns the item node. */
-export function consumeMany(ref: RootRef, params?: StaticHasManyParams): SelNode {
+/** Materialize a has-many relation; marks the field array, returns the item node. */
+export function consumeMany(ref: RootRef): SelNode {
 	if (ref.path.length === 0) {
 		return ref.node
 	}
 	const { owner, field } = ownerOfLast(ref)
 	const item = owner.child(field)
 	owner.markMany(field)
-	if (params && Object.keys(params).length > 0) {
-		owner.setParams(field, params)
-	}
 	return item
+}
+
+/**
+ * The origin of a has-many item: `$entity` on a has-many collector ref is its item proxy, so a hole
+ * path replayed through it reads the item's fields (never the ref API, e.g. an item field `value`).
+ */
+export function itemRefOf(relation: RootRef, item: SelNode): RootRef {
+	return { node: item, path: [], source: relation.source, absPath: [...relation.absPath, '$entity'] }
 }
 
 /** Record whatever field a resolution reads: a ref as a leaf, a meta read as its owning field. */

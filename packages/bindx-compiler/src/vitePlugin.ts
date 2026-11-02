@@ -101,13 +101,22 @@ export function bindxCompiler(options: BindxCompilerViteOptions = {}): BindxComp
 				accumulate(fileTotals)
 				compiledInFile += fileTotals.compiled
 			}
-			const result = await transformAsync(code, {
-				filename: file,
-				configFile: false,
-				babelrc: false,
-				sourceMaps: true,
-				plugins: [[bindxCompilerPlugin, { alias, entityLike, diagnostics, cache, onReport, onDependency: (dep: string) => deps.add(dep) }]],
-			})
+			let result: Awaited<ReturnType<typeof transformAsync>>
+			try {
+				result = await transformAsync(code, {
+					filename: file,
+					configFile: false,
+					babelrc: false,
+					sourceMaps: true,
+					plugins: [[bindxCompilerPlugin, { alias, entityLike, diagnostics, cache, onReport, onDependency: (dep: string) => deps.add(dep) }]],
+				})
+			} catch (error) {
+				// Syntax our parser options don't cover (e.g. decorators): the file keeps the runtime path.
+				if (diagnostics !== 'off') {
+					console.warn(`[bindx-compiler] ${file}: not compiled, parse failed — ${error instanceof Error ? error.message : String(error)}`)
+				}
+				return null
+			}
 			// Register every cross-file read so a later edit to a contract/target module re-transforms this file.
 			for (const dep of deps) {
 				this.addWatchFile(dep)

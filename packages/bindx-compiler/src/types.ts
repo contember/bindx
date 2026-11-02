@@ -4,15 +4,6 @@
  */
 import type * as t from '@babel/types'
 
-/** Has-many parameters; only statically-literal values are emitted. */
-export interface StaticHasManyParams {
-	filter?: unknown
-	orderBy?: unknown
-	limit?: number
-	offset?: number
-	totalCount?: boolean
-}
-
 /**
  * A single field: scalar leaf (`true`) or an object node. `fields` present ⇒ a relation with that
  * nested selection. `hasOneFields` were read through the field's ref API names (`.value`, `.length`):
@@ -24,7 +15,6 @@ export type StaticFieldNode =
 		fields?: StaticFieldMap
 		hasOneFields?: StaticFieldMap
 		many?: true
-		params?: StaticHasManyParams
 	}
 
 /** Selection for one implicit entity prop. Key = field name. */
@@ -75,7 +65,8 @@ export type BailoutReason =
 	| 'MEMBER_COMPONENT_TAG'
 	| 'ENTITY_SPREAD'
 	| 'COMPUTED_MEMBER'
-	| 'NON_LITERAL_HASMANY_PARAM'
+	| 'HASMANY_PARAMS_AT_ROOT'
+	| 'ENTITY_ESCAPES_TO_VALUE'
 	| 'ENTITY_REASSIGNMENT'
 	| 'ENTITY_NO_FUNCTION_CHILDREN'
 	| 'UNCLASSIFIED'

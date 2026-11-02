@@ -96,6 +96,16 @@ export const Host = createComponent().interfaces<{ item: { name: string } }>().r
 		expect(await runTransform(source, ROUTE, makeContext().context)).toBeNull()
 	})
 
+	test('returns null instead of failing the build on syntax it does not parse', async () => {
+		const source = `
+import { Entity } from '@contember/bindx-react'
+@sealed
+class Service {}
+export const route = <Entity entity={x}>{e => null}</Entity>
+`
+		expect(await runTransform(source, ROUTE, makeContext().context)).toBeNull()
+	})
+
 	test('skips non-jsx and node_modules ids without watching', async () => {
 		const { context, watched } = makeContext()
 		expect(await runTransform(CROSS_MODULE, join(DIR, 'plain.ts'), context)).toBeNull()

@@ -46,6 +46,7 @@ const renderTag = tag => <Field field={tag.name} />
 const renderAuthor = author => <Field field={author.name} />
 const renderers = { author: author => <Field field={author.name} /> }
 const labels = {}
+const Chip = (_props) => null
 `
 
 /** A module whose `.render()` host is mounted under an `<Entity>` root. */
@@ -143,6 +144,34 @@ const Card = (_props) => null`,
 	['function declaration called during render', hostCase(`({ article }) => { function title() { return <Field field={article.title} /> } return <div>{title()}</div> }`)],
 	['object of closures capturing a render local', hostCase(`({ article }) => { const wrap = node => node; return <Blocks field={article.author} blocks={{ main: it => wrap(<Field field={it.name} />) }} /> }`)],
 	['closure capturing a let assigned later', hostCase(`({ article }) => { let wrap; wrap = node => node; return <Picker field={article.author} renderItem={it => wrap(<Field field={it.name} />)} /> }`)],
+	['entity through a conditional local', hostCase(`({ article }) => { const au = isCz ? article.author : article.author; return <span>{au.name.value}</span> }`)],
+	['entity through a nullish-coalescing local', hostCase(`({ article }) => { const au = article.author ?? null; return <span>{au.name.value}</span> }`)],
+	['entity inside an array local', hostCase(`({ article }) => { const a = [article]; return <span>{a[0].title.value}</span> }`)],
+	['entity inside an object local', hostCase(`({ article }) => { const o = { a: article }; return <span>{o.a.title.value}</span> }`)],
+	['entity returned by a closure', hostCase(`({ article }) => { const get = () => article; return <span>{get().title.value}</span> }`)],
+	['entity wrapped in an object argument', hostCase(`({ article }) => <div>{renderBody({ article })}</div>`, `const renderBody = ({ article }) => <Field field={article.title} />`)],
+	['entity wrapped in an object argument at a root', rootCase('', `article => <div>{renderBody({ article })}</div>`).replace('export function Route', 'const renderBody = ({ article }) => <Field field={article.title} />\nexport function Route')],
+	['entity in a nullish argument', hostCase(`({ article }) => <div>{renderAuthor(article.author ?? null)}</div>`)],
+	['parameter default of a nested function', hostCase(`({ article }) => { const f = (t = article.title) => t.value; return <span>{f()}</span> }`)],
+	['has-many item field named like the ref API on a hole', hostCase(`({ article }) => <HasMany field={article.tags}>{tag => <Chip field={tag.value} />}</HasMany>`)],
+	['has-many item field named items through .map() on a hole', hostCase(`({ article }) => <div>{article.tags.map(tag => <Chip key={tag.id} field={tag.items} />)}</div>`)],
+	['plain function with a staticRender assigned later', hostCase(
+		`({ article }) => <Pick2 field={article.author} renderItem={it => <Field field={it.name} />} />`,
+		`function Pick2(_props) { return null }
+Pick2.staticRender = (p) => <HasOne field={p.field}>{e => p.renderItem(e)}</HasOne>`,
+	)],
+	['render-local shadowing a contract component', hostCase(`({ article }) => { const Repeater = Picker; return <Repeater field={article.author} renderItem={it => <Field field={it.name} />} /> }`)],
+	['staticRender cloning the entity into JSX children', hostCase(
+		`({ article }) => <Inject author={article.author}><AuthorName /></Inject>`,
+		`const AuthorName = createComponent().entity('author', AuthorDef).render(({ author }) => <Field field={author.name} />)
+const Inject = withCollector((_props) => null, (p) => <>{React.Children.map(p.children, c => React.cloneElement(c, { author: p.author }))}</>)`,
+	)],
+	['has-many with and without params', hostCase(`({ article }) => <div><HasMany field={article.tags} limit={1}>{t => <Field field={t.name} />}</HasMany><HasMany field={article.tags}>{t => <Field field={t.name} />}</HasMany></div>`)],
+	['children attribute next to JSX children of <Entity>', `${IMPORTS}
+export function Route() {
+	return <Entity entity={ArticleDef} by={{ id: 'article-1' }} children={a => <Field field={a.title} />}>{a => <Field field={a.content} />}</Entity>
+}
+`],
 	['root closure capturing a component-scope binding', rootCase(
 		`const wrap = node => node`,
 		`article => <div><Picker field={article.author} renderItem={it => wrap(<Field field={it.name} />)} /></div>`,
@@ -181,6 +210,8 @@ const COMPILING: ReadonlyArray<readonly [string, string]> = [
 	['module-scope children on a hole', hostCase(`({ article }) => <Select field={article.author}>{renderAuthor}</Select>`)],
 	['object of module-scope closures on a hole', hostCase(`({ article }) => <Blocks field={article.author} blocks={{ main: it => <Field field={it.name} /> }} />`)],
 	['props destructured in the body', hostCase(`(props) => { const { article } = props; return <Field field={article.title} /> }`)],
+	['plain data passed to a helper', hostCase(`({ article }) => <span>{String(article.title.value)}</span>`)],
+	['plain data in a let binding', hostCase(`({ article }) => { let t = article.title.value; return <span>{t}</span> }`)],
 	['event handler calling a field setter in a render-function child', hostCase(`({ article }) => <Field field={article.title}>{title => <input onChange={e => article.title.setValue(e.target.value)} value={title.value ?? ''} />}</Field>`)],
 ]
 

@@ -113,7 +113,7 @@ export function analyzeEntityRoot(
 	}
 
 	const rootNode = new SelNode()
-	const analyzer = new BodyAnalyzer(bindings, moduleScope, lookup, targetKinds)
+	const analyzer = new BodyAnalyzer(bindings, moduleScope, lookup, targetKinds, true)
 	try {
 		analyzer.analyzeRootChildren(childrenFn, rootNode, ENTITY_ROOT_KEY)
 	} catch (error) {
@@ -134,8 +134,9 @@ export function analyzeEntityRoot(
  */
 function entityChildrenFn(element: t.JSXElement): t.ArrowFunctionExpression | t.FunctionExpression | null {
 	const attrFn = childrenAttrFn(element)
+	const hasJsxChildren = element.children.some(child => !t.isJSXText(child) || child.value.trim() !== '')
 	if (attrFn) {
-		return attrFn
+		return hasJsxChildren ? null : attrFn // React's JSX children win over the attribute
 	}
 	let found: t.ArrowFunctionExpression | t.FunctionExpression | null = null
 	for (const child of element.children) {

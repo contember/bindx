@@ -27,9 +27,6 @@ function nodeToAst(node: StaticFieldNode): t.Expression {
 	if (node.many) {
 		props.push(t.objectProperty(t.identifier('many'), t.booleanLiteral(true)))
 	}
-	if (node.params) {
-		props.push(t.objectProperty(t.identifier('params'), t.valueToNode(node.params)))
-	}
 	return t.objectExpression(props)
 }
 

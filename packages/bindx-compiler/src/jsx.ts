@@ -7,13 +7,13 @@ import * as t from '@babel/types'
 import type { ComponentKind, ImportBindings } from './imports.js'
 import {
 	BailError, type RootRef, type Scope, consumeMany, consumeRelation, consumeResolution,
-	entityPathOf, evaluateLiteral, referencesRoot, resolve,
+	entityPathOf, evaluateLiteral, itemRefOf, referencesRoot, resolve,
 } from './resolve.js'
 import { type Closure, type HoleClosureProp, type HoleValueProp, holePolicyFor, resolveHoleExtraProps } from './holeProps.js'
 import type { ModuleScope } from './bindings.js'
 import type { CollectorContract, ContractLookup } from './contracts.js'
 import type { TargetKindLookup } from './targetKind.js'
-import type { AnalyzedHole, HoleEntityProp, StaticHasManyParams } from './types.js'
+import type { AnalyzedHole, HoleEntityProp } from './types.js'
 
 function asClosure(node: t.Node | null): Closure | null {
 	return node && (t.isArrowFunctionExpression(node) || t.isFunctionExpression(node)) ? node : null
@@ -35,6 +35,8 @@ export class JsxAnalyzer {
 		private readonly moduleScope: ModuleScope,
 		private readonly contracts: ContractLookup,
 		private readonly targetKinds: TargetKindLookup,
+		/** Analyzing an `<Entity>` root: the runtime walk there also keeps what components return. */
+		private readonly isSelectionRoot: boolean,
 	) {}
 
 	walk(node: t.JSXElement | t.JSXFragment, scope: Scope): void {
@@ -93,7 +95,8 @@ export class JsxAnalyzer {
 	 * into the hole's `extraProps` so compiled ≡ oracle by construction.
 	 */
 	private walkComponentElement(tag: string, node: t.JSXElement, scope: Scope): void {
-		const contract = this.contracts(tag)
+		// A render-local binding shadowing the tag is not the module component the contract belongs to.
+		const contract = this.moduleScope.isModuleBindingAt(tag, node) ? this.contracts(tag) : null
 		if (contract) {
 			this.walkContractComponent(tag, node, contract, scope)
 			return
@@ -135,6 +138,11 @@ export class JsxAnalyzer {
 			// Classify the target so provably-inert props (render-locals, function children on a
 			// createComponent/plain target, unreferenced staticRender props) drop without bailing.
 			const policy = holePolicyFor(this.targetKinds(tag))
+			// JSX children are not passed to the hole: a staticRender that reads them (e.g. clones the
+			// entity into them) would collect through values the replay cannot reproduce.
+			if (hasJsxChildren(node) && policy.closureNeedsCheck('children')) {
+				throw new BailError({ code: 'RENDER_LOCAL_ON_HOLE', message: `JSX children of hole element <${tag}> may be read by its selection surface` })
+			}
 			const extraProps = resolveHoleExtraProps({ tag, closureProps, valueProps, scope, moduleScope: this.moduleScope, policy })
 			this.host.addHole({
 				component: tag,
@@ -198,10 +206,12 @@ export class JsxAnalyzer {
 				}
 				continue // relation not resolvable → derived staticRender collects nothing for this entry
 			}
-			const item = entry.kind === 'itemOf' ? consumeMany(res.ref) : consumeRelation(res.ref)
+			const isMany = entry.kind === 'itemOf'
+			const item = isMany ? consumeMany(res.ref) : consumeRelation(res.ref)
 			const cb = this.contractCallback(node, cbName)
 			if (cb) {
-				this.host.walkCallbackWithItem(cb, { node: item, path: [], source: res.ref.source, absPath: res.ref.absPath }, scope)
+				const itemRef = isMany ? itemRefOf(res.ref, item) : { node: item, path: [], source: res.ref.source, absPath: res.ref.absPath }
+				this.host.walkCallbackWithItem(cb, itemRef, scope)
 			}
 			// Missing callback → relation only (already recorded by consume*), mirroring the runtime guard.
 		}
@@ -357,17 +367,22 @@ export class JsxAnalyzer {
 			}
 			return // no entity reaches this element → nothing it collects belongs to this selection
 		}
-		const params = many ? readHasManyParams(node) : undefined
-		const item = many ? consumeMany(res.ref, params) : consumeRelation(res.ref)
+		if (many && this.isSelectionRoot && HASMANY_PARAM_KEYS.some(key => findAttr(node, key) !== null)) {
+			// The root walk keeps <HasMany>'s returned, param-aliased relation next to the plain one;
+			// a field map holds one node per field. Inside a component the runtime ignores params.
+			throw new BailError({ code: 'HASMANY_PARAMS_AT_ROOT', message: '<HasMany> with params in an <Entity> root' })
+		}
+		const item = many ? consumeMany(res.ref) : consumeRelation(res.ref)
 		const children = childrenSlot(node)
 		if (children.kind === 'other') {
 			// The runtime invokes whatever `children` holds with the related entity.
 			throw new BailError({ code: 'UNCLASSIFIED', message: 'relation component children is not an inline function' })
 		}
 		if (children.kind === 'closure') {
-			this.host.walkCallbackWithItem(children.fn, { node: item, path: [], source: res.ref.source, absPath: res.ref.absPath }, scope)
+			const itemRef = many ? itemRefOf(res.ref, item) : { node: item, path: [], source: res.ref.source, absPath: res.ref.absPath }
+			this.host.walkCallbackWithItem(children.fn, itemRef, scope)
 		}
-		this.walkOtherAttrs(node, new Set(['field', 'children', ...(many ? HASMANY_PARAM_KEYS : [])]), scope)
+		this.walkOtherAttrs(node, new Set(['field', 'children']), scope) // params are evaluated during render too
 	}
 
 	private walkNonFunctionChildren(children: t.JSXElement['children'], scope: Scope): void {
@@ -424,33 +439,6 @@ export class JsxAnalyzer {
 	}
 }
 
-function readHasManyParams(node: t.JSXElement): StaticHasManyParams {
-	const params: Record<string, unknown> = {}
-	for (const key of HASMANY_PARAM_KEYS) {
-		const attr = findAttr(node, key)
-		if (!attr) {
-			continue
-		}
-		if (attr.value === null || attr.value === undefined) {
-			params[key] = true // boolean shorthand, e.g. `<HasMany ... totalCount>`
-			continue
-		}
-		if (t.isStringLiteral(attr.value)) {
-			params[key] = attr.value.value
-			continue
-		}
-		const expr = t.isJSXExpressionContainer(attr.value) && t.isExpression(attr.value.expression)
-			? attr.value.expression
-			: null
-		const lit = expr ? evaluateLiteral(expr) : { ok: false as const }
-		if (!lit.ok) {
-			throw new BailError({ code: 'NON_LITERAL_HASMANY_PARAM', message: `<HasMany> ${key} is not a static literal` })
-		}
-		params[key] = lit.value
-	}
-	return params
-}
-
 interface CollectedProps {
 	readonly entityProps: Record<string, HoleEntityProp>
 	readonly literalProps: Record<string, unknown>
@@ -491,6 +479,22 @@ function childrenSlot(node: t.JSXElement): CallbackSlot {
 	return only && t.isJSXExpressionContainer(only) && t.isExpression(only.expression)
 		? slotOf(only.expression)
 		: { kind: 'other' }
+}
+
+/** True when the element's children (or `children` attribute) include JSX rather than a single closure/value. */
+function hasJsxChildren(node: t.JSXElement): boolean {
+	const attr = findAttr(node, 'children')
+	const attrValue = attr ? jsxAttrInner(attr.value) : null
+	if (attrValue && (t.isJSXElement(attrValue) || t.isJSXFragment(attrValue))) {
+		return true
+	}
+	const nonText = node.children.filter(child => !t.isJSXText(child)) // text is a primitive string
+	if (nonText.length === 0) {
+		return false
+	}
+	const sole = soleChildExpression(node.children)
+	// A sole closure/value child is classified with the props instead.
+	return !(sole !== null && nonText.length === 1 && !t.isJSXElement(sole) && !t.isJSXFragment(sole))
 }
 
 /** The single expression child (`{x}`) of an element, or null when children are absent or JSX. */
