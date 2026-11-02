@@ -29,16 +29,29 @@ import {
 } from '@contember/bindx-react'
 import { bindxCompilerPlugin, type BindxCompilerOptions } from '../src/index.js'
 
+interface Tag {
+	id: string
+	name: string
+}
+
+/** `value` / `errors` relations share names with the field-ref API (has-one passthrough cases). */
+interface Author {
+	id: string
+	name: string
+	value: Tag | null
+	errors: Tag[]
+}
+
 interface Schema {
-	Article: { id: string; title: string; content: string; author: { id: string; name: string } | null; tags: { id: string; name: string }[] }
-	Author: { id: string; name: string }
-	Tag: { id: string; name: string }
+	Article: { id: string; title: string; content: string; author: Author | null; tags: Tag[] }
+	Author: Author
+	Tag: Tag
 }
 
 export const schema = defineSchema<Schema>({
 	entities: {
 		Article: { fields: { id: scalar(), title: scalar(), content: scalar(), author: hasOne('Author'), tags: hasMany('Tag') } },
-		Author: { fields: { id: scalar(), name: scalar() } },
+		Author: { fields: { id: scalar(), name: scalar(), value: hasOne('Tag'), errors: hasMany('Tag') } },
 		Tag: { fields: { id: scalar(), name: scalar() } },
 	},
 })

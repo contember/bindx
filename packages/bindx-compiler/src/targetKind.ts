@@ -9,9 +9,9 @@
  */
 import * as t from '@babel/types'
 import { walkAst } from './astWalk.js'
-import { readsInvocationContext } from './bindings.js'
+import { forEachChild, readsInvocationContext } from './bindings.js'
 import {
-	BindingResolver, type BindingResolverOptions, type ModuleView,
+	type BindingAlias, BindingResolver, type BindingResolverOptions, type ModuleView,
 } from './moduleResolve.js'
 import { unwrap } from './resolve.js'
 
@@ -52,17 +52,18 @@ export class TargetKindResolver {
 			return cached
 		}
 		const resolved = this.binding.resolve(tag)
-		const kind = resolved ? classifyInit(resolved.init, resolved.view) : UNKNOWN
+		const kind = resolved ? classifyInit(resolved.init, resolved.view, resolved.aliases) : UNKNOWN
 		this.memo.set(tag, kind)
 		return kind
 	}
 }
 
-/** Classify a resolved binding node within its owning module view. */
-function classifyInit(init: t.Node, view: ModuleView): TargetKind {
-	// A plain `function X() {}` / `class X {}` component has no selection surface.
-	if (t.isFunctionDeclaration(init) || t.isClassDeclaration(init)) {
-		return plainUnlessAugmented(declaredNameOf(view.program, init), view.program)
+/** Classify a resolved binding node within its owning module view (`aliases`: its other bound names). */
+function classifyInit(init: t.Node, view: ModuleView, aliases: ReadonlyArray<BindingAlias>): TargetKind {
+	// A plain `function X() {}` component has no selection surface. A class can declare one
+	// (`static staticRender`), so it stays unknown.
+	if (t.isFunctionDeclaration(init)) {
+		return plainIfUnreferenced(declaredNameOf(view.program, init), view.program, aliases)
 	}
 	const expr = unwrap(init)
 	if (!t.isExpression(expr)) {
@@ -87,37 +88,60 @@ function classifyInit(init: t.Node, view: ModuleView): TargetKind {
 
 	// A plain function/arrow component (not wrapped) has no selection surface.
 	if (t.isArrowFunctionExpression(expr) || t.isFunctionExpression(expr)) {
-		return plainUnlessAugmented(declaredNameOf(view.program, init), view.program)
+		return plainIfUnreferenced(declaredNameOf(view.program, init), view.program, aliases)
 	}
 
 	return UNKNOWN
 }
 
 /**
- * `plain` only while nothing can have attached a selection surface: an `X.staticRender = …` /
- * `X.getSelection = …` assignment, or `X` handed to a call (`Object.assign(X, …)`), makes it unknown.
+ * `plain` only with proof that nothing attached a selection surface (`X.staticRender = …`,
+ * `Object.assign(X, …)`, an alias that is augmented): in the defining module and every module the
+ * value is bound in on the way, the name may appear only where it is declared, imported, exported
+ * or used as a JSX tag. Augmentation from an unrelated module that imports `X` stays unseen.
  */
-function plainUnlessAugmented(name: string | null, program: t.Program): TargetKind {
+function plainIfUnreferenced(name: string | null, program: t.Program, aliases: ReadonlyArray<BindingAlias>): TargetKind {
 	if (name === null) {
 		return UNKNOWN
 	}
-	let isAugmented = false
-	walkAst(program, node => {
-		const isMemberTarget = t.isAssignmentExpression(node) && t.isMemberExpression(node.left)
-			&& t.isIdentifier(node.left.object) && node.left.object.name === name
-		const isCallArgument = (t.isCallExpression(node) || t.isNewExpression(node))
-			&& node.arguments.some(arg => t.isIdentifier(arg) && arg.name === name)
-		if (isMemberTarget || isCallArgument) {
-			isAugmented = true
-			return 'stop'
+	const sites = [{ program, name }, ...aliases]
+	return sites.every(site => isOnlyDeclared(site.program, site.name)) ? { kind: 'plain' } : UNKNOWN
+}
+
+/** True when every identifier `name` in `program` is a declaration, import/export specifier or a non-reference. */
+function isOnlyDeclared(program: t.Program, name: string): boolean {
+	let isReferenced = false
+	forEachChild(program, (child, parent) => {
+		if (!isReferenced && t.isIdentifier(child) && child.name === name && !isNonReferencePosition(child, parent)) {
+			isReferenced = true
 		}
 	})
-	return isAugmented ? UNKNOWN : { kind: 'plain' }
+	return !isReferenced
+}
+
+/** Identifier positions that neither read nor write the binding's value. JSX tags are `JSXIdentifier`s. */
+function isNonReferencePosition(node: t.Identifier, parent: t.Node): boolean {
+	if (t.isVariableDeclarator(parent) || t.isFunctionDeclaration(parent)) {
+		return parent.id === node
+	}
+	if (t.isImportSpecifier(parent) || t.isImportDefaultSpecifier(parent) || t.isExportSpecifier(parent)) {
+		return true
+	}
+	if (t.isExportDefaultDeclaration(parent)) {
+		return true // `export default X`: importers resolve to the identifier → unknown for them
+	}
+	if (t.isMemberExpression(parent) || t.isOptionalMemberExpression(parent)) {
+		return parent.property === node && !parent.computed // `foo.X`
+	}
+	if (t.isObjectProperty(parent) || t.isObjectMethod(parent) || t.isClassProperty(parent) || t.isClassMethod(parent)) {
+		return parent.key === node && !parent.computed && !(t.isObjectProperty(parent) && parent.shorthand)
+	}
+	return t.isTSTypeReference(parent) || t.isTSQualifiedName(parent) || t.isTSTypeQuery(parent)
 }
 
 /** The binding name a declaration (or a declarator's initializer) is declared under in `program`. */
 function declaredNameOf(program: t.Program, init: t.Node): string | null {
-	if ((t.isFunctionDeclaration(init) || t.isClassDeclaration(init)) && init.id) {
+	if (t.isFunctionDeclaration(init) && init.id) {
 		return init.id.name
 	}
 	let name: string | null = null

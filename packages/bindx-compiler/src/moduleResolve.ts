@@ -102,6 +102,21 @@ export interface BindingResolverOptions {
 interface ResolvedBinding {
 	readonly init: t.Node
 	readonly view: ModuleView
+	/** Every other module-level name the value is bound to on the way (the consumer's, passthrough re-exports). */
+	readonly aliases: ReadonlyArray<BindingAlias>
+}
+
+export interface BindingAlias {
+	readonly program: t.Program
+	readonly name: string
+}
+
+/** One step of a re-export chase: the module to look `importedName` up in, and the aliases seen so far. */
+interface ChaseStep {
+	readonly view: ModuleView
+	readonly fromFile: string
+	readonly importedName: string
+	readonly aliases: ReadonlyArray<BindingAlias>
 }
 
 /**
@@ -131,7 +146,7 @@ export class BindingResolver {
 	private compute(tag: string): ResolvedBinding | null {
 		const local = findTopLevelBinding(this.self.program, tag)
 		if (local) {
-			return { init: local, view: this.self }
+			return { init: local, view: this.self, aliases: [] }
 		}
 		const imp = findImport(this.self.program, tag)
 		if (!imp) {
@@ -146,7 +161,8 @@ export class BindingResolver {
 		if (!view) {
 			return null
 		}
-		return this.chaseExport(view, path, imp.importedName, new Set([path]), BindingResolver.MAX_HOPS)
+		const consumer: BindingAlias = { program: this.self.program, name: tag }
+		return this.chaseExport({ view, fromFile: path, importedName: imp.importedName, aliases: [consumer] }, new Set([path]), BindingResolver.MAX_HOPS)
 	}
 
 	/**
@@ -155,24 +171,26 @@ export class BindingResolver {
 	 * leaf reached twice is not mistaken for an ambiguity. Returns null on depth/cycle limit → the
 	 * caller's conservative fallback stands.
 	 */
-	private chaseExport(view: ModuleView, fromFile: string, importedName: string, visited: Set<string>, depth: number): ResolvedBinding | null {
+	private chaseExport(step: ChaseStep, visited: Set<string>, depth: number): ResolvedBinding | null {
+		const { view, fromFile, importedName, aliases } = step
 		const lookup = lookupExport(view.program, importedName)
 		if (!lookup) {
 			return null
 		}
 		if (lookup.kind === 'local') {
-			return { init: lookup.node, view }
+			return { init: lookup.node, view, aliases }
 		}
 		if (depth <= 0) {
 			return null // depth limit → unfollowable
 		}
 		if (lookup.kind === 'reexport') {
-			return this.followSource(lookup.source, fromFile, lookup.importedName, visited, depth)
+			const passthrough = lookup.localName === undefined ? [] : [{ program: view.program, name: lookup.localName }]
+			return this.followSource(lookup.source, { fromFile, importedName: lookup.importedName, aliases: [...aliases, ...passthrough] }, visited, depth)
 		}
 		// `export *`: search each target; first match wins, a second distinct match → ambiguous → unfollowable.
 		let found: ResolvedBinding | null = null
 		for (const source of lookup.sources) {
-			const hit = this.followSource(source, fromFile, importedName, visited, depth)
+			const hit = this.followSource(source, { fromFile, importedName, aliases }, visited, depth)
 			if (hit) {
 				if (found) {
 					return null
@@ -184,8 +202,8 @@ export class BindingResolver {
 	}
 
 	/** Load the module `source` resolves to (relative to `fromFile`) and continue the chase there. */
-	private followSource(source: string, fromFile: string | undefined, importedName: string, visited: Set<string>, depth: number): ResolvedBinding | null {
-		const path = this.resolveModulePath(source, fromFile)
+	private followSource(source: string, from: Omit<ChaseStep, 'view'>, visited: Set<string>, depth: number): ResolvedBinding | null {
+		const path = this.resolveModulePath(source, from.fromFile)
 		if (!path) {
 			return null // unresolvable specifier → stop
 		}
@@ -198,7 +216,7 @@ export class BindingResolver {
 			return null
 		}
 		visited.add(path)
-		return this.chaseExport(view, path, importedName, visited, depth - 1)
+		return this.chaseExport({ view, fromFile: path, importedName: from.importedName, aliases: from.aliases }, visited, depth - 1)
 	}
 
 	/** Resolve an import/re-export specifier to an existing absolute file (relative or alias-mapped only). */
@@ -287,7 +305,8 @@ function findTopLevelBinding(program: t.Program, name: string): t.Node | null {
  */
 type ExportLookup =
 	| { readonly kind: 'local'; readonly node: t.Node }
-	| { readonly kind: 'reexport'; readonly source: string; readonly importedName: string }
+	/** `localName`: the passthrough form binds the value locally too (`import { X } …; export { X }`). */
+	| { readonly kind: 'reexport'; readonly source: string; readonly importedName: string; readonly localName?: string }
 	| { readonly kind: 'star'; readonly sources: readonly string[] }
 
 /** Classify how `importedName` is exported from `program`; null when it is not exported here at all. */
@@ -364,7 +383,7 @@ function namedReexport(program: t.Program, node: t.ExportNamedDeclaration, impor
 			return { kind: 'local', node: local }
 		}
 		const imp = findImport(program, orig)
-		return imp ? { kind: 'reexport', source: imp.source, importedName: imp.importedName } : null
+		return imp ? { kind: 'reexport', source: imp.source, importedName: imp.importedName, localName: orig } : null
 	}
 	return null
 }

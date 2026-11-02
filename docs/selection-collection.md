@@ -530,9 +530,13 @@ tag — reusing the contract parse cache — into `createComponent`, `plain`, `c
 - **`createComponent`** target — `getSelection` never reads scalar props and never invokes
   function slots (the slot walk ignores functions), so render-locals and function props/children
   drop with **no bail**; the entity props still form the hole. Slot names come from `.slots([...])`
-  (default `['children']`); JSX-valued props are analyzed statically as before.
-- **`plain`** function/class component — no selection surface, so **every** non-entity prop drops;
+  (default `['children']`). JSX passed to a slot bails (`RENDER_LOCAL_ON_HOLE`): the target may
+  clone an entity into it; JSX in other props is analyzed statically as before.
+- **`plain`** function component — no selection surface, so **every** non-entity prop drops;
   the hole is still emitted (matching runtime blindness; keeps the validate-mode blind-spot warn).
+  Plain needs proof: in the defining module and every module the value is bound in on the way,
+  the name appears only where it is declared, imported, exported or used as a JSX tag (so no
+  `X.staticRender = …`, `Object.assign(X, …)` or alias). Classes are `unknown` (`static staticRender`).
 - **`collectorStatic`** (`withCollector(runtime, staticRenderFn)`) — the compiler reads the *set of
   prop names the staticRender references*. A dropped prop **not** in that set is safe; a referenced
   render-local still bails. A staticRender that spreads/aliases its props object (`{...props}`,

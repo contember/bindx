@@ -15,6 +15,8 @@ export type StaticFieldNode =
 		fields?: StaticFieldMap
 		hasOneFields?: StaticFieldMap
 		many?: true
+		/** Valid only if the field is not a has-one; the runtime falls back to the proxy pass otherwise. */
+		assumesNotHasOne?: true
 	}
 
 /** Selection for one implicit entity prop. Key = field name. */

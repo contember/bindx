@@ -14,6 +14,8 @@ export class SelNode {
 	/** Field → its target's selection, valid only if the field turns out to be a has-one. */
 	private readonly hasOneOnly = new Map<string, SelNode>()
 	private readonly manyFields = new Set<string>()
+	/** Fields the compiled selection is only valid for when they are not a has-one (runtime-checked). */
+	private readonly notHasOne = new Set<string>()
 
 	/** Add a scalar field (ignored if already a relation — matches SelectionScope). */
 	addScalar(fieldName: string): void {
@@ -48,6 +50,11 @@ export class SelNode {
 		return node
 	}
 
+	assumeNotHasOne(fieldName: string): void {
+		this.addScalar(fieldName)
+		this.notHasOne.add(fieldName)
+	}
+
 	markMany(fieldName: string): void {
 		this.manyFields.add(fieldName)
 	}
@@ -60,7 +67,14 @@ export class SelNode {
 		const map: StaticFieldMap = {}
 		for (const name of this.scalars) {
 			const hasOneOnly = this.hasOneOnly.get(name)
-			map[name] = hasOneOnly?.hasFields() ? { hasOneFields: hasOneOnly.toFieldMap() } : true
+			const node: Exclude<StaticFieldNode, true> = {}
+			if (hasOneOnly?.hasFields()) {
+				node.hasOneFields = hasOneOnly.toFieldMap()
+			}
+			if (this.notHasOne.has(name)) {
+				node.assumesNotHasOne = true
+			}
+			map[name] = Object.keys(node).length > 0 ? node : true
 		}
 		for (const [name, child] of this.relations) {
 			const node: Exclude<StaticFieldNode, true> = { fields: child.toFieldMap() }
@@ -70,6 +84,9 @@ export class SelNode {
 			}
 			if (this.manyFields.has(name)) {
 				node.many = true
+			}
+			if (this.notHasOne.has(name)) {
+				node.assumesNotHasOne = true
 			}
 			map[name] = node
 		}

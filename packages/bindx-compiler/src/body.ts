@@ -8,24 +8,19 @@ import type { SelNode } from './selectionTree.js'
 import type { ImportBindings } from './imports.js'
 import { readsInvocationContext, type ModuleScope } from './bindings.js'
 import {
-	BailError, type Resolution, type Scope, childScope, consumeMany, consumeRelation, consumeResolution,
-	itemRefOf, paramNamesOf, referencesRoot, resolve, unwrap, type RootRef,
+	BailError, type Scope, childScope, consumeMany, consumePlainRead, consumeRelation, consumeResolution,
+	itemRefOf, memberOf, paramNamesOf, plainReadIndex, referencesRoot, resolve, unwrap, type RootRef,
 } from './resolve.js'
-import { JsxAnalyzer } from './jsx.js'
+import { JsxAnalyzer, type ValueUse } from './jsx.js'
 import type { ContractLookup } from './contracts.js'
 import type { TargetKindLookup } from './targetKind.js'
 import type { AnalyzedHole } from './types.js'
 
-/**
- * How an expression's value is used. `read`: consumed in place (rendered, compared, coerced).
- * `kept`: stored, passed on or returned, so later reads through it are invisible to the walk —
- * an entity value there escapes and bails (default deny).
- */
-type ValueUse = 'read' | 'kept'
-
-/** Field-ref API names whose value is plain data, never an entity or ref (safe to keep). */
-const PLAIN_VALUE_KEYS: ReadonlySet<string> = new Set([
-	'value', 'serverValue', 'isDirty', 'isTouched', 'errors', 'hasError', 'length', 'totalCount',
+/** Field-ref methods that act on the ref and return no entity; called during render they only touch the field. */
+const REF_ACTION_METHODS: ReadonlySet<string> = new Set([
+	'setValue', 'touch', 'addError', 'clearErrors', 'connect', 'disconnect', 'delete', 'reset', 'remove', 'move',
+	'add', 'onChange', 'onChanging', 'onItemConnected', 'onItemDisconnected', 'interceptItemConnecting',
+	'interceptItemDisconnecting',
 ])
 
 export class BodyAnalyzer {
@@ -123,7 +118,6 @@ export class BodyAnalyzer {
 			return
 		}
 		if (t.isObjectPattern(target)) {
-			const node = consumeRelation(ref)
 			for (const prop of target.properties) {
 				if (t.isRestElement(prop)) {
 					throw new BailError({ code: 'UNCLASSIFIED', message: 'rest element in entity destructuring' })
@@ -131,11 +125,17 @@ export class BodyAnalyzer {
 				if (!t.isObjectProperty(prop) || prop.computed || !t.isIdentifier(prop.key)) {
 					throw new BailError({ code: 'UNCLASSIFIED', message: 'unsupported entity destructuring' })
 				}
-				this.bindPattern(
-					prop.value,
-					{ node, path: [prop.key.name], source: ref.source, absPath: [...ref.absPath, prop.key.name] },
-					scope,
-				)
+				// `const { x } = ref` reads `ref.x`: same rules as the member read (ref API, meta keys).
+				const member = memberOf(ref, prop.key.name)
+				if (member.kind === 'ref') {
+					this.bindPattern(prop.value, member.ref, scope)
+					continue
+				}
+				consumeResolution(member)
+				if (!t.isIdentifier(prop.value)) {
+					throw new BailError({ code: 'UNCLASSIFIED', message: 'nested destructuring of an entity meta value' })
+				}
+				scope.locals.add(prop.value.name)
 			}
 			return
 		}
@@ -209,8 +209,8 @@ export class BodyAnalyzer {
 			return
 		}
 		const res = resolve(decl.init, scope)
-		if (res.kind === 'ref' && kind !== 'const' && !isEntityValued(res)) {
-			consumeResolution(res) // `let v = article.title.value`: plain data, not an alias
+		if (res.kind === 'ref' && kind !== 'const' && plainReadIndex(res.ref) !== -1) {
+			consumePlainRead(res.ref, plainReadIndex(res.ref)) // `let v = article.title.value`: plain data, not an alias
 			this.addLocals(decl.id, scope)
 			return
 		}
@@ -324,9 +324,13 @@ export class BodyAnalyzer {
 			return
 		}
 		if (t.isNewExpression(node)) {
-			if (referencesRoot(node, scope)) {
-				throw new BailError({ code: 'ENTITY_ESCAPES_TO_CALL', message: 'entity value passed to a constructor' })
+			if (t.isExpression(node.callee) && resolve(node.callee, scope).kind === 'ref') {
+				throw new BailError({ code: 'ENTITY_ESCAPES_TO_CALL', message: 'entity value used as a constructor' })
 			}
+			if (t.isExpression(node.callee)) {
+				this.walkValue(node.callee, scope)
+			}
+			this.walkArguments(node.arguments, scope)
 			return
 		}
 		if (t.isTaggedTemplateExpression(node)) {
@@ -343,8 +347,9 @@ export class BodyAnalyzer {
 				this.walkUnresolved(node, scope, use)
 				return
 			}
-			if (use === 'kept' && isEntityValued(res)) {
-				throw new BailError({ code: 'ENTITY_ESCAPES_TO_VALUE', message: 'entity value is stored, passed on or returned' })
+			if (use === 'kept' && res.kind === 'ref') {
+				this.consumeKeptRef(res.ref)
+				return
 			}
 			consumeResolution(res)
 			return
@@ -388,6 +393,15 @@ export class BodyAnalyzer {
 			throw new BailError({ code: 'UNCLASSIFIED', message: `member access on a computed entity value: ${object.type}` })
 		}
 		this.walkValue(object, scope, 'kept')
+	}
+
+	/** A ref whose value leaves the walk: only plain data may (assuming its field is not a has-one). */
+	private consumeKeptRef(ref: RootRef): void {
+		const index = plainReadIndex(ref)
+		if (index === -1) {
+			throw new BailError({ code: 'ENTITY_ESCAPES_TO_VALUE', message: 'entity value is stored, passed on or returned' })
+		}
+		consumePlainRead(ref, index)
 	}
 
 	private walkSpreadable(node: t.Node, scope: Scope): void {
@@ -485,14 +499,36 @@ export class BodyAnalyzer {
 			}
 			return
 		}
-		// Any other call that receives/targets an entity value executes opaque code → bail.
-		if (t.isExpression(callee) && resolve(callee, scope).kind === 'ref') {
-			throw new BailError({ code: 'ENTITY_ESCAPES_TO_CALL', message: 'method call on an entity value' })
-		}
-		if (t.isExpression(callee)) {
+		const calleeRes = t.isExpression(callee) ? resolve(callee, scope) : { kind: 'none' as const }
+		if (calleeRes.kind === 'ref') {
+			this.consumeMethodCall(calleeRes.ref)
+		} else if (t.isExpression(callee)) {
 			this.walkValue(callee, scope) // the callee is evaluated too (an IIFE runs its body)
 		}
-		for (const arg of node.arguments) {
+		this.walkArguments(node.arguments, scope)
+	}
+
+	/**
+	 * A method called on a ref: a method of plain data (`title.value.trim()`) or a ref action
+	 * (`title.setValue(x)`) only touches the field; anything else runs opaque code on an entity → bail.
+	 */
+	private consumeMethodCall(ref: RootRef): void {
+		const plainIndex = plainReadIndex(ref)
+		if (plainIndex !== -1 && plainIndex < ref.path.length - 1) {
+			consumePlainRead(ref, plainIndex)
+			return
+		}
+		const method = ref.path[ref.path.length - 1]
+		if (ref.path.length >= 2 && method !== undefined && REF_ACTION_METHODS.has(method)) {
+			consumePlainRead(ref, ref.path.length - 1) // a has-one would read `method` as a field instead
+			return
+		}
+		throw new BailError({ code: 'ENTITY_ESCAPES_TO_CALL', message: 'method call on an entity value' })
+	}
+
+	/** Call/constructor arguments: the callee keeps them. */
+	private walkArguments(args: ReadonlyArray<t.Node>, scope: Scope): void {
+		for (const arg of args) {
 			if (t.isSpreadElement(arg)) {
 				if (referencesRoot(arg.argument, scope)) {
 					throw new BailError({ code: 'ENTITY_SPREAD', message: 'spread of an entity value into a call' })
@@ -504,10 +540,11 @@ export class BodyAnalyzer {
 				this.walkValue(arg, scope) // safe: analyzed, not executed with an entity value
 				continue
 			}
-			if (t.isExpression(arg) && isEntityValued(resolve(arg, scope))) {
-				throw new BailError({ code: 'ENTITY_ESCAPES_TO_CALL', message: 'entity value passed to an unrecognized call' })
-			}
 			if (t.isExpression(arg)) {
+				const res = resolve(arg, scope)
+				if (res.kind === 'ref' && plainReadIndex(res.ref) === -1) {
+					throw new BailError({ code: 'ENTITY_ESCAPES_TO_CALL', message: 'entity value passed to an unrecognized call' })
+				}
 				this.walkValue(arg, scope, 'kept') // the callee receives it
 			}
 		}
@@ -543,15 +580,6 @@ export class BodyAnalyzer {
 		this.walkParamDefaults(fn.params, child)
 		this.walkBody(fn, child)
 	}
-}
-
-/** True when a resolution is an entity, a relation or a field ref (not plain data read off one). */
-function isEntityValued(res: Resolution): boolean {
-	if (res.kind !== 'ref') {
-		return false // meta reads (`id`, `$isDirty`) are plain values
-	}
-	const last = res.ref.path[res.ref.path.length - 1]
-	return last === undefined || !PLAIN_VALUE_KEYS.has(last)
 }
 
 /** A `function` reading `arguments`/`this` gets values the analyzer cannot bind to roots. */

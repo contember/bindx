@@ -163,7 +163,7 @@ function readsEnclosingInvocationContext(value: t.Expression): boolean {
 }
 
 /** Visits every node below `root` with its parent. */
-function forEachChild(root: t.Node, visit: (child: t.Node, parent: t.Node) => void): void {
+export function forEachChild(root: t.Node, visit: (child: t.Node, parent: t.Node) => void): void {
 	const pending: t.Node[] = [root]
 	for (let node = pending.pop(); node; node = pending.pop()) {
 		for (const key of t.VISITOR_KEYS[node.type] ?? []) {

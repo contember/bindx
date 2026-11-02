@@ -21,9 +21,16 @@ function asClosure(node: t.Node | null): Closure | null {
 
 const HASMANY_PARAM_KEYS = ['filter', 'orderBy', 'limit', 'offset', 'totalCount'] as const
 
+/**
+ * How an expression's value is used. `read`: consumed in place (rendered, compared, coerced).
+ * `kept`: stored, passed on or returned, so later reads through it are invisible to the walk —
+ * an entity value there escapes and bails (default deny).
+ */
+export type ValueUse = 'read' | 'kept'
+
 /** The value/callback walkers the JSX analyzer defers back into (BodyAnalyzer). */
 export interface JsxHost {
-	walkValue(node: t.Node, scope: Scope): void
+	walkValue(node: t.Node, scope: Scope, use?: ValueUse): void
 	walkCallbackWithItem(fn: t.ArrowFunctionExpression | t.FunctionExpression, itemRef: RootRef, scope: Scope): void
 	addHole(hole: AnalyzedHole): void
 }
@@ -106,7 +113,8 @@ export class JsxAnalyzer {
 		const literalProps: Record<string, unknown> = {}
 		const closureProps: HoleClosureProp[] = []
 		const valueProps: HoleValueProp[] = []
-		const collected = { entityProps, literalProps, closureProps, valueProps }
+		const jsxProps: string[] = []
+		const collected = { entityProps, literalProps, closureProps, valueProps, jsxProps }
 
 		for (const attr of node.openingElement.attributes) {
 			if (t.isJSXSpreadAttribute(attr)) {
@@ -128,7 +136,8 @@ export class JsxAnalyzer {
 			}
 			this.collectComponentProp(attr.name.name, attr.value, scope, collected)
 		}
-		this.collectChildrenValue(soleChildExpression(node.children), scope, collected)
+		const soleChild = soleChildExpression(node.children)
+		this.collectChildrenValue(soleChild, scope, collected)
 
 		if (Object.keys(entityProps).length > 0) {
 			if (!this.moduleScope.isModuleBindingAt(tag, node)) {
@@ -142,6 +151,11 @@ export class JsxAnalyzer {
 			// entity into them) would collect through values the replay cannot reproduce.
 			if (hasJsxChildren(node) && policy.closureNeedsCheck('children')) {
 				throw new BailError({ code: 'RENDER_LOCAL_ON_HOLE', message: `JSX children of hole element <${tag}> may be read by its selection surface` })
+			}
+			// Same for JSX in other props (`slot={<AuthorName />}`): the surface may clone an entity into it.
+			const readJsxProp = jsxProps.find(name => policy.closureNeedsCheck(name) || policy.identifierNeedsCheck(name))
+			if (readJsxProp !== undefined) {
+				throw new BailError({ code: 'RENDER_LOCAL_ON_HOLE', message: `JSX prop \`${readJsxProp}\` of hole element <${tag}> may be read by its selection surface` })
 			}
 			const extraProps = resolveHoleExtraProps({ tag, closureProps, valueProps, scope, moduleScope: this.moduleScope, policy })
 			this.host.addHole({
@@ -161,7 +175,9 @@ export class JsxAnalyzer {
 			}
 		}
 
-		this.walkChildren(node.children, scope) // the `children` slot is analyzed at runtime
+		// The component receives its children: an entity there escapes unless it became the `children` hole prop.
+		const isSoleChildHoleProp = soleChild !== null && entityProps['children'] !== undefined
+		this.walkChildren(node.children, scope, isSoleChildHoleProp ? 'read' : 'kept')
 	}
 
 	/** A non-JSX children value: a closure or a value the target may invoke (`{renderItem}`). */
@@ -177,7 +193,15 @@ export class JsxAnalyzer {
 			collected.closureProps.push({ name: 'children', fn })
 			return
 		}
-		if (t.isExpression(value) && !referencesRoot(value, scope)) {
+		if (!t.isExpression(value)) {
+			return
+		}
+		const ep = entityPathOf(value, scope)
+		if (ep.kind === 'path') {
+			collected.entityProps['children'] = { source: ep.source, path: [...ep.path] } // `<Card>{article.author}</Card>`
+			return
+		}
+		if (!referencesRoot(value, scope)) {
 			collected.valueProps.push({ name: 'children', value })
 		}
 	}
@@ -263,11 +287,11 @@ export class JsxAnalyzer {
 				throw new BailError({ code: 'MEMBER_COMPONENT_TAG', message: 'entity value passed to a member-expression component tag' })
 			}
 		}
-		this.walkChildren(node.children, scope)
+		this.walkChildren(node.children, scope, 'kept') // the component receives its children
 	}
 
 	private collectComponentProp(propName: string, value: t.JSXAttribute['value'], scope: Scope, collected: CollectedProps): void {
-		const { entityProps, literalProps, valueProps } = collected
+		const { entityProps, literalProps, valueProps, jsxProps } = collected
 		if (value === null || value === undefined) {
 			literalProps[propName] = true // boolean shorthand `<Card flag/>`
 			return
@@ -284,6 +308,7 @@ export class JsxAnalyzer {
 		// The oracle walks it via the target's slot/staticRender proxies → this yields an equal-or-superset union.
 		if (t.isJSXElement(inner) || t.isJSXFragment(inner)) {
 			this.host.walkValue(inner, scope)
+			jsxProps.push(propName)
 			return
 		}
 		// `cond.*` DSL in a prop (`if={cond.eq(cell.kind, 'promo')}`): the only selection it carries
@@ -395,12 +420,12 @@ export class JsxAnalyzer {
 		this.walkChildren(children, scope)
 	}
 
-	private walkChildren(children: t.JSXElement['children'], scope: Scope): void {
+	private walkChildren(children: t.JSXElement['children'], scope: Scope, use: ValueUse = 'read'): void {
 		for (const child of children) {
 			if (t.isJSXElement(child) || t.isJSXFragment(child)) {
 				this.walk(child, scope)
 			} else if (t.isJSXExpressionContainer(child) && t.isExpression(child.expression)) {
-				this.host.walkValue(child.expression, scope)
+				this.host.walkValue(child.expression, scope, use)
 			} else if (t.isJSXSpreadChild(child) && referencesRoot(child.expression, scope)) {
 				throw new BailError({ code: 'ENTITY_SPREAD', message: 'spread of an entity value as a child' })
 			}
@@ -444,6 +469,7 @@ interface CollectedProps {
 	readonly literalProps: Record<string, unknown>
 	readonly closureProps: HoleClosureProp[]
 	readonly valueProps: HoleValueProp[]
+	readonly jsxProps: string[]
 }
 
 type CallbackSlot =

@@ -140,32 +140,29 @@ export function resolve(nodeIn: t.Node, scope: Scope): Resolution {
 		}
 
 		const objRes = resolve(node.object, scope)
-		if (objRes.kind !== 'ref') {
-			return objRes
-		}
-		// `$fields`/`$entity` reach the related entity: what follows is its fields, never ref API.
-		if (propName === '$fields' || propName === '$entity') {
-			if (objRes.ref.path.length === 0) {
-				return objRes
-			}
-			return { kind: 'ref', ref: { ...objRes.ref, node: consumeRelation(objRes.ref), path: [] } }
-		}
-		// `id`, `$*`, `__*` are accessor/meta props — never recorded as fields themselves.
-		if (isMetaKey(propName)) {
-			return { kind: 'opaque', owner: objRes.ref.path.length > 0 ? objRes.ref : null }
-		}
-		return {
-			kind: 'ref',
-			ref: {
-				node: objRes.ref.node,
-				path: [...objRes.ref.path, propName],
-				source: objRes.ref.source,
-				absPath: [...objRes.ref.absPath, propName],
-			},
-		}
+		return objRes.kind === 'ref' ? memberOf(objRes.ref, propName) : objRes
 	}
 
 	return { kind: 'none' }
+}
+
+/** `ref.propName` (a member read or a destructured key), mirroring the collector proxy. */
+export function memberOf(ref: RootRef, propName: string): Resolution {
+	// `$fields`/`$entity` reach the related entity: what follows is its fields, never ref API.
+	if (propName === '$fields' || propName === '$entity') {
+		if (ref.path.length === 0) {
+			return { kind: 'ref', ref }
+		}
+		return { kind: 'ref', ref: { ...ref, node: consumeRelation(ref), path: [] } }
+	}
+	// `id`, `$*`, `__*` are accessor/meta props — never recorded as fields themselves.
+	if (isMetaKey(propName)) {
+		return { kind: 'opaque', owner: ref.path.length > 0 ? ref : null }
+	}
+	return {
+		kind: 'ref',
+		ref: { node: ref.node, path: [...ref.path, propName], source: ref.source, absPath: [...ref.absPath, propName] },
+	}
 }
 
 /**
@@ -216,6 +213,39 @@ export function consumeMany(ref: RootRef): SelNode {
  */
 export function itemRefOf(relation: RootRef, item: SelNode): RootRef {
 	return { node: item, path: [], source: relation.source, absPath: [...relation.absPath, '$entity'] }
+}
+
+/**
+ * Field-ref API names whose value is plain data on a scalar or has-many ref. On a has-one they are
+ * fields of the target instead, which only the schema can tell.
+ */
+const PLAIN_VALUE_KEYS: ReadonlySet<string> = new Set([
+	'value', 'serverValue', 'isDirty', 'isTouched', 'errors', 'hasError', 'length', 'totalCount',
+])
+
+/**
+ * Index of the first plain-data ref API segment read off a field (`title.value` → 1), or -1. A
+ * segment right off an entity (`tag.value`, index 0) is a field, never ref API.
+ */
+export function plainReadIndex(ref: RootRef): number {
+	for (let i = 1; i < ref.path.length; i++) {
+		if (PLAIN_VALUE_KEYS.has(ref.path[i]!)) {
+			return i
+		}
+	}
+	return -1
+}
+
+/**
+ * Records a plain-data read (`article.title.value`) whose value leaves the walk. It is plain only if
+ * the field it is read off is not a has-one: the literal carries that assumption for the runtime,
+ * which falls back to the proxy pass when the schema says otherwise.
+ */
+export function consumePlainRead(ref: RootRef, index: number): void {
+	const read: RootRef = { ...ref, path: ref.path.slice(0, index + 1) }
+	consumeLeaf(read)
+	const { owner, field } = ownerOfLast({ ...ref, path: ref.path.slice(0, index) })
+	owner.assumeNotHasOne(field)
 }
 
 /** Record whatever field a resolution reads: a ref as a leaf, a meta read as its owning field. */

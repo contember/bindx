@@ -62,6 +62,8 @@ type StaticFieldNode =
 		hasOneFields?: StaticFieldMap // read through ref API names (`.value`, `.length`): fields of
 		                              // the target only if the schema says has-one (collector rule)
 		many?: true                   // has-many (known from <HasMany> / `.map()` usage)
+		assumesNotHasOne?: true       // a ref API value (`.value`, `.errors`) left the analyzed code;
+		                              // the runtime falls back when the schema says has-one
 	}
 // Has-many params are not part of the format: the runtime collector ignores them inside a
 // component, and an <Entity> root with a parameterised <HasMany> bails (HASMANY_PARAMS_AT_ROOT).
@@ -288,11 +290,15 @@ In `ensureImplicitCollected`, when a compiled selection is present:
   hole. Children of the element keep being analyzed statically (not part of the hole).
 - Still bails: an entity value that is stored, passed on or returned anywhere — a call argument
   (also wrapped in an object/array literal), a local through a conditional/`??`/container, a closure's
-  return value, a parameter default (`ENTITY_ESCAPES_TO_CALL` / `ENTITY_ESCAPES_TO_VALUE`); entity in a
+  return value, a parameter default, the JSX child of a component (unless it is the sole child and
+  becomes the hole's `children` prop) (`ENTITY_ESCAPES_TO_CALL` / `ENTITY_ESCAPES_TO_VALUE`). Plain
+  data (`.value`, `.errors`, …) may escape; the field is then emitted with `assumesNotHasOne`,
+  because on a has-one the collector reads those names as fields of the target. Methods of plain
+  data and ref actions (`setValue`, `add`, …) are calls that only touch the field; entity in a
   **non-literal expression prop that isn't a plain path** (e.g. `prop={fn(article)}`), spread onto
   an element, member-expression/namespace component tags (v2 keeps it simple: identifier tags only),
   and an **unsafe function prop / render-prop child of a hole element** (`FUNCTION_PROP_ON_HOLE` — see
-  above).
+  above), and JSX in a hole prop the target's surface may read (`slot={<X />}`, `RENDER_LOCAL_ON_HOLE`).
 - Emit: object literal with thunks — no longer pure JSON; snapshot tests must cover thunk emission.
 - Measure script: report per-chain hole counts; summary gains `compiled (with holes)`.
 

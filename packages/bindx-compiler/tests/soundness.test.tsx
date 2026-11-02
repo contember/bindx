@@ -32,6 +32,11 @@ const MOCK_DATA = {
 	Tag: { 'tag-1': { id: 'tag-1', name: 'news' } },
 }
 
+/** A createComponent target, for cases that need one (it compiles too, so not in IMPORTS). */
+const AUTHOR_NAME = `const AuthorName = createComponent().entity('author', AuthorDef).render(({ author }) => <Field field={author.name} />)
+const Inject = withCollector((_props) => null, (p) => React.cloneElement(p.slot, { author: p.author }))
+`
+
 const IMPORTS = `
 import React from 'react'
 import { Entity, Field, HasOne, HasMany, Show, createComponent, withCollector, itemOf, entityDef } from '@contember/bindx-react'
@@ -47,6 +52,11 @@ const renderAuthor = author => <Field field={author.name} />
 const renderers = { author: author => <Field field={author.name} /> }
 const labels = {}
 const Chip = (_props) => null
+const nameOf = v => v?.name?.value
+const listErrors = errors => errors.map(tag => tag.name.value).join()
+const Show2 = withCollector((_props) => null, (p) => <Field field={p.children.name} />)
+const ShowTitle = withCollector((_props) => null, (p) => <Field field={p.children.title} />)
+const Ns = { Show2 }
 `
 
 /** A module whose `.render()` host is mounted under an `<Entity>` root. */
@@ -137,8 +147,7 @@ const CASES: ReadonlyArray<readonly [string, string]> = [
 	['function children using arguments', hostCase(`({ article }) => <HasMany field={article.tags}>{function () { return <Field field={arguments[0].name} /> }}</HasMany>`)],
 	['render-local component shadowing a module binding', hostCase(
 		`({ article }) => { const Card = AuthorName; return <Card author={article.author} /> }`,
-		`const AuthorName = createComponent().entity('author', AuthorDef).render(({ author }) => <Field field={author.name} />)
-const Card = (_props) => null`,
+		`${AUTHOR_NAME}const Card = (_props) => null`,
 	)],
 	['rest of the props object', hostCase(`(props) => { const { ...rest } = props; return <Field field={rest.article.title} /> }`)],
 	['function declaration called during render', hostCase(`({ article }) => { function title() { return <Field field={article.title} /> } return <div>{title()}</div> }`)],
@@ -162,10 +171,38 @@ Pick2.staticRender = (p) => <HasOne field={p.field}>{e => p.renderItem(e)}</HasO
 	)],
 	['render-local shadowing a contract component', hostCase(`({ article }) => { const Repeater = Picker; return <Repeater field={article.author} renderItem={it => <Field field={it.name} />} /> }`)],
 	['staticRender cloning the entity into JSX children', hostCase(
-		`({ article }) => <Inject author={article.author}><AuthorName /></Inject>`,
-		`const AuthorName = createComponent().entity('author', AuthorDef).render(({ author }) => <Field field={author.name} />)
-const Inject = withCollector((_props) => null, (p) => <>{React.Children.map(p.children, c => React.cloneElement(c, { author: p.author }))}</>)`,
+		`({ article }) => <InjectChildren author={article.author}><AuthorName /></InjectChildren>`,
+		`${AUTHOR_NAME}const InjectChildren = withCollector((_props) => null, (p) => <>{React.Children.map(p.children, c => React.cloneElement(c, { author: p.author }))}</>)`,
 	)],
+	['has-one `.value` passed to a helper', hostCase(`({ article }) => <span>{nameOf(article.author.value)}</span>`)],
+	['has-one `.value` in a let binding', hostCase(`({ article }) => { let v = article.author.value; return <span>{v?.name?.value}</span> }`)],
+	['has-one `.value` destructured', hostCase(`({ article }) => { const { value } = article.author; return <span>{nameOf(value)}</span> }`)],
+	['has-one `.errors` passed to a helper', hostCase(`({ article }) => <span>{listErrors(article.author.errors)}</span>`)],
+	['root: has-one `.value` passed to a helper', rootCase('', `article => <span>{nameOf(article.author.value)}</span>`)],
+	['entity as the JSX child of a component', hostCase(`({ article }) => <Show2>{article.author}</Show2>`)],
+	['root entity as the JSX child of a component', hostCase(`({ article }) => <ShowTitle>{article}</ShowTitle>`)],
+	['entity as the JSX child of a member tag', hostCase(`({ article }) => <Ns.Show2>{article.author}</Ns.Show2>`)],
+	['class with a static staticRender', hostCase(
+		`({ article }) => <Pick3 field={article.author} renderItem={it => <Field field={it.name} />} />`,
+		`class Pick3 extends React.Component { static staticRender(p) { return <HasOne field={p.field}>{e => p.renderItem(e)}</HasOne> } render() { return null } }`,
+	)],
+	['root: class with a static staticRender', rootCase('', `article => <Pick4 author={article.author} />`).replace(
+		'export function Route',
+		'class Pick4 extends React.Component { static staticRender(p) { return <Field field={p.author.name} /> } render() { return null } }\nexport function Route',
+	)],
+	['staticRender assigned through an alias', hostCase(
+		`({ article }) => <Pick2 field={article.author} renderItem={it => <Field field={it.name} />} />`,
+		`function Pick2(_props) { return null }
+const P2 = Pick2
+P2.staticRender = (p) => <HasOne field={p.field}>{e => p.renderItem(e)}</HasOne>`,
+	)],
+	['staticRender assigned to an imported plain component', hostCase(
+		`({ article }) => <PlainPick field={article.author} renderItem={it => <Field field={it.name} />} />`,
+		`import { PlainPick } from './fixtures/_plainTarget'
+PlainPick.staticRender = (p) => <HasOne field={p.field}>{e => p.renderItem(e)}</HasOne>`,
+	)],
+	['JSX prop cloned by staticRender', hostCase(`({ article }) => <Inject author={article.author} slot={<AuthorName />} />`, AUTHOR_NAME)],
+	['root: JSX prop cloned by staticRender', rootCase('', `article => <Inject author={article.author} slot={<AuthorName />} />`).replace('export function Route', `${AUTHOR_NAME}export function Route`)],
 	['has-many with and without params', hostCase(`({ article }) => <div><HasMany field={article.tags} limit={1}>{t => <Field field={t.name} />}</HasMany><HasMany field={article.tags}>{t => <Field field={t.name} />}</HasMany></div>`)],
 	['children attribute next to JSX children of <Entity>', `${IMPORTS}
 export function Route() {
@@ -212,6 +249,10 @@ const COMPILING: ReadonlyArray<readonly [string, string]> = [
 	['props destructured in the body', hostCase(`(props) => { const { article } = props; return <Field field={article.title} /> }`)],
 	['plain data passed to a helper', hostCase(`({ article }) => <span>{String(article.title.value)}</span>`)],
 	['plain data in a let binding', hostCase(`({ article }) => { let t = article.title.value; return <span>{t}</span> }`)],
+	['scalar `.value` destructured', hostCase(`({ article }) => { const { value } = article.title; return <span>{value}</span> }`)],
+	['method call on plain data', hostCase(`({ article }) => <span>{article.title.value?.toUpperCase()}</span>`)],
+	['constructor called with plain data', hostCase(`({ article }) => <span>{String(new Date(article.content.value ?? ''))}</span>`)],
+	['ref action in an event handler', hostCase(`({ article }) => <button onClick={() => article.tags.add()}>{article.tags.length}</button>`)],
 	['event handler calling a field setter in a render-function child', hostCase(`({ article }) => <Field field={article.title}>{title => <input onChange={e => article.title.setValue(e.target.value)} value={title.value ?? ''} />}</Field>`)],
 ]
 
