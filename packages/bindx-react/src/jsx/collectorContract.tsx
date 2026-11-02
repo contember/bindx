@@ -29,9 +29,10 @@ export function entityOf(field: string): CallbackContract {
 	return { kind: 'entityOf', field }
 }
 
-type RelationCallback = (value: EntityRef<unknown>) => ReactNode
+type RelationCallback = (value: EntityRef<unknown>, index?: number) => ReactNode
 
-// At the collection boundary props carry collector proxies; these predicates narrow them without `as`.
+// Collection-boundary narrowing only: props here are collector proxies, so the ref predicates
+// check object-ness, not ref shape; a wrong prop is caught by HasMany/HasOne collection itself.
 function isRelationCallback(value: unknown): value is RelationCallback {
 	return typeof value === 'function'
 }
@@ -60,7 +61,7 @@ export function deriveContractStaticRender(contract: CollectorContract): (props:
 
 				if (kind === 'itemOf') {
 					if (!isHasManyRef(fieldValue)) return null
-					return <HasMany key={callbackName} field={fieldValue}>{item => child(item)}</HasMany>
+					return <HasMany key={callbackName} field={fieldValue}>{(item, index) => child(item, index)}</HasMany>
 				}
 				if (!isHasOneRef(fieldValue)) return null
 				return <HasOne key={callbackName} field={fieldValue}>{entity => child(entity)}</HasOne>

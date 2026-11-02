@@ -175,6 +175,28 @@ describe('collector contract — robustness', () => {
 		expect(fieldNames(selection!)).toContain('tags')
 	})
 
+	test('itemOf forwards the item index to the callback, like <HasMany>', () => {
+		interface IndexedRepeaterProps {
+			field: HasManyRef<Tag>
+			children: (item: EntityRef<Tag>, index: number) => React.ReactNode
+		}
+		const IndexedRepeater = withCollector(
+			function IndexedRepeater(_props: IndexedRepeaterProps): React.ReactNode { return null },
+			{ children: itemOf('field') },
+		)
+		const Host = createComponent()
+			.entity('article', schema.Article)
+			.render(({ article }) => (
+				<IndexedRepeater field={article.tags}>
+					{(tag, index) => (typeof index === 'number' ? <Field field={tag.name} /> : null)}
+				</IndexedRepeater>
+			))
+
+		const selection = getComponentSelection(Host, 'article')
+		const tags = [...selection!.fields.values()].find(f => f.fieldName === 'tags')
+		expect(fieldNames(tags!.nested!)).toContain('name')
+	})
+
 	test('COLLECTOR_CONTRACT exposes the declared contract for introspection', () => {
 		const holder = ContractRepeater as unknown as Record<symbol, unknown>
 		expect(holder[COLLECTOR_CONTRACT]).toEqual({ children: { kind: 'itemOf', field: 'field' } })
