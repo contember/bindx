@@ -11,6 +11,8 @@ import type { StaticFieldMap, StaticFieldNode, StaticHasManyParams, StaticSelect
 export class SelNode {
 	private readonly scalars = new Set<string>()
 	private readonly relations = new Map<string, SelNode>()
+	/** Field → its target's selection, valid only if the field turns out to be a has-one. */
+	private readonly hasOneOnly = new Map<string, SelNode>()
 	private readonly manyFields = new Set<string>()
 	private readonly params = new Map<string, StaticHasManyParams>()
 
@@ -33,6 +35,20 @@ export class SelNode {
 		return node
 	}
 
+	/**
+	 * The target node of a field read through its ref API (`author.value`): a field of the target
+	 * when the field is a has-one, passthrough otherwise. The field itself stays selected either way.
+	 */
+	hasOneChild(fieldName: string): SelNode {
+		this.addScalar(fieldName)
+		let node = this.hasOneOnly.get(fieldName)
+		if (!node) {
+			node = new SelNode()
+			this.hasOneOnly.set(fieldName, node)
+		}
+		return node
+	}
+
 	markMany(fieldName: string): void {
 		this.manyFields.add(fieldName)
 	}
@@ -48,10 +64,15 @@ export class SelNode {
 	toFieldMap(): StaticFieldMap {
 		const map: StaticFieldMap = {}
 		for (const name of this.scalars) {
-			map[name] = true
+			const hasOneOnly = this.hasOneOnly.get(name)
+			map[name] = hasOneOnly?.hasFields() ? { hasOneFields: hasOneOnly.toFieldMap() } : true
 		}
 		for (const [name, child] of this.relations) {
 			const node: Exclude<StaticFieldNode, true> = { fields: child.toFieldMap() }
+			const hasOneOnly = this.hasOneOnly.get(name)
+			if (hasOneOnly?.hasFields()) {
+				node.hasOneFields = hasOneOnly.toFieldMap()
+			}
 			if (this.manyFields.has(name)) {
 				node.many = true
 			}
@@ -70,11 +91,12 @@ export class SelNode {
  * harness: `true` for scalars, nested objects for relations. `many`/`params` are
  * dropped because the runtime collector does NOT record them in the implicit path
  * (verified against the oracle) — see docs/compiler-plan.md ternary/params notes.
+ * Schema-less, like the harness oracle: `hasOneFields` are ref-API passthrough.
  */
-export function fieldMapToPlain(map: StaticFieldMap): Record<string, unknown> {
+function fieldMapToPlain(map: StaticFieldMap): Record<string, unknown> {
 	const result: Record<string, unknown> = {}
 	for (const [name, node] of Object.entries(map)) {
-		result[name] = node === true ? true : fieldMapToPlain(node.fields)
+		result[name] = node === true || !node.fields ? true : fieldMapToPlain(node.fields)
 	}
 	return result
 }

@@ -15,6 +15,7 @@ import { BodyAnalyzer } from './body.js'
 import { BailError, internalErrorBail } from './resolve.js'
 import { SelNode } from './selectionTree.js'
 import type { ImportBindings } from './imports.js'
+import type { ModuleScope } from './bindings.js'
 import type { ContractLookup } from './contracts.js'
 import type { TargetKindLookup } from './targetKind.js'
 import type { ChainLoc, EntityRootResult } from './types.js'
@@ -55,7 +56,7 @@ function isEntityTag(name: t.JSXOpeningElement['name'], bindings: ImportBindings
 /**
  * Resolve which LOCAL tag names in `program` correspond to the configured `entityLike` component
  * names. Matching prefers an import's ORIGINAL exported name over its local alias (so
- * `import { RefreshableEntity as RE }` still matches when `RefreshableEntity` is configured); a
+ * `import { ForwardingEntity as FE }` still matches when `ForwardingEntity` is configured); a
  * locally-declared component (const/function/class) matches by its declared name. Default/namespace
  * imports carry no matchable exported name and are skipped.
  */
@@ -100,7 +101,7 @@ function collectLocalDeclNames(node: t.Statement, entityLike: ReadonlySet<string
 export function analyzeEntityRoot(
 	element: t.JSXElement,
 	bindings: ImportBindings,
-	moduleBindings: ReadonlySet<string>,
+	moduleScope: ModuleScope,
 	lookup: ContractLookup,
 	targetKinds: TargetKindLookup,
 ): EntityRootResult {
@@ -112,7 +113,7 @@ export function analyzeEntityRoot(
 	}
 
 	const rootNode = new SelNode()
-	const analyzer = new BodyAnalyzer(bindings, moduleBindings, lookup, targetKinds)
+	const analyzer = new BodyAnalyzer(bindings, moduleScope, lookup, targetKinds)
 	try {
 		analyzer.analyzeRootChildren(childrenFn, rootNode, ENTITY_ROOT_KEY)
 	} catch (error) {

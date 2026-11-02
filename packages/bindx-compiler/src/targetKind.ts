@@ -9,6 +9,7 @@
  */
 import * as t from '@babel/types'
 import { walkAst } from './astWalk.js'
+import { readsInvocationContext } from './bindings.js'
 import {
 	BindingResolver, type BindingResolverOptions, type ModuleView,
 } from './moduleResolve.js'
@@ -139,7 +140,10 @@ function slotNames(arg: t.Node | undefined): ReadonlySet<string> | 'unknown' {
  * param `p` is referenced as `p.x` (record `x`); any other use — `p[x]`, spread `{...p}`, passing
  * `p` onward, aliasing — cannot be followed → 'all'. Shadowing is ignored (over-counts → sound).
  */
-export function collectReferencedProps(fn: t.ArrowFunctionExpression | t.FunctionExpression): ReadonlySet<string> | 'all' {
+function collectReferencedProps(fn: t.ArrowFunctionExpression | t.FunctionExpression): ReadonlySet<string> | 'all' {
+	if (t.isFunctionExpression(fn) && readsInvocationContext(fn)) {
+		return 'all' // `arguments[0]` reaches the props without naming them
+	}
 	const param = fn.params[0]
 	if (!param) {
 		return new Set() // no props param → references nothing → all props safe to drop

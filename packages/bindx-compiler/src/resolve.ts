@@ -6,6 +6,7 @@
  */
 import * as t from '@babel/types'
 import { walkAst } from './astWalk.js'
+import { readsInvocationContext, type ModuleScope } from './bindings.js'
 import { SelNode } from './selectionTree.js'
 import type { Bailout, StaticHasManyParams } from './types.js'
 
@@ -73,10 +74,30 @@ export function paramNamesOf(param: t.Node): Set<string> {
 	return out
 }
 
+/**
+ * `opaque` = a meta/non-entity value read off a root (`entity.$data`, `author.id`); `owner` is the
+ * ref it was read from — the runtime collector still records that field (null for an entity itself).
+ */
 export type Resolution =
 	| { kind: 'ref'; ref: RootRef }
-	| { kind: 'opaque' }
+	| { kind: 'opaque'; owner: RootRef | null }
 	| { kind: 'none' }
+
+/**
+ * Properties a collector FIELD ref answers itself (FieldRef / HasManyRef API, see the `refObject`
+ * in packages/bindx-react/src/jsx/collectorProxy.ts). Read off a field they are not fields of its
+ * target — unless the field is a has-one, which the runtime decides from the schema.
+ */
+export const FIELD_REF_API_KEYS: ReadonlySet<string> = new Set([
+	'value', 'serverValue', 'isDirty', 'isTouched', 'touch', 'setValue', 'inputProps', 'errors', 'hasError',
+	'addError', 'clearErrors', 'onChange', 'onChanging', 'length', 'items', 'map', 'add', 'getById', 'remove',
+	'move', 'connect', 'disconnect', 'delete', 'reset', 'onItemConnected', 'onItemDisconnected',
+	'interceptItemConnecting', 'interceptItemDisconnecting', 'totalCount',
+])
+
+function isMetaKey(name: string): boolean {
+	return name === 'id' || name.startsWith('$') || name.startsWith('__')
+}
 
 /** Strip parentheses and TS type wrappers (`x as T`, `x!`, `x satisfies T`). */
 export function unwrap(node: t.Node): t.Node {
@@ -120,15 +141,18 @@ export function resolve(nodeIn: t.Node, scope: Scope): Resolution {
 
 		const objRes = resolve(node.object, scope)
 		if (objRes.kind !== 'ref') {
-			return objRes.kind === 'opaque' ? { kind: 'opaque' } : { kind: 'none' }
-		}
-		// `$fields`/`$entity` are transparent passthroughs to the same entity.
-		if (propName === '$fields' || propName === '$entity') {
 			return objRes
 		}
-		// `id`, `$*`, `__*` are accessor/meta props — never recorded as fields.
-		if (propName === 'id' || propName.startsWith('$') || propName.startsWith('__')) {
-			return { kind: 'opaque' }
+		// `$fields`/`$entity` reach the related entity: what follows is its fields, never ref API.
+		if (propName === '$fields' || propName === '$entity') {
+			if (objRes.ref.path.length === 0) {
+				return objRes
+			}
+			return { kind: 'ref', ref: { ...objRes.ref, node: consumeRelation(objRes.ref), path: [] } }
+		}
+		// `id`, `$*`, `__*` are accessor/meta props — never recorded as fields themselves.
+		if (isMetaKey(propName)) {
+			return { kind: 'opaque', owner: objRes.ref.path.length > 0 ? objRes.ref : null }
 		}
 		return {
 			kind: 'ref',
@@ -144,25 +168,35 @@ export function resolve(nodeIn: t.Node, scope: Scope): Resolution {
 	return { kind: 'none' }
 }
 
+/**
+ * Walks every segment but the last; returns the node owning the last segment. A segment followed
+ * by a field-ref API key is recorded as has-one-only (the runtime resolves it from the schema).
+ */
+function ownerOfLast(ref: RootRef): { readonly owner: SelNode; readonly field: string } {
+	let node = ref.node
+	for (let i = 0; i < ref.path.length - 1; i++) {
+		const segment = ref.path[i]!
+		node = FIELD_REF_API_KEYS.has(ref.path[i + 1]!) ? node.hasOneChild(segment) : node.child(segment)
+	}
+	return { owner: node, field: ref.path[ref.path.length - 1]! }
+}
+
 /** Record a member chain terminal as a scalar leaf (intermediate segments → relations). */
-export function consumeLeaf(ref: RootRef): void {
+function consumeLeaf(ref: RootRef): void {
 	if (ref.path.length === 0) {
 		return
 	}
-	let node = ref.node
-	for (let i = 0; i < ref.path.length - 1; i++) {
-		node = node.child(ref.path[i]!)
-	}
-	node.addScalar(ref.path[ref.path.length - 1]!)
+	const { owner, field } = ownerOfLast(ref)
+	owner.addScalar(field)
 }
 
 /** Materialize a chain fully as relations; returns the entity node it points at. */
 export function consumeRelation(ref: RootRef): SelNode {
-	let node = ref.node
-	for (const seg of ref.path) {
-		node = node.child(seg)
+	if (ref.path.length === 0) {
+		return ref.node
 	}
-	return node
+	const { owner, field } = ownerOfLast(ref)
+	return owner.child(field)
 }
 
 /** Materialize a has-many relation; marks the field array + params, returns the item node. */
@@ -170,17 +204,22 @@ export function consumeMany(ref: RootRef, params?: StaticHasManyParams): SelNode
 	if (ref.path.length === 0) {
 		return ref.node
 	}
-	let parent = ref.node
-	for (let i = 0; i < ref.path.length - 1; i++) {
-		parent = parent.child(ref.path[i]!)
-	}
-	const field = ref.path[ref.path.length - 1]!
-	const item = parent.child(field)
-	parent.markMany(field)
+	const { owner, field } = ownerOfLast(ref)
+	const item = owner.child(field)
+	owner.markMany(field)
 	if (params && Object.keys(params).length > 0) {
-		parent.setParams(field, params)
+		owner.setParams(field, params)
 	}
 	return item
+}
+
+/** Record whatever field a resolution reads: a ref as a leaf, a meta read as its owning field. */
+export function consumeResolution(res: Resolution): void {
+	if (res.kind === 'ref') {
+		consumeLeaf(res.ref)
+	} else if (res.kind === 'opaque' && res.owner) {
+		consumeLeaf(res.owner)
+	}
 }
 
 /** True if any identifier in the subtree satisfies `pred`. Over-approximates (visits member
@@ -244,9 +283,13 @@ function collectParamNames(node: t.Node, out: Set<string>): void {
  *
  * Nested inner functions' own params are theirs, not ours (see docs/compiler-plan.md, Phase 2/2.1).
  */
-export type HoleClosureClass = 'drop' | 'lift' | 'bail'
+type HoleClosureClass = 'drop' | 'lift' | 'bail'
 
-export function classifyHoleClosure(fn: t.ArrowFunctionExpression | t.FunctionExpression, scope: Scope): HoleClosureClass {
+export function classifyHoleClosure(
+	fn: t.ArrowFunctionExpression | t.FunctionExpression,
+	scope: Scope,
+	moduleScope: ModuleScope,
+): HoleClosureClass {
 	if (referencesRoot(fn, scope)) {
 		return 'bail' // captured entity root reachable when invoked
 	}
@@ -254,15 +297,13 @@ export function classifyHoleClosure(fn: t.ArrowFunctionExpression | t.FunctionEx
 	for (const param of fn.params) {
 		collectParamNames(param, ownParams)
 	}
-	if (!anyIdentifier(fn.body, name => ownParams.has(name))) {
+	const readsOwnInvocation = t.isFunctionExpression(fn) && readsInvocationContext(fn)
+	if (!readsOwnInvocation && !anyIdentifier(fn.body, name => ownParams.has(name))) {
 		return 'drop' // no proxy gateway — invoking it collects nothing
 	}
-	// Uses own params → must be preserved; liftable only if it captures no render binding
-	// (roots already excluded above). Over-approximates via property names → default deny.
-	const capturesRender = anyIdentifier(fn, name =>
-		!ownParams.has(name) && (scope.scalarParams.has(name) || scope.locals.has(name) || scope.propsParams.has(name)),
-	)
-	return capturesRender ? 'bail' : 'lift'
+	// Uses its invocation → must be preserved; liftable only if every name it reads means the
+	// same thing at module scope (default deny on anything an enclosing scope binds).
+	return moduleScope.capturesEnclosingScope(fn) ? 'bail' : 'lift'
 }
 
 /**
@@ -272,7 +313,7 @@ export function classifyHoleClosure(fn: t.ArrowFunctionExpression | t.FunctionEx
  * Throws COMPUTED_MEMBER on `article[x]`. Member segments are recorded literally so the
  * runtime's property-get replay reproduces the exact value (id/meta segments included).
  */
-export type EntityPath =
+type EntityPath =
 	| { kind: 'path'; source: string; path: readonly string[] }
 	| { kind: 'expr' }
 	| { kind: 'none' }
@@ -312,7 +353,7 @@ export function entityPathOf(nodeIn: t.Node, scope: Scope): EntityPath {
 	return { kind: 'none' }
 }
 
-export type LiteralResult = { ok: true; value: unknown } | { ok: false }
+type LiteralResult = { ok: true; value: unknown } | { ok: false }
 
 /** Evaluate an expression to a static literal value, or fail. Used for HasMany params. */
 export function evaluateLiteral(node: t.Node): LiteralResult {

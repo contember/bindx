@@ -17,9 +17,13 @@ function nodeToAst(node: StaticFieldNode): t.Expression {
 	if (node === true) {
 		return t.booleanLiteral(true)
 	}
-	const props: t.ObjectProperty[] = [
-		t.objectProperty(t.identifier('fields'), fieldMapToAst(node.fields)),
-	]
+	const props: t.ObjectProperty[] = []
+	if (node.fields) {
+		props.push(t.objectProperty(t.identifier('fields'), fieldMapToAst(node.fields)))
+	}
+	if (node.hasOneFields) {
+		props.push(t.objectProperty(t.identifier('hasOneFields'), fieldMapToAst(node.hasOneFields)))
+	}
 	if (node.many) {
 		props.push(t.objectProperty(t.identifier('many'), t.booleanLiteral(true)))
 	}

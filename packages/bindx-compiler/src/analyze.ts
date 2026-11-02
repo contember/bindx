@@ -10,6 +10,7 @@ import { collectImportBindings, collectModuleBindings, type ImportBindings } fro
 import { findChains, type Chain } from './chain.js'
 import { BodyAnalyzer } from './body.js'
 import { BailError, internalErrorBail } from './resolve.js'
+import { ModuleScope } from './bindings.js'
 import { SelNode } from './selectionTree.js'
 import { parseProgram } from './parse.js'
 import { ModuleCache } from './moduleResolve.js'
@@ -17,8 +18,6 @@ import { ContractResolver, type ContractLookup } from './contracts.js'
 import { TargetKindResolver, type TargetKindLookup } from './targetKind.js'
 import { analyzeEntityRoot, findEntityElements, resolveEntityLikeLocals, type InternalEntityRootResult } from './entityRoots.js'
 import type { ChainLoc, ChainResult, EntityRootResult, StaticSelection } from './types.js'
-
-export { parseProgram }
 
 export interface InternalChainResult {
 	readonly chain: Chain
@@ -54,7 +53,7 @@ const defaultModuleCache = new ModuleCache()
 
 interface ProgramContext {
 	readonly bindings: ImportBindings
-	readonly moduleBindings: ReadonlySet<string>
+	readonly moduleScope: ModuleScope
 	readonly lookup: ContractLookup
 	readonly targetKinds: TargetKindLookup
 }
@@ -70,7 +69,7 @@ function programContext(program: t.Program, options: AnalyzeOptions): ProgramCon
 	const targets = new TargetKindResolver(program, resolverOptions)
 	return {
 		bindings: collectImportBindings(program),
-		moduleBindings: collectModuleBindings(program),
+		moduleScope: new ModuleScope(program, collectModuleBindings(program)),
 		lookup: tag => contracts.resolve(tag),
 		targetKinds: tag => targets.resolve(tag),
 	}
@@ -78,25 +77,25 @@ function programContext(program: t.Program, options: AnalyzeOptions): ProgramCon
 
 /** Analyze an already-parsed program; retains Babel node refs for the plugin. */
 export function analyzeProgram(program: t.Program, options: AnalyzeOptions = {}): InternalChainResult[] {
-	const { bindings, moduleBindings, lookup, targetKinds } = programContext(program, options)
+	const { bindings, moduleScope, lookup, targetKinds } = programContext(program, options)
 	const chains = findChains(program, bindings)
-	return chains.map(chain => ({ chain, result: analyzeChain(chain, bindings, moduleBindings, lookup, targetKinds) }))
+	return chains.map(chain => ({ chain, result: analyzeChain(chain, bindings, moduleScope, lookup, targetKinds) }))
 }
 
 /** Analyze every top-level `<Entity>` (+ `entityLike`) selection root in a program (phase 3 / 3.1). */
 export function analyzeEntityRootsInProgram(program: t.Program, options: AnalyzeOptions = {}): InternalEntityRootResult[] {
-	const { bindings, moduleBindings, lookup, targetKinds } = programContext(program, options)
+	const { bindings, moduleScope, lookup, targetKinds } = programContext(program, options)
 	const entityLikeLocals = resolveEntityLikeLocals(program, new Set(options.entityLike ?? []))
 	return findEntityElements(program, bindings, entityLikeLocals).map(element => ({
 		element,
-		result: analyzeEntityRoot(element, bindings, moduleBindings, lookup, targetKinds),
+		result: analyzeEntityRoot(element, bindings, moduleScope, lookup, targetKinds),
 	}))
 }
 
 function analyzeChain(
 	chain: Chain,
 	bindings: ImportBindings,
-	moduleBindings: ReadonlySet<string>,
+	moduleScope: ModuleScope,
 	lookup: ContractLookup,
 	targetKinds: TargetKindLookup,
 ): ChainResult {
@@ -105,7 +104,7 @@ function analyzeChain(
 		return { loc, bailout: chain.earlyBail }
 	}
 	const propRoots = new Map<string, SelNode>(chain.entityProps.map(prop => [prop, new SelNode()]))
-	const analyzer = new BodyAnalyzer(bindings, moduleBindings, lookup, targetKinds)
+	const analyzer = new BodyAnalyzer(bindings, moduleScope, lookup, targetKinds)
 	try {
 		if (chain.conditionFn) {
 			analyzer.analyzeFunction(chain.conditionFn, propRoots)

@@ -6,10 +6,11 @@
 import * as t from '@babel/types'
 import type { ComponentKind, ImportBindings } from './imports.js'
 import {
-	BailError, type RootRef, type Scope, consumeLeaf, consumeMany, consumeRelation,
+	BailError, type RootRef, type Scope, consumeMany, consumeRelation, consumeResolution,
 	entityPathOf, evaluateLiteral, referencesRoot, resolve,
 } from './resolve.js'
-import { type Closure, type HoleClosureProp, type HoleIdentifierProp, holePolicyFor, resolveHoleExtraProps } from './holeProps.js'
+import { type Closure, type HoleClosureProp, type HoleValueProp, holePolicyFor, resolveHoleExtraProps } from './holeProps.js'
+import type { ModuleScope } from './bindings.js'
 import type { CollectorContract, ContractLookup } from './contracts.js'
 import type { TargetKindLookup } from './targetKind.js'
 import type { AnalyzedHole, HoleEntityProp, StaticHasManyParams } from './types.js'
@@ -31,7 +32,7 @@ export class JsxAnalyzer {
 	constructor(
 		private readonly host: JsxHost,
 		private readonly bindings: ImportBindings,
-		private readonly moduleBindings: ReadonlySet<string>,
+		private readonly moduleScope: ModuleScope,
 		private readonly contracts: ContractLookup,
 		private readonly targetKinds: TargetKindLookup,
 	) {}
@@ -101,14 +102,20 @@ export class JsxAnalyzer {
 		const entityProps: Record<string, HoleEntityProp> = {}
 		const literalProps: Record<string, unknown> = {}
 		const closureProps: HoleClosureProp[] = []
-		const identifierProps: HoleIdentifierProp[] = []
+		const valueProps: HoleValueProp[] = []
+		const collected = { entityProps, literalProps, closureProps, valueProps }
 
 		for (const attr of node.openingElement.attributes) {
 			if (t.isJSXSpreadAttribute(attr)) {
 				this.guardSpread(attr, scope, 'component')
 				continue
 			}
-			if (!t.isJSXIdentifier(attr.name) || attr.name.name === 'children') {
+			if (!t.isJSXIdentifier(attr.name)) {
+				continue
+			}
+			if (attr.name.name === 'children') {
+				// The attribute form of children: analyzed like the JSX child it stands for.
+				this.collectChildrenValue(jsxAttrInner(attr.value), scope, collected)
 				continue
 			}
 			const fn = asClosure(jsxAttrInner(attr.value))
@@ -116,20 +123,19 @@ export class JsxAnalyzer {
 				closureProps.push({ name: attr.name.name, fn }) // hole-classified below (lift/drop/bail)
 				continue
 			}
-			this.collectComponentProp(attr.name.name, attr.value, scope, entityProps, literalProps, identifierProps)
+			this.collectComponentProp(attr.name.name, attr.value, scope, collected)
 		}
-
-		const childClosure = childrenCallback(node.children)
+		this.collectChildrenValue(soleChildExpression(node.children), scope, collected)
 
 		if (Object.keys(entityProps).length > 0) {
-			if (!this.moduleBindings.has(tag)) {
-				// Tag isn't resolvable at module scope → no thunk can reference it.
+			if (!this.moduleScope.isModuleBindingAt(tag, node)) {
+				// Tag isn't unambiguously a module binding → a module-scope thunk could reference the wrong value.
 				throw new BailError({ code: 'ENTITY_ESCAPES_TO_COMPONENT', message: `component <${tag}> does not resolve to a module binding` })
 			}
 			// Classify the target so provably-inert props (render-locals, function children on a
 			// createComponent/plain target, unreferenced staticRender props) drop without bailing.
 			const policy = holePolicyFor(this.targetKinds(tag))
-			const extraProps = resolveHoleExtraProps({ tag, closureProps, identifierProps, childClosure, scope, moduleBindings: this.moduleBindings, policy })
+			const extraProps = resolveHoleExtraProps({ tag, closureProps, valueProps, scope, moduleScope: this.moduleScope, policy })
 			this.host.addHole({
 				component: tag,
 				entityProps,
@@ -139,14 +145,33 @@ export class JsxAnalyzer {
 		} else {
 			// Not a hole: a closure prop capturing an entity root would escape into the element
 			// (the runtime cannot see it either) — preserve the conservative bail.
-			for (const { fn } of closureProps) {
-				if (referencesRoot(fn, scope)) {
+			// A children closure is walked with the children below (its captures are recorded there).
+			for (const { name, fn } of closureProps) {
+				if (name !== 'children' && referencesRoot(fn, scope)) {
 					throw new BailError({ code: 'ENTITY_IN_EXPRESSION_PROP', message: `entity value inside a function prop of <${tag}>` })
 				}
 			}
 		}
 
 		this.walkChildren(node.children, scope) // the `children` slot is analyzed at runtime
+	}
+
+	/** A non-JSX children value: a closure or a value the target may invoke (`{renderItem}`). */
+	private collectChildrenValue(value: t.Node | null, scope: Scope, collected: CollectedProps): void {
+		if (value === null || t.isJSXElement(value) || t.isJSXFragment(value)) {
+			if (value !== null) {
+				this.host.walkValue(value, scope)
+			}
+			return
+		}
+		const fn = asClosure(value)
+		if (fn) {
+			collected.closureProps.push({ name: 'children', fn })
+			return
+		}
+		if (t.isExpression(value) && !referencesRoot(value, scope)) {
+			collected.valueProps.push({ name: 'children', value })
+		}
 	}
 
 	/**
@@ -168,6 +193,9 @@ export class JsxAnalyzer {
 			const fieldExpr = getAttr(node, entry.field)
 			const res = fieldExpr ? resolve(fieldExpr, scope) : { kind: 'none' as const }
 			if (res.kind !== 'ref') {
+				if (fieldExpr && referencesRoot(fieldExpr, scope)) {
+					throw new BailError({ code: 'UNCLASSIFIED', message: `contract field \`${entry.field}\` is not a plain entity path` })
+				}
 				continue // relation not resolvable → derived staticRender collects nothing for this entry
 			}
 			const item = entry.kind === 'itemOf' ? consumeMany(res.ref) : consumeRelation(res.ref)
@@ -204,13 +232,13 @@ export class JsxAnalyzer {
 		}
 	}
 
-	/** The inline closure a contract entry is invoked with (`children` closure or a named callback prop). */
+	/** The inline closure a contract entry is invoked with; any other callback value bails. */
 	private contractCallback(node: t.JSXElement, cbName: string): t.ArrowFunctionExpression | t.FunctionExpression | null {
-		if (cbName === 'children') {
-			return childrenCallback(node.children)
+		const callback = cbName === 'children' ? childrenSlot(node) : attrSlot(node, cbName)
+		if (callback.kind === 'other') {
+			throw new BailError({ code: 'FUNCTION_PROP_ON_HOLE', message: `contract callback \`${cbName}\` is not an inline function` })
 		}
-		const attr = findAttr(node, cbName)
-		return attr ? asClosure(jsxAttrInner(attr.value)) : null
+		return callback.kind === 'closure' ? callback.fn : null
 	}
 
 	/** Namespaced / member-expression tags (`<Ns.Comp/>`) cannot be referenced by a thunk → bail on entity props. */
@@ -228,14 +256,8 @@ export class JsxAnalyzer {
 		this.walkChildren(node.children, scope)
 	}
 
-	private collectComponentProp(
-		propName: string,
-		value: t.JSXAttribute['value'],
-		scope: Scope,
-		entityProps: Record<string, HoleEntityProp>,
-		literalProps: Record<string, unknown>,
-		identifierProps: Array<{ name: string; ident: t.Identifier }>,
-	): void {
+	private collectComponentProp(propName: string, value: t.JSXAttribute['value'], scope: Scope, collected: CollectedProps): void {
+		const { entityProps, literalProps, valueProps } = collected
 		if (value === null || value === undefined) {
 			literalProps[propName] = true // boolean shorthand `<Card flag/>`
 			return
@@ -265,19 +287,17 @@ export class JsxAnalyzer {
 			entityProps[propName] = { source: ep.source, path: [...ep.path] }
 			return
 		}
-		// Bare identifier — deferred to hole classification (module-scope lift / scalar drop / bail).
-		if (t.isIdentifier(inner)) {
-			identifierProps.push({ name: propName, ident: inner })
-			return
-		}
 		if (referencesRoot(inner, scope)) {
 			throw new BailError({ code: 'ENTITY_IN_EXPRESSION_PROP', message: `entity value inside a non-path expression prop \`${propName}\`` })
 		}
-		const lit = evaluateLiteral(inner)
+		const lit = t.isIdentifier(inner) ? { ok: false as const } : evaluateLiteral(inner)
 		if (lit.ok) {
 			literalProps[propName] = lit.value
+			return
 		}
-		// Non-literal non-entity props are silently omitted (recovered at runtime if needed).
+		if (t.isExpression(inner)) {
+			valueProps.push({ name: propName, value: inner }) // deferred to hole classification (lift / drop / bail)
+		}
 	}
 
 	/** True for a recognized `cond.method(...)` call (condition DSL) in a prop position. */
@@ -298,18 +318,13 @@ export class JsxAnalyzer {
 		}
 		switch (kind) {
 			case 'Field':
-				this.consumeAttrLeaf(node, 'field', scope)
-				this.walkOtherAttrs(node, new Set(['field', 'children', 'format']), scope)
-				return
 			case 'Attribute':
-				this.consumeAttrLeaf(node, 'field', scope)
-				this.walkChildren(node.children, scope)
-				this.walkOtherAttrs(node, new Set(['field', 'children', 'format']), scope)
-				return
 			case 'Show':
+				// The runtime never invokes a render-function child during collection; everything
+				// else on the element is evaluated during render (over-approximation is sound).
 				this.consumeAttrLeaf(node, 'field', scope)
-				this.walkShowChildren(node.children, scope)
-				this.walkOtherAttrs(node, new Set(['field', 'children', 'fallback']), scope)
+				this.walkNonFunctionChildren(node.children, scope)
+				this.walkOtherAttrs(node, new Set(attrSlot(node, 'children').kind === 'closure' ? ['field', 'children'] : ['field']), scope)
 				return
 			case 'HasOne':
 				this.walkRelationComponent(node, scope, false)
@@ -337,20 +352,25 @@ export class JsxAnalyzer {
 		const fieldExpr = getAttr(node, 'field')
 		const res = fieldExpr ? resolve(fieldExpr, scope) : { kind: 'none' as const }
 		if (res.kind !== 'ref') {
-			this.walkOtherAttrs(node, new Set(['field', 'children']), scope)
-			return
+			if (referencesRoot(node, scope)) {
+				throw new BailError({ code: 'UNCLASSIFIED', message: 'relation component field is not a plain entity path' })
+			}
+			return // no entity reaches this element → nothing it collects belongs to this selection
 		}
 		const params = many ? readHasManyParams(node) : undefined
 		const item = many ? consumeMany(res.ref, params) : consumeRelation(res.ref)
-		const cb = childrenCallback(node.children)
-		if (cb) {
-			this.host.walkCallbackWithItem(cb, { node: item, path: [], source: res.ref.source, absPath: res.ref.absPath }, scope)
+		const children = childrenSlot(node)
+		if (children.kind === 'other') {
+			// The runtime invokes whatever `children` holds with the related entity.
+			throw new BailError({ code: 'UNCLASSIFIED', message: 'relation component children is not an inline function' })
+		}
+		if (children.kind === 'closure') {
+			this.host.walkCallbackWithItem(children.fn, { node: item, path: [], source: res.ref.source, absPath: res.ref.absPath }, scope)
 		}
 		this.walkOtherAttrs(node, new Set(['field', 'children', ...(many ? HASMANY_PARAM_KEYS : [])]), scope)
 	}
 
-	private walkShowChildren(children: t.JSXElement['children'], scope: Scope): void {
-		// Runtime skips function children of <Show>; only plain children are analyzed.
+	private walkNonFunctionChildren(children: t.JSXElement['children'], scope: Scope): void {
 		const only = children.filter(c => !t.isJSXText(c) || c.value.trim() !== '')
 		const first = only[0]
 		if (only.length === 1 && first && t.isJSXExpressionContainer(first)
@@ -378,9 +398,11 @@ export class JsxAnalyzer {
 			return
 		}
 		const res = resolve(expr, scope)
-		if (res.kind === 'ref') {
-			consumeLeaf(res.ref)
+		if (res.kind === 'none') {
+			this.host.walkValue(expr, scope) // e.g. a conditional: every branch is a candidate field
+			return
 		}
+		consumeResolution(res)
 	}
 
 	private walkOtherAttrs(node: t.JSXElement, handled: Set<string>, scope: Scope): void {
@@ -429,14 +451,55 @@ function readHasManyParams(node: t.JSXElement): StaticHasManyParams {
 	return params
 }
 
-function childrenCallback(children: t.JSXElement['children']): t.ArrowFunctionExpression | t.FunctionExpression | null {
-	for (const child of children) {
-		if (t.isJSXExpressionContainer(child)
-			&& (t.isArrowFunctionExpression(child.expression) || t.isFunctionExpression(child.expression))) {
-			return child.expression
-		}
+interface CollectedProps {
+	readonly entityProps: Record<string, HoleEntityProp>
+	readonly literalProps: Record<string, unknown>
+	readonly closureProps: HoleClosureProp[]
+	readonly valueProps: HoleValueProp[]
+}
+
+type CallbackSlot =
+	| { readonly kind: 'none' }
+	| { readonly kind: 'closure'; readonly fn: Closure }
+	| { readonly kind: 'other' }
+
+/** What a callback slot holds: nothing, an inline closure, or anything else. */
+function slotOf(value: t.Node | null): CallbackSlot {
+	if (value === null) {
+		return { kind: 'none' }
 	}
-	return null
+	const fn = asClosure(value)
+	return fn ? { kind: 'closure', fn } : { kind: 'other' }
+}
+
+function attrSlot(node: t.JSXElement, name: string): CallbackSlot {
+	const attr = findAttr(node, name)
+	return attr ? slotOf(jsxAttrInner(attr.value) ?? attr) : { kind: 'none' }
+}
+
+/** The element's `children`, from the attribute or the JSX children (both at once is ambiguous). */
+function childrenSlot(node: t.JSXElement): CallbackSlot {
+	const attr = attrSlot(node, 'children')
+	const meaningful = node.children.filter(child => !t.isJSXText(child) || child.value.trim() !== '')
+	if (meaningful.length === 0) {
+		return attr
+	}
+	if (attr.kind !== 'none' || meaningful.length > 1) {
+		return { kind: 'other' }
+	}
+	const only = meaningful[0]
+	return only && t.isJSXExpressionContainer(only) && t.isExpression(only.expression)
+		? slotOf(only.expression)
+		: { kind: 'other' }
+}
+
+/** The single expression child (`{x}`) of an element, or null when children are absent or JSX. */
+function soleChildExpression(children: t.JSXElement['children']): t.Expression | null {
+	const meaningful = children.filter(child => !t.isJSXText(child) || child.value.trim() !== '')
+	const only = meaningful[0]
+	return meaningful.length === 1 && only && t.isJSXExpressionContainer(only) && t.isExpression(only.expression)
+		? only.expression
+		: null
 }
 
 function getAttr(node: t.JSXElement, name: string): t.Expression | null {

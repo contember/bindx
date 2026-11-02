@@ -13,11 +13,16 @@ export interface StaticHasManyParams {
 	totalCount?: boolean
 }
 
-/** A single field: scalar leaf (`true`) or a relation with nested selection. */
+/**
+ * A single field: scalar leaf (`true`) or an object node. `fields` present ⇒ a relation with that
+ * nested selection. `hasOneFields` were read through the field's ref API names (`.value`, `.length`):
+ * fields of the target only when the schema says the field is a has-one, collector passthrough otherwise.
+ */
 export type StaticFieldNode =
 	| true
 	| {
-		fields: StaticFieldMap
+		fields?: StaticFieldMap
+		hasOneFields?: StaticFieldMap
 		many?: true
 		params?: StaticHasManyParams
 	}

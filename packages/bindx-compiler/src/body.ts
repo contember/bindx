@@ -6,9 +6,10 @@
 import * as t from '@babel/types'
 import type { SelNode } from './selectionTree.js'
 import type { ImportBindings } from './imports.js'
+import { readsInvocationContext, type ModuleScope } from './bindings.js'
 import {
-	BailError, type Scope, childScope, consumeLeaf, consumeMany, consumeRelation,
-	paramNamesOf, referencesRoot, resolve, type RootRef,
+	BailError, type Scope, childScope, consumeMany, consumeRelation, consumeResolution,
+	paramNamesOf, referencesRoot, resolve, unwrap, type RootRef,
 } from './resolve.js'
 import { JsxAnalyzer } from './jsx.js'
 import type { ContractLookup } from './contracts.js'
@@ -22,11 +23,11 @@ export class BodyAnalyzer {
 
 	constructor(
 		private readonly bindings: ImportBindings,
-		private readonly moduleBindings: ReadonlySet<string>,
+		moduleScope: ModuleScope,
 		contracts: ContractLookup,
 		targetKinds: TargetKindLookup,
 	) {
-		this.jsx = new JsxAnalyzer(this, bindings, moduleBindings, contracts, targetKinds)
+		this.jsx = new JsxAnalyzer(this, bindings, moduleScope, contracts, targetKinds)
 	}
 
 	/** Public so JsxAnalyzer can register a hole it discovered. */
@@ -37,6 +38,7 @@ export class BodyAnalyzer {
 	/** Register a function's params against the shared prop roots, then walk its body. */
 	analyzeFunction(fn: t.ArrowFunctionExpression | t.FunctionExpression, propRoots: ReadonlyMap<string, SelNode>): void {
 		const scope: Scope = { roots: new Map(), propsParams: new Set(), propRoots, scalarParams: new Set(), locals: new Set() }
+		guardInvocationContext(fn)
 		const param = fn.params[0]
 		if (param) {
 			this.registerTopParam(param, scope)
@@ -66,25 +68,42 @@ export class BodyAnalyzer {
 			scope.propsParams.add(p.name)
 			return
 		}
-		if (t.isObjectPattern(p)) {
-			for (const prop of p.properties) {
-				if (t.isRestElement(prop)) {
-					continue // rest captures scalar props only (proxy exposes none enumerably)
+		if (!t.isObjectPattern(p)) {
+			throw new BailError({ code: 'UNCLASSIFIED', message: 'unsupported props parameter pattern' })
+		}
+		this.bindPropsPattern(p, scope)
+	}
+
+	/** Bind a destructuring of the props object (render param or `const {…} = props`). */
+	private bindPropsPattern(pattern: t.ObjectPattern, scope: Scope): void {
+		const defaults: t.Expression[] = []
+		for (const prop of pattern.properties) {
+			if (t.isRestElement(prop)) {
+				if (!t.isIdentifier(prop.argument)) {
+					throw new BailError({ code: 'UNCLASSIFIED', message: 'unsupported rest pattern of the props object' })
 				}
-				if (!t.isObjectProperty(prop) || prop.computed || !t.isIdentifier(prop.key)) {
-					continue
-				}
-				const propRoot = scope.propRoots.get(prop.key.name)
-				if (!propRoot) {
-					// Non-entity render prop (scalar / .use() value) — an inert scalar mock at
-					// oracle collection, so it is safe to drop when used as a hole prop.
-					for (const name of paramNamesOf(prop.value)) {
-						scope.scalarParams.add(name)
-					}
-					continue
-				}
-				this.bindPattern(prop.value, { node: propRoot, path: [], source: prop.key.name, absPath: [] }, scope)
+				scope.propsParams.add(prop.argument.name) // the rest still carries entity props
+				continue
 			}
+			const key = staticKeyName(prop)
+			if (key === null || !t.isObjectProperty(prop)) {
+				throw new BailError({ code: 'UNCLASSIFIED', message: 'unsupported key in the props destructuring' })
+			}
+			const propRoot = scope.propRoots.get(key)
+			if (!propRoot) {
+				// Non-entity render prop (scalar / .use() value) — an inert scalar mock at
+				// oracle collection, so it is safe to drop when used as a hole prop.
+				for (const name of paramNamesOf(prop.value)) {
+					scope.scalarParams.add(name)
+				}
+				collectDefaults(prop.value, defaults)
+				continue
+			}
+			this.bindPattern(prop.value, { node: propRoot, path: [], source: key, absPath: [] }, scope)
+		}
+		// Default values run during render and may read entity fields.
+		for (const value of defaults) {
+			this.walkValue(value, scope)
 		}
 	}
 
@@ -117,6 +136,12 @@ export class BodyAnalyzer {
 	// ── Statements ──────────────────────────────────────────────────────────
 
 	private walkStatements(stmts: t.Statement[], scope: Scope): void {
+		// Hoisted declarations are render-local from the start of the block.
+		for (const stmt of stmts) {
+			if ((t.isFunctionDeclaration(stmt) || t.isClassDeclaration(stmt)) && stmt.id) {
+				scope.locals.add(stmt.id.name)
+			}
+		}
 		for (const stmt of stmts) {
 			this.walkStatement(stmt, scope)
 		}
@@ -154,6 +179,10 @@ export class BodyAnalyzer {
 		if (t.isEmptyStatement(stmt)) {
 			return
 		}
+		if (t.isFunctionDeclaration(stmt)) {
+			this.walkNestedFunction(stmt, scope) // may be called during render: its reads count
+			return
+		}
 		// Loops, switch, try, etc.: sound only if no root escapes into them.
 		if (referencesRoot(stmt, scope)) {
 			throw new BailError({ code: 'UNCLASSIFIED', message: `unsupported statement referencing an entity: ${stmt.type}` })
@@ -162,6 +191,12 @@ export class BodyAnalyzer {
 
 	private walkDeclarator(kind: string, decl: t.VariableDeclarator, scope: Scope): void {
 		if (!decl.init) {
+			this.addLocals(decl.id, scope)
+			return
+		}
+		const init = unwrap(decl.init)
+		if (t.isIdentifier(init) && scope.propsParams.has(init.name)) {
+			this.bindPropsAlias(kind, decl.id, scope)
 			return
 		}
 		const res = resolve(decl.init, scope)
@@ -173,14 +208,35 @@ export class BodyAnalyzer {
 			return
 		}
 		// Render-local binding — not liftable if later used as a hole prop (default deny).
-		for (const name of Object.keys(t.getBindingIdentifiers(decl.id))) {
-			scope.locals.add(name)
-		}
+		this.addLocals(decl.id, scope)
 		if (res.kind === 'opaque') {
+			consumeResolution(res)
 			return
 		}
 		// Non-entity initializer: may still contain JSX/roots to analyze.
 		this.walkValue(decl.init, scope)
+	}
+
+	/** `const p = props` / `const { article } = props`: the binding stays a view of the props object. */
+	private bindPropsAlias(kind: string, target: t.VariableDeclarator['id'], scope: Scope): void {
+		if (kind !== 'const') {
+			throw new BailError({ code: 'ENTITY_REASSIGNMENT', message: 'props alias must be a const binding' })
+		}
+		if (t.isIdentifier(target)) {
+			scope.propsParams.add(target.name)
+			return
+		}
+		if (t.isObjectPattern(target)) {
+			this.bindPropsPattern(target, scope)
+			return
+		}
+		throw new BailError({ code: 'UNCLASSIFIED', message: 'unsupported destructuring of the props object' })
+	}
+
+	private addLocals(target: t.Node, scope: Scope): void {
+		for (const name of Object.keys(t.getBindingIdentifiers(target))) {
+			scope.locals.add(name)
+		}
 	}
 
 	// ── Expressions ─────────────────────────────────────────────────────────
@@ -265,15 +321,52 @@ export class BodyAnalyzer {
 		if (t.isMemberExpression(node) || t.isOptionalMemberExpression(node) || t.isIdentifier(node)
 			|| t.isParenthesizedExpression(node) || t.isTSNonNullExpression(node) || t.isTSAsExpression(node)) {
 			const res = resolve(node, scope)
-			if (res.kind === 'ref') {
-				consumeLeaf(res.ref)
+			if (res.kind === 'none') {
+				this.walkUnresolved(node, scope)
+				return
 			}
+			consumeResolution(res)
 			return
 		}
 		// Literals and other leaves: only a problem if they smuggle a root.
 		if (referencesRoot(node, scope)) {
 			throw new BailError({ code: 'UNCLASSIFIED', message: `unclassifiable expression referencing an entity: ${node.type}` })
 		}
+	}
+
+	/**
+	 * A value read that is not an entity path. Every part evaluated during render still counts:
+	 * the props object as a value and member access on a computed entity value bail.
+	 */
+	private walkUnresolved(nodeIn: t.Node, scope: Scope): void {
+		const node = unwrap(nodeIn)
+		if (t.isIdentifier(node)) {
+			if (scope.propsParams.has(node.name)) {
+				throw new BailError({ code: 'UNCLASSIFIED', message: 'the props object is used as a value' })
+			}
+			return
+		}
+		if (!t.isMemberExpression(node) && !t.isOptionalMemberExpression(node)) {
+			this.walkValue(node, scope)
+			return
+		}
+		if (node.computed) {
+			this.walkValue(node.object, scope)
+			this.walkValue(node.property, scope)
+			return
+		}
+		const object = unwrap(node.object)
+		if (t.isIdentifier(object)) {
+			return // a scalar prop (`props.label`) or a non-entity binding
+		}
+		if (t.isMemberExpression(object) || t.isOptionalMemberExpression(object)) {
+			this.walkUnresolved(object, scope)
+			return
+		}
+		if (!t.isCallExpression(object) && !t.isOptionalCallExpression(object) && referencesRoot(object, scope)) {
+			throw new BailError({ code: 'UNCLASSIFIED', message: `member access on a computed entity value: ${object.type}` })
+		}
+		this.walkValue(object, scope)
 	}
 
 	private walkSpreadable(node: t.Node, scope: Scope): void {
@@ -309,7 +402,7 @@ export class BodyAnalyzer {
 		}
 	}
 
-	private walkNestedFunction(fn: t.ArrowFunctionExpression | t.FunctionExpression | t.ObjectMethod, scope: Scope): void {
+	private walkNestedFunction(fn: t.ArrowFunctionExpression | t.FunctionExpression | t.FunctionDeclaration | t.ObjectMethod, scope: Scope): void {
 		const child = childScope(scope)
 		for (const param of fn.params) {
 			const p = t.isAssignmentPattern(param) ? param.left : param
@@ -358,6 +451,9 @@ export class BodyAnalyzer {
 		if (t.isExpression(callee) && resolve(callee, scope).kind === 'ref') {
 			throw new BailError({ code: 'ENTITY_ESCAPES_TO_CALL', message: 'method call on an entity value' })
 		}
+		if (t.isExpression(callee)) {
+			this.walkValue(callee, scope) // the callee is evaluated too (an IIFE runs its body)
+		}
 		for (const arg of node.arguments) {
 			if (t.isSpreadElement(arg)) {
 				if (referencesRoot(arg.argument, scope)) {
@@ -392,6 +488,7 @@ export class BodyAnalyzer {
 
 	/** Public so JsxAnalyzer can drive HasOne/HasMany children callbacks; itemRef carries the item's origin. */
 	walkCallbackWithItem(fn: t.ArrowFunctionExpression | t.FunctionExpression, itemRef: RootRef, scope: Scope): void {
+		guardInvocationContext(fn)
 		const child = childScope(scope)
 		const param = fn.params[0]
 		if (param) {
@@ -409,6 +506,42 @@ export class BodyAnalyzer {
 			this.walkStatements(fn.body.body, child)
 		} else {
 			this.walkValue(fn.body, child)
+		}
+	}
+}
+
+/** A `function` reading `arguments`/`this` gets values the analyzer cannot bind to roots. */
+function guardInvocationContext(fn: t.ArrowFunctionExpression | t.FunctionExpression): void {
+	if (t.isFunctionExpression(fn) && readsInvocationContext(fn)) {
+		throw new BailError({ code: 'UNCLASSIFIED', message: 'function reads `arguments` or `this`' })
+	}
+}
+
+/** Non-computed identifier or string-literal key of an object-pattern property; null otherwise. */
+function staticKeyName(prop: t.ObjectProperty | t.RestElement): string | null {
+	if (!t.isObjectProperty(prop) || prop.computed) {
+		return null
+	}
+	if (t.isIdentifier(prop.key)) {
+		return prop.key.name
+	}
+	return t.isStringLiteral(prop.key) ? prop.key.value : null
+}
+
+/** Default-value expressions inside a binding pattern (evaluated when the pattern binds). */
+function collectDefaults(pattern: t.Node, out: t.Expression[]): void {
+	if (t.isAssignmentPattern(pattern)) {
+		out.push(pattern.right)
+		collectDefaults(pattern.left, out)
+	} else if (t.isObjectPattern(pattern)) {
+		for (const prop of pattern.properties) {
+			collectDefaults(t.isRestElement(prop) ? prop.argument : prop.value, out)
+		}
+	} else if (t.isArrayPattern(pattern)) {
+		for (const element of pattern.elements) {
+			if (element) {
+				collectDefaults(element, out)
+			}
 		}
 	}
 }
