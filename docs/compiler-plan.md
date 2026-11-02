@@ -124,7 +124,7 @@ Dependencies: `@babel/core`, `@babel/parser`, `@babel/traverse`, `@babel/types`.
   (3 args) → explicit; ignore (not collected via proxy today either).
 - `.props()`, `.use()`, `.mock()`, `.slots()`, `.roles()` → chain metadata, no effect on analysis
   (`.mock()` values are irrelevant — the compiler never executes anything).
-- `.condition(fn)` → analyze `fn` like a render body (runtime collection executes it too).
+- `.if(fn)` → analyze `fn` like a render body (runtime collection executes it too).
 - `.interfaces(...)` → **bail** (interfaces mode).
 - `.render(fn)` → analyze `fn`.
 
@@ -166,7 +166,7 @@ For each fixture:
 
 Fixture set (minimum): scalar fields; nested has-one; has-many with literal params; both-branch
 ternary (document expected superset vs runtime — see below); map over has-many children callback;
-alias `const`; `.condition()` accesses; `.use()`/`.mock()`/`.props()` present but irrelevant;
+alias `const`; `.if()` accesses; `.use()`/`.mock()`/`.props()` present but irrelevant;
 each bail trigger.
 
 **Ternary caveat**: branch-union fixtures will legitimately differ from the runtime oracle
@@ -190,7 +190,7 @@ Status: **implemented** on `experiment/selection-compiler`. Runtime resolution
 emission (`packages/bindx-compiler`), full hole-equivalence + end-to-end tests, and the dataview
 relation-column fix have all landed and are green.
 
-Result (re-measured on the reference app, 257 chains):
+Result (re-measured on a large production app, 257 chains):
 **242/257 compiled = 94 %** (phase 1 was 216/257 = 84 %). 26 chains carry 82 holes total. 15 bails
 remain: 9 `FUNCTION_PROP_ON_HOLE`, 5 `ENTITY_IN_EXPRESSION_PROP`, 1 `ENTITY_REASSIGNMENT` — the
 `ENTITY_ESCAPES_TO_COMPONENT` class that dominated phase 1 is gone.
@@ -198,7 +198,7 @@ remain: 9 `FUNCTION_PROP_ON_HOLE`, 5 `ENTITY_IN_EXPRESSION_PROP`, 1 `ENTITY_REAS
 > **Soundness correction (was 98 %).** An earlier measurement read 251/257 = 98 % but was
 > **unsound**: a hole element's function props / render-prop children were dropped from the emitted
 > hole (they are non-literal), yet a hole target's `staticRender` may *invoke* such a closure during
-> collection with a collector proxy — the reference app's `SelectField` does exactly
+> collection with a collector proxy — a typical relation-select wrapper's staticRender is exactly
 > `<HasOne field={props.field}>{e => props.children(e)}</HasOne>`. The runtime oracle therefore
 > collected fields from the closure body (e.g. `it => <Field field={it.name}/>` → `author.name`) that
 > the compiled path could not → **compiled ⊂ runtime → under-fetch → `UnfetchedFieldError`** in
@@ -279,7 +279,7 @@ In `ensureImplicitCollected`, when a compiled selection is present:
    contained per hole (same report-and-continue policy as `analyzeJsx`).
 4. Target has neither surface (plain React component): the hole contributes nothing — the runtime
    proxy pass is equally blind there, so compiled behavior stays exactly equivalent (this is the
-   documented reference-app dummy-`<Field>` blind spot). In validate mode, emit a dev-only warn naming the
+   known blind spot that apps work around by mounting sibling dummy `<Field>`s). In validate mode, emit a dev-only warn naming the
    component so the blind spot becomes discoverable instead of silent.
 5. Finalize scopes → `SelectionMeta` → fragments, as today. The host render fn is still never
    executed.
@@ -308,17 +308,17 @@ target (with and without sibling dummy `<Field>`s), multiple entity props on one
 entity-derived path (`article.author`) into a target, hole target defined later in the module (TDZ),
 literal + non-literal extra props.
 
-### Related runtime fix (in scope — the reference app workaround removal) — DONE
+### Related runtime fix (in scope — removes a downstream workaround) — DONE
 
 `DataGridHasOneColumn`'s `collectSelection` (bindx-dataview `createRelationColumn.tsx`) discarded
 the renderer's returned JSX, so nested `<HasMany>`/`<Field>` inside relation-column renderers were
-never collected (the reference app worked around it with a `.map()` trick). Fixed: `walkRendererJsx` now runs
+never collected (apps had to work around it with a `.map()` trick). Fixed: `walkRendererJsx` now runs
 `collectSelection` on the renderer's returned JSX in addition to the proxy capture, in both the
 `buildLeaf` `relatedSelection` computation and the hasOne/hasMany cell configs. The JSX walk drives
 the collector proxy (via `HasMany.getSelection`'s `map`), registering nested fields into the parent
 scope — mirroring `collectImplicitSelections`. Errors are contained per column. Independent of the
 compiler; benefits uncompiled apps too. Regression test: `tests/react/dataview/createRelationColumn.test.tsx`
-("nested declarative selection (the reference app regression)").
+("nested declarative selection (downstream regression)").
 
 ### Explicit non-goal
 
@@ -376,7 +376,7 @@ An inline closure prop / render-prop child of a hole element is classified `drop
 
 ### `cond.*` DSL in JSX prop positions
 
-`<Case if={cond.eq(cell.kind, 'promo')}>` — the recognized `cond.*` call in a prop has its FieldRef
+`<Case if={cond.eq(article.status, 'published')}>` — the recognized `cond.*` call in a prop has its FieldRef
 arguments recorded as touched leaves (via the body analyzer's existing `cond` handling), then the
 prop is dropped. **Soundness (verified against `Case.getSelection`)**: a condition object's only
 selection surface is `collectConditionFields` = the FieldRef args; the literal comparison value and
@@ -386,21 +386,21 @@ collects exactly those FieldRefs plus the (separately analyzed) children — so 
 
 ### JSX-element / fragment prop values
 
-`draftSlot={<X ... />}` — the JSX is analyzed statically exactly like children (recurse; entity
+`headerSlot={<X ... />}` — the JSX is analyzed statically exactly like children (recurse; entity
 references form paths / nested holes as usual) and the prop itself is not emitted. Soundness: the
 oracle walks such JSX via the target's slot-walk / `staticRender` collector proxies, so static
 analysis yields an equal-or-superset union (under-fetch impossible; over-fetch acceptable). Where the
 target renders the slot as children (`withCollector` returning `<>{props.slot}{props.children}</>`)
 the two are exactly equal.
 
-### Result (re-measured on the reference app, 257 chains)
+### Result (re-measured on a large production app, 257 chains)
 
 **254/257 compiled = 99 %** (phase 2 was 242/257 = 94 %). 38 chains carry 112 holes. The 3 remaining
 bails are all genuine: 1 `ENTITY_IN_EXPRESSION_PROP` (a root-capturing event handler on a non-hole
 element — the runtime cannot see it either), 1 `FUNCTION_PROP_ON_HOLE` (a render-prop child that
-captures the host entity root `footer.linkColumns` — not liftable), 1 `ENTITY_REASSIGNMENT`
+captures a host entity root path — not liftable), 1 `ENTITY_REASSIGNMENT`
 (out of scope). The `FUNCTION_PROP_ON_HOLE` class that dominated phase 2's residue is essentially
-gone (9 → 1); the navigation-editor `cond`-in-props and publish.tsx `draftSlot` bails disappeared.
+gone (9 → 1); the `cond`-in-props and JSX-valued slot-prop bails disappeared.
 
 ## Phase 2.2 — collector contracts (declarative invocation contracts for withCollector) — IMPLEMENTED
 
@@ -410,9 +410,10 @@ contract overload) landed in `012b321`. Compiler side — contract discovery
 (`packages/bindx-compiler/src/contracts.ts`) and contract-aware hole formation
 (`jsx.ts` `walkContractComponent`) — plus fixtures + oracle-equivalence tests are green.
 
-Motivation: the last real reference-app bail (footer-editor `LinksSection`) is a render-prop child that
-both uses its own param AND captures a host-root path (`footer.linkColumns`) — not droppable
-(target invokes it at collection), not liftable (render-scope capture). The root cause is that
+Motivation: the last real `FUNCTION_PROP_ON_HOLE` bail in the measured app is a render-prop child of
+a shared repeater helper that both uses its own param AND captures a host-root path (e.g.
+`article.title`) — not droppable (target invokes it at collection), not liftable (render-scope
+capture). The root cause is that
 the analyzer cannot know an unknown component's invocation contract; `HasMany` works only because
 that knowledge is hardcoded. A declared contract solves the CLASS: the analyzer treats the
 callback exactly like a `HasMany` children callback — param becomes a root, host captures become
@@ -466,12 +467,11 @@ withCollector(runtime, contract: CollectorContract)
 - Runtime: contract-derived staticRender produces identical collection to an equivalent
   hand-written staticRender function (oracle comparison); runtime rendering unaffected.
 - Compiler fixtures: same-file contract target; **cross-file** contract target (fixture imports
-  the component from a sibling fixture module); footer-editor replica (item callback capturing a
-  host-root field → STRICT oracle equality); entityOf; non-contract function prop dropped;
+  the component from a sibling fixture module); an item callback that also captures a host-root
+  field (e.g. `article.title`) → STRICT oracle equality; entityOf; non-contract function prop dropped;
   contract entry with missing callback.
-- the reference app: validated on a patched TEMP COPY (scratchpad) of `footer-editor.tsx` + `_shared.tsx` with
-  `InitializingRepeater` declaring `{ children: itemOf('field') }` — the reference repo itself is NOT
-  modified; the suggested reference-app patch ships in the report/docs instead.
+- Measured app: validated on a temporary copy of the bailing module and its shared repeater helper,
+  with the helper declaring `{ children: itemOf('field') }` — the app itself is not modified.
 
 ### Implemented — discovery mechanics
 
@@ -511,41 +511,21 @@ no safety bail** — the derived staticRender provably never invokes them (this 
 `FUNCTION_PROP_ON_HOLE`/`RENDER_LOCAL_ON_HOLE` class for contract components). A missing callback for
 an entry records the relation only.
 
-### Implemented — the reference app temp-copy validation
+### Implemented — measured-app validation
 
-Copied `footer-editor.tsx` + `_shared.tsx` into the scratchpad (relative `./_shared` import
-preserved) and patched only the COPY's `InitializingRepeater` to `{ children: itemOf('field') }`
-(importing `itemOf`). `measure.ts` on that directory:
+On a temporary copy of the bailing module plus its shared repeater helper, with only the helper
+switched from a hand-written staticRender to `{ children: itemOf('field') }`:
 
-- **Before** (hand-written staticRender, contract not discoverable): `footer-editor.tsx` **L112**
-  `LinksSection` → `BAIL FUNCTION_PROP_ON_HOLE` (7/8 compiled). The render-prop child both uses its
-  item param and captures the host root `footer.linkColumns` — not droppable, not liftable.
-- **After** (contract declared): **L112 → `OK [footer] (1 hole)`** — no more `FUNCTION_PROP_ON_HOLE`
-  (8/8 compiled). The outer repeater is now a contract callback; the inner
-  `<FooterLinkRow link={link} parentColumns={footer.linkColumns} />` remains a legitimate hole
-  resolved through `FooterLinkRow`'s own staticRender.
+- **Before** (hand-written staticRender, contract not discoverable): the repeater element →
+  `BAIL FUNCTION_PROP_ON_HOLE`. Its render-prop child both uses its item param and captures a
+  host-root path — not droppable, not liftable.
+- **After** (contract declared): the chain compiles with 1 hole. The outer repeater is now a contract
+  callback; an inner row component receiving both the item and the host-root value remains a
+  legitimate hole resolved through that component's own staticRender.
 
-Full reference-app re-measure is **unchanged** — 254/257 (99%), 3 bails
-(1 `ENTITY_IN_EXPRESSION_PROP`, 1 `FUNCTION_PROP_ON_HOLE`, 1 `ENTITY_REASSIGNMENT`) — because the reference app has
-not adopted contracts. Adopting the suggested patch would clear the remaining `FUNCTION_PROP_ON_HOLE`.
-
-Suggested reference-app patch (`packages/admin/app/components/web-builder/forms/_shared.tsx`) — also drop the
-now-unused `HasMany` JSX import:
-
-```diff
--import { Field, HasMany, HasOne, useEntityList, useField, useHasMany, useHasOne, withCollector } from '@contember/bindx-react'
-+import { Field, HasOne, itemOf, useEntityList, useField, useHasMany, useHasOne, withCollector } from '@contember/bindx-react'
-@@
- export const InitializingRepeater = withCollector(
- 	InitializingRepeaterRuntime,
--	(props: InitializingRepeaterProps<object>) => (
--		<HasMany field={props.field}>
--			{item => props.children(item, { remove: () => {} })}
--		</HasMany>
--	),
-+	{ children: itemOf('field') },
- ) as <TEntity extends object>(props: InitializingRepeaterProps<TEntity>) => React.ReactNode
-```
+The full re-measure is **unchanged** — 254/257 (99%), 3 bails (1 `ENTITY_IN_EXPRESSION_PROP`,
+1 `FUNCTION_PROP_ON_HOLE`, 1 `ENTITY_REASSIGNMENT`) — because the app has not adopted contracts.
+Declaring the contract on its repeater helper would clear the remaining `FUNCTION_PROP_ON_HOLE`.
 
 ## Phase 3 — Entity root compilation — IMPLEMENTED
 
@@ -582,10 +562,10 @@ measure entity-root reporting — plus adapter-oracle equivalence tests
   root the plugin pushes `compiledSelection={{ props: { entity: {...} }, holes: [...] }}` onto the
   element (idempotent — skips elements already carrying the attribute).
 
-### Result (measured on the reference app)
+### Result (measured on a large production app)
 
 Chains unchanged: **254/257 (99%)**, 3 bails (host analysis untouched). Entity roots:
-**84/105 compiled** (114 holes — every compiled root carries ≥1 hole: the reference app's dominant pattern is
+**84/105 compiled** (114 holes — every compiled root carries ≥1 hole: the app's dominant pattern is
 `<Entity>{e => <Body entity={e} />}</Entity>`, one delegated hole per root). 21 bails:
 11 `RENDER_LOCAL_ON_HOLE`, 7 `ENTITY_ESCAPES_TO_CALL`, 2 `ENTITY_NO_FUNCTION_CHILDREN`,
 1 `FUNCTION_PROP_ON_HOLE` — the same reason classes as chains.
@@ -606,7 +586,7 @@ no attribute). Plus children-not-invoked-during-collection (SCOPE_REF counter) a
 Motivation: after phase 2.2 the compiler covers `createComponent()` chains, but selection
 ROOTS still collect at runtime: `<Entity>` invokes its children render-prop with a collector
 proxy on every root mount (`useSelectionCollection` → `collect: collector => children(collector)`)
-— the same crash-prone, one-branch execution the compiler eliminated for components. the reference app has 147
+— the same crash-prone, one-branch execution the compiler eliminated for components. A large production app has 147
 `<Entity>` usages vs 65 definer-based hooks (already static by construction — nothing to compile
 there). DataGrid/DataView roots are explicitly OUT of scope for phase 3 (different walker/marker
 system; phase 3.1 candidate).
@@ -652,7 +632,7 @@ system; phase 3.1 candidate).
   createComponent used inside the Entity closure (fragment composition still merges); a hole
   (entity-derived value into a nested component); a collector-contract target; branch union
   (superset assertion); create-mode Entity.
-- Full the reference app measure re-run with root counts.
+- Full production-app measure re-run with root counts.
 
 ## Phase 3.1 — hole-target classification + entity-like roots — IMPLEMENTED
 
@@ -666,18 +646,19 @@ plain `function`/`class` declarations too); target classification lives in `src/
 option on `analyzeSource`/`analyzeProgram`/`analyzeEntityRoots`/the Babel plugin, plus a
 `--entity-like=Name,...` measure flag.
 
-### Result (re-measured on the reference app)
+### Result (re-measured on a large production app)
 
 - **Chains unchanged: 254/257 (99%)**, 3 bails (host analysis untouched) — as required.
 - **Entity roots (no flag): 93/105 compiled** (was 84/105 in phase 3). 12 bails:
   7 `ENTITY_ESCAPES_TO_CALL` (genuine, out of scope), 2 `RENDER_LOCAL_ON_HOLE`
-  (both `~/`-aliased imports the measure run cannot resolve → default-deny `unknown`),
+  (both non-relative aliased imports the measure run was not configured to resolve → default-deny
+  `unknown`),
   2 `ENTITY_NO_FUNCTION_CHILDREN`, 1 `ENTITY_IN_EXPRESSION_PROP`. The classification cleared
   the phase-3 residue of 11 `RENDER_LOCAL_ON_HOLE` → 2 and 1 `FUNCTION_PROP_ON_HOLE` → 0.
-- **Entity roots (`--entity-like=RefreshableEntity`): 124/140 compiled**. The flag surfaces
-  **35 new roots** (105 → 140) hidden behind the `RefreshableEntity` forwarding wrapper; 31 of
-  them compile. 16 bails (the extra 4 vs no-flag are new `RefreshableEntity` roots passing
-  render-locals to `~/`-aliased unresolvable targets — same default-deny class).
+- **Entity roots (`--entity-like=ForwardingEntity`): 124/140 compiled**. The flag surfaces
+  **35 new roots** (105 → 140) hidden behind a forwarding `<Entity>` wrapper; 31 of them compile.
+  16 bails (the extra 4 vs no-flag are new wrapper roots passing render-locals to unresolved aliased
+  targets — same default-deny class).
 
 Classification (`TargetKind`): the collector-CONTRACT case is handled separately by
 `ContractResolver` (checked first in `jsx.ts`); target-kind covers `createComponent` /
@@ -688,12 +669,12 @@ param `p` yields the `p.x` accesses, with any other use (`p[x]`, `{...p}`, `f(p)
 `entityLike` matching prefers an import's ORIGINAL exported name over its local alias, else the
 local declaration name; default/namespace imports carry no matchable name and are skipped.
 
-Motivation (the reference app entity-root bail audit): 12 of 21 root bails are render-locals / function children
+Motivation (entity-root bail audit on the measured app): 12 of 21 root bails are render-locals / function children
 on hole elements whose targets provably ignore them — `createComponent` targets (getSelection never
 reads scalar props and never invokes function children; the slot walk ignores non-JSX), plain
 function components (no surface at all), and `withCollector` staticRenders that reference only
 `props.entity`. The taint lattice bails only because the TARGET KIND is unknown. Separately,
-the reference app's `RefreshableEntity` forwarding wrapper hides 82 Entity roots from the root scan entirely.
+a forwarding `<Entity>` wrapper hides 82 Entity roots from the root scan entirely.
 
 ### A) Target-kind classification (compiler-only; reuses the contract-discovery parse cache)
 
@@ -727,8 +708,8 @@ opt-in requirement, documented (no runtime change needed). Measure gains a CLI f
 
 Fixtures per kind (createComponent target with render-local + function children now compiles and is
 adapter-oracle-equal; plain target; collector-static referenced vs unreferenced prop; rest-spread →
-conservative; entityLike forwarding-wrapper root end-to-end). the reference app re-measure with
-`--entity-like=RefreshableEntity` — expected: root bails 21 → ~9, plus ~82 newly visible roots.
+conservative; entityLike forwarding-wrapper root end-to-end). Production-app re-measure with
+`--entity-like=ForwardingEntity` — expected: root bails 21 → ~9, plus ~82 newly visible roots.
 
 ## Prod hardening
 

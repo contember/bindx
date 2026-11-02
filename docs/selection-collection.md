@@ -374,7 +374,7 @@ export const Repeater = withCollector(
 The contract is `Record<callbackPropName, itemOf(field) | entityOf(field)>` (`children` allowed as a
 key), also exposed on the component under the `COLLECTOR_CONTRACT` symbol for introspection. This
 solves the case a hole cannot: a callback that both uses its item param **and** captures a host-root
-field (e.g. `{item => <Row item={item} parentColumns={footer.linkColumns} />}`) — under a contract the
+field (e.g. `{item => <Row item={item} title={article.title} />}`) — under a contract the
 host capture is an ordinary root path, and non-contract function props on the element are dropped
 safely (the derived staticRender never invokes them). The compiler discovers contracts declared
 locally or imported via a **relative** (or aliased) specifier, following `from`-source re-export
@@ -466,7 +466,7 @@ machine-readable reason (e.g. `ENTITY_ESCAPES_TO_CALL`, `ENTITY_IN_EXPRESSION_PR
 
 `FUNCTION_PROP_ON_HOLE` / `RENDER_LOCAL_ON_HOLE` guard an under-fetch class: a hole element's
 function props / render-prop children / identifier-valued props are non-entity, but a hole target's
-`staticRender` may *invoke* them with a collector proxy during collection (the reference app's `SelectField` does
+`staticRender` may *invoke* them with a collector proxy during collection (the `SelectField` example above does
 `<HasOne field={props.field}>{e => props.children(e)}</HasOne>`), collecting fields the compiled path
 would otherwise miss. **Phase 2.1** resolves most of these by *lifting* the value into the hole's
 `extraProps` instead of dropping it: module-scope bindings and render-scope-free closures are in scope
@@ -476,7 +476,7 @@ root bails, as does a render-local const passed onward). See docs/compiler-plan.
 
 Measure the compiled-vs-bailed rate (and hole counts) over a source tree with
 `bun run packages/bindx-compiler/scripts/measure.ts <dir>` (default
-`packages/example`). On the largest real bindx app (the reference app, 257 chains)
+`packages/example`). On a large production app (257 chains)
 phase 2.1 compiles **254/257 (99%)** — 38 chains carry 112 holes total — leaving 3 genuine bails
 (1 `ENTITY_IN_EXPRESSION_PROP`, 1 `FUNCTION_PROP_ON_HOLE`, 1 `ENTITY_REASSIGNMENT`); phase 2 with
 holes compiled 94%, phase 1 without holes 84%.
@@ -512,8 +512,8 @@ so the compiler is a sound superset here.
 
 The root oracle is the `QuerySpec` the adapter receives: rendering a transformed vs
 untransformed `<Entity>` under a query-recording `MockAdapter` requests the identical root
-selection (superset for branch unions). On the reference app, the plugin compiles
-**84/105** `<Entity>` roots (114 holes; the reference app's dominant pattern is
+selection (superset for branch unions). On the same production app, the plugin compiles
+**84/105** `<Entity>` roots (114 holes; its dominant pattern is
 `<Entity>{e => <Body entity={e} />}</Entity>`, one delegated hole per root). The 21 bails are
 11 `RENDER_LOCAL_ON_HOLE`, 7 `ENTITY_ESCAPES_TO_CALL`, 2 `ENTITY_NO_FUNCTION_CHILDREN`,
 1 `FUNCTION_PROP_ON_HOLE` — the same reason classes as chains, since the same machinery runs.
@@ -542,8 +542,8 @@ tag — reusing the contract parse cache — into `createComponent`, `plain`, `c
   their own resolver, before target-kind classification.
 
 **`entityLike` — roots behind forwarding wrappers.** Some apps wrap `<Entity>` in a thin component
-that forwards props (the reference app's `RefreshableEntity` = `withCollector(props => <Entity queryKey={…}
-{...props} />, props => <Entity {...props} />)`). Pass `entityLike: ['RefreshableEntity', …]` to
+that forwards props (e.g. `const ForwardingEntity = withCollector(props => <Entity queryKey={…}
+{...props} />, props => <Entity {...props} />)`). Pass `entityLike: ['ForwardingEntity', …]` to
 the analyzer/plugin (or `--entity-like=Name,…` to `measure`) and those tags are scanned + emitted
 **exactly like `<Entity>`**: the `compiledSelection` attribute is injected on the *wrapper* element
 and reaches the inner `<Entity>` through the wrapper's `{...props}` spread — **that props
@@ -551,8 +551,8 @@ forwarding is the opt-in requirement** (there is no runtime change; `<Entity>` a
 `compiledSelection`). Matching prefers an import's original exported name over its local alias; a
 locally-declared wrapper matches by its declared name; default/namespace imports are skipped.
 
-On the reference app: chains stay **254/257**; entity roots go **84 → 93/105** from
-classification alone, and **`--entity-like=RefreshableEntity`** surfaces **35 previously-hidden
+On the same production app: chains stay **254/257**; entity roots go **84 → 93/105** from
+classification alone, and **`--entity-like=ForwardingEntity`** surfaces **35 previously-hidden
 roots** (105 → 140, 124 compiled).
 
 See [docs/compiler-plan.md](./compiler-plan.md) for the full design.
