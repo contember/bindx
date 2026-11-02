@@ -205,7 +205,7 @@ describe('hole equivalence vs runtime oracle', () => {
 	// relative imports resolve to the same singletons the oracle uses.
 	const tmpPath = join(DIR, 'fixtures', '.holes-compiled.tsx')
 	let compiledModule: Record<string, unknown> = {}
-	const oracle = oracleModule as unknown as Record<string, unknown>
+	const oracle: Readonly<Record<string, unknown>> = { ...oracleModule }
 
 	beforeAll(async () => {
 		const source = readFileSync(join(DIR, 'fixtures', 'holes.tsx'), 'utf8')
@@ -214,7 +214,7 @@ describe('hole equivalence vs runtime oracle', () => {
 			throw new Error('transform produced no output')
 		}
 		writeFileSync(tmpPath, out.code)
-		compiledModule = (await import(tmpPath)) as Record<string, unknown>
+		compiledModule = await import(tmpPath)
 	})
 
 	afterAll(() => {
@@ -224,19 +224,19 @@ describe('hole equivalence vs runtime oracle', () => {
 	// Sanity: the meaningful targets must actually collect through the hole, otherwise
 	// the equality checks below could pass trivially with both sides empty.
 	test('createComponent target collects author.name through the hole', () => {
-		expect(runtimePlain(oracle.ToCreateComponent, 'article')).toMatchObject({ author: { name: true } })
-		expect(runtimePlain(compiledModule.ToCreateComponent, 'article')).toMatchObject({ author: { name: true } })
+		expect(runtimePlain(oracle['ToCreateComponent'], 'article')).toMatchObject({ author: { name: true } })
+		expect(runtimePlain(compiledModule['ToCreateComponent'], 'article')).toMatchObject({ author: { name: true } })
 	})
 
 	test('withCollector target collects author.name through the hole', () => {
-		expect(runtimePlain(compiledModule.ToWithCollector, 'article')).toMatchObject({ author: { name: true } })
+		expect(runtimePlain(compiledModule['ToWithCollector'], 'article')).toMatchObject({ author: { name: true } })
 	})
 
 	test('plain target with a sibling <Field> keeps the sibling selection; blind target still touches author', () => {
 		// PlainAuthor never reads a field, but the bare `article.author` get registers a
 		// touched leaf on BOTH sides — the sibling <Field> adds title. Symmetric over-fetch.
-		expect(runtimePlain(compiledModule.ToPlainWithSibling, 'article')).toEqual({ author: true, title: true })
-		expect(runtimePlain(oracle.ToPlainWithSibling, 'article')).toEqual({ author: true, title: true })
+		expect(runtimePlain(compiledModule['ToPlainWithSibling'], 'article')).toEqual({ author: true, title: true })
+		expect(runtimePlain(oracle['ToPlainWithSibling'], 'article')).toEqual({ author: true, title: true })
 	})
 
 	for (const name of EXPORTS) {

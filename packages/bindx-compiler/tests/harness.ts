@@ -15,12 +15,34 @@ export function analyzeFixture(dir: string, file: string): ChainResult[] {
 	return analyzeSource(readFileSync(path, 'utf8'), path)
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null
+}
+
+function isSelectionMeta(value: unknown): value is SelectionMeta {
+	return isRecord(value) && value['fields'] instanceof Map
+}
+
+/** Reads the `$prop` fragment getter, which runs a component's static collection. */
+export function triggerCollection(component: object, prop: string): void {
+	Reflect.get(component, `$${prop}`)
+}
+
+/** The selection a component collected for `prop` (after {@link triggerCollection}). */
+export function collectedSelection(component: unknown, prop: string): SelectionMeta | undefined {
+	if (typeof component !== 'function' && !isRecord(component)) {
+		return undefined
+	}
+	triggerCollection(component, prop)
+	const selections: unknown = Reflect.get(component, COMPONENT_SELECTIONS)
+	const entry: unknown = selections instanceof Map ? selections.get(prop) : undefined
+	const selection = isRecord(entry) ? entry['selection'] : undefined
+	return isSelectionMeta(selection) ? selection : undefined
+}
+
 /** Runtime oracle: trigger `$prop` collection, normalize to the plain field tree. */
 export function runtimePlain(component: unknown, prop: string): Record<string, unknown> {
-	// Fragment access triggers static collection (same idiom as createComponentUse.test.tsx).
-	void (component as Record<string, unknown>)[`$${prop}`]
-	const selections = (component as Record<symbol, Map<string, { selection: SelectionMeta }>>)[COMPONENT_SELECTIONS]
-	const selection = selections?.get(prop)?.selection
+	const selection = collectedSelection(component, prop)
 	if (!selection) {
 		return {}
 	}
@@ -32,9 +54,8 @@ export function compilerPlain(result: ChainResult, prop: string): Record<string,
 	if (isBailed(result)) {
 		return {}
 	}
-	const plain = selectionToPlain(result.selection)
-	const forProp = plain[prop]
-	return (forProp && typeof forProp === 'object') ? forProp as Record<string, unknown> : {}
+	const forProp = selectionToPlain(result.selection)[prop]
+	return isRecord(forProp) ? forProp : {}
 }
 
 /** Drop `__params` (never present in the implicit path, but defensive). */
@@ -44,7 +65,7 @@ function stripParams(obj: Record<string, unknown>): Record<string, unknown> {
 		if (key === '__params') {
 			continue
 		}
-		out[key] = value && typeof value === 'object' ? stripParams(value as Record<string, unknown>) : value
+		out[key] = isRecord(value) ? stripParams(value) : value
 	}
 	return out
 }
@@ -57,14 +78,11 @@ export function isSubset(sub: Record<string, unknown>, sup: Record<string, unkno
 		}
 		const other = sup[key]
 		if (value === true) {
-			if (other !== true && !(other && typeof other === 'object')) {
+			if (other !== true && !isRecord(other)) {
 				return false
 			}
-		} else if (value && typeof value === 'object') {
-			if (!other || typeof other !== 'object') {
-				return false
-			}
-			if (!isSubset(value as Record<string, unknown>, other as Record<string, unknown>)) {
+		} else if (isRecord(value)) {
+			if (!isRecord(other) || !isSubset(value, other)) {
 				return false
 			}
 		}

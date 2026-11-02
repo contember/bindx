@@ -28,14 +28,15 @@ import {
 	setStaticSelectionValidation,
 } from '@contember/bindx-react'
 import { bindxCompilerPlugin } from '../src/index.js'
+import { triggerCollection } from './harness.js'
 
 interface FixtureModule {
-	readonly Card: unknown
+	readonly Card: React.ComponentType<{ article: unknown }>
 	readonly getRenderCalls: () => number
 }
 
 interface HoleFixtureModule {
-	readonly Host: unknown
+	readonly Host: React.ComponentType<{ article: unknown }>
 	readonly getHostRenderCalls: () => number
 }
 
@@ -75,7 +76,7 @@ async function loadTransformed<T>(source: string): Promise<T> {
 	const path = join(TMP_DIR, `.e2e-${counter++}.tsx`)
 	writeFileSync(path, out.code)
 	tmpFiles.push(path)
-	return import(path) as Promise<T>
+	return import(path)
 }
 
 interface Schema {
@@ -118,14 +119,14 @@ describe('end-to-end: transformed module runs the static path', () => {
 
 		// Trigger static collection via the fragment getter — the proxy pass would
 		// have executed the render fn; the injected static selection must not.
-		void (mod.Card as Record<string, unknown>).$article
+		triggerCollection(mod.Card, 'article')
 		expect(mod.getRenderCalls()).toBe(0)
 
 		const adapter = new MockAdapter(
 			{ Article: { 'article-1': { id: 'article-1', title: 'Hello World' } } },
 			{ delay: 0 },
 		)
-		const Card = mod.Card as React.ComponentType<{ article: unknown }>
+		const Card = mod.Card
 		const { container } = render(
 			<BindxProvider adapter={adapter} schema={schema}>
 				<Entity entity={articleDef} by={{ id: 'article-1' }}>
@@ -147,7 +148,7 @@ describe('end-to-end: transformed module runs the static path', () => {
 
 		const mod = await loadTransformed<FixtureModule>(SOURCE)
 		// Collection now also runs the proxy pass and diffs — must agree.
-		void (mod.Card as Record<string, unknown>).$article
+		triggerCollection(mod.Card, 'article')
 
 		expect(warn).not.toHaveBeenCalled()
 		warn.mockRestore()
@@ -184,7 +185,7 @@ describe('end-to-end: transformed module resolves a hole', () => {
 
 		// (a) Static collection resolves the hole via AuthorName's selection surface —
 		// the host render fn must not run (proxy pass would have incremented the counter).
-		void (mod.Host as Record<string, unknown>).$article
+		triggerCollection(mod.Host, 'article')
 		expect(mod.getHostRenderCalls()).toBe(0)
 
 		const adapter = new MockAdapter(
@@ -194,7 +195,7 @@ describe('end-to-end: transformed module resolves a hole', () => {
 			},
 			{ delay: 0 },
 		)
-		const Host = mod.Host as React.ComponentType<{ article: unknown }>
+		const Host = mod.Host
 		const { container } = render(
 			<BindxProvider adapter={adapter} schema={schema}>
 				<Entity entity={articleDef} by={{ id: 'article-1' }}>
@@ -217,7 +218,7 @@ describe('end-to-end: transformed module resolves a hole', () => {
 		const mod = await loadTransformed<HoleFixtureModule>(SOURCE_HOLE)
 		// The diff of compiled-vs-proxy selection must agree; createComponent target is
 		// not a blind spot, so no blind-spot warn either.
-		void (mod.Host as Record<string, unknown>).$article
+		triggerCollection(mod.Host, 'article')
 
 		expect(warn).not.toHaveBeenCalled()
 		warn.mockRestore()

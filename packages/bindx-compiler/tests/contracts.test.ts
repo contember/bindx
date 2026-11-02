@@ -14,7 +14,7 @@ const results = analyzeFixture(DIR, 'contracts.tsx')
 
 // Fixture host exports in source order (all use the `article` implicit prop).
 const EXPORTS = ['SameFile', 'CrossFile', 'HostCapture', 'EntityOf', 'DroppedFnProp', 'MissingCallback', 'Unparseable'] as const
-const oracle = fixture as unknown as Record<string, unknown>
+const oracle: Readonly<Record<string, unknown>> = { ...fixture }
 
 function chainAt(index: number): AnalyzedChain {
 	const result = results[index]!

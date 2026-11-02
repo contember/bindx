@@ -95,7 +95,7 @@ async function loadModule<T>(source: string, dir: string, compiled: boolean, opt
 	const path = join(dir, `.tk-${counter++}.tsx`)
 	writeFileSync(path, code)
 	tmpFiles.push(path)
-	return import(path) as Promise<T>
+	return import(path)
 }
 
 export interface RootSpec {

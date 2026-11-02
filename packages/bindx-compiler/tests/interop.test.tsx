@@ -21,9 +21,10 @@ import * as t from '@babel/types'
 import type { File } from '@babel/types'
 import { writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { COMPONENT_SELECTIONS, convertToQuerySelection, type SelectionMeta } from '@contember/bindx-react'
+import { convertToQuerySelection } from '@contember/bindx-react'
 import { bindxCompilerPlugin, type AnalyzedHole } from '../src/index.js'
 import { selectionToAst } from '../src/emit.js'
+import { collectedSelection } from './harness.js'
 
 // A hole whose target INVOKES its render-prop child (SelectField.staticRender calls props.children),
 // so the child `it => <Field field={it.name} />` is LIFTED verbatim into the hole's extraProps.
@@ -72,7 +73,7 @@ async function loadCompiled<T>(source: string): Promise<T> {
 	const path = join(import.meta.dir, `.interop-${counter++}.tsx`)
 	writeFileSync(path, code)
 	tmpFiles.push(path)
-	return import(path) as Promise<T>
+	return import(path)
 }
 
 afterAll(() => {
@@ -89,9 +90,7 @@ describe('#3 compiler → react-jsx interop (shared-AST stress)', () => {
 	test('output loads and the lifted closure still collects article.author.name', async () => {
 		const mod = await loadCompiled<HostModule>(SOURCE)
 		// Fragment access triggers static collection off the injected literal (extraProps thunk replayed).
-		void (mod.Host as Record<string, unknown>).$article
-		const selections = (mod.Host as Record<symbol, Map<string, { selection: SelectionMeta }>>)[COMPONENT_SELECTIONS]
-		const selection = selections?.get('article')?.selection
+		const selection = collectedSelection(mod.Host, 'article')
 		expect(selection).toBeDefined()
 		const query = selection ? convertToQuerySelection(selection) : {}
 		// The hole put author.name into the collected selection — proves neither copy was corrupted.

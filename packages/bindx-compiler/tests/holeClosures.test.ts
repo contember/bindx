@@ -108,7 +108,7 @@ export const Host = createComponent().entity('article', ArticleDef).render(({ ar
 describe('hole closure lifting — equivalence vs runtime oracle', () => {
 	const tmpPath = join(DIR, 'fixtures', '.holeClosures-compiled.tsx')
 	let compiled: Record<string, unknown> = {}
-	const oracle = oracleModule as unknown as Record<string, unknown>
+	const oracle: Readonly<Record<string, unknown>> = { ...oracleModule }
 
 	beforeAll(async () => {
 		const source = readFileSync(FIXTURE, 'utf8')
@@ -117,7 +117,7 @@ describe('hole closure lifting — equivalence vs runtime oracle', () => {
 			throw new Error('transform produced no output')
 		}
 		writeFileSync(tmpPath, out.code)
-		compiled = (await import(tmpPath)) as Record<string, unknown>
+		compiled = await import(tmpPath)
 	})
 
 	afterAll(() => {
@@ -125,20 +125,20 @@ describe('hole closure lifting — equivalence vs runtime oracle', () => {
 	})
 
 	test('LiftedRenderProp — compiled (lifted closure) equals the oracle (both collect author.name)', () => {
-		const reference = runtimePlain(oracle.LiftedRenderProp, 'article')
+		const reference = runtimePlain(oracle['LiftedRenderProp'], 'article')
 		expect(reference).toMatchObject({ author: { name: true } })
-		expect(runtimePlain(compiled.LiftedRenderProp, 'article')).toEqual(reference)
+		expect(runtimePlain(compiled['LiftedRenderProp'], 'article')).toEqual(reference)
 	})
 
 	test('CapturingRenderProp — bailed compiled path equals the oracle (both collect author.name)', () => {
-		const reference = runtimePlain(oracle.CapturingRenderProp, 'article')
+		const reference = runtimePlain(oracle['CapturingRenderProp'], 'article')
 		expect(reference).toMatchObject({ author: { name: true } })
-		expect(runtimePlain(compiled.CapturingRenderProp, 'article')).toEqual(reference)
+		expect(runtimePlain(compiled['CapturingRenderProp'], 'article')).toEqual(reference)
 	})
 
 	test('SafeHoleClosures — compiled hole equals the oracle (both collect author.name)', () => {
-		const reference = runtimePlain(oracle.SafeHoleClosures, 'article')
+		const reference = runtimePlain(oracle['SafeHoleClosures'], 'article')
 		expect(reference).toMatchObject({ author: { name: true } })
-		expect(runtimePlain(compiled.SafeHoleClosures, 'article')).toEqual(reference)
+		expect(runtimePlain(compiled['SafeHoleClosures'], 'article')).toEqual(reference)
 	})
 })

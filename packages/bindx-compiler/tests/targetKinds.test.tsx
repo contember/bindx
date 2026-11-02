@@ -270,12 +270,12 @@ describe('phase 3.1 — adapter-oracle equivalence', () => {
 	test('plain target with render-local: both blind, query equal', async () => {
 		const fields = await expectRootEquivalent(PLAIN_RENDER_LOCAL, DIR)
 		expect(fields).toMatchObject({ title: true })
-		expect(fields.author).toBeUndefined() // plain target is blind — no author fetched
+		expect(fields['author']).toBeUndefined() // plain target is blind — no author fetched
 	})
 
 	test('collectorStatic (unreferenced render-local dropped): strict equality, author.name collected', async () => {
 		const fields = await expectRootEquivalent(COLLECTOR_UNREFERENCED, DIR)
-		expect(fields.author).toMatchObject({ name: true })
+		expect(fields['author']).toMatchObject({ name: true })
 	})
 
 	test('entityLike wrapper: attribute rides {...props}; query equal, children not invoked', async () => {

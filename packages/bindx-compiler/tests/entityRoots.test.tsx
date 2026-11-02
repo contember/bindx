@@ -94,7 +94,7 @@ async function loadModule<T>(source: string, compiled: boolean): Promise<T> {
 	const path = join(TMP_DIR, `.p3-${counter++}.tsx`)
 	writeFileSync(path, code)
 	tmpFiles.push(path)
-	return import(path) as Promise<T>
+	return import(path)
 }
 
 interface RouteModule {
@@ -311,7 +311,7 @@ describe('phase 3 — entity root static analysis', () => {
 		expect(root && !isEntityRootBailed(root)).toBe(true)
 		if (root && !isEntityRootBailed(root)) {
 			expect(root.holes).toHaveLength(1)
-			expect(root.holes[0]!.entityProps.author).toEqual({ source: 'entity', path: ['author'] })
+			expect(root.holes[0]!.entityProps['author']).toEqual({ source: 'entity', path: ['author'] })
 		}
 	})
 
@@ -331,7 +331,7 @@ describe('phase 3 — entity root static analysis', () => {
 		expect(chains).toHaveLength(1)
 		expect(isBailed(chains[0]!)).toBe(false)
 		if (!isBailed(chains[0]!)) {
-			expect(chains[0]!.selection.article).toEqual({ title: true })
+			expect(chains[0]!.selection['article']).toEqual({ title: true })
 		}
 		// The Entity emit contains only paths rooted at its own closure param.
 		expect(roots).toHaveLength(1)
@@ -376,7 +376,7 @@ describe('phase 3 — adapter-oracle equivalence', () => {
 
 	test('nested has-one', async () => {
 		const fields = await expectRootEquivalent(NESTED_HAS_ONE)
-		expect(fields.author).toMatchObject({ name: true })
+		expect(fields['author']).toMatchObject({ name: true })
 	})
 
 	test('compiled createComponent inside the closure (fragment merges)', async () => {
@@ -386,12 +386,12 @@ describe('phase 3 — adapter-oracle equivalence', () => {
 
 	test('a hole (entity-derived value into a nested component)', async () => {
 		const fields = await expectRootEquivalent(HOLE)
-		expect(fields.author).toMatchObject({ name: true })
+		expect(fields['author']).toMatchObject({ name: true })
 	})
 
 	test('collector-contract target inside the closure', async () => {
 		const fields = await expectRootEquivalent(CONTRACT)
-		expect(fields.tags).toMatchObject({ name: true })
+		expect(fields['tags']).toMatchObject({ name: true })
 	})
 
 	test('branch union — runtime ⊆ compiled superset', async () => {
