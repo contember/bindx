@@ -17,11 +17,18 @@ function isValidFieldMap(value: unknown): boolean {
 	return isPlainObject(value) && Object.values(value).every(isValidFieldNode)
 }
 
+function isValidOptionalFieldMap(value: unknown): boolean {
+	return value === undefined || isValidFieldMap(value)
+}
+
 function isValidFieldNode(node: unknown): boolean {
 	if (node === true) {
 		return true
 	}
-	if (!isPlainObject(node) || !isValidFieldMap(node['fields'])) {
+	if (!isPlainObject(node) || (node['fields'] === undefined && node['hasOneFields'] === undefined)) {
+		return false
+	}
+	if (!isValidOptionalFieldMap(node['fields']) || !isValidOptionalFieldMap(node['hasOneFields'])) {
 		return false
 	}
 	return (node['many'] === undefined || node['many'] === true)

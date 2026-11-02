@@ -13,7 +13,7 @@
  * invokes them during collection stays oracle-equal — see docs/compiler-plan.md.
  */
 import type { ReactNode } from 'react'
-import type { SelectionMeta } from '@contember/bindx'
+import type { SelectionMeta, StaticSelectionSchema } from '@contember/bindx'
 import { SchemaRegistry, SelectionScope, ComponentBrand, driveSelectionScope } from '@contember/bindx'
 import type { StaticFieldMap } from '@contember/bindx'
 import { createCollectorProxy } from './proxy.js'
@@ -143,7 +143,7 @@ export function resolveCompiledSelection(params: ResolveCompiledSelectionParams)
 
 	// 1. Seed a live (open) scope per entity prop from the static field maps.
 	for (const [propName, fieldMap] of Object.entries(compiled.props)) {
-		driveSelectionScope(scopeFor(propName), fieldMap)
+		driveSelectionScope(scopeFor(propName), fieldMap, schemaFor(propName, ctx))
 	}
 
 	// 2. Resolve each hole into the same scopes (fragment-spread equivalent).
@@ -264,13 +264,17 @@ function assembleHoleProps(hole: CompiledHole, ctx: HoleResolutionContext): Reco
  * entity-name + schema config that the proxy pass uses for that prop.
  */
 function createSourceProxy(sourceProp: string, ctx: HoleResolutionContext): unknown {
-	const scope = ctx.scopeFor(sourceProp)
-	const config = ctx.implicitConfigsMap.get(sourceProp)
-	const entityName = config?.entityName ?? null
-	const registry = config?.schema
-		? new SchemaRegistry(config.schema)
-		: ctx.schemaRegistry
-	return createCollectorProxy(scope, entityName, registry)
+	const { entityName, schemaRegistry } = schemaFor(sourceProp, ctx)
+	return createCollectorProxy(ctx.scopeFor(sourceProp), entityName, schemaRegistry)
+}
+
+/** The entity name + schema the proxy pass would collect an entity prop with. */
+function schemaFor(propName: string, ctx: HoleResolutionContext): StaticSelectionSchema {
+	const config = ctx.implicitConfigsMap.get(propName)
+	return {
+		entityName: config?.entityName ?? null,
+		schemaRegistry: config?.schema ? new SchemaRegistry(config.schema) : ctx.schemaRegistry,
+	}
 }
 
 /** Replays a member path via property gets — identical to the proxy pass. */

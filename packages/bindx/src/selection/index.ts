@@ -34,4 +34,5 @@ export {
 	driveSelectionScope,
 	type StaticFieldMap,
 	type StaticFieldNode,
+	type StaticSelectionSchema,
 } from './staticSelectionToMeta.js'

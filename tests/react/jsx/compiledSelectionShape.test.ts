@@ -11,6 +11,7 @@ describe('isValidCompiledSelection', () => {
 				article: {
 					title: true,
 					tags: { fields: { name: true }, many: true, params: { limit: 5 } },
+					content: { hasOneFields: { value: true } },
 				},
 			},
 			holes: [{
@@ -26,7 +27,7 @@ describe('isValidCompiledSelection', () => {
 	const rejected: Array<[string, unknown]> = [
 		['wrong version', { v: 1, props: { article: { title: true } } }],
 		['props key that is not an entity prop', { v: 2, props: { other: { title: true } } }],
-		['relation node without fields', { v: 2, props: { article: { author: {} } } }],
+		['object node with neither fields nor hasOneFields', { v: 2, props: { article: { author: {} } } }],
 		['scalar leaf other than true', { v: 2, props: { article: { title: false } } }],
 		['many flag other than true', { v: 2, props: { article: { tags: { fields: {}, many: 1 } } } }],
 		['holes that are not an array', { v: 2, props: {}, holes: {} }],

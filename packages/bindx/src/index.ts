@@ -166,7 +166,7 @@ export type {
 
 // Selection utilities
 export { createFragment, buildQueryFromSelection, SELECTION_META, createSelectionBuilder, SelectionMetaCollector, mergeSelections, createEmptySelection, SelectionScope, staticSelectionToMeta, driveSelectionScope } from './selection/index.js'
-export type { HasManyParams, StaticFieldMap, StaticFieldNode } from './selection/index.js'
+export type { HasManyParams, StaticFieldMap, StaticFieldNode, StaticSelectionSchema } from './selection/index.js'
 
 // Handles
 export { EntityHandle, HasOneHandle, HasManyListHandle, FieldHandle } from './handles/index.js'
