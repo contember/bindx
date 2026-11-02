@@ -17,14 +17,13 @@
 	"dependencies": {
 		"@babel/core": "^7.28.0",
 		"@babel/parser": "^7.28.0",
-		"@babel/traverse": "^7.28.0",
 		"@babel/types": "^7.28.0"
 	},
 	"devDependencies": {
 		"@babel/plugin-transform-react-jsx": "^7.28.0",
+		"@contember/bindx": "workspace:*",
 		"@contember/bindx-react": "workspace:*",
-		"@types/babel__core": "^7.20.5",
-		"@types/babel__traverse": "^7.20.6"
+		"@types/babel__core": "^7.20.5"
 	},
 	"files": [
 		"dist",
