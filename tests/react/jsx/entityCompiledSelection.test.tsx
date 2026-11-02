@@ -39,6 +39,52 @@ function isCollector(value: unknown): boolean {
 }
 
 describe('compiled <Entity> — collection is skipped', () => {
+	test('a literal assuming a has-one is not one falls back to the collector pass', async () => {
+		const warn = spyOn(console, 'warn').mockImplementation(() => {})
+		let collectorCalls = 0
+		// `entity.author.value` left the analyzed code: sound only if `author` is no has-one.
+		const compiledSelection: CompiledSelection = { v: 2, props: { entity: { author: { assumesNotHasOne: true } } } }
+
+		const { container } = renderWithBindx(
+			<Entity entity={schema.Article} by={{ id: 'article-1' }} compiledSelection={compiledSelection}>
+				{article => {
+					if (isCollector(article)) {
+						collectorCalls++
+					}
+					return <span data-testid="title"><Field field={article.title} /></span>
+				}}
+			</Entity>,
+		)
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'title').textContent).toBe('Hello World')
+		})
+		expect(collectorCalls).toBeGreaterThan(0)
+		expect(warn).toHaveBeenCalled()
+		warn.mockRestore()
+	})
+
+	test('a literal assuming a scalar is not a has-one is used as is', async () => {
+		let collectorCalls = 0
+		const compiledSelection: CompiledSelection = { v: 2, props: { entity: { title: { assumesNotHasOne: true } } } }
+
+		const { container } = renderWithBindx(
+			<Entity entity={schema.Article} by={{ id: 'article-1' }} compiledSelection={compiledSelection}>
+				{article => {
+					if (isCollector(article)) {
+						collectorCalls++
+					}
+					return <span data-testid="title"><Field field={article.title} /></span>
+				}}
+			</Entity>,
+		)
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'title').textContent).toBe('Hello World')
+		})
+		expect(collectorCalls).toBe(0)
+	})
+
 	test('renders WITHOUT ever invoking children with a collector', async () => {
 		let collectorCalls = 0
 		const compiledSelection: CompiledSelection = { v: 2, props: { entity: { title: true } } }

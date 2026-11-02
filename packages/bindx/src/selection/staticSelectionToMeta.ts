@@ -17,7 +17,8 @@ export type StaticFieldMap = Record<string, StaticFieldNode>
 /**
  * `true` = the field was read; an object node = `fields` read on its target (⇒ a relation), plus
  * `hasOneFields` read through ref API names (`.value`, `.length`) — fields of the target only when
- * the schema says the field is a has-one, collector passthrough otherwise.
+ * the schema says the field is a has-one, collector passthrough otherwise. `assumesNotHasOne` marks
+ * a field whose ref API value left the analyzed code: sound only when the field is not a has-one.
  */
 export type StaticFieldNode =
 	| true
@@ -25,7 +26,16 @@ export type StaticFieldNode =
 		fields?: StaticFieldMap
 		hasOneFields?: StaticFieldMap
 		many?: true // has-many (known from <HasMany> / `.map()` usage)
+		assumesNotHasOne?: true
 	}
+
+/** A compiled field map whose assumptions the schema contradicts; callers fall back to runtime collection. */
+export class StaticSelectionMismatchError extends Error {
+	constructor(entityName: string | null, fieldName: string) {
+		super(`compiled selection assumed ${entityName ?? '?'}.${fieldName} is not a has-one relation`)
+		this.name = 'StaticSelectionMismatchError'
+	}
+}
 
 /** The entity a field map is read on, for schema lookups (both null ⇒ no schema, like the collector). */
 export interface StaticSelectionSchema {
@@ -60,6 +70,9 @@ function typeField(schema: StaticSelectionSchema, fieldName: string): FieldTypin
 export function driveSelectionScope(scope: SelectionScope, map: StaticFieldMap, schema: StaticSelectionSchema = NO_SCHEMA): void {
 	for (const [fieldName, node] of Object.entries(map)) {
 		const typing = typeField(schema, fieldName)
+		if (node !== true && node.assumesNotHasOne && typing.isHasOne) {
+			throw new StaticSelectionMismatchError(schema.entityName, fieldName)
+		}
 		const nested = node === true ? undefined : node.fields
 		const hasOneFields = node !== true && typing.isHasOne ? node.hasOneFields : undefined
 		if (!nested && !hasOneFields && !typing.isHasOne && !typing.isHasMany) {

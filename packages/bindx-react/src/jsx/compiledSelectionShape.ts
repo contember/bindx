@@ -30,15 +30,16 @@ function isValidFieldNode(node: unknown): boolean {
 	if (node === true) {
 		return true
 	}
-	if (!isPlainObject(node) || !hasOnlyKeys(node, ['fields', 'hasOneFields', 'many'])) {
+	if (!isPlainObject(node) || !hasOnlyKeys(node, ['fields', 'hasOneFields', 'many', 'assumesNotHasOne'])) {
 		return false
 	}
-	if (node['fields'] === undefined && node['hasOneFields'] === undefined) {
+	if (node['fields'] === undefined && node['hasOneFields'] === undefined && node['assumesNotHasOne'] === undefined) {
 		return false
 	}
 	return isValidOptionalFieldMap(node['fields'])
 		&& isValidOptionalFieldMap(node['hasOneFields'])
 		&& (node['many'] === undefined || node['many'] === true)
+		&& (node['assumesNotHasOne'] === undefined || node['assumesNotHasOne'] === true)
 }
 
 function isValidThunkMap(value: unknown): boolean {

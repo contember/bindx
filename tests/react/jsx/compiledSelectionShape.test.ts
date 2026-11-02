@@ -12,6 +12,7 @@ describe('isValidCompiledSelection', () => {
 					title: true,
 					tags: { fields: { name: true }, many: true },
 					content: { hasOneFields: { value: true } },
+					slug: { assumesNotHasOne: true },
 				},
 			},
 			holes: [{
@@ -29,6 +30,7 @@ describe('isValidCompiledSelection', () => {
 		['props key that is not an entity prop', { v: 2, props: { other: { title: true } } }],
 		['object node with neither fields nor hasOneFields', { v: 2, props: { article: { author: {} } } }],
 		['scalar leaf other than true', { v: 2, props: { article: { title: false } } }],
+		['assumesNotHasOne other than true', { v: 2, props: { article: { title: { assumesNotHasOne: false } } } }],
 		['many flag other than true', { v: 2, props: { article: { tags: { fields: {}, many: 1 } } } }],
 		['unknown key on a field node', { v: 2, props: { article: { tags: { fields: {}, many: true, params: { limit: 5 } } } } }],
 		['unknown top-level key', { v: 2, props: {}, extra: true }],
