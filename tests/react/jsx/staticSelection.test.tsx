@@ -85,24 +85,15 @@ describe('staticSelectionToMeta — converter equivalence', () => {
 		expect(staticSelectionToMeta({ author: true })).toEqual(runtime!)
 	})
 
-	test('has-many with params matches an equivalently built SelectionScope', () => {
-		// Standalone createComponent has no schema registry, so its proxy pass does
-		// not capture has-many params — SelectionScope is the canonical reference here.
+	test('has-many matches an equivalently built SelectionScope', () => {
 		const scope = new SelectionScope()
 		const tags = scope.child('tags')
 		scope.markAsArray('tags')
-		scope.setHasManyParams('tags', { limit: 5, filter: { active: true } })
 		tags.addScalar('name')
 		const reference = scope.toSelectionMeta()
 
-		const map: StaticFieldMap = {
-			tags: { fields: { name: true }, many: true, params: { limit: 5, filter: { active: true } } },
-		}
-		const actual = staticSelectionToMeta(map)
-		expect(actual).toEqual(reference)
-		// Params drive alias generation — the has-many key must be the hashed alias, not "tags".
-		expect([...actual.fields.keys()][0]).not.toBe('tags')
-		expect([...actual.fields.values()][0]!.hasManyParams).toEqual({ limit: 5, filter: { active: true } })
+		const map: StaticFieldMap = { tags: { fields: { name: true }, many: true } }
+		expect(staticSelectionToMeta(map)).toEqual(reference)
 	})
 })
 
@@ -188,17 +179,16 @@ describe('validate mode', () => {
 		warn.mockRestore()
 	})
 
-	test('has-many params/many-ness only in compiled (divergence 1) emits no warning', () => {
+	test('many-ness only in compiled emits no warning', () => {
 		setStaticSelectionValidation(true)
 		const warn = spyOn(console, 'warn').mockImplementation(() => {})
 
-		// The compiler emits has-many params; the runtime does not record them in
-		// implicit collection. Same fields, so a params-only difference must not warn.
+		// Without a schema the runtime does not mark the relation as an array; same fields, no warning.
 		const Comp = createComponent()
 			.entity('article', schema.Article)
 			.render(
 				({ article }) => <HasMany field={article.tags}>{t => <Field field={t.name} />}</HasMany>,
-				{ v: 2, props: { article: { tags: { fields: { name: true }, many: true, params: { limit: 5 } } } } },
+				{ v: 2, props: { article: { tags: { fields: { name: true }, many: true } } } },
 			)
 
 		getComponentSelection(Comp, 'article')
@@ -609,17 +599,9 @@ describe('compiled selection — runtime hardening (validation, containment, kil
 		warn.mockRestore()
 	})
 
-	test('a throwing extraProps thunk is contained — its hole degrades, siblings and own props survive', () => {
-		const error = spyOn(console, 'error').mockImplementation(() => {})
+	test('a throwing extraProps thunk falls back to the proxy pass instead of dropping the hole', () => {
+		const warn = spyOn(console, 'warn').mockImplementation(() => {})
 
-		interface SelectFieldProps {
-			entity: EntityRef<Author>
-			children: (entity: EntityRef<Author>) => React.ReactNode
-		}
-		const SelectField = withCollector(
-			function SelectField(_props: SelectFieldProps): React.ReactNode { return null },
-			(props: SelectFieldProps) => <>{props.children(props.entity)}</>,
-		)
 		const AuthorCard = createComponent()
 			.entity('author', schema.Author)
 			.render(({ author }) => <Field field={author.name} />)
@@ -627,31 +609,49 @@ describe('compiled selection — runtime hardening (validation, containment, kil
 		const CompiledHost = createComponent()
 			.entity('article', schema.Article)
 			.render(
-				() => { throw new Error('render must not run') },
+				({ article }) => <div><Field field={article.title} /><AuthorCard author={article.author} /></div>,
 				{
 					v: 2,
 					props: { article: { title: true } },
-					holes: [
-						{
-							component: () => SelectField,
-							entityProps: { entity: { source: 'article', path: ['author'] } },
-							// TDZ / module-init failure: the thunk throws while the hole's props are assembled.
-							extraProps: { children: () => { throw new Error('thunk boom') } },
-						},
-						{
-							component: () => AuthorCard,
-							entityProps: { author: { source: 'article', path: ['author'] } },
-						},
-					],
+					holes: [{
+						component: () => AuthorCard,
+						entityProps: { author: { source: 'article', path: ['author'] } },
+						// TDZ / module-init failure: the thunk throws while the hole's props are assembled.
+						extraProps: { label: () => { throw new Error('thunk boom') } },
+					}],
 				},
 			)
 
 		const selection = getComponentSelection(CompiledHost, 'article')
-		// Own static prop and the sibling hole both survived the throwing thunk.
+		expect(warn).toHaveBeenCalled()
 		expect(fieldNames(selection!)).toContain('title')
 		expect(fieldNames(relation(selection!, 'author'))).toContain('name')
-		expect(error).toHaveBeenCalled()
-		error.mockRestore()
+		warn.mockRestore()
+	})
+
+	test('a hole whose component thunk returns nothing falls back to the proxy pass', () => {
+		const warn = spyOn(console, 'warn').mockImplementation(() => {})
+
+		const AuthorCard = createComponent()
+			.entity('author', schema.Author)
+			.render(({ author }) => <Field field={author.name} />)
+
+		const CompiledHost = createComponent()
+			.entity('article', schema.Article)
+			.render(
+				({ article }) => <AuthorCard author={article.author} />,
+				{
+					v: 2,
+					props: { article: {} },
+					// A stale literal: the export it points at was renamed.
+					holes: [{ component: () => undefined, entityProps: { author: { source: 'article', path: ['author'] } } }],
+				},
+			)
+
+		const selection = getComponentSelection(CompiledHost, 'article')
+		expect(warn).toHaveBeenCalled()
+		expect(fieldNames(relation(selection!, 'author'))).toContain('name')
+		warn.mockRestore()
 	})
 
 	test('killswitch: setCompiledSelectionsEnabled(false) forces the proxy pass', () => {

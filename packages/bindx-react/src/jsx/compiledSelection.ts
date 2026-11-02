@@ -15,11 +15,13 @@
 import type { ReactNode } from 'react'
 import type { SelectionMeta, StaticSelectionSchema } from '@contember/bindx'
 import { SchemaRegistry, SelectionScope, ComponentBrand, driveSelectionScope } from '@contember/bindx'
+import { SelectionMetaCollector, mergeSelections } from './SelectionMeta.js'
 import type { StaticFieldMap } from '@contember/bindx'
 import { createCollectorProxy } from './proxy.js'
 import { collectSelection, resolveComponentName } from './analyzer.js'
 import { createFragment, createScalarPropMock } from './collectionHelpers.js'
 import type { SelectionPropMeta } from './componentBuilder.types.js'
+import type { SelectionProvider } from './types.js'
 import type { EntityConfig } from './componentFactory.js'
 
 // ============================================================================
@@ -91,7 +93,8 @@ export interface ApplyCompiledSelectionParams {
  */
 export function applyCompiledSelection(params: ApplyCompiledSelectionParams): void {
 	const { selectionsMap, componentBrand, roles } = params
-	const metas = resolveCompiledSelection({
+	// Like the proxy pass, a component keeps only what reached its scopes (returned fields are dropped).
+	const { metas } = resolveCompiledSelection({
 		compiled: params.compiled,
 		implicitConfigs: params.implicitConfigs,
 		schemaRegistry: params.schemaRegistry,
@@ -106,7 +109,7 @@ export function applyCompiledSelection(params: ApplyCompiledSelectionParams): vo
 	}
 }
 
-export interface ResolveCompiledSelectionParams {
+interface ResolveCompiledSelectionParams {
 	readonly compiled: CompiledSelection
 	readonly implicitConfigs: readonly [string, EntityConfig][]
 	readonly schemaRegistry: SchemaRegistry<Record<string, object>> | null
@@ -114,13 +117,21 @@ export interface ResolveCompiledSelectionParams {
 	readonly validateMode: boolean
 }
 
+interface ResolvedCompiledSelection {
+	/** Snapshotted selection per entity prop that captured fields. */
+	readonly metas: Map<string, SelectionMeta>
+	/** What hole targets returned instead of writing into a scope (kept by the <Entity> root walk only). */
+	readonly returned: SelectionMeta
+}
+
 /**
  * Core resolution shared by createComponent (fragments) and <Entity> (root
  * selection): seeds one live scope per entity prop from the static field maps,
- * resolves every hole into the matching scope, and returns the snapshotted
- * SelectionMeta per prop that captured fields. The host render fn is never run.
+ * resolves every hole into the matching scope, and snapshots them. The host render fn
+ * is never run. Throws on a broken literal (missing hole component, throwing thunk) so
+ * the caller falls back to the proxy pass instead of under-fetching.
  */
-export function resolveCompiledSelection(params: ResolveCompiledSelectionParams): Map<string, SelectionMeta> {
+function resolveCompiledSelection(params: ResolveCompiledSelectionParams): ResolvedCompiledSelection {
 	const { compiled } = params
 	const propScopes = new Map<string, SelectionScope>()
 
@@ -147,8 +158,9 @@ export function resolveCompiledSelection(params: ResolveCompiledSelectionParams)
 	}
 
 	// 2. Resolve each hole into the same scopes (fragment-spread equivalent).
+	const returned = new SelectionMetaCollector()
 	for (const hole of compiled.holes ?? []) {
-		resolveHole(hole, ctx)
+		resolveHole(hole, ctx, returned)
 	}
 
 	// 3. Snapshot every scope that captured fields.
@@ -158,7 +170,7 @@ export function resolveCompiledSelection(params: ResolveCompiledSelectionParams)
 			metas.set(propName, scope.toSelectionMeta())
 		}
 	}
-	return metas
+	return { metas, returned }
 }
 
 /** Fixed key under which <Entity> stores its compiled root field map + hole sources. */
@@ -177,14 +189,17 @@ export interface ResolveCompiledRootSelectionParams {
  * <Entity> is a selection root, not a composable component.
  */
 export function resolveCompiledRootSelection(params: ResolveCompiledRootSelectionParams): SelectionMeta {
-	const metas = resolveCompiledSelection({
+	const { metas, returned } = resolveCompiledSelection({
 		compiled: params.compiled,
 		implicitConfigs: [[COMPILED_ROOT_KEY, { entityName: params.entityType }]],
 		schemaRegistry: params.schemaRegistry,
 		componentDisplayName: `Entity(${params.entityType})`,
 		validateMode: params.validateMode,
 	})
-	return metas.get(COMPILED_ROOT_KEY) ?? { fields: new Map() }
+	const selection = metas.get(COMPILED_ROOT_KEY) ?? { fields: new Map() }
+	// The runtime root walk merges what its JSX components return (e.g. an uploader's nested fields).
+	mergeSelections(selection, returned)
+	return selection
 }
 
 interface HoleResolutionContext {
@@ -198,31 +213,25 @@ interface HoleResolutionContext {
 /**
  * Resolves one hole: assembles the target's props (entity values replayed from
  * the source scopes + literal props) and feeds them to its selection surface,
- * mirroring `analyzeJsx` order. Errors are contained per hole.
+ * mirroring `analyzeJsx` order. A broken literal throws; an error inside the
+ * target's own surface is contained, as in the proxy pass.
  */
-function resolveHole(hole: CompiledHole, ctx: HoleResolutionContext): void {
-	let target: unknown
-	try {
-		target = hole.component()
-	} catch (error) {
-		reportHoleError(undefined, ctx.componentDisplayName, error)
-		return
-	}
+function resolveHole(hole: CompiledHole, ctx: HoleResolutionContext, returned: SelectionMetaCollector): void {
+	const target = hole.component()
 	if (target === null || (typeof target !== 'object' && typeof target !== 'function')) {
-		return
+		throw new Error(`hole component thunk returned ${String(target)} (stale compiled selection?)`)
 	}
+	const props = assembleHoleProps(hole, ctx)
 
 	try {
-		// Inside the try: a throwing extraProps thunk (module-init/TDZ) degrades this one hole, not the whole resolution.
-		const props = assembleHoleProps(hole, ctx)
 		if (hasGetSelection(target)) {
-			// Entity values carry SCOPE_REF, so getSelection merges into the source
-			// scopes as a side effect; the returned fields are irrelevant here.
-			target.getSelection(props, collectNested)
+			// Entity values carry SCOPE_REF, so most targets merge into the source scopes as a side
+			// effect; some only return their fields.
+			addReturnedFields(returned, target.getSelection(props, collectNested))
 		} else if (hasStaticRender(target)) {
 			const jsx = target.staticRender(wrapPropsWithScalarFallback(props))
 			if (jsx !== null && jsx !== undefined) {
-				collectSelection(jsx)
+				mergeSelections(returned, collectSelection(jsx))
 			}
 		} else if (ctx.validateMode) {
 			// Plain React target: the runtime proxy pass is equally blind here, so
@@ -234,6 +243,16 @@ function resolveHole(hole: CompiledHole, ctx: HoleResolutionContext): void {
 		}
 	} catch (error) {
 		reportHoleError(target, ctx.componentDisplayName, error)
+	}
+}
+
+/** Adds a `getSelection` result the way `analyzeJsx` does. */
+function addReturnedFields(returned: SelectionMetaCollector, result: ReturnType<SelectionProvider['getSelection']>): void {
+	if (!result) {
+		return
+	}
+	for (const field of Array.isArray(result) ? result : [result]) {
+		returned.addField(field)
 	}
 }
 
@@ -305,7 +324,7 @@ function wrapPropsWithScalarFallback(props: Record<string, unknown>): Record<str
 }
 
 interface GetSelectionSurface {
-	getSelection(props: Record<string, unknown>, collectNested: (node: ReactNode) => SelectionMeta): unknown
+	getSelection(props: Record<string, unknown>, collectNested: (node: ReactNode) => SelectionMeta): ReturnType<SelectionProvider['getSelection']>
 }
 
 interface StaticRenderSurface {
@@ -325,7 +344,7 @@ function hasStaticRender(target: object): target is StaticRenderSurface {
  * report-and-continue policy of `analyzeJsx`'s per-component error handling.
  */
 function reportHoleError(target: unknown, hostName: string, error: unknown): void {
-	const name = target === undefined ? 'anonymous' : resolveComponentName(target)
+	const name = resolveComponentName(target)
 	console.error(
 		`[bindx] Hole resolution of <${name}> inside <${hostName}> failed — its fields were NOT added to the fetch plan. `
 		+ 'Fix the error below; fields it uses may be missing from queries until then.',

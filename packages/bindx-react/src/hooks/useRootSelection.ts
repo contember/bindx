@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { buildQueryFromSelection } from '@contember/bindx'
 import type { EntityAccessor } from '../jsx/types.js'
 import { useSchemaRegistry } from './BackendAdapterContext.js'
@@ -29,6 +29,8 @@ export function useRootSelection(params: UseRootSelectionParams): SelectionColle
 	const schemaRegistry = useSchemaRegistry()
 	const validateMode = isStaticSelectionValidationEnabled()
 	const compiledEnabled = isCompiledSelectionsEnabled()
+	// Same query ⇒ same result object, so consumers keyed on the selection keep their handles.
+	const compiledCacheRef = useRef<SelectionCollectionResult | null>(null)
 
 	// Compiled root selection — present ⇒ skip the children(collector) walk (unless validating).
 	// Killswitch off or a malformed/throwing literal yields null ⇒ the runtime walk runs. Decided
@@ -51,7 +53,14 @@ export function useRootSelection(params: UseRootSelectionParams): SelectionColle
 				schemaRegistry,
 				validateMode,
 			})
-			return { selection, queryKey: JSON.stringify(buildQueryFromSelection(selection)) }
+			const queryKey = JSON.stringify(buildQueryFromSelection(selection))
+			const cached = compiledCacheRef.current
+			if (cached && cached.queryKey === queryKey) {
+				return cached
+			}
+			const result = { selection, queryKey }
+			compiledCacheRef.current = result
+			return result
 		} catch (error) {
 			console.warn(
 				`[bindx] compiled selection for <Entity ${entityType}> failed to resolve — `

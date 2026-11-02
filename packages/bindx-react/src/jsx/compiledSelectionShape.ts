@@ -21,18 +21,24 @@ function isValidOptionalFieldMap(value: unknown): boolean {
 	return value === undefined || isValidFieldMap(value)
 }
 
+/** Only known keys: a literal from a newer emitter that still says `v: 2` must not be half-read. */
+function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+	return Object.keys(value).every(key => allowed.includes(key))
+}
+
 function isValidFieldNode(node: unknown): boolean {
 	if (node === true) {
 		return true
 	}
-	if (!isPlainObject(node) || (node['fields'] === undefined && node['hasOneFields'] === undefined)) {
+	if (!isPlainObject(node) || !hasOnlyKeys(node, ['fields', 'hasOneFields', 'many'])) {
 		return false
 	}
-	if (!isValidOptionalFieldMap(node['fields']) || !isValidOptionalFieldMap(node['hasOneFields'])) {
+	if (node['fields'] === undefined && node['hasOneFields'] === undefined) {
 		return false
 	}
-	return (node['many'] === undefined || node['many'] === true)
-		&& (node['params'] === undefined || isPlainObject(node['params']))
+	return isValidOptionalFieldMap(node['fields'])
+		&& isValidOptionalFieldMap(node['hasOneFields'])
+		&& (node['many'] === undefined || node['many'] === true)
 }
 
 function isValidThunkMap(value: unknown): boolean {
@@ -41,11 +47,15 @@ function isValidThunkMap(value: unknown): boolean {
 }
 
 function isValidHole(hole: unknown, entityPropNames: readonly string[]): boolean {
-	if (!isPlainObject(hole) || typeof hole['component'] !== 'function' || !isPlainObject(hole['entityProps'])) {
+	if (!isPlainObject(hole) || !hasOnlyKeys(hole, ['component', 'entityProps', 'literalProps', 'extraProps'])) {
+		return false
+	}
+	if (typeof hole['component'] !== 'function' || !isPlainObject(hole['entityProps'])) {
 		return false
 	}
 	const hasValidOrigins = Object.values(hole['entityProps']).every(origin =>
 		isPlainObject(origin)
+		&& hasOnlyKeys(origin, ['source', 'path'])
 		&& typeof origin['source'] === 'string'
 		&& entityPropNames.includes(origin['source'])
 		&& isStringArray(origin['path']),
@@ -63,7 +73,7 @@ export function isValidCompiledSelection(
 	value: unknown,
 	entityPropNames: readonly string[],
 ): value is CompiledSelection {
-	if (!isPlainObject(value) || value['v'] !== 2 || !isPlainObject(value['props'])) {
+	if (!isPlainObject(value) || !hasOnlyKeys(value, ['v', 'props', 'holes']) || value['v'] !== 2 || !isPlainObject(value['props'])) {
 		return false
 	}
 	const hasValidProps = Object.entries(value['props']).every(([propName, fieldMap]) =>

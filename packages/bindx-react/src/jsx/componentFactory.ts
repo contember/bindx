@@ -246,7 +246,8 @@ export function buildComponent<TProps extends object>(
 		try {
 			// Precompiled selection present ⇒ build entries from it, skip the proxy pass.
 			// Killswitch off or a malformed/throwing literal falls back to the proxy pass wholesale (never under-fetch).
-			if (compiled && isCompiledSelectionsEnabled() && tryApplyCompiled()) {
+			// Interfaces mode discovers props during the proxy pass; a literal cannot carry them.
+			if (compiled && !hasInterfacesMode && isCompiledSelectionsEnabled() && tryApplyCompiled()) {
 				return
 			}
 			collectImplicitSelections(implicitConfigs, renderFn, selectionsMap, componentBrand, roles, hasInterfacesMode, schemaRegistry, conditionFn, mockValues)

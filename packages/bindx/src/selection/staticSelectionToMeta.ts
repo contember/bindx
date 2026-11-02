@@ -8,7 +8,7 @@
  * the collector proxy's schema rules, so both paths share the same field typing.
  */
 import type { SelectionMeta } from './types.js'
-import { SelectionScope, type HasManyParams } from './SelectionScope.js'
+import { SelectionScope } from './SelectionScope.js'
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 
 /** Selection for one implicit entity prop. Key = field name. */
@@ -24,14 +24,7 @@ export type StaticFieldNode =
 	| {
 		fields?: StaticFieldMap
 		hasOneFields?: StaticFieldMap
-		many?: true // has-many (known from <HasMany> usage or collection params)
-		params?: { // has-many params; only statically-literal values
-			filter?: unknown
-			orderBy?: unknown
-			limit?: number
-			offset?: number
-			totalCount?: boolean
-		}
+		many?: true // has-many (known from <HasMany> / `.map()` usage)
 	}
 
 /** The entity a field map is read on, for schema lookups (both null ⇒ no schema, like the collector). */
@@ -77,10 +70,6 @@ export function driveSelectionScope(scope: SelectionScope, map: StaticFieldMap, 
 		const childScope = scope.child(fieldName)
 		if (typing.isHasMany || (node !== true && node.many)) {
 			scope.markAsArray(fieldName)
-		}
-		if (node !== true && node.params) {
-			const params: HasManyParams = node.params
-			scope.setHasManyParams(fieldName, params)
 		}
 		driveSelectionScope(childScope, nested ?? {}, typing.target)
 		driveSelectionScope(childScope, hasOneFields ?? {}, typing.target)
