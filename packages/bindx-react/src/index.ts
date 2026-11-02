@@ -38,7 +38,6 @@ export type {
 	HasManyOptions,
 	InferSelection,
 	// Static (precompiled) selection
-	StaticSelection,
 	StaticFieldMap,
 	StaticFieldNode,
 	QuerySpec,
@@ -154,7 +153,6 @@ export {
 	// Selection utilities
 	createFragment,
 	buildQueryFromSelection,
-	staticSelectionToMeta,
 	// Handles
 	EntityHandle,
 	HasOneHandle,

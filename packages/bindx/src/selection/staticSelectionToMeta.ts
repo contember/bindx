@@ -1,9 +1,9 @@
 /**
- * Converts a precompiled static selection into runtime `SelectionMeta`.
+ * Converts a precompiled static field map into runtime `SelectionMeta`.
  *
- * The compiler emits this plain, serializable shape as the 2nd argument of
- * `.render()`; the runtime consumes it in place of the proxy collection pass.
- * Output is indistinguishable from `SelectionScope.toSelectionMeta()` for the
+ * The compiler emits these plain, serializable maps inside a `CompiledSelection`
+ * (2nd argument of `.render()`); the runtime consumes them in place of the proxy
+ * collection pass. Output is indistinguishable from `SelectionScope.toSelectionMeta()` for the
  * equivalent access pattern — this file drives a `SelectionScope` so both paths
  * share the exact same alias/path/`id`-seeding semantics.
  */
@@ -26,9 +26,6 @@ export type StaticFieldNode =
 			totalCount?: boolean
 		}
 	}
-
-/** Emitted as the 2nd argument of .render(): key = implicit entity prop name. */
-export type StaticSelection = Record<string, StaticFieldMap>
 
 /**
  * Drives a caller-provided (open) scope from a static field map, mirroring the
