@@ -58,9 +58,9 @@ function matchesAny(id: string, patterns: readonly (string | RegExp)[]): boolean
 	return patterns.some(pattern => (typeof pattern === 'string' ? id.includes(pattern) : pattern.test(id)))
 }
 
-/** Cheap gate: only these markers can produce an emit — skip everything else without parsing. */
-function mayCompile(code: string): boolean {
-	return code.includes('createComponent') || code.includes('<Entity')
+/** Cheap gate: only these markers can produce an emit (aliased `Entity` imports included). */
+function mayCompile(code: string, entityLike: readonly string[]): boolean {
+	return code.includes('createComponent') || code.includes('Entity') || entityLike.some(name => code.includes(name))
 }
 
 /**
@@ -92,24 +92,28 @@ export function bindxCompiler(options: BindxCompilerViteOptions = {}): BindxComp
 			if (exclude && matchesAny(file, exclude)) {
 				return null
 			}
-			if (!mayCompile(code)) {
-				return null // no createComponent/<Entity → nothing to compile; return source untouched
+			if (!mayCompile(code, entityLike ?? [])) {
+				return null // no createComponent/Entity marker → nothing to compile; return source untouched
 			}
 			const deps = new Set<string>()
+			let compiledInFile = 0
+			const onReport = (fileTotals: DiagnosticTotals): void => {
+				accumulate(fileTotals)
+				compiledInFile += fileTotals.compiled
+			}
 			const result = await transformAsync(code, {
-				filename: id,
+				filename: file,
 				configFile: false,
 				babelrc: false,
 				sourceMaps: true,
-				parserOpts: { plugins: ['typescript', 'jsx'] },
-				plugins: [[bindxCompilerPlugin, { alias, entityLike, diagnostics, cache, onReport: accumulate, onDependency: (dep: string) => deps.add(dep) }]],
+				plugins: [[bindxCompilerPlugin, { alias, entityLike, diagnostics, cache, onReport, onDependency: (dep: string) => deps.add(dep) }]],
 			})
-			if (!result?.code) {
-				return null
-			}
 			// Register every cross-file read so a later edit to a contract/target module re-transforms this file.
 			for (const dep of deps) {
 				this.addWatchFile(dep)
+			}
+			if (!result?.code || compiledInFile === 0) {
+				return null // nothing injected → leave the source (and its source map) untouched
 			}
 			return { code: result.code, map: result.map }
 		},

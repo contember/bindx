@@ -16,6 +16,7 @@ import type { ModuleCache } from './moduleResolve.js'
 import { compiledSelectionAttr, entitySelectionObject, selectionToAst } from './emit.js'
 import { ENTITY_ROOT_KEY, hasCompiledSelectionAttr } from './entityRoots.js'
 import { messageOf } from './resolve.js'
+import { parserPluginsFor } from './parse.js'
 import { isBailed, isEntityRootBailed } from './types.js'
 import { reportFile, type DiagnosticEntry, type DiagnosticsMode, type DiagnosticTotals } from './diagnostics.js'
 
@@ -53,8 +54,14 @@ export function bindxCompilerPlugin(_api?: unknown, options?: BindxCompilerOptio
 	const cache = options?.cache
 	return {
 		name: 'bindx-selection-compiler',
-		manipulateOptions(_opts, parserOpts: { plugins: unknown[] }): void {
-			parserOpts.plugins.push('jsx', 'typescript')
+		manipulateOptions(opts: { filename?: string | null }, parserOpts: { plugins: unknown[] }): void {
+			// Only what the file's extension calls for, and never `typescript` next to `flow`.
+			const has = (name: string): boolean => parserOpts.plugins.some(plugin => plugin === name || (Array.isArray(plugin) && plugin[0] === name))
+			for (const plugin of parserPluginsFor(opts.filename)) {
+				if (!has(plugin) && !(plugin === 'typescript' && has('flow'))) {
+					parserOpts.plugins.push(plugin)
+				}
+			}
 		},
 		visitor: {
 			Program(path, state: PluginPass): void {
@@ -95,11 +102,10 @@ export function bindxCompilerPlugin(_api?: unknown, options?: BindxCompilerOptio
 						hoistEntitySelection(path, element, result.selection, result.holes, hoisted)
 					})
 				}
-				insertAfterImports(path.node, hoisted)
+				insertAfterImports(path, hoisted)
 
 				const totals = reportFile(filename, entries, diagnostics)
 				onReport?.(totals)
-				path.skip()
 			},
 		},
 	}
@@ -148,18 +154,20 @@ function hoistEntitySelection(
 	element.openingElement.attributes.push(compiledSelectionAttr(t.identifier(id.name)))
 }
 
-/** Insert hoisted declarations after the last import (so module-scope refs stay above first use). */
-function insertAfterImports(program: t.Program, decls: readonly t.Statement[]): void {
+/**
+ * Insert hoisted declarations after the last import (so module-scope refs stay above first use).
+ * Through the path API, so other plugins in the same pass see them.
+ */
+function insertAfterImports(path: NodePath<t.Program>, decls: t.Statement[]): void {
 	if (decls.length === 0) {
 		return
 	}
-	let index = 0
-	for (let i = 0; i < program.body.length; i++) {
-		if (t.isImportDeclaration(program.body[i])) {
-			index = i + 1
-		}
+	const lastImport = path.get('body').filter(statement => statement.isImportDeclaration()).pop()
+	if (lastImport) {
+		lastImport.insertAfter(decls)
+	} else {
+		path.unshiftContainer('body', decls)
 	}
-	program.body.splice(index, 0, ...decls)
 }
 
 export default bindxCompilerPlugin

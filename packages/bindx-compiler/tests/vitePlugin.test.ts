@@ -65,6 +65,37 @@ describe('bindxCompiler vite plugin', () => {
 		expect(watched).toHaveLength(0)
 	})
 
+	test('compiles a root whose Entity import is aliased', async () => {
+		const source = `
+import { Entity as E, Field, entityDef } from '@contember/bindx-react'
+const ArticleDef = entityDef('Article')
+export const Route = () => <E entity={ArticleDef} by={{ id: '1' }}>{article => <Field field={article.title} />}</E>
+`
+		const { context } = makeContext()
+		const result = await runTransform(source, ROUTE, context)
+		expect(result?.code).toContain('compiledSelection')
+	})
+
+	test('compiles an entityLike-only file', async () => {
+		const source = `
+import { Field } from '@contember/bindx-react'
+import { ForwardingWrapper } from './fixtures/_targets.js'
+export const Route = () => <ForwardingWrapper by={{ id: '1' }}>{article => <Field field={article.title} />}</ForwardingWrapper>
+`
+		const plugin = bindxCompiler({ entityLike: ['ForwardingWrapper'] })
+		const result = await plugin.transform.call(makeContext().context, source, ROUTE)
+		expect(result?.code).toContain('compiledSelection')
+	})
+
+	test('returns null when nothing compiles', async () => {
+		const source = `
+import { createComponent, Field } from '@contember/bindx-react'
+import { schema } from './fixtures/_schema.js'
+export const Host = createComponent().interfaces<{ item: { name: string } }>().render(({ item }) => <span>{item.fields.name.value}</span>)
+`
+		expect(await runTransform(source, ROUTE, makeContext().context)).toBeNull()
+	})
+
 	test('skips non-jsx and node_modules ids without watching', async () => {
 		const { context, watched } = makeContext()
 		expect(await runTransform(CROSS_MODULE, join(DIR, 'plain.ts'), context)).toBeNull()

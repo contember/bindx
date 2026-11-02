@@ -6,8 +6,8 @@
  * so the two positions share nodes. With the deep clone the output parses, LOADS, and the component
  * still collects the lifted field; a shared node would corrupt one of the two copies.
  *
- * (One transformSync can't chain the two: the compiler's Program `path.skip()` also halts react-jsx
- * in a merged pass, so we thread the AST across two passes — a stronger shared-node stress than one.)
+ * The AST is threaded across two passes on purpose — a stronger shared-node stress than one merged
+ * pass, which is covered separately below.
  */
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (typeof document === 'undefined') {
@@ -96,6 +96,27 @@ describe('#3 compiler → react-jsx interop (shared-AST stress)', () => {
 		const query = selection ? convertToQuerySelection(selection) : {}
 		// The hole put author.name into the collected selection — proves neither copy was corrupted.
 		expect(query).toMatchObject({ author: { name: true } })
+	})
+})
+
+describe('merged pass with other plugins', () => {
+	for (const order of ['compiler first', 'jsx first'] as const) {
+		test(`${order}: both plugins run over the file`, () => {
+			const plugins = order === 'compiler first'
+				? [bindxCompilerPlugin, [reactJsx, { runtime: 'automatic' }]]
+				: [[reactJsx, { runtime: 'automatic' }], bindxCompilerPlugin]
+			const out = transformSync(SOURCE, { filename: 'host.tsx', configFile: false, babelrc: false, plugins })
+			expect(out?.code).toContain('v: 2')
+			expect(out?.code).not.toContain('<SelectField')
+		})
+	}
+})
+
+describe('parser options follow the file extension', () => {
+	test('a .ts file with an angle-bracket cast parses', () => {
+		const source = `import { createComponent } from '@contember/bindx-react'\nexport const y = <number>(1 as unknown)\n`
+		const out = transformSync(source, { filename: 'cast.ts', configFile: false, babelrc: false, plugins: [bindxCompilerPlugin] })
+		expect(out?.code).toContain('const y')
 	})
 })
 
