@@ -39,27 +39,6 @@ export interface CompiledSelection {
 	holes?: CompiledHole[]
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-/**
- * Defensive runtime shape check for a compiler-emitted literal. A stale or corrupt
- * literal (wrong version, non-object props, malformed holes) must never be half-read
- * into the fetch plan — consumers fall back to the runtime proxy pass when this fails.
- */
-export function isValidCompiledSelection(value: unknown): value is CompiledSelection {
-	if (!isPlainObject(value) || value['v'] !== 2 || !isPlainObject(value['props'])) {
-		return false
-	}
-	for (const propValue of Object.values(value['props'])) {
-		if (!isPlainObject(propValue)) {
-			return false
-		}
-	}
-	return value['holes'] === undefined || Array.isArray(value['holes'])
-}
-
 /**
  * A nested component composition the compiler could not inline statically.
  * Resolved at collection time through the target's selection surface.
@@ -301,7 +280,7 @@ function replayPath(root: unknown, path: readonly string[]): unknown {
 		if (current === null || (typeof current !== 'object' && typeof current !== 'function')) {
 			return current
 		}
-		current = (current as Record<string, unknown>)[key]
+		current = Reflect.get(current, key)
 	}
 	return current
 }
@@ -313,7 +292,7 @@ function replayPath(root: unknown, path: readonly string[]): unknown {
 function wrapPropsWithScalarFallback(props: Record<string, unknown>): Record<string, unknown> {
 	return new Proxy(props, {
 		get(target, key): unknown {
-			if (typeof key === 'symbol' || key in target) {
+			if (typeof key === 'symbol' || Object.hasOwn(target, key)) {
 				return Reflect.get(target, key)
 			}
 			return createScalarPropMock()
@@ -330,11 +309,11 @@ interface StaticRenderSurface {
 }
 
 function hasGetSelection(target: object): target is GetSelectionSurface {
-	return 'getSelection' in target && typeof (target as GetSelectionSurface).getSelection === 'function'
+	return 'getSelection' in target && typeof target.getSelection === 'function'
 }
 
 function hasStaticRender(target: object): target is StaticRenderSurface {
-	return 'staticRender' in target && typeof (target as StaticRenderSurface).staticRender === 'function'
+	return 'staticRender' in target && typeof target.staticRender === 'function'
 }
 
 /**

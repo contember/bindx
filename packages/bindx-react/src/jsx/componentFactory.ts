@@ -32,7 +32,8 @@ import { FIELD_REF_META, BINDX_COMPONENT, SCOPE_REF } from './types.js'
 import { createCollectorProxy } from './proxy.js'
 import { collectSelection } from './analyzer.js'
 import { createFragment, createScalarPropMock } from './collectionHelpers.js'
-import { applyCompiledSelection, isValidCompiledSelection, type CompiledSelection } from './compiledSelection.js'
+import { applyCompiledSelection, type CompiledSelection } from './compiledSelection.js'
+import { isValidCompiledSelection } from './compiledSelectionShape.js'
 import { type Condition, evaluateCondition } from './conditions.js'
 import { useRefSubscription } from '../hooks/useFields.js'
 
@@ -81,7 +82,10 @@ export function isStaticSelectionValidationEnabled(): boolean {
 /** Killswitch: when off, all consumers ignore compiled literals and use the runtime proxy path. */
 let compiledSelectionsEnabled = true
 
-/** Disables compiled selections at runtime — incident mitigation without a rebuild. */
+/**
+ * Disables compiled selections at runtime — incident mitigation without a rebuild.
+ * <Entity> roots switch on their next render; a createComponent switches only if not yet collected.
+ */
 export function setCompiledSelectionsEnabled(enabled: boolean): void {
 	compiledSelectionsEnabled = enabled
 }
@@ -192,7 +196,7 @@ export function buildComponent<TProps extends object>(
 	// Applies the compiled literal; returns false (⇒ caller falls back to the proxy pass) on a
 	// malformed literal or a top-level throw. Per-hole failures stay contained inside applyCompiledSelection.
 	function tryApplyCompiled(): boolean {
-		if (!isValidCompiledSelection(compiled)) {
+		if (!isValidCompiledSelection(compiled, implicitConfigs.map(([name]) => name))) {
 			console.warn(
 				`[bindx] compiled selection for <${componentDisplayName}> is malformed (version/shape check failed) — `
 				+ 'falling back to runtime collection.',
@@ -448,7 +452,7 @@ function collectImplicitSelections<TProps extends object>(
 
 			// Deterministic analysis-time value; must win over the interfaces-mode
 			// branch so a mocked scalar is never mistaken for an interface entity prop.
-			if (propName in mockValues) {
+			if (Object.hasOwn(mockValues, propName)) {
 				return mockValues[propName]
 			}
 
@@ -533,8 +537,12 @@ function validateCompiledSelection<TProps extends object>(
 	const runtimeMap = new Map<string, SelectionPropMeta>()
 	try {
 		collectImplicitSelections(implicitConfigs, renderFn, runtimeMap, componentBrand, roles, hasInterfacesMode, schemaRegistry, conditionFn, mockValues)
-	} catch {
-		// Proxy pass crashed — the compiled selection already stands; nothing to compare.
+	} catch (error) {
+		console.error(
+			`[bindx] validate-mode proxy pass of <${componentDisplayName}> crashed — `
+			+ 'under-fetch diff skipped; the compiled selection still stands.',
+			error,
+		)
 		return
 	}
 

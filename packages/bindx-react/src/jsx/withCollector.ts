@@ -49,18 +49,12 @@ export function withCollector<TComponent extends (...args: never[]) => ReactNode
 ): TComponent {
 	// A function is a staticRender; a plain object is a declarative contract.
 	if (typeof contractOrStaticRender === 'function') {
-		const staticRender = contractOrStaticRender
-		;(component as TComponent & { staticRender: typeof staticRender }).staticRender = staticRender
-		return component
+		return Object.assign(component, { staticRender: contractOrStaticRender })
 	}
 
 	const contract = contractOrStaticRender
-	const staticRender = deriveContractStaticRender(contract)
-	const target = component as TComponent & {
-		staticRender: typeof staticRender
-		[COLLECTOR_CONTRACT]: CollectorContract
-	}
-	target.staticRender = staticRender
-	target[COLLECTOR_CONTRACT] = contract
-	return component
+	return Object.assign(component, {
+		staticRender: deriveContractStaticRender(contract),
+		[COLLECTOR_CONTRACT]: contract,
+	})
 }

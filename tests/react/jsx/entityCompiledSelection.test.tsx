@@ -3,8 +3,8 @@
 // are hand-written to simulate the emit. See docs/compiler-plan.md (Phase 3).
 import '../../setup'
 import { describe, test, expect, afterEach, spyOn } from 'bun:test'
-import { cleanup, waitFor } from '@testing-library/react'
-import React from 'react'
+import { act, cleanup, waitFor } from '@testing-library/react'
+import React, { useState } from 'react'
 import {
 	createComponent,
 	withCollector,
@@ -13,6 +13,7 @@ import {
 	HasOne,
 	SCOPE_REF,
 	setStaticSelectionValidation,
+	setCompiledSelectionsEnabled,
 	type EntityRef,
 	type CompiledSelection,
 } from '@contember/bindx-react'
@@ -27,8 +28,9 @@ import {
 
 afterEach(() => {
 	cleanup()
-	// Validate mode is a module-level flag — never leak it into other tests.
+	// Module-level flags — never leak them into other tests.
 	setStaticSelectionValidation(false)
+	setCompiledSelectionsEnabled(true)
 })
 
 /** True when `children` was handed a collector proxy (collection pass), not a real handle. */
@@ -284,6 +286,95 @@ describe('compiled <Entity> — malformed literal falls back to the runtime walk
 		expect(warn).toHaveBeenCalled()
 		// Fallback ran: children was invoked with a collector (the pass the compiled path skips).
 		expect(collectorCalls).toBeGreaterThan(0)
+		warn.mockRestore()
+	})
+})
+
+describe('compiled <Entity> — leaving the compiled path after mount re-runs the children walk', () => {
+	const compiledSelection: CompiledSelection = { v: 2, props: { entity: { title: true, content: true } } }
+
+	interface SwitchableRootProps {
+		readonly onReady: (controls: { rerender: () => void; dropCompiled: () => void }) => void
+	}
+
+	function SwitchableRoot({ onReady }: SwitchableRootProps): React.ReactNode {
+		const [renderCount, setRenderCount] = useState(0)
+		const [isCompiled, setIsCompiled] = useState(true)
+		onReady({ rerender: () => setRenderCount(count => count + 1), dropCompiled: () => setIsCompiled(false) })
+		return (
+			<div data-render-count={renderCount}>
+				<Entity
+					entity={schema.Article}
+					by={{ id: 'article-1' }}
+					compiledSelection={isCompiled ? compiledSelection : undefined}
+				>
+					{article => (
+						<>
+							<span data-testid="title"><Field field={article.title} /></span>
+							<span data-testid="content"><Field field={article.content} /></span>
+						</>
+					)}
+				</Entity>
+			</div>
+		)
+	}
+
+	async function mountCompiled(): Promise<{ container: HTMLElement; rerender: () => void; dropCompiled: () => void }> {
+		const controls = { rerender: (): void => {}, dropCompiled: (): void => {} }
+		const { container } = renderWithBindx(<SwitchableRoot onReady={next => Object.assign(controls, next)} />)
+		await waitFor(() => {
+			expect(getByTestId(container, 'title').textContent).toBe('Hello World')
+		})
+		return { container, ...controls }
+	}
+
+	test('killswitch flipped after mount', async () => {
+		const { container, rerender } = await mountCompiled()
+		setCompiledSelectionsEnabled(false)
+		act(() => rerender())
+		// A stale skipped walk would refetch `id` only and crash on the first field read.
+		await waitFor(() => {
+			expect(getByTestId(container, 'content').textContent).toBe('This is the content')
+		})
+		expect(getByTestId(container, 'title').textContent).toBe('Hello World')
+	})
+
+	test('compiledSelection removed on a re-render', async () => {
+		const { container, dropCompiled } = await mountCompiled()
+		act(() => dropCompiled())
+		await waitFor(() => {
+			expect(getByTestId(container, 'content').textContent).toBe('This is the content')
+		})
+		expect(getByTestId(container, 'title').textContent).toBe('Hello World')
+	})
+})
+
+describe('compiled <Entity> — a hole sourced outside the root falls back to the runtime walk', () => {
+	test('warns and collects through children instead of dropping the hole', async () => {
+		const warn = spyOn(console, 'warn').mockImplementation(() => {})
+		const AuthorName = createComponent()
+			.entity('author', schema.Author)
+			.render(({ author }) => <Field field={author.name} />)
+		const compiledSelection: CompiledSelection = {
+			v: 2,
+			props: { entity: { title: true } },
+			holes: [{ component: () => AuthorName, entityProps: { author: { source: 'article', path: ['author'] } } }],
+		}
+
+		const { container } = renderWithBindx(
+			<Entity entity={schema.Article} by={{ id: 'article-1' }} compiledSelection={compiledSelection}>
+				{article => (
+					<HasOne field={article.author}>
+						{author => <span data-testid="author-name"><AuthorName author={author} /></span>}
+					</HasOne>
+				)}
+			</Entity>,
+		)
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'author-name').textContent).toBe('John Doe')
+		})
+		expect(warn).toHaveBeenCalled()
 		warn.mockRestore()
 	})
 })

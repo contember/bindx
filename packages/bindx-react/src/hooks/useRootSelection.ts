@@ -3,7 +3,8 @@ import { buildQueryFromSelection } from '@contember/bindx'
 import type { EntityAccessor } from '../jsx/types.js'
 import { useSchemaRegistry } from './BackendAdapterContext.js'
 import { useSelectionCollection, type SelectionCollectionResult } from './useSelectionCollection.js'
-import { isValidCompiledSelection, resolveCompiledRootSelection, type CompiledSelection } from '../jsx/compiledSelection.js'
+import { COMPILED_ROOT_KEY, resolveCompiledRootSelection, type CompiledSelection } from '../jsx/compiledSelection.js'
+import { isValidCompiledSelection } from '../jsx/compiledSelectionShape.js'
 import { isCompiledSelectionsEnabled, isStaticSelectionValidationEnabled, validateCompiledRootSelection } from '../jsx/componentFactory.js'
 
 /**
@@ -36,7 +37,7 @@ export function useRootSelection(params: UseRootSelectionParams): SelectionColle
 		if (!compiledSelection || !compiledEnabled) {
 			return null
 		}
-		if (!isValidCompiledSelection(compiledSelection)) {
+		if (!isValidCompiledSelection(compiledSelection, [COMPILED_ROOT_KEY])) {
 			console.warn(
 				`[bindx] compiled selection for <Entity ${entityType}> is malformed (version/shape check failed) — `
 				+ 'falling back to the runtime children walk.',
@@ -64,11 +65,14 @@ export function useRootSelection(params: UseRootSelectionParams): SelectionColle
 	// Runtime walk. Its collect no-ops when compiled & not validating, so children is
 	// never called with a collector. In validate mode the walk runs to feed the diff;
 	// a crash there is contained so it cannot break the compiled path.
+	// The skip is part of the memo key: leaving the compiled path after mount (killswitch,
+	// prop dropped) must re-run the walk instead of reusing the empty skipped result.
+	const isWalkSkipped = compiledResult !== null && !validateMode
 	const runtimeResult = useSelectionCollection({
 		entityType,
-		depsKey,
+		depsKey: isWalkSkipped ? `${depsKey}::compiled` : depsKey,
 		collect: collector => {
-			if (compiledResult && !validateMode) {
+			if (isWalkSkipped) {
 				return null
 			}
 			try {

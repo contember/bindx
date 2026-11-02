@@ -14,7 +14,6 @@ import {
 	HasMany,
 	Entity,
 	COMPONENT_SELECTIONS,
-	staticSelectionToMeta,
 	setStaticSelectionValidation,
 	setCompiledSelectionsEnabled,
 	type SelectionMeta,
@@ -22,7 +21,7 @@ import {
 	type EntityRef,
 	type CompiledSelection,
 } from '@contember/bindx-react'
-import { SelectionScope } from '@contember/bindx'
+import { SelectionScope, staticSelectionToMeta } from '@contember/bindx'
 import { schema, renderWithBindx, getByTestId, type Article, type Author } from '../../shared'
 
 afterEach(() => {
@@ -584,6 +583,29 @@ describe('compiled selection — runtime hardening (validation, containment, kil
 		// The fallback ran the render fn and collected what IT read (content), not the literal's `title`.
 		expect(renderCalls).toBeGreaterThan(0)
 		expect(fieldNames(selection!)).toEqual(['content'])
+		warn.mockRestore()
+	})
+
+	test('a hole sourced from a non-entity prop is rejected and falls back to the proxy pass', () => {
+		const warn = spyOn(console, 'warn').mockImplementation(() => {})
+		const AuthorCard = createComponent()
+			.entity('author', schema.Author)
+			.render(({ author }) => <Field field={author.name} />)
+		const Comp = createComponent()
+			.entity('article', schema.Article)
+			.render(
+				({ article }) => <AuthorCard author={article.author} />,
+				{
+					v: 2,
+					props: { article: { title: true } },
+					holes: [{ component: () => AuthorCard, entityProps: { author: { source: 'post', path: ['author'] } } }],
+				},
+			)
+
+		const selection = getComponentSelection(Comp, 'article')
+		expect(warn).toHaveBeenCalled()
+		// The proxy pass collected the nested component's field instead of silently dropping the hole.
+		expect(fieldNames(relation(selection!, 'author'))).toContain('name')
 		warn.mockRestore()
 	})
 
