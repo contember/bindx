@@ -2,7 +2,7 @@
  * Phase-2.2 collector contracts: a contract component forms NO hole; its callback is
  * analyzed like a <HasMany>/<HasOne> child. Every host chain is validated against the
  * runtime proxy collector (the oracle) for STRICT field-tree equality — including the
- * footer-editor shape (item callback capturing a host-root field) that defeated holes.
+ * shape of an item callback that also captures a host-root field, which defeated holes.
  */
 import { describe, expect, test } from 'bun:test'
 import { isBailed, type AnalyzedChain } from '../src/index.js'
@@ -41,7 +41,7 @@ describe('collector contracts — discovery + no hole', () => {
 		expect(compilerPlain(result, 'article')).toMatchObject({ tags: { name: true } })
 	})
 
-	test('#2 footer-editor shape: host-root capture lands at the article root', () => {
+	test('#2 item callback capturing a host-root field: the capture lands at the article root', () => {
 		const plain = compilerPlain(chainAt(2), 'article')
 		expect(plain).toMatchObject({ tags: { name: true }, title: true })
 	})

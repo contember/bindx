@@ -2,8 +2,8 @@
  * Phase 3.1: hole-target-kind classification + entityLike roots. Static-analysis assertions cover
  * the drop-vs-bail decisions per target kind; adapter-oracle equivalence (render transformed vs
  * untransformed under a recording MockAdapter) proves the compiled root query equals the runtime
- * walk. Fixtures mirror real-world shapes (createComponent + render-local, PublishedRevisionIdProvider
- * function children, withCollector staticRender, RefreshableEntity forwarding wrapper).
+ * walk. Fixtures cover common shapes (createComponent + render-local, a provider with function
+ * children, withCollector staticRender, a forwarding <Entity> wrapper).
  */
 import { afterAll, afterEach, describe, expect, test } from 'bun:test'
 import { cleanup } from '@testing-library/react'
@@ -40,7 +40,7 @@ export function Route() {
 }
 `
 
-// createComponent target with FUNCTION children (PublishedRevisionIdProvider shape): the target's
+// createComponent target with FUNCTION children (a value provider): the target's
 // render calls children(scalar). getSelection walks the children slot but analyzeJsx ignores a
 // function → nothing collected from it; the target's own implicit selection (title) still lands.
 const CC_FUNCTION_CHILDREN = `
@@ -144,7 +144,7 @@ export function Route() {
 }
 `
 
-// entityLike forwarding wrapper (RefreshableEntity shape): a withCollector whose runtime + static
+// entityLike forwarding wrapper: a withCollector whose runtime + static
 // render spread props into a real <Entity>. Treated as <Entity> for root scanning; the injected
 // compiledSelection reaches the inner Entity via {...props}.
 const ENTITY_LIKE = `

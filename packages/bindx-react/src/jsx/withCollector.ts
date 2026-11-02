@@ -29,8 +29,8 @@ import { COLLECTOR_CONTRACT, deriveContractStaticRender } from './collectorContr
  *
  * // Declarative contract instead of a hand-written staticRender: `children` is invoked
  * // per item of the `field` has-many relation. The staticRender is derived automatically.
- * export const InitializingRepeater = withCollector(
- *   function InitializingRepeater({ field, children, ... }) { ... },
+ * export const ItemRepeater = withCollector(
+ *   function ItemRepeater({ field, children, ... }) { ... },
  *   { children: itemOf('field') }
  * )
  * ```

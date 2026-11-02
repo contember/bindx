@@ -45,7 +45,7 @@ export const CrossFile = createComponent()
 		</ItemRepeater>
 	))
 
-// 2. footer-editor replica — item callback uses its param AND captures a host-root field. STRICT.
+// 2. Item callback that uses its param AND captures a host-root field. STRICT.
 export const HostCapture = createComponent()
 	.entity('article', schema.Article)
 	.render(({ article }) => (

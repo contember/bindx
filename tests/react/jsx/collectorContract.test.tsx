@@ -104,7 +104,7 @@ describe('collector contract — oracle equivalence', () => {
 		expect(fieldNames(contract!)).toContain('tags')
 	})
 
-	test('itemOf: host-root capture inside the callback (footer-editor shape) matches oracle', () => {
+	test('itemOf: host-root capture inside the callback matches oracle', () => {
 		// The callback uses its own item param AND a field of the HOST entity — the exact
 		// shape that defeated the analyzer. Under a contract the host capture is an ordinary root path.
 		const ContractHost = createComponent()
