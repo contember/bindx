@@ -301,13 +301,13 @@ function wrapCollectorRefWithFieldAccessProxy(
 			}
 
 			// React element probes (e.g. `{article.title}` rendered directly as a
-				// child) must not upgrade this scalar ref to a relation.
-				if (REACT_ELEMENT_PROBE_KEYS.has(prop)) {
-					return Reflect.get(target, prop)
-				}
+			// child) must not upgrade this scalar ref to a relation.
+			if (REACT_ELEMENT_PROBE_KEYS.has(prop)) {
+				return Reflect.get(target, prop)
+			}
 
-				if (isHasOneRelation) {
-					// For has-one relations, match runtime EntityHandle proxy behavior:
+			if (isHasOneRelation) {
+				// For has-one relations, match runtime EntityHandle proxy behavior:
 				// Only pass through id, $-prefixed, and __-prefixed properties.
 				// Everything else is field access on the related entity.
 				if (prop === 'id' || prop.startsWith('$') || prop.startsWith('__')) {
