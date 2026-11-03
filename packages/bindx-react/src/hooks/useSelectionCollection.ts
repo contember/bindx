@@ -97,8 +97,8 @@ function isSelectionCovered(selection: SelectionMeta, covering: SelectionMeta): 
  * 4. Merges both sources of selection
  *
  * Selection is collected once per `depsKey` and `source` and, unless `grow` is off,
- * only grows for one entity type and `depsKey`. Re-renders driven by the store keep the same `source`, so they do not
- * re-run the collection.
+ * only grows for one entity type, `depsKey` and schema registry. Re-renders driven by
+ * the store keep the same `source`, so they do not re-run the collection.
  *
  * **Limitation:** Fields accessed conditionally in the collect function are only
  * captured if they are accessed when the collection runs.
@@ -175,10 +175,14 @@ export function useSelectionCollection(
 
 		// If the selection hasn't actually changed, return cached values
 		if (cache && cache.queryKey === newQueryKey) {
-			cache.entityType = entityType
-			cache.depsKey = depsKey
-			cache.schemaRegistry = schemaRegistry
-			return cache
+			if (cache.entityType === entityType && cache.depsKey === depsKey && cache.schemaRegistry === schemaRegistry) {
+				return cache
+			}
+			// Same query under another entity, depsKey or registry: keep the selection and
+			// record what it belongs to now, in a new object so the previous result stays intact.
+			const rekeyed: SelectionCache = { ...cache, entityType, depsKey, schemaRegistry }
+			selectionCacheRef.current = rekeyed
+			return rekeyed
 		}
 
 		// Update cache with new values

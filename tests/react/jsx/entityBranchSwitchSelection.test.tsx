@@ -231,4 +231,59 @@ describe('<Entity> reused across conditional branches', () => {
 		expect(getByTestId(container, 'author-author-1').textContent).toBe('John Doe')
 		expect(requestedFields['Author']).not.toContain('title')
 	})
+
+	test('should start the selection afresh when <Entity> switches to another record', async () => {
+		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+		const query = adapter.query.bind(adapter)
+		const requestedFields: Record<string, string[]> = {}
+		adapter.query = (queries, options) => {
+			for (const entry of queries) {
+				if (entry.type === 'get') {
+					requestedFields[JSON.stringify(entry.by)] = entry.spec.fields.map(field => field.sourcePath[0] ?? field.name)
+				}
+			}
+			return query(queries, options)
+		}
+
+		let setArticleId: (id: string) => void = () => {}
+
+		function App() {
+			const [articleId, setLocalArticleId] = useState('article-1')
+			setArticleId = setLocalArticleId
+
+			return articleId === 'article-1'
+				? (
+					<Entity entity={schema.Article} by={{ id: articleId }}>
+						{article => (
+							<div data-testid="article">
+								<Field field={article.title} />
+								<Field field={article.content} />
+							</div>
+						)}
+					</Entity>
+				)
+				: (
+					<Entity entity={schema.Article} by={{ id: articleId }}>
+						{article => <div data-testid="article"><Field field={article.title} /></div>}
+					</Entity>
+				)
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<App />
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'article').textContent).toBe('Hello WorldThis is the content')
+		})
+
+		act(() => setArticleId('article-2'))
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'article').textContent).toBe('Another Article')
+		})
+		expect(requestedFields[JSON.stringify({ id: 'article-2' })]).not.toContain('content')
+	})
 })
