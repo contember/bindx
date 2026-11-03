@@ -81,6 +81,9 @@ export function useRootSelection(params: UseRootSelectionParams): SelectionColle
 		entityType,
 		depsKey: isWalkSkipped ? `${depsKey}::compiled` : depsKey,
 		source: children,
+		// With a compiled selection the walk only feeds the validate-mode diff, which must
+		// compare against what these children read, not a union with earlier ones.
+		grow: compiledResult === null,
 		collect: collector => {
 			if (isWalkSkipped) {
 				return null

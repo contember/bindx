@@ -21,12 +21,18 @@ export interface UseSelectionCollectionOptions {
 	 * The user-supplied render function `collect` wraps. A new identity re-runs the
 	 * collection: React reuses an <Entity> across conditional branches that differ only
 	 * in their children, and those children may read fields the previous ones did not.
-	 * Within one `depsKey` the selection only grows — fields the new children no longer
-	 * read stay selected — so the result changes (and the data is refetched) only when a
-	 * field nobody requested before appears. Pass a stable `source` from a parent that
-	 * re-renders often: every new identity runs the collection again.
+	 * For one entity type and `depsKey` the selection only grows — fields the new children
+	 * no longer read stay selected — so the result changes (and the data is refetched) only
+	 * when a field nobody requested before appears. Pass a stable `source` from a parent
+	 * that re-renders often: every new identity runs the collection again.
 	 */
 	source?: unknown
+	/**
+	 * Whether the selection grows across collections (default `true`). Off, every
+	 * collection stands on its own — for a caller that fetches a different selection and
+	 * only compares against this one.
+	 */
+	grow?: boolean
 	/** Extra data to include in the query key (e.g., filter/orderBy for lists) */
 	queryKeyExtra?: Record<string, unknown>
 }
@@ -47,8 +53,10 @@ export interface SelectionCollectionResult {
 interface SelectionCache {
 	selection: SelectionMeta
 	queryKey: string
-	/** The `depsKey` the selection was grown under; a different one starts afresh. */
+	/** What the selection was grown under; a change in any of them starts afresh. */
+	entityType: string
 	depsKey: string
+	schemaRegistry: unknown
 }
 
 /** Deep copy, so a merge into it cannot reach selections other code still holds. */
@@ -88,8 +96,8 @@ function isSelectionCovered(selection: SelectionMeta, covering: SelectionMeta): 
  * 3. Analyzes returned JSX for component-level selections
  * 4. Merges both sources of selection
  *
- * Selection is collected once per `depsKey` and `source` and only grows within one
- * `depsKey`. Re-renders driven by the store keep the same `source`, so they do not
+ * Selection is collected once per `depsKey` and `source` and, unless `grow` is off,
+ * only grows for one entity type and `depsKey`. Re-renders driven by the store keep the same `source`, so they do not
  * re-run the collection.
  *
  * **Limitation:** Fields accessed conditionally in the collect function are only
@@ -100,7 +108,7 @@ function isSelectionCovered(selection: SelectionMeta, covering: SelectionMeta): 
 export function useSelectionCollection(
 	options: UseSelectionCollectionOptions,
 ): SelectionCollectionResult {
-	const { entityType, depsKey, collect, source, queryKeyExtra } = options
+	const { entityType, depsKey, collect, source, grow = true, queryKeyExtra } = options
 	const bindxContext = useContext(BindxContext)
 
 	// `collect` is usually an inline closure; `source` decides when collection re-runs.
@@ -134,11 +142,15 @@ export function useSelectionCollection(
 		const collected = scope.toSelectionMeta()
 		mergeSelections(collected, jsxSel)
 
-		// Grow, never shrink, within one depsKey: children that stop reading a field
+		// Grow, never shrink, for one entity type and depsKey: children that stop reading a field
 		// (a hidden section, a switched branch) must not trigger a refetch, and coming
 		// back to them must find the field still fetched.
 		const cache = selectionCacheRef.current
-		const growsCache = cache !== null && cache.depsKey === depsKey
+		const growsCache = grow
+			&& cache !== null
+			&& cache.entityType === entityType
+			&& cache.depsKey === depsKey
+			&& cache.schemaRegistry === schemaRegistry
 		if (growsCache && isSelectionCovered(collected, cache.selection)) {
 			return cache
 		}
@@ -163,9 +175,9 @@ export function useSelectionCollection(
 
 		// If the selection hasn't actually changed, return cached values
 		if (cache && cache.queryKey === newQueryKey) {
-			if (cache.depsKey !== depsKey) {
-				cache.depsKey = depsKey
-			}
+			cache.entityType = entityType
+			cache.depsKey = depsKey
+			cache.schemaRegistry = schemaRegistry
 			return cache
 		}
 
@@ -173,12 +185,14 @@ export function useSelectionCollection(
 		const newCache: SelectionCache = {
 			selection,
 			queryKey: newQueryKey,
+			entityType,
 			depsKey,
+			schemaRegistry,
 		}
 		selectionCacheRef.current = newCache
 
 		return newCache
-	}, [entityType, depsKey, source, schemaRegistry])
+	}, [entityType, depsKey, source, grow, schemaRegistry])
 
 	return result
 }

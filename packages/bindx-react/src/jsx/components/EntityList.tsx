@@ -39,7 +39,7 @@ export interface EntityListProps<TRoleMap extends Record<string, object> = Recor
  * EntityList component - orchestrates the two-pass rendering approach for lists.
  *
  * Phase 1 (Collection): Renders children with a collector proxy to determine which fields are needed —
- *   again whenever the children function changes, growing the selection within the same filter/order/page
+ *   again whenever the children function changes, growing the selection for the same entity and filter/order/page
  * Phase 2 (Loading): Fetches data based on collected selection
  * Phase 3 (Runtime): Renders children for each item with real data accessors
  *

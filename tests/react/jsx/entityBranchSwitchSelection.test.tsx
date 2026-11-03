@@ -181,4 +181,54 @@ describe('<Entity> reused across conditional branches', () => {
 		expect(queryCount).toBe(queriesAfterLoad)
 		expect(getByTestId(container, 'title').textContent).toBe('Hello World')
 	})
+
+	test('should not carry fields of the previous entity into an <EntityList> reused for another entity', async () => {
+		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+		const query = adapter.query.bind(adapter)
+		const requestedFields: Record<string, string[]> = {}
+		adapter.query = (queries, options) => {
+			for (const entry of queries) {
+				const fields = 'spec' in entry ? entry.spec.fields.map(field => field.sourcePath[0] ?? field.name) : []
+				requestedFields[entry.entityType] = fields
+			}
+			return query(queries, options)
+		}
+
+		let setTab: (tab: 'articles' | 'authors') => void = () => {}
+
+		function App() {
+			const [tab, setLocalTab] = useState<'articles' | 'authors'>('articles')
+			setTab = setLocalTab
+
+			return tab === 'articles'
+				? (
+					<EntityList entity={schema.Article}>
+						{article => <div data-testid={`article-${article.id}`}><Field field={article.title} /></div>}
+					</EntityList>
+				)
+				: (
+					<EntityList entity={schema.Author}>
+						{author => <div data-testid={`author-${author.id}`}><Field field={author.name} /></div>}
+					</EntityList>
+				)
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<App />
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'article-article-1')).not.toBeNull()
+		})
+
+		act(() => setTab('authors'))
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'author-author-1')).not.toBeNull()
+		})
+		expect(getByTestId(container, 'author-author-1').textContent).toBe('John Doe')
+		expect(requestedFields['Author']).not.toContain('title')
+	})
 })
