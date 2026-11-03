@@ -1,10 +1,10 @@
 // Regression test for https://github.com/contember/bindx/issues/158
 import '../../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
-import { render, waitFor, cleanup } from '@testing-library/react'
+import { act, render, waitFor, cleanup } from '@testing-library/react'
 import React from 'react'
-import { BindxProvider, MockAdapter, Entity, Field, HasMany } from '@contember/bindx-react'
-import type { QueryFieldSpec } from '@contember/bindx'
+import { BindxProvider, MockAdapter, Entity, Field, HasMany, createComponent } from '@contember/bindx-react'
+import type { HasManyAccessor, QueryFieldSpec } from '@contember/bindx'
 import { getByTestId, queryByTestId, createMockData, schema, testSchema } from '../../../shared'
 
 afterEach(() => {
@@ -109,5 +109,58 @@ describe('<HasMany> with parameters', () => {
 		})
 		expect(getByTestId(container, 'react').textContent).toBe('React')
 		expect(getByTestId(container, 'javascript').textContent).toBe('#f7df1e')
+	})
+
+	test('should keep showing items added to the relation in an orderBy-only list', async () => {
+		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+		let tags: HasManyAccessor<{ id: string; name: string; color: string }> | null = null
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<Entity entity={schema.Article} by={{ id: 'article-1' }}>
+					{article => {
+						tags = article.tags as unknown as typeof tags
+						return (
+							<div data-testid="tags">
+								<HasMany field={article.tags} orderBy={[{ name: 'desc' }]}>{tag => <Field field={tag.name} />}</HasMany>
+							</div>
+						)
+					}}
+				</Entity>
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'tags').textContent).toBe('ReactJavaScript')
+		})
+
+		act(() => {
+			tags!.add({ name: 'Zed', color: '#000' })
+		})
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'tags').textContent).toContain('Zed')
+		})
+	})
+
+	test('should render the filtered list from a component collected implicitly', async () => {
+		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+		const ReactTags = createComponent()
+			.entity('article', schema.Article)
+			.render(({ article }) => (
+				<HasMany field={article.tags} filter={{ name: { eq: 'React' } }}>{tag => <Field field={tag.name} />}</HasMany>
+			))
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<Entity entity={schema.Article} by={{ id: 'article-1' }}>
+					{article => <div data-testid="tags"><ReactTags article={article} /></div>}
+				</Entity>
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'tags').textContent).toBe('React')
+		})
 	})
 })

@@ -84,6 +84,10 @@ export class SelectionScope {
 			childScope.addScalar('id')
 			this.children.set(alias, childScope)
 			this.relationMeta.set(alias, { fieldName, isArray: true, params })
+		} else if (params.totalCount) {
+			// totalCount is not part of the alias: one reader asking for it is enough.
+			const meta = this.relationMeta.get(alias)!
+			meta.params = { ...meta.params, totalCount: true }
 		}
 		return childScope
 	}

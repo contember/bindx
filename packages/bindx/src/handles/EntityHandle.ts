@@ -372,11 +372,40 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			effectiveAlias,
 			nestedSelection,
 			[...this.entityPath, fieldName],
-			siblingAlias => this.hasMany(fieldName, siblingAlias, this.selection?.fields.get(siblingAlias)?.nested),
+			siblingAlias => this.resolveHasManyAlias(fieldName, siblingAlias),
 		)
 		this.relationHandleCache.set(cacheKey, { raw: handle as unknown as RelationHandleRaw, proxy: handle })
 
 		return handle
+	}
+
+	/**
+	 * The has-many `fieldName` under `alias`, if this entity's selection fetched it; `undefined`
+	 * otherwise, so the caller keeps reading the relation it already has.
+	 */
+	private resolveHasManyAlias(fieldName: string, alias: string): HasManyAccessor<object> | undefined {
+		const meta = this.selection?.fields.get(alias)
+		if (!meta || meta.fieldName !== fieldName) {
+			return undefined
+		}
+		this.declareAliasViewMembership(fieldName, meta)
+		return this.hasMany(fieldName, alias, meta.nested)
+	}
+
+	/**
+	 * The alias is a hash of the params, so the store cannot tell a filtered view from one that
+	 * only orders; declare which it is where the params are known, so an orderBy-only view keeps
+	 * showing items added to the relation.
+	 */
+	private declareAliasViewMembership(fieldName: string, meta: SelectionFieldMeta): void {
+		if (meta.alias !== fieldName) {
+			this.store.declareHasManyViewMembership(
+				this.entityType,
+				fieldName,
+				meta.alias,
+				canHasManyParamsExcludeMembers(meta.hasManyParams) ? 'partial' : 'total',
+			)
+		}
 	}
 
 	/**
@@ -513,15 +542,8 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 					// Has-many relation - return HasManyListHandle.
 					// Thread the selected alias so the handle reads data stored under the
 					// auto-generated alias (e.g. `tags_<hash>`) for params-bearing relations.
-					// The alias is a hash of the params, so the store cannot tell a filtered
-					// view from one that only orders — say so here, where the params are.
-					if (fieldMeta && fieldMeta.alias !== schemaFieldName) {
-						this.store.declareHasManyViewMembership(
-							this.entityType,
-							schemaFieldName,
-							fieldMeta.alias,
-							canHasManyParamsExcludeMembers(fieldMeta.hasManyParams) ? 'partial' : 'total',
-						)
+					if (fieldMeta) {
+						this.declareAliasViewMembership(schemaFieldName, fieldMeta)
 					}
 					return this.hasMany(schemaFieldName, fieldMeta?.alias, nestedSelection)
 				}

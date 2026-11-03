@@ -28,13 +28,14 @@ import { createAliasProxy } from './proxyFactory.js'
 /**
  * Symbol for a has-many handle's alias resolver: given the alias of the same relation
  * selected with other parameters (`generateHasManyAlias`), it returns the handle that
- * reads the data fetched under that alias. `<HasMany filter … >` uses it so the list it
- * renders is the filtered one, not the plain relation.
+ * reads the data fetched under that alias, or `undefined` when the parent's selection did
+ * not fetch it. `<HasMany filter … >` uses it so the list it renders is the filtered one,
+ * not the plain relation.
  */
 export const HAS_MANY_ALIAS_RESOLVER = Symbol('HAS_MANY_ALIAS_RESOLVER')
 
 /** Resolves a sibling alias of the same has-many relation; see {@link HAS_MANY_ALIAS_RESOLVER}. */
-export type HasManyAliasResolver = (alias: string) => HasManyAccessor<object>
+export type HasManyAliasResolver = (alias: string) => HasManyAccessor<object> | undefined
 
 /**
  * HasManyListHandle provides access to a has-many relation (list of entities).

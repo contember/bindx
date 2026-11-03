@@ -46,12 +46,15 @@ function HasManyImpl<
 	TSchema extends Record<string, object> = Record<string, object>,
 >({ field, children, filter, orderBy, limit, offset }: HasManyProps<TEntity, TSelected, TBrand, TEntityName, TSchema>): ReactElement {
 	// With parameters the data was fetched under the params alias (see getSelection); the
-	// field the children received reads the plain relation, so switch to that alias.
+	// field the children received reads the plain relation, so switch to that alias. A
+	// selection that did not fetch the alias (a compiled one, a `useEntity` definer, params
+	// changed since collection) leaves the field as given.
 	const fieldName = field[FIELD_REF_META].fieldName
 	const alias = generateHasManyAlias(fieldName, { filter, orderBy, limit, offset })
 	const resolveAlias = (field as unknown as { [HAS_MANY_ALIAS_RESOLVER]?: HasManyAliasResolver })[HAS_MANY_ALIAS_RESOLVER]
-	const listRef = alias !== fieldName && resolveAlias
-		? resolveAlias(alias) as unknown as HasManyRef<TEntity, TSelected, TBrand, TEntityName, TSchema>
+	const aliasList = alias !== fieldName && resolveAlias ? resolveAlias(alias) : undefined
+	const listRef = aliasList
+		? aliasList as unknown as HasManyRef<TEntity, TSelected, TBrand, TEntityName, TSchema>
 		: field
 
 	// useHasMany() subscribes to store and returns HasManyAccessor with .map()/.items/.length
@@ -103,8 +106,8 @@ hasManyWithSelection.getSelection = (
 		result.childScope = scope
 		result.syntheticChildren = props.children(item, 0)
 	} else {
-		// A field without a detached collector (not a collector proxy): its map() still
-		// yields a collector item that knows the target entity.
+		// No params, or a field that is not a collector proxy: map() yields a collector
+		// item that knows the target entity and writes into the plain relation.
 		fullField.map((item, index) => {
 			const scopeRef = (item as unknown as Record<symbol, unknown>)[SCOPE_REF]
 			if (scopeRef instanceof SelectionScope) {

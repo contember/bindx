@@ -77,6 +77,11 @@ describe('bail triggers (direct)', () => {
 		expect(bail(`({ article }) => <Field field={article[key]} />`)).toBe('COMPUTED_MEMBER')
 	})
 
+	test('HasMany with spread props, which may carry params', () => {
+		expect(bail(`({ article }) => <HasMany field={article.tags} {...listParams}>{t => <Field field={t.name} />}</HasMany>`))
+			.toBe('HASMANY_PARAMS')
+	})
+
 	test('HasMany params inside a component', () => {
 		expect(bail(`({ article }) => <HasMany field={article.tags} limit={n}>{t => <Field field={t.name} />}</HasMany>`))
 			.toBe('HASMANY_PARAMS')
