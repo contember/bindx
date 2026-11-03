@@ -69,13 +69,42 @@ function cloneSelection(selection: SelectionMeta): SelectionMeta {
 }
 
 /**
+ * Drops from `target` the has-many entries that `collected` replaces: a field the
+ * collected children read under other parameters (`<HasMany>` gives each filter /
+ * orderBy / limit / offset its own alias). A search or a page held in parent state
+ * then swaps its subquery instead of piling up every earlier one. Fields only the
+ * cached side reads are kept. Recurses into relations both sides read.
+ */
+function dropReplacedHasManyAliases(target: SelectionMeta, collected: SelectionMeta): void {
+	const collectedFieldNames = new Set<string>()
+	for (const field of collected.fields.values()) {
+		collectedFieldNames.add(field.fieldName)
+	}
+	for (const [key, field] of target.fields) {
+		const collectedField = collected.fields.get(key)
+		if (collectedField) {
+			if (field.nested && collectedField.nested) {
+				dropReplacedHasManyAliases(field.nested, collectedField.nested)
+			}
+			continue
+		}
+		if (field.isArray && collectedFieldNames.has(field.fieldName)) {
+			target.fields.delete(key)
+		}
+	}
+}
+
+/**
  * Whether every field `selection` requests is already requested by `covering`,
- * recursively and with the same has-many parameters.
+ * recursively, with the same relation kind and has-many parameters.
  */
 function isSelectionCovered(selection: SelectionMeta, covering: SelectionMeta): boolean {
 	for (const [key, field] of selection.fields) {
 		const existing = covering.fields.get(key)
 		if (!existing || existing.fieldName !== field.fieldName) {
+			return false
+		}
+		if ((field.isRelation && !existing.isRelation) || (field.isArray && !existing.isArray)) {
 			return false
 		}
 		if (field.hasManyParams && JSON.stringify(field.hasManyParams) !== JSON.stringify(existing.hasManyParams)) {
@@ -97,8 +126,15 @@ function isSelectionCovered(selection: SelectionMeta, covering: SelectionMeta): 
  * 4. Merges both sources of selection
  *
  * Selection is collected once per `depsKey` and `source` and, unless `grow` is off,
- * only grows for one entity type, `depsKey` and schema registry. Re-renders driven by
- * the store keep the same `source`, so they do not re-run the collection.
+ * only grows for one entity type, `depsKey` and schema registry; a has-many read under
+ * new parameters replaces its earlier subquery. Re-renders driven by this entity's own
+ * store subscription keep the same `source`, so they do not re-run the collection. An
+ * <Entity> nested in another entity's children gets a new inline `children` whenever the
+ * outer one re-renders — on every store change it subscribes to — and collects again each
+ * time; the result stays cached, so there is no refetch, only the walk.
+ *
+ * A compiled selection (`useRootSelection`) does not grow: it is replaced on a branch
+ * switch and can shrink.
  *
  * **Limitation:** Fields accessed conditionally in the collect function are only
  * captured if they are accessed when the collection runs.
@@ -142,9 +178,10 @@ export function useSelectionCollection(
 		const collected = scope.toSelectionMeta()
 		mergeSelections(collected, jsxSel)
 
-		// Grow, never shrink, for one entity type and depsKey: children that stop reading a field
-		// (a hidden section, a switched branch) must not trigger a refetch, and coming
-		// back to them must find the field still fetched.
+		// Grow, never shrink, for one entity type and depsKey: children that stop reading a
+		// field (a hidden section, a switched branch) must not trigger a refetch, and coming
+		// back to them must find the field still fetched. A has-many read under new
+		// parameters replaces its earlier subquery rather than adding to it.
 		const cache = selectionCacheRef.current
 		const growsCache = grow
 			&& cache !== null
@@ -158,6 +195,7 @@ export function useSelectionCollection(
 		// and the cached one with useEntity, so the union is built in a fresh copy.
 		const selection = growsCache ? cloneSelection(cache.selection) : collected
 		if (growsCache) {
+			dropReplacedHasManyAliases(selection, collected)
 			mergeSelections(selection, collected)
 		}
 

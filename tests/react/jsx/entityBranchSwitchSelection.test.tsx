@@ -3,7 +3,7 @@ import '../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
 import { render, waitFor, cleanup, act } from '@testing-library/react'
 import React, { useState } from 'react'
-import { BindxProvider, MockAdapter, Entity, EntityList, Field } from '@contember/bindx-react'
+import { BindxProvider, MockAdapter, Entity, EntityList, Field, HasMany } from '@contember/bindx-react'
 import { getByTestId, queryByTestId, createMockData, schema, testSchema } from '../../shared'
 
 afterEach(() => {
@@ -285,5 +285,105 @@ describe('<Entity> reused across conditional branches', () => {
 			expect(getByTestId(container, 'article').textContent).toBe('Another Article')
 		})
 		expect(requestedFields[JSON.stringify({ id: 'article-2' })]).not.toContain('content')
+	})
+
+	test('should replace a has-many subquery when its filter changes instead of adding another', async () => {
+		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+		const query = adapter.query.bind(adapter)
+		const tagSubqueries: number[] = []
+		adapter.query = (queries, options) => {
+			for (const entry of queries) {
+				if (entry.type === 'get') {
+					tagSubqueries.push(entry.spec.fields.filter(field => field.sourcePath[0] === 'tags').length)
+				}
+			}
+			return query(queries, options)
+		}
+
+		let setSearch: (search: string) => void = () => {}
+
+		function App() {
+			const [search, setLocalSearch] = useState('Java')
+			setSearch = setLocalSearch
+
+			return (
+				<Entity entity={schema.Article} by={{ id: 'article-1' }}>
+					{article => (
+						<div data-testid="tags">
+							<HasMany field={article.tags} filter={{ name: { containsCI: search } }}>
+								{tag => <Field field={tag.name} />}
+							</HasMany>
+						</div>
+					)}
+				</Entity>
+			)
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<App />
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'tags')).not.toBeNull()
+		})
+
+		for (const search of ['Re', 'Rea', 'React']) {
+			act(() => setSearch(search))
+			await new Promise(resolve => setTimeout(resolve, 10))
+		}
+
+		expect(tagSubqueries.length).toBeGreaterThan(1)
+		expect(tagSubqueries.every(count => count === tagSubqueries[0])).toBe(true)
+	})
+
+	test('should not refetch a nested <Entity> when the outer entity re-renders on a store change', async () => {
+		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+		const query = adapter.query.bind(adapter)
+		let queryCount = 0
+		adapter.query = (...args) => {
+			queryCount++
+			return query(...args)
+		}
+
+		let setOuterTitle: (title: string) => void = () => {}
+
+		function App() {
+			return (
+				<Entity entity={schema.Article} by={{ id: 'article-1' }}>
+					{article => {
+						setOuterTitle = title => article.title.setValue(title)
+						return (
+							<div>
+								<div data-testid="outer"><Field field={article.title} /></div>
+								<Entity entity={schema.Article} by={{ id: 'article-2' }}>
+									{inner => <div data-testid="inner"><Field field={inner.content} /></div>}
+								</Entity>
+							</div>
+						)
+					}}
+				</Entity>
+			)
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<App />
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'inner')).not.toBeNull()
+		})
+		const queriesAfterLoad = queryCount
+
+		act(() => setOuterTitle('Edited'))
+		act(() => setOuterTitle('Edited again'))
+		await new Promise(resolve => setTimeout(resolve, 20))
+
+		expect(getByTestId(container, 'outer').textContent).toBe('Edited again')
+		expect(getByTestId(container, 'inner').textContent).toBe('More content here')
+		expect(queryCount).toBe(queriesAfterLoad)
 	})
 })
