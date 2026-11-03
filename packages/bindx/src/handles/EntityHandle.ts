@@ -372,6 +372,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			effectiveAlias,
 			nestedSelection,
 			[...this.entityPath, fieldName],
+			siblingAlias => this.hasMany(fieldName, siblingAlias, this.selection?.fields.get(siblingAlias)?.nested),
 		)
 		this.relationHandleCache.set(cacheKey, { raw: handle as unknown as RelationHandleRaw, proxy: handle })
 

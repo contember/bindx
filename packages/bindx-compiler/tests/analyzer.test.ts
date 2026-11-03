@@ -19,21 +19,10 @@ function selectionOf(code: string): Record<string, unknown> {
 const PRELUDE = `import { createComponent, Field, HasMany, HasOne } from '@contember/bindx-react'\nimport { schema } from './s'\n`
 
 describe('StaticSelection emission (raw, not normalized)', () => {
-	test('has-many params are not emitted (the runtime ignores them inside a component)', () => {
+	test('a component with a parameterised <HasMany> bails (the runtime collects it under its params alias)', () => {
 		const results = analyzeFixture(DIR, 'hasManyParams.tsx')
 		const result = results[0]!
-		expect(isBailed(result)).toBe(false)
-		if (isBailed(result)) {
-			return
-		}
-		expect(result.selection).toEqual({
-			article: {
-				tags: {
-					fields: { id: true, name: true, color: true },
-					many: true,
-				},
-			},
-		})
+		expect(isBailed(result) ? result.bailout.code : null).toBe('HASMANY_PARAMS')
 	})
 
 	test('scalar leaf is `true`, has-one relation nests with id', () => {
@@ -88,9 +77,9 @@ describe('bail triggers (direct)', () => {
 		expect(bail(`({ article }) => <Field field={article[key]} />`)).toBe('COMPUTED_MEMBER')
 	})
 
-	test('HasMany params inside a component are ignored, like the runtime collector', () => {
+	test('HasMany params inside a component', () => {
 		expect(bail(`({ article }) => <HasMany field={article.tags} limit={n}>{t => <Field field={t.name} />}</HasMany>`))
-			.toBeNull()
+			.toBe('HASMANY_PARAMS')
 	})
 
 	test('HasMany params in an <Entity> root', () => {
@@ -100,7 +89,7 @@ describe('bail triggers (direct)', () => {
 			+ `<HasMany field={a.tags} limit={1}>{t => <Field field={t.name} />}</HasMany>}</Entity>`,
 			'root.tsx',
 		)
-		expect(root && isEntityRootBailed(root) ? root.bailout.code : null).toBe('HASMANY_PARAMS_AT_ROOT')
+		expect(root && isEntityRootBailed(root) ? root.bailout.code : null).toBe('HASMANY_PARAMS')
 	})
 })
 
