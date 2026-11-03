@@ -352,6 +352,29 @@ describe('errorPathResolver', () => {
 			})
 		})
 
+		test('should report an exhausted resource budget as a non-retryable entity-level error', () => {
+			const store = new SnapshotStore()
+
+			const mutationResult: ContemberMutationResult = {
+				ok: false,
+				errorMessage: null,
+				errors: [{
+					paths: [],
+					message: 'Request memory budget exhausted',
+					type: 'ResourceExhausted',
+				}],
+				validation: { valid: true, errors: [] },
+			}
+
+			const resolved = resolveAllErrors(mutationResult, 'Article', 'a-1', createContext(store))
+
+			expect(resolved).toHaveLength(1)
+			expect(resolved[0]!.target).toEqual({ entityType: 'Article', entityId: 'a-1', type: 'entity' })
+			expect(resolved[0]!.error.code).toBe('RESOURCE_EXHAUSTED')
+			expect(resolved[0]!.error.category).toBe('resource_limit')
+			expect(resolved[0]!.error.retryable).toBe(false)
+		})
+
 		test('should resolve multiple errors to different entities', () => {
 			const store = new SnapshotStore()
 			store.getOrCreateRelation('Article', 'a-1', 'author', {

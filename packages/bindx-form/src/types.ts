@@ -68,6 +68,7 @@ export type ColumnType =
 	| 'String'
 	| 'Integer'
 	| 'Double'
+	| 'Numeric'
 	| 'Date'
 	| 'DateTime'
 	| 'Time'

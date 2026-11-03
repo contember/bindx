@@ -38,13 +38,14 @@ export function isExecutionErrorType(value: string): value is ExecutionErrorType
 /**
  * Error classification for retry logic.
  */
-export type ErrorCategory = 'validation' | 'constraint' | 'not_found' | 'transient' | 'unknown'
+export type ErrorCategory = 'validation' | 'constraint' | 'not_found' | 'resource_limit' | 'transient' | 'unknown'
 
 /**
  * Classifies an execution error type into a category.
  * - 'validation': Data validation errors (not retryable)
  * - 'constraint': Database constraint violations (not retryable without data change)
  * - 'not_found': Entity not found or access denied (not retryable)
+ * - 'resource_limit': The request exceeded a server resource budget; the same request exceeds it again (not retryable)
  * - 'transient': Temporary errors that may succeed on retry
  * - 'unknown': Unclassified errors
  */
@@ -61,6 +62,8 @@ export function classifyError(errorType?: string): ErrorCategory {
 			return 'validation'
 		case 'NotFoundOrDenied':
 			return 'not_found'
+		case 'ResourceExhausted':
+			return 'resource_limit'
 		case 'SqlError':
 			// SQL errors could be transient (deadlock, connection issues) or permanent
 			return 'transient'

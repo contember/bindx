@@ -26,6 +26,7 @@ describe('error classification', () => {
 			['InvalidDataInput', 'validation'],
 			['NonUniqueWhereInput', 'validation'],
 			['NotFoundOrDenied', 'not_found'],
+			['ResourceExhausted', 'resource_limit'],
 			['SqlError', 'transient'],
 		])('should classify %s as %s', (errorType, expectedCategory) => {
 			expect(classifyError(errorType)).toBe(expectedCategory)
@@ -41,6 +42,7 @@ describe('error classification', () => {
 			['constraint', false],
 			['validation', false],
 			['not_found', false],
+			['resource_limit', false],
 			['transient', true],
 			['unknown', true],
 		])('should return %s for category %s', (category, expectedRetryable) => {

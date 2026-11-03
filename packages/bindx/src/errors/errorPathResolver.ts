@@ -192,6 +192,8 @@ function getErrorCode(errorType?: string): string | undefined {
 			return 'INVALID_DATA'
 		case 'SqlError':
 			return 'SQL_ERROR'
+		case 'ResourceExhausted':
+			return 'RESOURCE_EXHAUSTED'
 		default:
 			return undefined
 	}
