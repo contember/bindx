@@ -92,4 +92,93 @@ describe('<Entity> reused across conditional branches', () => {
 		})
 		expect(getByTestId(container, 'content-article-1').textContent).toBe('This is the content')
 	})
+
+	test('should not refetch when children stop reading a field or come back to it', async () => {
+		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+		const query = adapter.query.bind(adapter)
+		let queryCount = 0
+		adapter.query = (...args) => {
+			queryCount++
+			return query(...args)
+		}
+
+		let setShowContent: (show: boolean) => void = () => {}
+
+		function App() {
+			const [showContent, setLocalShowContent] = useState(true)
+			setShowContent = setLocalShowContent
+
+			return (
+				<Entity entity={schema.Article} by={{ id: 'article-1' }}>
+					{article => (
+						<div>
+							<div data-testid="title"><Field field={article.title} /></div>
+							{showContent && <div data-testid="content"><Field field={article.content} /></div>}
+						</div>
+					)}
+				</Entity>
+			)
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<App />
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'content')).not.toBeNull()
+		})
+		const queriesAfterLoad = queryCount
+
+		act(() => setShowContent(false))
+		act(() => setShowContent(true))
+		act(() => setShowContent(false))
+		act(() => setShowContent(true))
+		await new Promise(resolve => setTimeout(resolve, 20))
+
+		expect(queryCount).toBe(queriesAfterLoad)
+		expect(getByTestId(container, 'content').textContent).toBe('This is the content')
+	})
+
+	test('should keep the selection and skip refetching when the parent re-renders with the same fields', async () => {
+		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+		const query = adapter.query.bind(adapter)
+		let queryCount = 0
+		adapter.query = (...args) => {
+			queryCount++
+			return query(...args)
+		}
+
+		let rerender: () => void = () => {}
+
+		function App() {
+			const [, setTick] = useState(0)
+			rerender = () => setTick(tick => tick + 1)
+
+			return (
+				<Entity entity={schema.Article} by={{ id: 'article-1' }}>
+					{article => <div data-testid="title"><Field field={article.title} /></div>}
+				</Entity>
+			)
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<App />
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'title')).not.toBeNull()
+		})
+		const queriesAfterLoad = queryCount
+
+		act(() => rerender())
+		act(() => rerender())
+		await new Promise(resolve => setTimeout(resolve, 20))
+
+		expect(queryCount).toBe(queriesAfterLoad)
+		expect(getByTestId(container, 'title').textContent).toBe('Hello World')
+	})
 })

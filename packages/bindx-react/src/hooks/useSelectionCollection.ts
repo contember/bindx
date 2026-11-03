@@ -3,7 +3,7 @@ import { createCollectorProxy } from '../jsx/proxy.js'
 import { collectSelection, debugSelection } from '../jsx/analyzer.js'
 import { mergeSelections } from '../jsx/SelectionMeta.js'
 import { buildQueryFromSelection, SelectionScope } from '@contember/bindx'
-import type { SelectionMeta, SchemaRegistry } from '@contember/bindx'
+import type { SelectionMeta, SelectionFieldMeta, SchemaRegistry } from '@contember/bindx'
 import type { EntityAccessor } from '../jsx/types.js'
 import { BindxContext } from './BackendAdapterContext.js'
 
@@ -21,7 +21,10 @@ export interface UseSelectionCollectionOptions {
 	 * The user-supplied render function `collect` wraps. A new identity re-runs the
 	 * collection: React reuses an <Entity> across conditional branches that differ only
 	 * in their children, and those children may read fields the previous ones did not.
-	 * The collected result stays the same object while its query does not change.
+	 * Within one `depsKey` the selection only grows — fields the new children no longer
+	 * read stay selected — so the result changes (and the data is refetched) only when a
+	 * field nobody requested before appears. Pass a stable `source` from a parent that
+	 * re-renders often: every new identity runs the collection again.
 	 */
 	source?: unknown
 	/** Extra data to include in the query key (e.g., filter/orderBy for lists) */
@@ -44,6 +47,37 @@ export interface SelectionCollectionResult {
 interface SelectionCache {
 	selection: SelectionMeta
 	queryKey: string
+	/** The `depsKey` the selection was grown under; a different one starts afresh. */
+	depsKey: string
+}
+
+/** Deep copy, so a merge into it cannot reach selections other code still holds. */
+function cloneSelection(selection: SelectionMeta): SelectionMeta {
+	const fields = new Map<string, SelectionFieldMeta>()
+	for (const [key, field] of selection.fields) {
+		fields.set(key, field.nested ? { ...field, nested: cloneSelection(field.nested) } : { ...field })
+	}
+	return { fields }
+}
+
+/**
+ * Whether every field `selection` requests is already requested by `covering`,
+ * recursively and with the same has-many parameters.
+ */
+function isSelectionCovered(selection: SelectionMeta, covering: SelectionMeta): boolean {
+	for (const [key, field] of selection.fields) {
+		const existing = covering.fields.get(key)
+		if (!existing || existing.fieldName !== field.fieldName) {
+			return false
+		}
+		if (field.hasManyParams && JSON.stringify(field.hasManyParams) !== JSON.stringify(existing.hasManyParams)) {
+			return false
+		}
+		if (field.nested && !(existing.nested && isSelectionCovered(field.nested, existing.nested))) {
+			return false
+		}
+	}
+	return true
 }
 
 /**
@@ -54,8 +88,9 @@ interface SelectionCache {
  * 3. Analyzes returned JSX for component-level selections
  * 4. Merges both sources of selection
  *
- * Selection is collected once per `depsKey` and `source`. Re-renders driven by the
- * store keep the same `source`, so they do not re-run the collection.
+ * Selection is collected once per `depsKey` and `source` and only grows within one
+ * `depsKey`. Re-renders driven by the store keep the same `source`, so they do not
+ * re-run the collection.
  *
  * **Limitation:** Fields accessed conditionally in the collect function are only
  * captured if they are accessed when the collection runs.
@@ -96,8 +131,23 @@ export function useSelectionCollection(
 		}
 
 		// Convert scope to SelectionMeta and merge with JSX selection
-		const selection = scope.toSelectionMeta()
-		mergeSelections(selection, jsxSel)
+		const collected = scope.toSelectionMeta()
+		mergeSelections(collected, jsxSel)
+
+		// Grow, never shrink, within one depsKey: children that stop reading a field
+		// (a hidden section, a switched branch) must not trigger a refetch, and coming
+		// back to them must find the field still fetched.
+		const cache = selectionCacheRef.current
+		const growsCache = cache !== null && cache.depsKey === depsKey
+		if (growsCache && isSelectionCovered(collected, cache.selection)) {
+			return cache
+		}
+		// The collected selection can share nested objects with component selections
+		// and the cached one with useEntity, so the union is built in a fresh copy.
+		const selection = growsCache ? cloneSelection(cache.selection) : collected
+		if (growsCache) {
+			mergeSelections(selection, collected)
+		}
 
 		// Debug output can be enabled via the debug prop on BindxProvider
 		if (bindxContext?.debug) {
@@ -112,8 +162,10 @@ export function useSelectionCollection(
 			: JSON.stringify(query)
 
 		// If the selection hasn't actually changed, return cached values
-		const cache = selectionCacheRef.current
 		if (cache && cache.queryKey === newQueryKey) {
+			if (cache.depsKey !== depsKey) {
+				cache.depsKey = depsKey
+			}
 			return cache
 		}
 
@@ -121,6 +173,7 @@ export function useSelectionCollection(
 		const newCache: SelectionCache = {
 			selection,
 			queryKey: newQueryKey,
+			depsKey,
 		}
 		selectionCacheRef.current = newCache
 
