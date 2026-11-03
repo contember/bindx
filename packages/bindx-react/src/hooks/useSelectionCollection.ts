@@ -69,16 +69,20 @@ function cloneSelection(selection: SelectionMeta): SelectionMeta {
 }
 
 /**
- * Drops from `target` the has-many entries that `collected` replaces: a field the
- * collected children read under other parameters (`<HasMany>` gives each filter /
- * orderBy / limit / offset its own alias). A search or a page held in parent state
- * then swaps its subquery instead of piling up every earlier one. Fields only the
- * cached side reads are kept. Recurses into relations both sides read.
+ * Drops from `target` the has-many entries that `collected` replaces. `<HasMany>` gives
+ * each filter / orderBy / limit / offset its own alias, so a field the collected children
+ * read under parameters `target` has not seen yet is a replacement: the cached
+ * parameterised aliases of that field that the children no longer read go, and a search
+ * or a page held in parent state swaps its subquery instead of piling up every earlier
+ * one. Without such a new alias nothing is dropped, so a hidden filtered list survives
+ * growth elsewhere. Recurses into relations both sides read.
  */
 function dropReplacedHasManyAliases(target: SelectionMeta, collected: SelectionMeta): void {
-	const collectedFieldNames = new Set<string>()
-	for (const field of collected.fields.values()) {
-		collectedFieldNames.add(field.fieldName)
+	const replacedFieldNames = new Set<string>()
+	for (const [key, field] of collected.fields) {
+		if (field.isArray && field.hasManyParams && key !== field.fieldName && !target.fields.has(key)) {
+			replacedFieldNames.add(field.fieldName)
+		}
 	}
 	for (const [key, field] of target.fields) {
 		const collectedField = collected.fields.get(key)
@@ -88,7 +92,7 @@ function dropReplacedHasManyAliases(target: SelectionMeta, collected: SelectionM
 			}
 			continue
 		}
-		if (field.isArray && collectedFieldNames.has(field.fieldName)) {
+		if (field.isArray && key !== field.fieldName && replacedFieldNames.has(field.fieldName)) {
 			target.fields.delete(key)
 		}
 	}
@@ -167,11 +171,13 @@ export function useSelectionCollection(
 
 		// Analyze the returned JSX for component-level selections
 		let jsxSel: SelectionMeta
+		let jsxAnalysed = true
 		try {
 			jsxSel = collectSelection(jsx)
 		} catch {
 			// staticRender of nested components may crash during collection
 			jsxSel = { fields: new Map() }
+			jsxAnalysed = false
 		}
 
 		// Convert scope to SelectionMeta and merge with JSX selection
@@ -195,7 +201,11 @@ export function useSelectionCollection(
 		// and the cached one with useEntity, so the union is built in a fresh copy.
 		const selection = growsCache ? cloneSelection(cache.selection) : collected
 		if (growsCache) {
-			dropReplacedHasManyAliases(selection, collected)
+			// A failed JSX analysis misses the aliased has-manys the children render, so
+			// nothing cached may be treated as replaced.
+			if (jsxAnalysed) {
+				dropReplacedHasManyAliases(selection, collected)
+			}
 			mergeSelections(selection, collected)
 		}
 

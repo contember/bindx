@@ -291,10 +291,13 @@ describe('<Entity> reused across conditional branches', () => {
 		const adapter = new MockAdapter(createMockData(), { delay: 0 })
 		const query = adapter.query.bind(adapter)
 		const tagSubqueries: number[] = []
+		let lastTagFilters: unknown[] = []
 		adapter.query = (queries, options) => {
 			for (const entry of queries) {
 				if (entry.type === 'get') {
-					tagSubqueries.push(entry.spec.fields.filter(field => field.sourcePath[0] === 'tags').length)
+					const tagFields = entry.spec.fields.filter(field => field.sourcePath[0] === 'tags')
+					tagSubqueries.push(tagFields.length)
+					lastTagFilters = tagFields.map(field => field.filter).filter(filter => filter !== undefined)
 				}
 			}
 			return query(queries, options)
@@ -336,6 +339,7 @@ describe('<Entity> reused across conditional branches', () => {
 
 		expect(tagSubqueries.length).toBeGreaterThan(1)
 		expect(tagSubqueries.every(count => count === tagSubqueries[0])).toBe(true)
+		expect(lastTagFilters).toEqual([{ name: { containsCI: 'React' } }])
 	})
 
 	test('should not refetch a nested <Entity> when the outer entity re-renders on a store change', async () => {
@@ -385,5 +389,64 @@ describe('<Entity> reused across conditional branches', () => {
 		expect(getByTestId(container, 'outer').textContent).toBe('Edited again')
 		expect(getByTestId(container, 'inner').textContent).toBe('More content here')
 		expect(queryCount).toBe(queriesAfterLoad)
+	})
+
+	test('should keep a hidden filtered has-many when the selection grows elsewhere', async () => {
+		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+		const query = adapter.query.bind(adapter)
+		let queryCount = 0
+		adapter.query = (...args) => {
+			queryCount++
+			return query(...args)
+		}
+
+		let setShowFiltered: (show: boolean) => void = () => {}
+		let setShowTitle: (show: boolean) => void = () => {}
+
+		function App() {
+			const [showFiltered, setLocalShowFiltered] = useState(true)
+			const [showTitle, setLocalShowTitle] = useState(false)
+			setShowFiltered = setLocalShowFiltered
+			setShowTitle = setLocalShowTitle
+
+			return (
+				<Entity entity={schema.Article} by={{ id: 'article-1' }}>
+					{article => (
+						<div>
+							<HasMany field={article.tags}>{tag => <Field field={tag.name} />}</HasMany>
+							{showFiltered && (
+								<div data-testid="filtered">
+									<HasMany field={article.tags} filter={{ name: { eq: 'React' } }}>{tag => <Field field={tag.name} />}</HasMany>
+								</div>
+							)}
+							{showTitle && <div data-testid="title"><Field field={article.title} /></div>}
+						</div>
+					)}
+				</Entity>
+			)
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<App />
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'filtered')).not.toBeNull()
+		})
+
+		act(() => setShowFiltered(false))
+		act(() => setShowTitle(true))
+		await waitFor(() => {
+			expect(getByTestId(container, 'title').textContent).toBe('Hello World')
+		})
+		const queriesAfterGrowth = queryCount
+
+		act(() => setShowFiltered(true))
+		await new Promise(resolve => setTimeout(resolve, 20))
+
+		expect(queryCount).toBe(queriesAfterGrowth)
+		expect(getByTestId(container, 'filtered').textContent).not.toBe('')
 	})
 })
