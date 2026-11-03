@@ -25,6 +25,7 @@ export const ExecutionErrorTypes: Record<ExecutionErrorType, ExecutionErrorType>
 	NonUniqueWhereInput: 'NonUniqueWhereInput',
 	InvalidDataInput: 'InvalidDataInput',
 	SqlError: 'SqlError',
+	ResourceExhausted: 'ResourceExhausted',
 }
 
 /**

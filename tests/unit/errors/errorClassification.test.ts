@@ -57,6 +57,7 @@ describe('error classification', () => {
 			expect(isExecutionErrorType('NonUniqueWhereInput')).toBe(true)
 			expect(isExecutionErrorType('InvalidDataInput')).toBe(true)
 			expect(isExecutionErrorType('SqlError')).toBe(true)
+			expect(isExecutionErrorType('ResourceExhausted')).toBe(true)
 		})
 
 		test('should return false for invalid error types', () => {
@@ -68,7 +69,7 @@ describe('error classification', () => {
 
 	describe('ExecutionErrorTypes', () => {
 		test('should contain all error types', () => {
-			expect(Object.keys(ExecutionErrorTypes)).toHaveLength(7)
+			expect(Object.keys(ExecutionErrorTypes)).toHaveLength(8)
 			expect(ExecutionErrorTypes.NotNullConstraintViolation).toBe('NotNullConstraintViolation')
 			expect(ExecutionErrorTypes.UniqueConstraintViolation).toBe('UniqueConstraintViolation')
 			expect(ExecutionErrorTypes.ForeignKeyConstraintViolation).toBe('ForeignKeyConstraintViolation')
@@ -76,6 +77,7 @@ describe('error classification', () => {
 			expect(ExecutionErrorTypes.NonUniqueWhereInput).toBe('NonUniqueWhereInput')
 			expect(ExecutionErrorTypes.InvalidDataInput).toBe('InvalidDataInput')
 			expect(ExecutionErrorTypes.SqlError).toBe('SqlError')
+			expect(ExecutionErrorTypes.ResourceExhausted).toBe('ResourceExhausted')
 		})
 	})
 
