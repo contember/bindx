@@ -47,12 +47,10 @@ function HasManyImpl<
 >({ field, children, filter, orderBy, limit, offset }: HasManyProps<TEntity, TSelected, TBrand, TEntityName, TSchema>): ReactElement {
 	// With parameters the data was fetched under the params alias (see getSelection); the
 	// field the children received reads the plain relation, so switch to that alias. A
-	// selection that did not fetch the alias (a compiled one, a `useEntity` definer, params
-	// changed since collection) leaves the field as given.
-	const fieldName = field[FIELD_REF_META].fieldName
-	const alias = generateHasManyAlias(fieldName, { filter, orderBy, limit, offset })
+	// selection that did not fetch the alias (a `useEntity` definer, params changed since
+	// collection) leaves the field as given.
 	const resolveAlias = (field as unknown as { [HAS_MANY_ALIAS_RESOLVER]?: HasManyAliasResolver })[HAS_MANY_ALIAS_RESOLVER]
-	const aliasList = alias !== fieldName && resolveAlias ? resolveAlias(alias) : undefined
+	const aliasList = resolveAlias?.({ filter, orderBy, limit, offset })
 	const listRef = aliasList
 		? aliasList as unknown as HasManyRef<TEntity, TSelected, TBrand, TEntityName, TSchema>
 		: field

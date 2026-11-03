@@ -3,8 +3,8 @@ import '../../../setup'
 import { describe, test, expect, afterEach } from 'bun:test'
 import { act, render, waitFor, cleanup } from '@testing-library/react'
 import React from 'react'
-import { BindxProvider, MockAdapter, Entity, Field, HasMany, createComponent } from '@contember/bindx-react'
-import type { HasManyAccessor, QueryFieldSpec } from '@contember/bindx'
+import { BindxProvider, MockAdapter, Entity, Field, HasMany, createComponent, useBindxContext, useSchemaRegistry } from '@contember/bindx-react'
+import { EntityHandle, type HasManyAccessor, type QueryFieldSpec, type SchemaRegistry } from '@contember/bindx'
 import { getByTestId, queryByTestId, createMockData, schema, testSchema } from '../../../shared'
 
 afterEach(() => {
@@ -162,5 +162,45 @@ describe('<HasMany> with parameters', () => {
 		await waitFor(() => {
 			expect(getByTestId(container, 'tags').textContent).toBe('React')
 		})
+	})
+
+	test('should render the filtered list for an entity handle without a selection', async () => {
+		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+
+		// A row like HasManyDataGrid builds it: the same entity, created without a selection,
+		// over the store the <Entity> above filled.
+		function SelectionlessRow({ id }: { id: string }): React.ReactElement {
+			const { store, dispatcher } = useBindxContext()
+			const schemaRegistry = useSchemaRegistry()
+			const row = EntityHandle.create<{ id: string; tags: { id: string; name: string }[] }>(
+				id,
+				'Article',
+				store,
+				dispatcher,
+				schemaRegistry as SchemaRegistry<Record<string, object>>,
+			)
+			return (
+				<HasMany field={row.tags} filter={{ name: { eq: 'React' } }}>{tag => <i><Field field={tag.name} /></i>}</HasMany>
+			)
+		}
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<Entity entity={schema.Article} by={{ id: 'article-1' }}>
+					{article => (
+						<div>
+							<HasMany field={article.tags} filter={{ name: { eq: 'React' } }}>{tag => <Field field={tag.name} />}</HasMany>
+							<div data-testid="row"><SelectionlessRow id={article.id} /></div>
+						</div>
+					)}
+				</Entity>
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'row').textContent).toBe('React')
+		})
+		// The plain relation holds both tags (with only their ids fetched); the filtered list one.
+		expect(getByTestId(container, 'row').querySelectorAll('i').length).toBe(1)
 	})
 })

@@ -13,7 +13,8 @@ import {
 } from '../core/actions.js'
 import { FIELD_REF_META, type FieldRefMeta, type FieldAccessor, type HasOneAccessor, type HasManyAccessor, type EntityFieldsAccessor, type Unsubscribe, type EntityAccessor } from './types.js'
 import { deepEqual } from '../utils/deepEqual.js'
-import { canHasManyParamsExcludeMembers } from '../utils/aliasGenerator.js'
+import { canHasManyParamsExcludeMembers, generateHasManyAlias } from '../utils/aliasGenerator.js'
+import type { HasManyParams } from '../selection/index.js'
 import { createClientError, type ErrorInput, type FieldError } from '../errors/types.js'
 import type {
 	EventTypeMap,
@@ -372,7 +373,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			effectiveAlias,
 			nestedSelection,
 			[...this.entityPath, fieldName],
-			siblingAlias => this.resolveHasManyAlias(fieldName, siblingAlias),
+			params => this.resolveHasManyAlias(fieldName, params),
 		)
 		this.relationHandleCache.set(cacheKey, { raw: handle as unknown as RelationHandleRaw, proxy: handle })
 
@@ -380,15 +381,26 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	}
 
 	/**
-	 * The has-many `fieldName` under `alias`, if this entity's selection fetched it; `undefined`
-	 * otherwise, so the caller keeps reading the relation it already has.
+	 * The has-many `fieldName` read with `params`, under their alias. With a selection it is
+	 * returned only if the selection fetched that alias, `undefined` otherwise, so the caller
+	 * keeps reading the relation it already has. An entity without a selection (e.g. a
+	 * `HasManyDataGrid` row) has no way to tell and gets the alias handle, which reads the
+	 * plain relation's data when nothing was stored under the alias.
 	 */
-	private resolveHasManyAlias(fieldName: string, alias: string): HasManyAccessor<object> | undefined {
-		const meta = this.selection?.fields.get(alias)
+	private resolveHasManyAlias(fieldName: string, params: HasManyParams): HasManyAccessor<object> | undefined {
+		const alias = generateHasManyAlias(fieldName, params)
+		if (alias === fieldName) {
+			return undefined
+		}
+		if (!this.selection) {
+			this.declareAliasViewMembership(fieldName, alias, params)
+			return this.hasMany(fieldName, alias)
+		}
+		const meta = this.selection.fields.get(alias)
 		if (!meta || meta.fieldName !== fieldName) {
 			return undefined
 		}
-		this.declareAliasViewMembership(fieldName, meta)
+		this.declareAliasViewMembership(fieldName, alias, meta.hasManyParams)
 		return this.hasMany(fieldName, alias, meta.nested)
 	}
 
@@ -397,13 +409,13 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	 * only orders; declare which it is where the params are known, so an orderBy-only view keeps
 	 * showing items added to the relation.
 	 */
-	private declareAliasViewMembership(fieldName: string, meta: SelectionFieldMeta): void {
-		if (meta.alias !== fieldName) {
+	private declareAliasViewMembership(fieldName: string, alias: string, params: HasManyParams | undefined): void {
+		if (alias !== fieldName) {
 			this.store.declareHasManyViewMembership(
 				this.entityType,
 				fieldName,
-				meta.alias,
-				canHasManyParamsExcludeMembers(meta.hasManyParams) ? 'partial' : 'total',
+				alias,
+				canHasManyParamsExcludeMembers(params) ? 'partial' : 'total',
 			)
 		}
 	}
@@ -543,7 +555,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 					// Thread the selected alias so the handle reads data stored under the
 					// auto-generated alias (e.g. `tags_<hash>`) for params-bearing relations.
 					if (fieldMeta) {
-						this.declareAliasViewMembership(schemaFieldName, fieldMeta)
+						this.declareAliasViewMembership(schemaFieldName, fieldMeta.alias, fieldMeta.hasManyParams)
 					}
 					return this.hasMany(schemaFieldName, fieldMeta?.alias, nestedSelection)
 				}
