@@ -381,11 +381,10 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	}
 
 	/**
-	 * The has-many `fieldName` read with `params`, under their alias. With a selection it is
-	 * returned only if the selection fetched that alias, `undefined` otherwise, so the caller
-	 * keeps reading the relation it already has. An entity without a selection (e.g. a
-	 * `HasManyDataGrid` row) has no way to tell and gets the alias handle, which reads the
-	 * plain relation's data when nothing was stored under the alias.
+	 * The has-many `fieldName` read with `params`, under their alias, when that alias was
+	 * fetched: per the selection when the entity has one, per its stored data when it has none
+	 * (a `HasManyDataGrid` row). Otherwise `undefined`, so the caller keeps reading the relation
+	 * it already has; in create mode, for one, items added to the relation then still show.
 	 */
 	private resolveHasManyAlias(fieldName: string, params: HasManyParams): HasManyAccessor<object> | undefined {
 		const alias = generateHasManyAlias(fieldName, params)
@@ -393,6 +392,10 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			return undefined
 		}
 		if (!this.selection) {
+			const data = this.store.getEntitySnapshot(this.entityType, this.entityId)?.data
+			if (!data || !(alias in data)) {
+				return undefined
+			}
 			this.declareAliasViewMembership(fieldName, alias, params)
 			return this.hasMany(fieldName, alias)
 		}

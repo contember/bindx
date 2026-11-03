@@ -203,4 +203,42 @@ describe('<HasMany> with parameters', () => {
 		// The plain relation holds both tags (with only their ids fetched); the filtered list one.
 		expect(getByTestId(container, 'row').querySelectorAll('i').length).toBe(1)
 	})
+
+	test('should show items added in create mode in a filtered or limited list', async () => {
+		const adapter = new MockAdapter(createMockData(), { delay: 0 })
+		let tags: HasManyAccessor<{ id: string; name: string; color: string }> | null = null
+
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={testSchema}>
+				<Entity entity={schema.Article} create>
+					{article => {
+						tags = article.tags as unknown as typeof tags
+						return (
+							<div>
+								<div data-testid="filtered">
+									<HasMany field={article.tags} filter={{ name: { eq: 'React' } }}>{tag => <Field field={tag.name} />}</HasMany>
+								</div>
+								<div data-testid="limited">
+									<HasMany field={article.tags} limit={10}>{tag => <Field field={tag.name} />}</HasMany>
+								</div>
+							</div>
+						)
+					}}
+				</Entity>
+			</BindxProvider>,
+		)
+
+		await waitFor(() => {
+			expect(queryByTestId(container, 'filtered')).not.toBeNull()
+		})
+
+		act(() => {
+			tags!.add({ name: 'React', color: '#000' })
+		})
+
+		await waitFor(() => {
+			expect(getByTestId(container, 'filtered').textContent).toBe('React')
+		})
+		expect(getByTestId(container, 'limited').textContent).toBe('React')
+	})
 })
