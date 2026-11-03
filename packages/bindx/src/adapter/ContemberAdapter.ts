@@ -27,7 +27,7 @@ import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
  */
 export interface ContemberAdapterOptions {
 	/** GraphQL client instance */
-	client: GraphQlClient
+	client: Pick<GraphQlClient, 'execute'>
 	/** Schema registry for relation target resolution */
 	schemaRegistry: SchemaRegistry
 }

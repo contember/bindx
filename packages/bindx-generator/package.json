@@ -17,8 +17,8 @@
 	],
 	"license": "MIT",
 	"dependencies": {
-		"@contember/schema": "2.1.0-rc.6",
-		"@contember/schema-utils": "2.1.0-rc.6"
+		"@contember/schema": "2.2.0-alpha.17",
+		"@contember/schema-utils": "2.2.0-alpha.17"
 	},
 	"devDependencies": {
 		"@types/node": "^25.0.3"

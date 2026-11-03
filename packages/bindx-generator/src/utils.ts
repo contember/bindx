@@ -18,6 +18,9 @@ export const columnToTsType = (column: Model.AnyColumn): string => {
 				return 'number'
 			case Model.ColumnType.Double:
 				return 'number'
+			// An exact decimal travels as a string, so it keeps every digit.
+			case Model.ColumnType.Numeric:
+				return 'string'
 			case Model.ColumnType.Bool:
 				return 'boolean'
 			case Model.ColumnType.DateTime:
