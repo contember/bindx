@@ -5,7 +5,7 @@
 		"packages/*"
 	],
 	"scripts": {
-		"build": "tsc --build",
+		"build": "tsc --build && bun run --cwd packages/bindx-compiler build:js",
 		"dev": "tsc --build --watch",
 		"typecheck": "tsc --build",
 		"lint": "eslint .",
