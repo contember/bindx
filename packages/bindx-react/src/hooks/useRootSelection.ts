@@ -80,6 +80,7 @@ export function useRootSelection(params: UseRootSelectionParams): SelectionColle
 	const runtimeResult = useSelectionCollection({
 		entityType,
 		depsKey: isWalkSkipped ? `${depsKey}::compiled` : depsKey,
+		source: children,
 		collect: collector => {
 			if (isWalkSkipped) {
 				return null

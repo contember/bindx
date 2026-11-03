@@ -17,6 +17,13 @@ export interface UseSelectionCollectionOptions {
 	depsKey: string
 	/** Collector function — receives a collector proxy, returns JSX for analysis */
 	collect: (collector: EntityAccessor<unknown>) => ReactNode
+	/**
+	 * The user-supplied render function `collect` wraps. A new identity re-runs the
+	 * collection: React reuses an <Entity> across conditional branches that differ only
+	 * in their children, and those children may read fields the previous ones did not.
+	 * The collected result stays the same object while its query does not change.
+	 */
+	source?: unknown
 	/** Extra data to include in the query key (e.g., filter/orderBy for lists) */
 	queryKeyExtra?: Record<string, unknown>
 }
@@ -47,19 +54,21 @@ interface SelectionCache {
  * 3. Analyzes returned JSX for component-level selections
  * 4. Merges both sources of selection
  *
- * **Limitation:** Selection is collected once per `depsKey`.
- * Fields accessed conditionally in the collect function are only captured
- * if they are accessed during the initial collection phase.
+ * Selection is collected once per `depsKey` and `source`. Re-renders driven by the
+ * store keep the same `source`, so they do not re-run the collection.
+ *
+ * **Limitation:** Fields accessed conditionally in the collect function are only
+ * captured if they are accessed when the collection runs.
  *
  * @internal This hook is for internal use only.
  */
 export function useSelectionCollection(
 	options: UseSelectionCollectionOptions,
 ): SelectionCollectionResult {
-	const { entityType, depsKey, collect, queryKeyExtra } = options
+	const { entityType, depsKey, collect, source, queryKeyExtra } = options
 	const bindxContext = useContext(BindxContext)
 
-	// Stable collect ref - we use a ref to avoid re-running useMemo on every render
+	// `collect` is usually an inline closure; `source` decides when collection re-runs.
 	const collectRef = useRef(collect)
 	collectRef.current = collect
 
@@ -116,7 +125,7 @@ export function useSelectionCollection(
 		selectionCacheRef.current = newCache
 
 		return newCache
-	}, [entityType, depsKey, schemaRegistry]) // Only depend on entity identity, deps key, and schema
+	}, [entityType, depsKey, source, schemaRegistry])
 
 	return result
 }
