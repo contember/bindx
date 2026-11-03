@@ -41,7 +41,7 @@
     },
     "packages/bindx-compiler": {
       "name": "@contember/bindx-compiler",
-      "version": "0.1.46",
+      "version": "0.1.57",
       "dependencies": {
         "@babel/core": "^7.28.0",
         "@babel/parser": "^7.28.0",
@@ -52,6 +52,9 @@
         "@contember/bindx": "workspace:*",
         "@contember/bindx-react": "workspace:*",
         "@types/babel__core": "^7.20.5",
+      },
+      "peerDependencies": {
+        "@contember/bindx-react": "workspace:*",
       },
     },
     "packages/bindx-dataview": {
