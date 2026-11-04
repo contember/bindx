@@ -264,28 +264,42 @@ export function useDataViewTextFilterInput({ name, debounceMs = 500 }: {
 	debounceMs?: number
 }): UseDataViewTextFilterInputResult {
 	const [state, setFilter] = useDataViewFilter<TextFilterArtifact>(name)
-	const [value, setValue] = useState(state?.query ?? '')
+	const query = state?.query ?? ''
+	const [value, setValue] = useState(query)
 	const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+	// The last query this input applied; a different one in the filter state came from outside.
+	const appliedQueryRef = useRef(query)
+
+	const cancelPendingQuery = useCallback((): void => {
+		clearTimeout(timerRef.current)
+		timerRef.current = undefined
+	}, [])
 
 	useEffect(() => {
-		if (!timerRef.current) {
-			setValue(state?.query ?? '')
-		}
-	}, [state?.query])
+		if (query === appliedQueryRef.current) return
+		appliedQueryRef.current = query
+		cancelPendingQuery()
+		setValue(query)
+	}, [query, cancelPendingQuery])
+
+	const applyQuery = useCallback((newQuery: string): void => {
+		appliedQueryRef.current = newQuery
+		setFilter(it => ({ mode: 'contains' as const, ...it, query: newQuery }))
+	}, [setFilter])
 
 	const onChange = useCallback((e: ChangeEvent<HTMLInputElement>): void => {
 		const newValue = e.target.value
+		cancelPendingQuery()
 		if (debounceMs && newValue) {
-			if (timerRef.current) clearTimeout(timerRef.current)
 			timerRef.current = setTimeout(() => {
 				timerRef.current = undefined
-				setFilter(it => ({ mode: 'contains' as const, ...it, query: newValue }))
+				applyQuery(newValue)
 			}, debounceMs)
 		} else {
-			setFilter(it => ({ mode: 'contains' as const, ...it, query: newValue }))
+			applyQuery(newValue)
 		}
 		setValue(newValue)
-	}, [debounceMs, setFilter])
+	}, [debounceMs, applyQuery, cancelPendingQuery])
 
 	return { value, onChange }
 }
