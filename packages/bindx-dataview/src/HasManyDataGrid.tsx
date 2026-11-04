@@ -40,7 +40,7 @@ import {
 } from '@contember/bindx-react'
 import { useDataViewKey } from './DataViewKeyProvider.js'
 import { DataViewProvider, type DataViewContextValue, type DataViewFetchAllData } from './DataViewContext.js'
-import { useLoaderState } from './useLoaderState.js'
+import { resolveLoaderState } from './loaderState.js'
 import { useDataGridSetup } from './useDataGridSetup.js'
 import { buildHasManyRelationQuery, extractHasManyRelationRows } from './hasManyRelationQuery.js'
 import { usePagingTotalCount } from './usePagingTotalCount.js'
@@ -84,8 +84,8 @@ interface ListState {
 	totalCount?: number
 	/** The query options the items were loaded for. */
 	optionsKey?: string
-	/** The items are shown while the same query loads again. */
-	isRefetching?: boolean
+	/** The request (query options and reload) the items were loaded for. */
+	requestKey?: string
 }
 
 const INITIAL_LIST_STATE: ListState = { status: 'loading', items: [] }
@@ -159,12 +159,13 @@ function HasManyDataGridImpl<TEntity extends object>({
 		setReloadCounter(c => c + 1)
 	}, [])
 
+	const requestKey = JSON.stringify([optionsKey, reloadCounter])
+
 	// ---- Data loading via GetQuery on parent ----
 	useEffect(() => {
 		const abortController = new AbortController()
-		setListState(previous => previous.status === 'ready' && previous.optionsKey === optionsKey
-			? { ...previous, isRefetching: true }
-			: INITIAL_LIST_STATE)
+		// Stale-while-revalidate: the rows of the previous request stay on screen until the new ones land.
+		setListState(previous => previous.status === 'ready' ? previous : INITIAL_LIST_STATE)
 
 		const fetchData = async (): Promise<void> => {
 			try {
@@ -197,7 +198,7 @@ function HasManyDataGridImpl<TEntity extends object>({
 
 				const relation = extractHasManyRelationRows(result.data, { alias, fieldName })
 				if (!relation) {
-					setListState({ status: 'ready', items: [], optionsKey })
+					setListState({ status: 'ready', items: [], optionsKey, requestKey })
 					return
 				}
 
@@ -209,7 +210,7 @@ function HasManyDataGridImpl<TEntity extends object>({
 					}
 				})
 
-				setListState({ status: 'ready', items, totalCount: relation.totalCount, optionsKey })
+				setListState({ status: 'ready', items, totalCount: relation.totalCount, optionsKey, requestKey })
 			} catch (error) {
 				if (abortController.signal.aborted) return
 				setListState({ status: 'error', items: [] })
@@ -221,7 +222,7 @@ function HasManyDataGridImpl<TEntity extends object>({
 		return () => {
 			abortController.abort()
 		}
-	}, [parentEntityType, parentEntityId, fieldName, targetEntityType, optionsKey, reloadCounter, setup.selection, batcher, dispatcher, store, schemaRegistry])
+	}, [parentEntityType, parentEntityId, fieldName, targetEntityType, optionsKey, requestKey, setup.selection, batcher, dispatcher, store, schemaRegistry])
 
 	// ---- Build items from state ----
 	const items = useMemo((): EntityAccessor<TEntity>[] => {
@@ -239,7 +240,8 @@ function HasManyDataGridImpl<TEntity extends object>({
 
 	const itemCount = items.length
 
-	const loaderState = useLoaderState(listState.status, listState.isRefetching ?? false)
+	// Derived in render: on the render that changes the request, the rows already answer an earlier one.
+	const loaderState = resolveLoaderState(listState.status, listState.requestKey !== requestKey)
 
 	const countKey = useMemo(
 		() => JSON.stringify([parentEntityType, parentEntityId, fieldName, setup.combinedFilter ?? {}]),

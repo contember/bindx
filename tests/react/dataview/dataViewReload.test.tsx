@@ -19,6 +19,7 @@ import {
 	DataGrid,
 	DataGridTextColumn,
 	DataViewEachRow,
+	DataViewEmpty,
 	DataViewNonEmpty,
 	HasManyDataGrid,
 	Select,
@@ -217,5 +218,65 @@ describe('data view reload()', () => {
 		expect(getByTestId(container, 'loader-state').textContent).toBe('refreshing')
 		expect(rowCount()).toBe(3)
 		await waitFor(() => expect(rowCount()).toBe(2))
+	})
+
+	test('an empty result stays on screen while the grid refetches', async () => {
+		const adapter = createAdapter()
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={schema}>
+				<DataGrid entity={taskDef} filter={{ finished: { eq: true } }}>
+					{it => (
+						<>
+							<DataGridTextColumn field={it.title} header="Title" />
+							<DataViewEmpty><span data-testid="no-results" /></DataViewEmpty>
+							<ReloadProbe />
+						</>
+					)}
+				</DataGrid>
+			</BindxProvider>,
+		)
+		await waitFor(() => expect(queryByTestId(container, 'no-results')).not.toBeNull())
+
+		await clickReload(container)
+
+		expect(getByTestId(container, 'loader-state').textContent).toBe('refreshing')
+		expect(queryByTestId(container, 'no-results')).not.toBeNull()
+		await waitFor(() => expect(getByTestId(container, 'loader-state').textContent).toBe('loaded'))
+		expect(queryByTestId(container, 'no-results')).not.toBeNull()
+	})
+
+	test('HasManyDataGrid keeps the previous page on screen while the next one loads', async () => {
+		const adapter = createAdapter()
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={schema}>
+				<Entity entity={projectDef} by={{ id: 'p1' }}>
+					{project => (
+						<HasManyDataGrid field={project.tasks} itemsPerPage={2}>
+							{it => (
+								<>
+									<DataGridTextColumn field={it.title} header="Title" />
+									<DataViewNonEmpty>
+										<DataViewEachRow>{item => <span key={item.id} data-testid="row" data-id={item.id} />}</DataViewEachRow>
+									</DataViewNonEmpty>
+									<TestPagination />
+									<ReloadProbe />
+								</>
+							)}
+						</HasManyDataGrid>
+					)}
+				</Entity>
+			</BindxProvider>,
+		)
+		const rowIds = (): (string | null)[] => Array.from(container.querySelectorAll('[data-testid="row"]')).map(el => el.getAttribute('data-id'))
+		await waitFor(() => expect(rowIds()).toEqual(['t1', 't2']))
+
+		await act(async () => {
+			fireEvent.click(getByTestId(container, 'datagrid-pagination-next'))
+		})
+
+		expect(getByTestId(container, 'loader-state').textContent).toBe('refreshing')
+		expect(rowIds()).toEqual(['t1', 't2'])
+		await waitFor(() => expect(rowIds()).toEqual(['t3']))
+		expect(getByTestId(container, 'loader-state').textContent).toBe('loaded')
 	})
 })

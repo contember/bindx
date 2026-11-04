@@ -22,7 +22,7 @@ import {
 } from '@contember/bindx-react'
 import { useDataViewKey } from './DataViewKeyProvider.js'
 import { DataViewProvider, type DataViewContextValue } from './DataViewContext.js'
-import { useLoaderState } from './useLoaderState.js'
+import { resolveLoaderState } from './loaderState.js'
 import { useDataGridSetup, QUERY_FILTER_NAME } from './useDataGridSetup.js'
 import { useListFetchAllData } from './useListFetchAllData.js'
 import { usePagingTotalCount } from './usePagingTotalCount.js'
@@ -116,7 +116,7 @@ function DataGridImpl<TRoleMap extends Record<string, object>>({
 	const items = result.$status === 'ready' ? result.items : []
 	const itemCount = items.length
 	const isRefetching = result.$status === 'ready' && result.$isRefetching
-	const loaderState = useLoaderState(result.$status, isRefetching)
+	const loaderState = resolveLoaderState(result.$status, isRefetching)
 
 	// ---- Total count via a standalone count query (keyed on filter only) ----
 	const { count: totalCount } = useEntityCount(entity, {

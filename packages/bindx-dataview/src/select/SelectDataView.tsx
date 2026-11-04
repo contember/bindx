@@ -44,7 +44,7 @@ import {
 } from '@contember/bindx-react'
 import { useSelectOptions } from './selectContext.js'
 import { DataViewProvider, type DataViewContextValue } from '../DataViewContext.js'
-import { useLoaderState } from '../useLoaderState.js'
+import { resolveLoaderState } from '../loaderState.js'
 import { useFilteringState, useSortingState, usePagingState, useSelectionState } from '../useDataViewState.js'
 import { useListFetchAllData } from '../useListFetchAllData.js'
 import { usePagingTotalCount } from '../usePagingTotalCount.js'
@@ -181,7 +181,7 @@ function SelectDataViewImpl({
 	const items = result.$status === 'ready' ? result.items : []
 	const itemCount = items.length
 	const isRefetching = result.$status === 'ready' && result.$isRefetching
-	const loaderState = useLoaderState(result.$status, isRefetching)
+	const loaderState = resolveLoaderState(result.$status, isRefetching)
 
 	// ---- Total count via a standalone count query (keyed on filter only) ----
 	const { count: totalCount } = useEntityCount(options, {
