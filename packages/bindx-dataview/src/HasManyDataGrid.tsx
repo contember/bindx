@@ -19,7 +19,7 @@
  * ```
  */
 
-import { memo, type ReactElement, type ReactNode, useEffect, useMemo, useCallback, useState } from 'react'
+import { memo, type ReactElement, type ReactNode, useEffect, useMemo, useCallback, useRef, useState } from 'react'
 import type {
 	EntityAccessor,
 	HasManyRef,
@@ -31,7 +31,7 @@ import { FIELD_REF_META } from '@contember/bindx'
 import {
 	buildQueryFromSelection,
 	EntityHandle,
-	setEntityData,
+	refreshServerData,
 } from '@contember/bindx'
 import type { SchemaRegistry } from '@contember/bindx'
 import type { StateStorageOrName } from './stateStorage.js'
@@ -82,6 +82,8 @@ interface ListState {
 	status: 'loading' | 'error' | 'ready'
 	items: Array<{ id: string; data: object }>
 	totalCount?: number
+	/** The relation (parent, field, selection) the items were loaded for. */
+	scopeKey?: string
 	/** The query options the items were loaded for. */
 	optionsKey?: string
 	/** The request (query options and reload) the items were loaded for. */
@@ -159,13 +161,18 @@ function HasManyDataGridImpl<TEntity extends object>({
 		setReloadCounter(c => c + 1)
 	}, [])
 
-	const requestKey = JSON.stringify([optionsKey, reloadCounter])
+	const scopeKey = JSON.stringify([parentEntityType, parentEntityId, fieldName, targetEntityType, setup.queryKey])
+	const requestKey = JSON.stringify([scopeKey, optionsKey, reloadCounter])
+	// The request key covers the selection's content; the effect reads the latest object without refetching on a new identity.
+	const selectionRef = useRef(setup.selection)
+	selectionRef.current = setup.selection
 
 	// ---- Data loading via GetQuery on parent ----
 	useEffect(() => {
 		const abortController = new AbortController()
+		const selection = selectionRef.current
 		// Stale-while-revalidate: the rows of the previous request stay on screen until the new ones land.
-		setListState(previous => previous.status === 'ready' ? previous : INITIAL_LIST_STATE)
+		setListState(previous => previous.status === 'ready' && previous.scopeKey === scopeKey ? previous : INITIAL_LIST_STATE)
 
 		const fetchData = async (): Promise<void> => {
 			try {
@@ -184,7 +191,7 @@ function HasManyDataGridImpl<TEntity extends object>({
 					orderBy: currentOptions.orderBy,
 					limit: currentOptions.limit,
 					offset: currentOptions.offset,
-					targetSpec: buildQueryFromSelection(setup.selection),
+					targetSpec: buildQueryFromSelection(selection),
 				})
 
 				const result = await batcher.enqueue(query, { signal: abortController.signal })
@@ -192,28 +199,29 @@ function HasManyDataGridImpl<TEntity extends object>({
 				if (abortController.signal.aborted) return
 
 				if (result.type !== 'get' || !result.data) {
-					setListState({ status: 'error', items: [] })
+					setListState({ status: 'error', items: [], scopeKey })
 					return
 				}
 
 				const relation = extractHasManyRelationRows(result.data, { alias, fieldName })
 				if (!relation) {
-					setListState({ status: 'ready', items: [], optionsKey, requestKey })
+					setListState({ status: 'ready', items: [], scopeKey, optionsKey, requestKey })
 					return
 				}
 
-				store.indexServerResponse(targetEntityType, relation.rows, setup.selection, schemaRegistry)
+				store.indexServerResponse(targetEntityType, relation.rows, selection, schemaRegistry)
 				const items = relation.rows.map(data => ({ id: getRowId(targetEntityType, data), data: store.resolveServerOccurrence(data) }))
 				store.batchNotifications(() => {
 					for (const item of items) {
-						dispatcher.dispatch(setEntityData(targetEntityType, item.id, item.data, true))
+						// Revalidation preserves local edits while advancing the server baseline.
+						dispatcher.dispatch(refreshServerData(targetEntityType, item.id, item.data))
 					}
 				})
 
-				setListState({ status: 'ready', items, totalCount: relation.totalCount, optionsKey, requestKey })
+				setListState({ status: 'ready', items, totalCount: relation.totalCount, scopeKey, optionsKey, requestKey })
 			} catch (error) {
 				if (abortController.signal.aborted) return
-				setListState({ status: 'error', items: [] })
+				setListState({ status: 'error', items: [], scopeKey })
 			}
 		}
 
@@ -222,12 +230,15 @@ function HasManyDataGridImpl<TEntity extends object>({
 		return () => {
 			abortController.abort()
 		}
-	}, [parentEntityType, parentEntityId, fieldName, targetEntityType, optionsKey, requestKey, setup.selection, batcher, dispatcher, store, schemaRegistry])
+	}, [parentEntityType, parentEntityId, fieldName, targetEntityType, scopeKey, optionsKey, requestKey, batcher, dispatcher, store, schemaRegistry])
+
+	// Rows loaded for another relation (a different parent) are never shown, not even as stale.
+	const shownState = listState.scopeKey === scopeKey ? listState : INITIAL_LIST_STATE
 
 	// ---- Build items from state ----
 	const items = useMemo((): EntityAccessor<TEntity>[] => {
-		if (listState.status !== 'ready') return []
-		return listState.items.map((item) =>
+		if (shownState.status !== 'ready') return []
+		return shownState.items.map((item) =>
 			EntityHandle.create<TEntity>(
 				item.id,
 				targetEntityType,
@@ -236,21 +247,21 @@ function HasManyDataGridImpl<TEntity extends object>({
 				schemaRegistry as SchemaRegistry<Record<string, object>>,
 			) as unknown as EntityAccessor<TEntity>,
 		)
-	}, [listState, targetEntityType, store, dispatcher, schemaRegistry])
+	}, [shownState, targetEntityType, store, dispatcher, schemaRegistry])
 
 	const itemCount = items.length
 
 	// Derived in render: on the render that changes the request, the rows already answer an earlier one.
-	const loaderState = resolveLoaderState(listState.status, listState.requestKey !== requestKey)
+	const loaderState = resolveLoaderState(shownState.status, shownState.requestKey !== requestKey)
 
 	const countKey = useMemo(
 		() => JSON.stringify([parentEntityType, parentEntityId, fieldName, setup.combinedFilter ?? {}]),
 		[parentEntityType, parentEntityId, fieldName, setup.combinedFilter],
 	)
 	usePagingTotalCount(setup.paging, {
-		countedTotal: listState.totalCount ?? null,
+		countedTotal: shownState.totalCount ?? null,
 		countKey,
-		isPageCurrent: listState.status === 'ready' && listState.optionsKey === optionsKey,
+		isPageCurrent: shownState.status === 'ready' && shownState.optionsKey === optionsKey,
 		pageItemCount: itemCount,
 	})
 
