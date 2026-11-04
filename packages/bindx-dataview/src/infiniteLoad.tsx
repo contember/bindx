@@ -18,7 +18,7 @@
 import React, { createContext, forwardRef, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { composeEventHandlers } from '@radix-ui/primitive'
-import { useDataViewContext } from './DataViewContext.js'
+import { DataViewProvider, useDataViewContext, type DataViewContextValue, type DataViewItem } from './DataViewContext.js'
 
 // ============================================================================
 // Context
@@ -31,7 +31,14 @@ interface InfiniteLoadContextValue {
 }
 
 interface PageData {
-	readonly items: readonly { id: string; data: Record<string, unknown> }[]
+	readonly offset: number
+	readonly items: readonly DataViewItem[]
+}
+
+/** Pages loaded before the current one, for the query (filter, order, page size) they belong to. */
+interface StoredPages {
+	readonly queryKey: string
+	readonly pages: readonly PageData[]
 }
 
 const InfiniteLoadContext = createContext<InfiniteLoadContextValue | null>(null)
@@ -44,6 +51,26 @@ function useInfiniteLoadContext(): InfiniteLoadContextValue {
 	return ctx
 }
 
+/** The stored pages that run from the first row up to the current offset, or none when the view jumped. */
+function pagesBefore(pages: readonly PageData[], offset: number | undefined, limit: number | undefined): readonly PageData[] {
+	if (offset === undefined || limit === undefined) return []
+	const run = pages.filter(page => page.offset < offset)
+	const isContiguous = run.length * limit === offset && run.every((page, index) => page.offset === index * limit)
+	return isContiguous ? run : []
+}
+
+function joinPages(pages: readonly PageData[], currentItems: readonly DataViewItem[]): readonly DataViewItem[] {
+	if (pages.length === 0) return currentItems
+	const seen = new Set<string>()
+	const items: DataViewItem[] = []
+	for (const item of [...pages.flatMap(page => page.items), ...currentItems]) {
+		if (seen.has(item.id)) continue
+		seen.add(item.id)
+		items.push(item)
+	}
+	return items
+}
+
 // ============================================================================
 // Provider
 // ============================================================================
@@ -52,55 +79,70 @@ export interface DataViewInfiniteLoadProviderProps {
 	children: React.ReactNode
 }
 
+/**
+ * Shows the pages loaded so far as one list: its children see the stored pages plus the current one
+ * as the data view's `items`. `loadMore` stores the current page and moves the view to the next one;
+ * `reload` loads the list again from the first page. Only descendants get that `reload`: one above
+ * the provider refetches the view's current page alone.
+ */
 export function DataViewInfiniteLoadProvider({
 	children,
 }: DataViewInfiniteLoadProviderProps): ReactElement {
-	const { paging, filtering, sorting } = useDataViewContext()
-	const [pages, setPages] = useState<PageData[]>([])
-	const [isLoadingMore, setIsLoadingMore] = useState(false)
+	const dataView = useDataViewContext()
+	const { paging, filtering, sorting, items, loaderState, reload: reloadPage } = dataView
+	const { queryOffset: offset, queryLimit: limit, hasNext, next, first } = paging
+	const queryKey = JSON.stringify([filtering.resolvedWhere ?? null, sorting.resolvedOrderBy ?? null, limit ?? null])
 
-	const filterKey = JSON.stringify(filtering.resolvedWhere ?? null)
-	const sortKey = JSON.stringify(sorting.resolvedOrderBy ?? null)
+	const [stored, setStored] = useState<StoredPages>({ queryKey, pages: [] })
+	const pages = useMemo(
+		() => pagesBefore(stored.queryKey === queryKey ? stored.pages : [], offset, limit),
+		[stored, queryKey, offset, limit],
+	)
 
-	const previousParams = useRef<{
-		filterKey: string
-		sortKey: string
-		limit: number | undefined
-		offset: number | undefined
-	} | null>(null)
+	// The rows on screen answer the current offset only once the view has loaded it.
+	const isPageLoaded = loaderState === 'loaded'
+	const isLoadingMore = loaderState === 'initial' || loaderState === 'refreshing'
 
-	const currentParams = useMemo(() => ({
-		filterKey,
-		sortKey,
-		limit: paging.queryLimit,
-		offset: paging.queryOffset,
-	}), [filterKey, sortKey, paging.queryLimit, paging.queryOffset])
-
+	// Two calls before the next render must request one page.
+	const requestedFromRef = useRef<string | null>(null)
+	const requestKey = `${queryKey}@${offset ?? ''}`
 	useEffect(() => {
-		const prev = previousParams.current
-		if (!prev) {
-			setPages([])
-		} else if (
-			prev.filterKey === currentParams.filterKey
-			&& prev.sortKey === currentParams.sortKey
-			&& prev.limit === currentParams.limit
-			&& prev.limit !== undefined
-			&& prev.offset !== undefined
-			&& currentParams.offset === prev.offset + prev.limit
-		) {
-			setIsLoadingMore(true)
-		} else {
-			setPages([])
-		}
-		previousParams.current = currentParams
-	}, [currentParams])
-
-	const hasNext = paging.hasNext
+		requestedFromRef.current = null
+	}, [requestKey, loaderState])
 
 	const loadMore = useMemo((): (() => void) | undefined => {
-		if (!hasNext) return undefined
-		return () => paging.next()
-	}, [hasNext, paging])
+		if (!hasNext || offset === undefined) return undefined
+		return () => {
+			if (!isPageLoaded || requestedFromRef.current === requestKey) return
+			requestedFromRef.current = requestKey
+			const currentPage: PageData = { offset, items }
+			setStored({ queryKey, pages: [...pages, currentPage] })
+			next()
+		}
+	}, [hasNext, isPageLoaded, offset, requestKey, queryKey, pages, items, next])
+
+	// The list shown when a reload started stays on screen until the first page lands.
+	const [reloadedList, setReloadedList] = useState<readonly DataViewItem[] | null>(null)
+	if (reloadedList !== null && !isLoadingMore) {
+		setReloadedList(null)
+	}
+
+	const joinedItems = useMemo(() => joinPages(pages, items), [pages, items])
+	const shownItems = reloadedList ?? joinedItems
+
+	// The view refetches only its current page, so a reload starts the list again from the first one.
+	const reload = useCallback((): void => {
+		// A reload during a reload keeps the list shown at the first one.
+		setReloadedList(current => current ?? joinedItems)
+		setStored({ queryKey, pages: [] })
+		first()
+		reloadPage()
+	}, [joinedItems, queryKey, first, reloadPage])
+
+	const dataViewValue = useMemo(
+		(): DataViewContextValue => ({ ...dataView, items: shownItems, itemCount: shownItems.length, reload }),
+		[dataView, shownItems, reload],
+	)
 
 	const contextValue = useMemo((): InfiniteLoadContextValue => ({
 		pages,
@@ -109,9 +151,11 @@ export function DataViewInfiniteLoadProvider({
 	}), [pages, loadMore, isLoadingMore])
 
 	return (
-		<InfiniteLoadContext.Provider value={contextValue}>
-			{children}
-		</InfiniteLoadContext.Provider>
+		<DataViewProvider value={dataViewValue}>
+			<InfiniteLoadContext.Provider value={contextValue}>
+				{children}
+			</InfiniteLoadContext.Provider>
+		</DataViewProvider>
 	)
 }
 

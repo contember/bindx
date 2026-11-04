@@ -5,7 +5,7 @@
  * For has-many relation grids, use HasManyDataGrid instead.
  */
 
-import { memo, type ReactElement, type ReactNode, useEffect, useMemo, useCallback, useRef, useState } from 'react'
+import { memo, type ReactElement, type ReactNode, useEffect, useMemo, useCallback, useState } from 'react'
 import type {
 	EntityDef,
 	EntityAccessor,
@@ -21,7 +21,8 @@ import {
 	useEntityCount,
 } from '@contember/bindx-react'
 import { useDataViewKey } from './DataViewKeyProvider.js'
-import { DataViewProvider, type DataViewContextValue, type DataViewLoaderState } from './DataViewContext.js'
+import { DataViewProvider, type DataViewContextValue } from './DataViewContext.js'
+import { resolveLoaderState } from './loaderState.js'
 import { useDataGridSetup, QUERY_FILTER_NAME } from './useDataGridSetup.js'
 import { useListFetchAllData } from './useListFetchAllData.js'
 import { usePagingTotalCount } from './usePagingTotalCount.js'
@@ -94,9 +95,13 @@ function DataGridImpl<TRoleMap extends Record<string, object>>({
 		storageKey: effectiveStorageKey,
 	})
 
-	// ---- Loader state tracking ----
-	const hasLoadedOnce = useRef(false)
-	const [loaderState, setLoaderState] = useState<DataViewLoaderState>('initial')
+	// ---- Reload: a new query key refetches the page, a new refresh token recounts ----
+	const [reloadCounter, setReloadCounter] = useState(0)
+	const { refreshTotalCount } = setup.paging
+	const reload = useCallback((): void => {
+		setReloadCounter(c => c + 1)
+		refreshTotalCount()
+	}, [refreshTotalCount])
 
 	// ---- Load data via useEntityList ----
 	const result = useEntityList(entity, {
@@ -105,11 +110,13 @@ function DataGridImpl<TRoleMap extends Record<string, object>>({
 		limit: setup.paging.queryLimit,
 		offset: setup.paging.queryOffset,
 		selection: setup.selection,
-		queryKey: setup.queryKey,
+		queryKey: `${setup.queryKey}#reload:${reloadCounter}`,
 	})
 
 	const items = result.$status === 'ready' ? result.items : []
 	const itemCount = items.length
+	const isRefetching = result.$status === 'ready' && result.$isRefetching
+	const loaderState = resolveLoaderState(result.$status, isRefetching)
 
 	// ---- Total count via a standalone count query (keyed on filter only) ----
 	const { count: totalCount } = useEntityCount(entity, {
@@ -117,31 +124,13 @@ function DataGridImpl<TRoleMap extends Record<string, object>>({
 		refreshToken: setup.paging.totalCountRefreshToken,
 	})
 
-	// Update loader state
-	useEffect(() => {
-		if (result.$status === 'ready') {
-			hasLoadedOnce.current = true
-			setLoaderState('loaded')
-		} else if (result.$status === 'error') {
-			setLoaderState('failed')
-		} else if (result.$status === 'loading') {
-			setLoaderState(hasLoadedOnce.current ? 'refreshing' : 'initial')
-		}
-	}, [result.$status])
-
 	const countKey = useMemo(() => JSON.stringify(setup.combinedFilter ?? {}), [setup.combinedFilter])
 	usePagingTotalCount(setup.paging, {
 		countedTotal: totalCount,
 		countKey,
-		isPageCurrent: result.$status === 'ready' && !result.$isRefetching,
+		isPageCurrent: result.$status === 'ready' && !isRefetching,
 		pageItemCount: itemCount,
 	})
-
-	// ---- Reload ----
-	const [, setReloadCounter] = useState(0)
-	const reload = useCallback((): void => {
-		setReloadCounter(c => c + 1)
-	}, [])
 
 	// ---- Row highlighting ----
 	const [highlightIndex, setHighlightIndex] = useState<number | null>(null)

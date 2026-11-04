@@ -60,9 +60,9 @@ export interface DataViewLoaderStateProps {
 	children: React.ReactNode
 	/** Render children when data is loaded */
 	loaded?: boolean
-	/** Render children when refreshing (after initial load) */
+	/** Render children while rows of an earlier query are shown and the current one loads */
 	refreshing?: boolean
-	/** Render children during initial load */
+	/** Render children while loading with no rows to show */
 	initial?: boolean
 	/** Render children on failure */
 	failed?: boolean
@@ -82,9 +82,9 @@ export function DataViewLoaderState({
 export interface DataViewLoaderStateSwitchProps {
 	/** Render when data is loaded */
 	loaded?: React.ReactNode
-	/** Render when refreshing (after initial load) */
+	/** Render while rows of an earlier query are shown and the current one loads */
 	refreshing?: React.ReactNode
-	/** Render during initial load */
+	/** Render while loading with no rows to show */
 	initial?: React.ReactNode
 	/** Render on failure */
 	failed?: React.ReactNode
@@ -136,7 +136,9 @@ export interface DataViewEmptyProps {
 
 export function DataViewEmpty({ children }: DataViewEmptyProps): ReactElement {
 	const { loaderState, itemCount } = useDataViewContext()
-	if (loaderState !== 'loaded' || itemCount > 0) return <>{null}</>
+	// An empty result stays on screen while the current query loads.
+	const isShowingResult = loaderState === 'loaded' || loaderState === 'refreshing'
+	if (!isShowingResult || itemCount > 0) return <>{null}</>
 	return <>{children}</>
 }
 
@@ -146,7 +148,9 @@ export interface DataViewNonEmptyProps {
 
 export function DataViewNonEmpty({ children }: DataViewNonEmptyProps): ReactElement {
 	const { loaderState, itemCount } = useDataViewContext()
-	if (loaderState !== 'loaded' || itemCount === 0) return <>{null}</>
+	// Rows of an earlier query stay mounted while the current one loads.
+	const isShowingResult = loaderState === 'loaded' || loaderState === 'refreshing'
+	if (!isShowingResult || itemCount === 0) return <>{null}</>
 	return <>{children}</>
 }
 
