@@ -146,7 +146,9 @@ export interface DataViewNonEmptyProps {
 
 export function DataViewNonEmpty({ children }: DataViewNonEmptyProps): ReactElement {
 	const { loaderState, itemCount } = useDataViewContext()
-	if (loaderState !== 'loaded' || itemCount === 0) return <>{null}</>
+	// Rows of an earlier query stay mounted while the current one loads.
+	const isShowingRows = loaderState === 'loaded' || loaderState === 'refreshing'
+	if (!isShowingRows || itemCount === 0) return <>{null}</>
 	return <>{children}</>
 }
 

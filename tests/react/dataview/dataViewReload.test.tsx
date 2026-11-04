@@ -19,6 +19,7 @@ import {
 	DataGrid,
 	DataGridTextColumn,
 	DataViewEachRow,
+	DataViewNonEmpty,
 	HasManyDataGrid,
 	Select,
 	SelectDataView,
@@ -188,5 +189,33 @@ describe('data view reload()', () => {
 		expect(optionCount()).toBe(3)
 		await waitFor(() => expect(optionCount()).toBe(2))
 		await waitFor(() => expect(queryByTestId(container, 'datagrid-pagination-total')?.textContent).toBe('2 total'))
+	})
+
+	test('rows inside DataViewNonEmpty stay mounted while the grid refetches', async () => {
+		const adapter = createAdapter()
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={schema}>
+				<DataGrid entity={taskDef} filter={openTasks}>
+					{it => (
+						<>
+							<DataGridTextColumn field={it.title} header="Title" />
+							<DataViewNonEmpty>
+								<DataViewEachRow>{item => <span key={item.id} data-testid="row" />}</DataViewEachRow>
+							</DataViewNonEmpty>
+							<ReloadProbe />
+						</>
+					)}
+				</DataGrid>
+			</BindxProvider>,
+		)
+		const rowCount = (): number => container.querySelectorAll('[data-testid="row"]').length
+		await waitFor(() => expect(rowCount()).toBe(3))
+
+		finishTaskOnServer(adapter, 't1')
+		await clickReload(container)
+
+		expect(getByTestId(container, 'loader-state').textContent).toBe('refreshing')
+		expect(rowCount()).toBe(3)
+		await waitFor(() => expect(rowCount()).toBe(2))
 	})
 })
