@@ -1,5 +1,5 @@
 // Packs every publishable package the way the publish script does (`bun pm pack`)
-// and fails when a `main`/`module`/`types`/`bin`/`exports` target is missing from the tarball.
+// and fails when a `main`/`module`/`types`/`bin`/`exports`/`imports` target is missing from the tarball.
 // Run after `bun run build`.
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
@@ -40,6 +40,7 @@ function collectTargets(manifest: Record<string, unknown>): string[] {
 		collectExportTargets(bin, targets)
 	}
 	collectExportTargets(manifest['exports'], targets)
+	collectExportTargets(manifest['imports'], targets)
 	return targets
 }
 
@@ -118,7 +119,7 @@ function main(): void {
 		}
 		if (failures.length > 0) {
 			console.error(`\n${failures.length} package(s) reference files that are not in the tarball. Did you run \`bun run build\`?`)
-			process.exit(1)
+			process.exitCode = 1
 		}
 	} finally {
 		rmSync(destination, { recursive: true, force: true })
