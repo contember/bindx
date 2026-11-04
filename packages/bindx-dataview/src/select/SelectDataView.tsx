@@ -43,7 +43,8 @@ import {
 	collectSelection,
 } from '@contember/bindx-react'
 import { useSelectOptions } from './selectContext.js'
-import { DataViewProvider, type DataViewContextValue, type DataViewLoaderState } from '../DataViewContext.js'
+import { DataViewProvider, type DataViewContextValue } from '../DataViewContext.js'
+import { useLoaderState } from '../useLoaderState.js'
 import { useFilteringState, useSortingState, usePagingState, useSelectionState } from '../useDataViewState.js'
 import { useListFetchAllData } from '../useListFetchAllData.js'
 import { usePagingTotalCount } from '../usePagingTotalCount.js'
@@ -76,10 +77,6 @@ function SelectDataViewImpl({
 	const options = useSelectOptions()
 	const { schema: schemaRegistry } = useBindxContext()
 	const entityType = options.$name
-
-	// ---- Loader state tracking ----
-	const hasLoadedOnce = useRef(false)
-	const [loaderState, setLoaderState] = useState<DataViewLoaderState>('initial')
 
 	// ---- Build selection from definer ----
 	// Use ref for selectionDefiner to avoid re-running on every render
@@ -155,6 +152,14 @@ function SelectDataViewImpl({
 		return { and: parts }
 	}, [staticFilter, filtering.resolvedWhere])
 
+	// ---- Reload: a new query key refetches the page, a new refresh token recounts ----
+	const [reloadCounter, setReloadCounter] = useState(0)
+	const { refreshTotalCount } = paging
+	const reload = useCallback((): void => {
+		setReloadCounter(c => c + 1)
+		refreshTotalCount()
+	}, [refreshTotalCount])
+
 	// ---- Load data ----
 	const result = useEntityList(options, {
 		filter: combinedFilter,
@@ -162,11 +167,13 @@ function SelectDataViewImpl({
 		limit: paging.queryLimit,
 		offset: paging.queryOffset,
 		selection,
-		queryKey,
+		queryKey: `${queryKey}#reload:${reloadCounter}`,
 	})
 
 	const items = result.$status === 'ready' ? result.items : []
 	const itemCount = items.length
+	const isRefetching = result.$status === 'ready' && result.$isRefetching
+	const loaderState = useLoaderState(result.$status, isRefetching)
 
 	// ---- Total count via a standalone count query (keyed on filter only) ----
 	const { count: totalCount } = useEntityCount(options, {
@@ -174,31 +181,13 @@ function SelectDataViewImpl({
 		refreshToken: paging.totalCountRefreshToken,
 	})
 
-	// Update loader state
-	useEffect(() => {
-		if (result.$status === 'ready') {
-			hasLoadedOnce.current = true
-			setLoaderState('loaded')
-		} else if (result.$status === 'error') {
-			setLoaderState('failed')
-		} else if (result.$status === 'loading') {
-			setLoaderState(hasLoadedOnce.current ? 'refreshing' : 'initial')
-		}
-	}, [result.$status])
-
 	const countKey = useMemo(() => JSON.stringify(combinedFilter ?? {}), [combinedFilter])
 	usePagingTotalCount(paging, {
 		countedTotal: totalCount,
 		countKey,
-		isPageCurrent: result.$status === 'ready' && !result.$isRefetching,
+		isPageCurrent: result.$status === 'ready' && !isRefetching,
 		pageItemCount: itemCount,
 	})
-
-	// ---- Reload ----
-	const [, setReloadCounter] = useState(0)
-	const reload = useCallback((): void => {
-		setReloadCounter(c => c + 1)
-	}, [])
 
 	// ---- Row highlighting ----
 	const [highlightIndex, setHighlightIndex] = useState<number | null>(null)

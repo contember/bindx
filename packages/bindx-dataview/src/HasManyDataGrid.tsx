@@ -19,7 +19,7 @@
  * ```
  */
 
-import { memo, type ReactElement, type ReactNode, useEffect, useMemo, useCallback, useRef, useState } from 'react'
+import { memo, type ReactElement, type ReactNode, useEffect, useMemo, useCallback, useState } from 'react'
 import type {
 	EntityAccessor,
 	HasManyRef,
@@ -39,7 +39,8 @@ import {
 	useBindxContext,
 } from '@contember/bindx-react'
 import { useDataViewKey } from './DataViewKeyProvider.js'
-import { DataViewProvider, type DataViewContextValue, type DataViewFetchAllData, type DataViewLoaderState } from './DataViewContext.js'
+import { DataViewProvider, type DataViewContextValue, type DataViewFetchAllData } from './DataViewContext.js'
+import { useLoaderState } from './useLoaderState.js'
 import { useDataGridSetup } from './useDataGridSetup.js'
 import { buildHasManyRelationQuery, extractHasManyRelationRows } from './hasManyRelationQuery.js'
 import { usePagingTotalCount } from './usePagingTotalCount.js'
@@ -83,6 +84,8 @@ interface ListState {
 	totalCount?: number
 	/** The query options the items were loaded for. */
 	optionsKey?: string
+	/** The items are shown while the same query loads again. */
+	isRefetching?: boolean
 }
 
 const INITIAL_LIST_STATE: ListState = { status: 'loading', items: [] }
@@ -138,8 +141,6 @@ function HasManyDataGridImpl<TEntity extends object>({
 	})
 
 	// ---- State ----
-	const hasLoadedOnce = useRef(false)
-	const [loaderState, setLoaderState] = useState<DataViewLoaderState>('initial')
 	const [listState, setListState] = useState<ListState>(INITIAL_LIST_STATE)
 
 	const optionsKey = useMemo(
@@ -152,10 +153,18 @@ function HasManyDataGridImpl<TEntity extends object>({
 		[setup.combinedFilter, setup.sorting.resolvedOrderBy, setup.paging.queryLimit, setup.paging.queryOffset],
 	)
 
+	// ---- Reload: the same query loads again, the relation response carries the total ----
+	const [reloadCounter, setReloadCounter] = useState(0)
+	const reload = useCallback((): void => {
+		setReloadCounter(c => c + 1)
+	}, [])
+
 	// ---- Data loading via GetQuery on parent ----
 	useEffect(() => {
 		const abortController = new AbortController()
-		setListState(INITIAL_LIST_STATE)
+		setListState(previous => previous.status === 'ready' && previous.optionsKey === optionsKey
+			? { ...previous, isRefetching: true }
+			: INITIAL_LIST_STATE)
 
 		const fetchData = async (): Promise<void> => {
 			try {
@@ -212,7 +221,7 @@ function HasManyDataGridImpl<TEntity extends object>({
 		return () => {
 			abortController.abort()
 		}
-	}, [parentEntityType, parentEntityId, fieldName, targetEntityType, optionsKey, setup.selection, batcher, dispatcher, store, schemaRegistry])
+	}, [parentEntityType, parentEntityId, fieldName, targetEntityType, optionsKey, reloadCounter, setup.selection, batcher, dispatcher, store, schemaRegistry])
 
 	// ---- Build items from state ----
 	const items = useMemo((): EntityAccessor<TEntity>[] => {
@@ -230,17 +239,7 @@ function HasManyDataGridImpl<TEntity extends object>({
 
 	const itemCount = items.length
 
-	// Update loader state
-	useEffect(() => {
-		if (listState.status === 'ready') {
-			hasLoadedOnce.current = true
-			setLoaderState('loaded')
-		} else if (listState.status === 'error') {
-			setLoaderState('failed')
-		} else if (listState.status === 'loading') {
-			setLoaderState(hasLoadedOnce.current ? 'refreshing' : 'initial')
-		}
-	}, [listState.status])
+	const loaderState = useLoaderState(listState.status, listState.isRefetching ?? false)
 
 	const countKey = useMemo(
 		() => JSON.stringify([parentEntityType, parentEntityId, fieldName, setup.combinedFilter ?? {}]),
@@ -252,12 +251,6 @@ function HasManyDataGridImpl<TEntity extends object>({
 		isPageCurrent: listState.status === 'ready' && listState.optionsKey === optionsKey,
 		pageItemCount: itemCount,
 	})
-
-	// ---- Reload ----
-	const [, setReloadCounter] = useState(0)
-	const reload = useCallback((): void => {
-		setReloadCounter(c => c + 1)
-	}, [])
 
 	// ---- Row highlighting ----
 	const [highlightIndex, setHighlightIndex] = useState<number | null>(null)
