@@ -151,6 +151,14 @@ function SelectDataViewImpl({
 		if (parts.length === 1) return parts[0]
 		return { and: parts }
 	}, [staticFilter, filtering.resolvedWhere])
+	const countKey = useMemo(() => JSON.stringify(combinedFilter ?? {}), [combinedFilter])
+
+	// A new search starts on the first page. Reset during render, so no query goes out at the old offset.
+	const [pagedFilterKey, setPagedFilterKey] = useState(countKey)
+	if (pagedFilterKey !== countKey) {
+		setPagedFilterKey(countKey)
+		paging.first()
+	}
 
 	// ---- Reload: a new query key refetches the page, a new refresh token recounts ----
 	const [reloadCounter, setReloadCounter] = useState(0)
@@ -181,7 +189,6 @@ function SelectDataViewImpl({
 		refreshToken: paging.totalCountRefreshToken,
 	})
 
-	const countKey = useMemo(() => JSON.stringify(combinedFilter ?? {}), [combinedFilter])
 	usePagingTotalCount(paging, {
 		countedTotal: totalCount,
 		countKey,

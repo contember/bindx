@@ -31,8 +31,9 @@ type PageOutcome =
 const NO_BOUNDS: TotalBounds = { atLeast: 0, atMost: null }
 
 /**
- * Feeds the paging state its total: the counted total when the data source reports one,
- * otherwise the total the loaded pages prove. Only a page that answers the current query counts.
+ * Feeds the paging state its total: the total a current page proves by ending the list, else the counted
+ * total when the data source reports one, else the total the loaded pages prove. Only a page that answers
+ * the current query counts.
  *
  * A page shorter than the limit ends the list. An empty page past offset 0 only bounds the total
  * from above, so the grid bisects between the bounds, one page per query, until a page ends the list.
@@ -46,15 +47,19 @@ export function usePagingTotalCount(paging: PagingStateResult, source: PagingTot
 		if (boundsRef.current.countKey !== countKey || countedTotal !== null) {
 			boundsRef.current = { countKey, bounds: NO_BOUNDS }
 		}
+		const page = isPageCurrent && queryLimit !== undefined && queryOffset !== undefined
+			? { offset: queryOffset, limit: queryLimit, itemCount: pageItemCount }
+			: null
 		if (countedTotal !== null) {
-			setTotalCount(countedTotal)
+			// The count may still describe an earlier row set; a current page that ends the list does not.
+			setTotalCount((page && totalEndedByPage(page)) ?? countedTotal)
 			return
 		}
-		if (!isPageCurrent || queryLimit === undefined || queryOffset === undefined) {
+		if (!page) {
 			return
 		}
 
-		const outcome = inferTotalFromPage(boundsRef.current.bounds, { offset: queryOffset, limit: queryLimit, itemCount: pageItemCount })
+		const outcome = inferTotalFromPage(boundsRef.current.bounds, page)
 		if (outcome.type === 'total') {
 			boundsRef.current = { countKey, bounds: NO_BOUNDS }
 			setTotalCount(outcome.totalCount)
@@ -67,11 +72,20 @@ export function usePagingTotalCount(paging: PagingStateResult, source: PagingTot
 	}, [countedTotal, countKey, isPageCurrent, pageItemCount, queryLimit, queryOffset, setTotalCount, goTo])
 }
 
-function inferTotalFromPage(bounds: TotalBounds, { offset, limit, itemCount }: LoadedPage): PageOutcome {
+/** The total, when the page is shorter than the limit and so ends the list. An empty page past offset 0 proves no total. */
+function totalEndedByPage({ offset, limit, itemCount }: LoadedPage): number | null {
 	const isEmptyPastStart = itemCount === 0 && offset > 0
-	if (itemCount < limit && !isEmptyPastStart) {
-		return { type: 'total', totalCount: offset + itemCount }
+	return itemCount < limit && !isEmptyPastStart ? offset + itemCount : null
+}
+
+function inferTotalFromPage(bounds: TotalBounds, page: LoadedPage): PageOutcome {
+	const { offset, limit, itemCount } = page
+	const endedTotal = totalEndedByPage(page)
+	if (endedTotal !== null) {
+		return { type: 'total', totalCount: endedTotal }
 	}
+
+	const isEmptyPastStart = itemCount === 0 && offset > 0
 
 	const narrowed: TotalBounds = isEmptyPastStart
 		? { atLeast: bounds.atLeast, atMost: Math.min(bounds.atMost ?? offset, offset) }
