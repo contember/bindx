@@ -8,6 +8,12 @@ import type { FilteringState, SortingStateResult, PagingStateResult, SelectionSt
 import type { DataViewColumn } from './columnLeaf.js'
 import type { EntityAccessor, SelectionMeta } from '@contember/bindx'
 
+/**
+ * - `initial`: loading, with no rows to show (first load, or a retry after a failure)
+ * - `loaded`: the rows answer the current query
+ * - `refreshing`: the rows shown answer an earlier query while the current one loads
+ * - `failed`: the current query failed
+ */
 export type DataViewLoaderState = 'initial' | 'loaded' | 'refreshing' | 'failed'
 
 export type DataViewItem = EntityAccessor<object>

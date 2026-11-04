@@ -27,6 +27,7 @@ import {
 	useDataViewContext,
 	useDataViewReload,
 } from '@contember/bindx-dataview'
+import type { BackendAdapter, Query, QueryOptions, QueryResult } from '@contember/bindx'
 import { TestPagination, TestTable, getByTestId, getRowCount, queryByTestId } from './helpers.js'
 
 afterEach(cleanup)
@@ -70,6 +71,25 @@ function finishTaskOnServer(adapter: MockAdapter, id: string): void {
 	const projectTasks = project?.['tasks']
 	if (project && Array.isArray(projectTasks)) {
 		project['tasks'] = projectTasks.filter(it => it.id !== id)
+	}
+}
+
+/** Fails the first list query, then answers like the inner adapter. */
+class FailFirstListAdapter implements BackendAdapter {
+	private hasFailed = false
+
+	constructor(private readonly inner: MockAdapter) {}
+
+	async query(queries: readonly Query[], options?: QueryOptions): Promise<QueryResult[]> {
+		if (!this.hasFailed && queries.some(query => query.type === 'list')) {
+			this.hasFailed = true
+			throw new Error('list query failed')
+		}
+		return this.inner.query(queries, options)
+	}
+
+	persist(...args: Parameters<BackendAdapter['persist']>): ReturnType<BackendAdapter['persist']> {
+		return this.inner.persist(...args)
 	}
 }
 
@@ -277,6 +297,30 @@ describe('data view reload()', () => {
 		expect(getByTestId(container, 'loader-state').textContent).toBe('refreshing')
 		expect(rowIds()).toEqual(['t1', 't2'])
 		await waitFor(() => expect(rowIds()).toEqual(['t3']))
+		expect(getByTestId(container, 'loader-state').textContent).toBe('loaded')
+	})
+
+	test('a retry after a failure loads as initial, with no rows to keep', async () => {
+		const adapter = new FailFirstListAdapter(createAdapter())
+		const { container } = render(
+			<BindxProvider adapter={adapter} schema={schema}>
+				<DataGrid entity={taskDef} filter={openTasks}>
+					{it => (
+						<>
+							<DataGridTextColumn field={it.title} header="Title" />
+							<TestTable />
+							<ReloadProbe />
+						</>
+					)}
+				</DataGrid>
+			</BindxProvider>,
+		)
+		await waitFor(() => expect(getByTestId(container, 'loader-state').textContent).toBe('failed'))
+
+		await clickReload(container)
+
+		expect(getByTestId(container, 'loader-state').textContent).toBe('initial')
+		await waitFor(() => expect(getRowCount(container)).toBe(3))
 		expect(getByTestId(container, 'loader-state').textContent).toBe('loaded')
 	})
 })

@@ -60,9 +60,9 @@ export interface DataViewLoaderStateProps {
 	children: React.ReactNode
 	/** Render children when data is loaded */
 	loaded?: boolean
-	/** Render children when refreshing (after initial load) */
+	/** Render children while rows of an earlier query are shown and the current one loads */
 	refreshing?: boolean
-	/** Render children during initial load */
+	/** Render children while loading with no rows to show */
 	initial?: boolean
 	/** Render children on failure */
 	failed?: boolean
@@ -82,9 +82,9 @@ export function DataViewLoaderState({
 export interface DataViewLoaderStateSwitchProps {
 	/** Render when data is loaded */
 	loaded?: React.ReactNode
-	/** Render when refreshing (after initial load) */
+	/** Render while rows of an earlier query are shown and the current one loads */
 	refreshing?: React.ReactNode
-	/** Render during initial load */
+	/** Render while loading with no rows to show */
 	initial?: React.ReactNode
 	/** Render on failure */
 	failed?: React.ReactNode
