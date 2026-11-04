@@ -65,8 +65,8 @@ type StaticFieldNode =
 		assumesNotHasOne?: true       // a ref API value (`.value`, `.errors`) left the analyzed code;
 		                              // the runtime falls back when the schema says has-one
 	}
-// Has-many params are not part of the format: the runtime collector ignores them inside a
-// component, and an <Entity> root with a parameterised <HasMany> bails (HASMANY_PARAMS_AT_ROOT).
+// Has-many params are not part of the format: a parameterised <HasMany> is collected and
+// rendered under its params alias, so the component or <Entity> root holding it bails (HASMANY_PARAMS).
 
 /** Emitted as the 2nd argument of .render(): key = implicit entity prop name. */
 type StaticSelection = Record<string, StaticFieldMap>

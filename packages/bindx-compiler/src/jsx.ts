@@ -42,8 +42,6 @@ export class JsxAnalyzer {
 		private readonly moduleScope: ModuleScope,
 		private readonly contracts: ContractLookup,
 		private readonly targetKinds: TargetKindLookup,
-		/** Analyzing an `<Entity>` root: the runtime walk there also keeps what components return. */
-		private readonly isSelectionRoot: boolean,
 	) {}
 
 	walk(node: t.JSXElement | t.JSXFragment, scope: Scope): void {
@@ -392,10 +390,13 @@ export class JsxAnalyzer {
 			}
 			return // no entity reaches this element → nothing it collects belongs to this selection
 		}
-		if (many && this.isSelectionRoot && HASMANY_PARAM_KEYS.some(key => findAttr(node, key) !== null)) {
-			// The root walk keeps <HasMany>'s returned, param-aliased relation next to the plain one;
-			// a field map holds one node per field. Inside a component the runtime ignores params.
-			throw new BailError({ code: 'HASMANY_PARAMS_AT_ROOT', message: '<HasMany> with params in an <Entity> root' })
+		const mayHaveParams = HASMANY_PARAM_KEYS.some(key => findAttr(node, key) !== null)
+			|| node.openingElement.attributes.some(attr => t.isJSXSpreadAttribute(attr))
+		if (many && mayHaveParams) {
+			// The runtime collects a parameterised <HasMany> under its params alias, next to the
+			// plain relation, and renders that alias; a field map holds one node per field. A
+			// spread may carry params, so it counts as having them.
+			throw new BailError({ code: 'HASMANY_PARAMS', message: '<HasMany> with params' })
 		}
 		const item = many ? consumeMany(res.ref) : consumeRelation(res.ref)
 		const children = childrenSlot(node)

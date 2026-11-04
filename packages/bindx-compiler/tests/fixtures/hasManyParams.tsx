@@ -2,9 +2,8 @@ import { createComponent, Field, HasMany } from '@contember/bindx-react'
 import type { FixtureCase } from '../fixtureTypes.js'
 import { schema } from './_schema.js'
 
-// Has-many with literal params. The runtime collector drops params in the implicit
-// path (verified against the oracle), so field-tree equality holds; params are
-// asserted separately in analyzer.test.ts.
+// Has-many with literal params. The runtime collects it under its params alias, which the
+// field-map format cannot hold, so the chain bails to the runtime pass.
 export const HasManyParams = createComponent()
 	.entity('article', schema.Article)
 	.render(({ article }) => (
@@ -19,5 +18,5 @@ export const HasManyParams = createComponent()
 	))
 
 export const cases: FixtureCase[] = [
-	{ component: HasManyParams, prop: 'article' },
+	{ component: HasManyParams, prop: 'article', expect: 'bail', code: 'HASMANY_PARAMS' },
 ]
