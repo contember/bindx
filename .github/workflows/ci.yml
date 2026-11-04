@@ -31,6 +31,17 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
 
+  package-contents:
+    name: Package Contents
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      # Fails when a bin/exports/main/types target of a published package is missing from its tarball.
+      - run: bun run check:pack
+
   test:
     name: Unit & Integration Tests
     runs-on: ubuntu-latest

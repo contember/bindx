@@ -5,7 +5,8 @@
 		"packages/*"
 	],
 	"scripts": {
-		"build": "tsc --build && bun run --cwd packages/bindx-compiler build:js",
+		"build": "tsc --build && bun run --filter '*' build:js",
+		"check:pack": "bun run scripts/check-pack/run.ts",
 		"dev": "tsc --build --watch",
 		"typecheck": "tsc --build",
 		"lint": "eslint .",
