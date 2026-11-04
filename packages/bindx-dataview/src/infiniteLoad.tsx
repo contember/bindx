@@ -132,7 +132,8 @@ export function DataViewInfiniteLoadProvider({
 
 	// The view refetches only its current page, so a reload starts the list again from the first one.
 	const reload = useCallback((): void => {
-		setReloadedList(joinedItems)
+		// A reload during a reload keeps the list shown at the first one.
+		setReloadedList(current => current ?? joinedItems)
 		setStored({ queryKey, pages: [] })
 		first()
 		reloadPage()

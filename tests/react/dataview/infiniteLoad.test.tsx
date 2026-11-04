@@ -176,4 +176,21 @@ describe('DataViewInfiniteLoadProvider', () => {
 		expect(optionIds(container)).toEqual(expectedIds(100))
 		await waitFor(() => expect(optionIds(container)).toEqual(expectedIds(51).slice(1)))
 	})
+
+	test('a reload during a reload keeps the list shown at the first one', async () => {
+		const container = renderPicker(createAdapter())
+		await waitFor(() => expect(optionIds(container)).toHaveLength(50))
+		await loadMore(container)
+		await waitFor(() => expect(optionIds(container)).toHaveLength(100))
+
+		await act(async () => {
+			fireEvent.click(getByTestId(container, 'reload'))
+		})
+		await act(async () => {
+			fireEvent.click(getByTestId(container, 'reload'))
+		})
+
+		expect(optionIds(container)).toEqual(expectedIds(100))
+		await waitFor(() => expect(optionIds(container)).toEqual(expectedIds(50)))
+	})
 })
