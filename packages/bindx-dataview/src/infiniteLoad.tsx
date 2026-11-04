@@ -82,7 +82,8 @@ export interface DataViewInfiniteLoadProviderProps {
 /**
  * Shows the pages loaded so far as one list: its children see the stored pages plus the current one
  * as the data view's `items`. `loadMore` stores the current page and moves the view to the next one;
- * `reload` loads the list again from the first page.
+ * `reload` loads the list again from the first page. Only descendants get that `reload`: one above
+ * the provider refetches the view's current page alone.
  */
 export function DataViewInfiniteLoadProvider({
 	children,
@@ -120,13 +121,23 @@ export function DataViewInfiniteLoadProvider({
 		}
 	}, [hasNext, isPageLoaded, offset, requestKey, queryKey, pages, items, next])
 
+	// The list shown when a reload started stays on screen until the first page lands.
+	const [reloadedList, setReloadedList] = useState<readonly DataViewItem[] | null>(null)
+	if (reloadedList !== null && !isLoadingMore) {
+		setReloadedList(null)
+	}
+
+	const joinedItems = useMemo(() => joinPages(pages, items), [pages, items])
+	const shownItems = reloadedList ?? joinedItems
+
 	// The view refetches only its current page, so a reload starts the list again from the first one.
 	const reload = useCallback((): void => {
+		setReloadedList(joinedItems)
+		setStored({ queryKey, pages: [] })
 		first()
 		reloadPage()
-	}, [first, reloadPage])
+	}, [joinedItems, queryKey, first, reloadPage])
 
-	const shownItems = useMemo(() => joinPages(pages, items), [pages, items])
 	const dataViewValue = useMemo(
 		(): DataViewContextValue => ({ ...dataView, items: shownItems, itemCount: shownItems.length, reload }),
 		[dataView, shownItems, reload],

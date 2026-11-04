@@ -172,6 +172,8 @@ describe('DataViewInfiniteLoadProvider', () => {
 			fireEvent.click(getByTestId(container, 'reload'))
 		})
 
+		// The list stays as it was until the first page lands.
+		expect(optionIds(container)).toEqual(expectedIds(100))
 		await waitFor(() => expect(optionIds(container)).toEqual(expectedIds(51).slice(1)))
 	})
 })
