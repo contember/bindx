@@ -81,14 +81,15 @@ export interface DataViewInfiniteLoadProviderProps {
 
 /**
  * Shows the pages loaded so far as one list: its children see the stored pages plus the current one
- * as the data view's `items`. `loadMore` stores the current page and moves the view to the next one.
+ * as the data view's `items`. `loadMore` stores the current page and moves the view to the next one;
+ * `reload` loads the list again from the first page.
  */
 export function DataViewInfiniteLoadProvider({
 	children,
 }: DataViewInfiniteLoadProviderProps): ReactElement {
 	const dataView = useDataViewContext()
-	const { paging, filtering, sorting, items, loaderState } = dataView
-	const { queryOffset: offset, queryLimit: limit, hasNext, next } = paging
+	const { paging, filtering, sorting, items, loaderState, reload: reloadPage } = dataView
+	const { queryOffset: offset, queryLimit: limit, hasNext, next, first } = paging
 	const queryKey = JSON.stringify([filtering.resolvedWhere ?? null, sorting.resolvedOrderBy ?? null, limit ?? null])
 
 	const [stored, setStored] = useState<StoredPages>({ queryKey, pages: [] })
@@ -119,10 +120,16 @@ export function DataViewInfiniteLoadProvider({
 		}
 	}, [hasNext, isPageLoaded, offset, requestKey, queryKey, pages, items, next])
 
+	// The view refetches only its current page, so a reload starts the list again from the first one.
+	const reload = useCallback((): void => {
+		first()
+		reloadPage()
+	}, [first, reloadPage])
+
 	const shownItems = useMemo(() => joinPages(pages, items), [pages, items])
 	const dataViewValue = useMemo(
-		(): DataViewContextValue => ({ ...dataView, items: shownItems, itemCount: shownItems.length }),
-		[dataView, shownItems],
+		(): DataViewContextValue => ({ ...dataView, items: shownItems, itemCount: shownItems.length, reload }),
+		[dataView, shownItems, reload],
 	)
 
 	const contextValue = useMemo((): InfiniteLoadContextValue => ({

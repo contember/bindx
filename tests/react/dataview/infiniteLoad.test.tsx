@@ -13,6 +13,7 @@ import {
 	Select,
 	SelectDataView,
 	useDataViewContext,
+	useDataViewReload,
 } from '@contember/bindx-dataview'
 import { getByTestId, queryByTestId } from './helpers.js'
 
@@ -64,6 +65,11 @@ function SearchButton(): ReactElement {
 	)
 }
 
+function ReloadButton(): ReactElement {
+	const reload = useDataViewReload()
+	return <button data-testid="reload" onClick={reload}>Reload</button>
+}
+
 function renderPicker(adapter: MockAdapter): HTMLElement {
 	function Picker(): ReactElement {
 		const article = useEntity(articleDef, { by: { id: 'a1' } }, e => e.id().tag(t => t.id().name()))
@@ -79,6 +85,7 @@ function renderPicker(adapter: MockAdapter): HTMLElement {
 							<button data-testid="load-more">More</button>
 						</DataViewInfiniteLoadTrigger>
 						<SearchButton />
+						<ReloadButton />
 					</DataViewInfiniteLoadProvider>
 				</SelectDataView>
 			</Select>
@@ -151,5 +158,20 @@ describe('DataViewInfiniteLoadProvider', () => {
 			fireEvent.click(getByTestId(container, 'search-ten'))
 		})
 		await waitFor(() => expect(optionIds(container)).toEqual(Array.from({ length: 10 }, (_, i) => tagId((i + 1) * 10))))
+	})
+
+	test('reload() loads the list again from the first page', async () => {
+		const adapter = createAdapter()
+		const container = renderPicker(adapter)
+		await waitFor(() => expect(optionIds(container)).toHaveLength(50))
+		await loadMore(container)
+		await waitFor(() => expect(optionIds(container)).toHaveLength(100))
+
+		delete adapter.getStore()['Tag']?.[tagId(1)]
+		await act(async () => {
+			fireEvent.click(getByTestId(container, 'reload'))
+		})
+
+		await waitFor(() => expect(optionIds(container)).toEqual(expectedIds(51).slice(1)))
 	})
 })
