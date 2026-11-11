@@ -1,6 +1,6 @@
 {
 	"name": "@contember/bindx-compiler",
-	"version": "0.1.61",
+	"version": "0.1.62",
 	"description": "Build-time selection compiler for bindx: a Babel plugin and a Vite plugin that precompile implicit selections",
 	"type": "module",
 	"main": "./dist/index.js",

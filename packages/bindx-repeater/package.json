@@ -1,6 +1,6 @@
 {
 	"name": "@contember/bindx-repeater",
-	"version": "0.1.61",
+	"version": "0.1.62",
 	"description": "Repeater components for has-many list management",
 	"type": "module",
 	"main": "./src/index.ts",
