@@ -13,6 +13,7 @@ import {
 	liveHasManyChildIds,
 	plannedDeleteChildIds,
 	reconcileHasManyState,
+	relationServerIds,
 	setsEqual,
 	toRelationProjection,
 	toViewProjection,
@@ -384,6 +385,9 @@ export class HasManyStore {
 	/**
 	 * Removes an entity from a has-many relation.
 	 * For newly created entities (via add()), cancels the connection.
+	 * For an existing entity connected only locally, a disconnect cancels the planned
+	 * connection: the server never held the edge, so there is nothing to disconnect,
+	 * and a create input does not accept `disconnect` at all.
 	 * For existing server entities, plans the specified removal type.
 	 * Returns true if the state changed (caller should notify), false if it was a no-op.
 	 */
@@ -391,13 +395,16 @@ export class HasManyStore {
 		const existing = this.hasManyStates.get(key)
 		if (!existing) return false
 
-		if (existing.plannedAdditions.get(itemId)?.kind !== 'created') {
+		const addition = existing.plannedAdditions.get(itemId)
+		const cancelsAddition = addition?.kind === 'created'
+			|| (addition?.kind === 'connected' && removalType === 'disconnect' && !relationServerIds(existing).has(itemId))
+		if (!cancelsAddition) {
 			// planHasManyRemoval bumps editableWriteVersion itself.
 			this.planHasManyRemoval(key, itemId, removalType)
 			return true
 		}
 
-		// Cancelling a pending create cancels it in every view at once: the entity is
+		// Cancelling a pending addition cancels it in every view at once: the edge is
 		// going away, so leaving it listed elsewhere would show a row nothing persists.
 		const state = this.editableState(key)
 		state.plannedAdditions.delete(itemId)
