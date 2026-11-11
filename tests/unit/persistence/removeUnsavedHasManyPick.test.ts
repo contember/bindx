@@ -1,7 +1,7 @@
 /**
  * Removing a has-many item that was only connected locally cancels the planned
- * connection instead of planning a disconnect: the server never held the edge, and a
- * create input does not accept `disconnect` at all (contember/bindx#144).
+ * connection instead of planning a disconnect or a delete: the server never held the
+ * edge, and a create input accepts neither (contember/bindx#144).
  */
 import { describe, test, expect, beforeEach } from 'bun:test'
 import { SnapshotStore, MutationCollector, ContemberSchemaMutationAdapter, type SchemaNames } from '@contember/bindx'
@@ -67,6 +67,13 @@ describe('removing an unsaved has-many pick', () => {
 			})
 		})
 
+		test('connect then a delete-type removal sends no relation operation', () => {
+			store.planHasManyConnection('Article', articleId, 'tags', 'tag-1')
+			store.removeFromHasMany('Article', articleId, 'tags', 'tag-1', 'delete')
+
+			expect(collector.collectCreateData('Article', articleId)).toEqual({ title: 'New' })
+		})
+
 		test('connect, remove and connect the same item again sends its connect', () => {
 			store.planHasManyConnection('Article', articleId, 'tags', 'tag-1')
 			store.removeFromHasMany('Article', articleId, 'tags', 'tag-1', 'disconnect')
@@ -111,12 +118,18 @@ describe('removing an unsaved has-many pick', () => {
 			})
 		})
 
-		test('deleting a locally connected item still deletes it', () => {
+		test('a delete of a locally connected item cancels the connect instead of deleting the row', () => {
 			store.planHasManyConnection('Article', 'a-1', 'tags', 'tag-2')
 			store.removeFromHasMany('Article', 'a-1', 'tags', 'tag-2', 'delete')
 
+			expect(collector.collectUpdateData('Article', 'a-1')).toBeNull()
+		})
+
+		test('deleting a server item still deletes it', () => {
+			store.removeFromHasMany('Article', 'a-1', 'tags', 'tag-1', 'delete')
+
 			expect(collector.collectUpdateData('Article', 'a-1')).toEqual({
-				tags: [{ delete: { id: 'tag-2' }, alias: 'tag-2' }],
+				tags: [{ delete: { id: 'tag-1' }, alias: 'tag-1' }],
 			})
 		})
 	})

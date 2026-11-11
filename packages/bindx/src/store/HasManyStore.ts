@@ -385,9 +385,10 @@ export class HasManyStore {
 	/**
 	 * Removes an entity from a has-many relation.
 	 * For newly created entities (via add()), cancels the connection.
-	 * For an existing entity connected only locally, a disconnect cancels the planned
-	 * connection: the server never held the edge, so there is nothing to disconnect,
-	 * and a create input does not accept `disconnect` at all.
+	 * For an existing entity connected only locally, any removal cancels the planned
+	 * connection: the server never held the edge, so there is nothing to disconnect or
+	 * delete through it, and a create input accepts neither. `remove()` picks `delete`
+	 * for a non-nullable one-has-many, so planning it would delete another parent's row.
 	 * For existing server entities, plans the specified removal type.
 	 * Returns true if the state changed (caller should notify), false if it was a no-op.
 	 */
@@ -397,7 +398,7 @@ export class HasManyStore {
 
 		const addition = existing.plannedAdditions.get(itemId)
 		const cancelsAddition = addition?.kind === 'created'
-			|| (addition?.kind === 'connected' && removalType === 'disconnect' && !relationServerIds(existing).has(itemId))
+			|| (addition?.kind === 'connected' && !relationServerIds(existing).has(itemId))
 		if (!cancelsAddition) {
 			// planHasManyRemoval bumps editableWriteVersion itself.
 			this.planHasManyRemoval(key, itemId, removalType)
