@@ -3,7 +3,7 @@ export { FieldHandle } from './FieldHandle.js'
 export { EntityHandle } from './EntityHandle.js'
 export { HasOneHandle } from './HasOneHandle.js'
 export { PlaceholderHandle } from './PlaceholderHandle.js'
-export { HasManyListHandle } from './HasManyListHandle.js'
+export { HasManyListHandle, HAS_MANY_ALIAS_RESOLVER, type HasManyAliasResolver } from './HasManyListHandle.js'
 export {
 	FIELD_REF_META,
 	type HasOneRelationState,
