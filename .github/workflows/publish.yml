@@ -9,9 +9,15 @@ permissions:
   id-token: write
   contents: read
 
+# Never cancel a publish that is already running.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
