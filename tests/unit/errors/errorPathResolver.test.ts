@@ -383,7 +383,7 @@ describe('errorPathResolver', () => {
 				errorMessage: null,
 				errors: [{
 					paths: [],
-					message: 'new row for relation "article" violates check constraint "article_rating_range"',
+					message: 'Check constraint "ratingRange" on entity Article violated',
 					type: 'CheckConstraintViolation',
 				}],
 				validation: { valid: true, errors: [] },

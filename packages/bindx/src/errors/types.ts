@@ -33,7 +33,7 @@ export const ExecutionErrorTypes: Record<ExecutionErrorType, ExecutionErrorType>
  * Checks if a string is a valid ExecutionErrorType.
  */
 export function isExecutionErrorType(value: string): value is ExecutionErrorType {
-	return value in ExecutionErrorTypes
+	return Object.hasOwn(ExecutionErrorTypes, value)
 }
 
 /**
@@ -51,27 +51,21 @@ export type ErrorCategory = 'validation' | 'constraint' | 'not_found' | 'resourc
  * - 'unknown': Unclassified errors
  */
 export function classifyError(errorType?: string): ErrorCategory {
-	if (!errorType) return 'unknown'
+	if (errorType === undefined || !isExecutionErrorType(errorType)) return 'unknown'
+	return executionErrorCategories[errorType]
+}
 
-	switch (errorType) {
-		case 'NotNullConstraintViolation':
-		case 'UniqueConstraintViolation':
-		case 'ForeignKeyConstraintViolation':
-		case 'CheckConstraintViolation':
-			return 'constraint'
-		case 'InvalidDataInput':
-		case 'NonUniqueWhereInput':
-			return 'validation'
-		case 'NotFoundOrDenied':
-			return 'not_found'
-		case 'ResourceExhausted':
-			return 'resource_limit'
-		case 'SqlError':
-			// SQL errors could be transient (deadlock, connection issues) or permanent
-			return 'transient'
-		default:
-			return 'unknown'
-	}
+const executionErrorCategories: Record<ExecutionErrorType, ErrorCategory> = {
+	NotNullConstraintViolation: 'constraint',
+	UniqueConstraintViolation: 'constraint',
+	ForeignKeyConstraintViolation: 'constraint',
+	CheckConstraintViolation: 'constraint',
+	InvalidDataInput: 'validation',
+	NonUniqueWhereInput: 'validation',
+	NotFoundOrDenied: 'not_found',
+	ResourceExhausted: 'resource_limit',
+	// SQL errors could be transient (deadlock, connection issues) or permanent
+	SqlError: 'transient',
 }
 
 /**

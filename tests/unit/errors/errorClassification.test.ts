@@ -36,6 +36,10 @@ describe('error classification', () => {
 		test('should return unknown for undefined error type', () => {
 			expect(classifyError(undefined)).toBe('unknown')
 		})
+
+		test.each(['FutureEngineError', 'toString', 'constructor'])('should return unknown for unrecognised type %s', errorType => {
+			expect(classifyError(errorType)).toBe('unknown')
+		})
 	})
 
 	describe('isRetryableCategory', () => {
@@ -68,6 +72,7 @@ describe('error classification', () => {
 			expect(isExecutionErrorType('UnknownError')).toBe(false)
 			expect(isExecutionErrorType('')).toBe(false)
 			expect(isExecutionErrorType('notNullConstraintViolation')).toBe(false) // Wrong case
+			expect(isExecutionErrorType('toString')).toBe(false)
 		})
 	})
 
