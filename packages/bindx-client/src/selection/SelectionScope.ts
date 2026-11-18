@@ -16,6 +16,8 @@ export interface HasManyParams {
  * Relation metadata stored at parent level
  */
 interface RelationMeta {
+	/** The schema field; the child's key differs from it for a has-many keyed by its params alias. */
+	fieldName: string
 	isArray: boolean
 	params?: HasManyParams
 }
@@ -57,7 +59,35 @@ export class SelectionScope {
 			childScope.parent = this
 			childScope.addScalar('id')
 			this.children.set(fieldName, childScope)
-			this.relationMeta.set(fieldName, { isArray: false })
+			this.relationMeta.set(fieldName, { fieldName, isArray: false })
+		}
+		return childScope
+	}
+
+	/**
+	 * Create or get the child scope of a has-many read with parameters. It is keyed by the
+	 * params alias (`generateHasManyAlias`), next to and independent of the plain relation's
+	 * child, so a filtered or paginated list selects its fields only under its own alias and
+	 * two lists over the same field with different parameters stay apart.
+	 */
+	hasManyChild(fieldName: string, params: HasManyParams): SelectionScope {
+		const alias = generateHasManyAlias(fieldName, params)
+		if (alias === fieldName) {
+			const plain = this.child(fieldName)
+			this.markAsArray(fieldName)
+			return plain
+		}
+		let childScope = this.children.get(alias)
+		if (!childScope) {
+			childScope = new SelectionScope()
+			childScope.parent = this
+			childScope.addScalar('id')
+			this.children.set(alias, childScope)
+			this.relationMeta.set(alias, { fieldName, isArray: true, params })
+		} else if (params.totalCount) {
+			// totalCount is not part of the alias: one reader asking for it is enough.
+			const meta = this.relationMeta.get(alias)!
+			meta.params = { ...meta.params, totalCount: true }
 		}
 		return childScope
 	}
@@ -110,14 +140,18 @@ export class SelectionScope {
 		}
 
 		// Merge relation children
-		for (const [fieldName, otherChild] of other.children) {
-			const thisChild = this.child(fieldName)
+		for (const [key, otherChild] of other.children) {
+			const otherMeta = other.relationMeta.get(key)
+			if (otherMeta && key !== otherMeta.fieldName && otherMeta.params) {
+				this.hasManyChild(otherMeta.fieldName, otherMeta.params).merge(otherChild)
+				continue
+			}
+			const thisChild = this.child(key)
 			thisChild.merge(otherChild)
 
 			// Merge relation metadata
-			const otherMeta = other.relationMeta.get(fieldName)
 			if (otherMeta) {
-				const thisMeta = this.relationMeta.get(fieldName)!
+				const thisMeta = this.relationMeta.get(key)!
 				if (otherMeta.isArray) {
 					thisMeta.isArray = true
 				}
@@ -137,7 +171,9 @@ export class SelectionScope {
 			// Only process root-level fields
 			if (field.path.length !== 1) continue
 
-			if (field.isRelation && field.nested) {
+			if (field.isRelation && field.nested && field.isArray && field.hasManyParams && field.alias !== field.fieldName) {
+				this.hasManyChild(field.fieldName, field.hasManyParams).mergeFromSelectionMeta(field.nested)
+			} else if (field.isRelation && field.nested) {
 				const childScope = this.child(field.fieldName)
 				if (field.isArray) {
 					this.markAsArray(field.fieldName)
@@ -174,13 +210,14 @@ export class SelectionScope {
 		}
 
 		// Add relation fields with nested selections
-		for (const [fieldName, childScope] of this.children) {
-			const meta = this.relationMeta.get(fieldName)!
+		for (const [key, childScope] of this.children) {
+			const meta = this.relationMeta.get(key)!
+			const fieldName = meta.fieldName
 
 			// Generate alias for has-many fields with params
 			const alias = meta.isArray && meta.params
 				? generateHasManyAlias(fieldName, meta.params)
-				: fieldName
+				: key
 
 			fields.set(alias, {
 				fieldName,

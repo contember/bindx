@@ -5,6 +5,7 @@ import type { SnapshotStore } from '../store/SnapshotStore.js'
 import type { HasManyRemovalType } from '../store/RelationStore.js'
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 import type { SelectionMeta } from '../selection/types.js'
+import type { HasManyParams } from '../selection/index.js'
 import {
 	connectToList,
 	addToList,
@@ -26,6 +27,18 @@ import type {
 import { createAliasProxy } from './proxyFactory.js'
 
 /**
+ * Symbol for a has-many handle's alias resolver: given has-many parameters, it returns the
+ * handle of the same relation under their alias (`generateHasManyAlias`), which reads the
+ * data fetched with them, or `undefined` when the parameters make no alias or the parent's
+ * selection did not fetch it. `<HasMany filter … >` uses it so the list it renders is the
+ * filtered one, not the plain relation.
+ */
+export const HAS_MANY_ALIAS_RESOLVER = Symbol('HAS_MANY_ALIAS_RESOLVER')
+
+/** Resolves a sibling alias of the same has-many relation; see {@link HAS_MANY_ALIAS_RESOLVER}. */
+export type HasManyAliasResolver = (params: HasManyParams) => HasManyAccessor<object> | undefined
+
+/**
  * HasManyListHandle provides access to a has-many relation (list of entities).
  * Implements HasManyRef interface for JSX compatibility.
  *
@@ -42,6 +55,9 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
+
+	/** Present when the parent entity can hand out this relation under another alias. */
+	readonly [HAS_MANY_ALIAS_RESOLVER]?: HasManyAliasResolver
 
 	/**
 	 * Type brand - entity name for type inference.
@@ -80,10 +96,12 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		// Segments from the query root down to this relation. Items do NOT inherit it:
 		// a has-many restarts the chain, mirroring the collector proxy.
 		private readonly relationPath: readonly string[] = [fieldName],
+		resolveAlias?: HasManyAliasResolver,
 	) {
 		super(parentEntityType, parentEntityId, store, dispatcher)
 		this.__brands = brands
 		this.alias = alias ?? fieldName
+		this[HAS_MANY_ALIAS_RESOLVER] = resolveAlias
 	}
 
 	static create<TEntity extends object = object, TSelected = TEntity>(
@@ -98,9 +116,13 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		alias?: string,
 		selection?: SelectionMeta,
 		relationPath?: readonly string[],
+		resolveAlias?: HasManyAliasResolver,
 	): HasManyAccessor<TEntity, TSelected> {
 		return createAliasProxy<HasManyListHandle<TEntity, TSelected>, HasManyAccessor<TEntity, TSelected>>(
-			HasManyListHandle.createRaw<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath),
+			HasManyListHandle.createRaw<TEntity, TSelected>(
+				parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema,
+				brands, alias, selection, relationPath, resolveAlias,
+			),
 		)
 	}
 
@@ -120,8 +142,11 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		alias?: string,
 		selection?: SelectionMeta,
 		relationPath?: readonly string[],
+		resolveAlias?: HasManyAliasResolver,
 	): HasManyListHandle<TEntity, TSelected> {
-		return new HasManyListHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath)
+		return new HasManyListHandle<TEntity, TSelected>(
+			parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath, resolveAlias,
+		)
 	}
 
 	/**

@@ -1,5 +1,5 @@
 import type { SchemaRegistry } from '@contember/bindx'
-import { SelectionScope, generatePlaceholderId } from '@contember/bindx'
+import { SelectionScope, generatePlaceholderId, type HasManyParams } from '@contember/bindx'
 import {
 	type EntityAccessor,
 	type EntityFields,
@@ -11,6 +11,8 @@ import {
 	type HasOneAccessor,
 	FIELD_REF_META,
 	SCOPE_REF,
+	HAS_MANY_PARAMS_COLLECTOR,
+	type HasManyParamsCollector,
 } from './types.js'
 import { wrapEntityRefWithFieldAccessProxy, REACT_ELEMENT_PROBE_KEYS } from './proxyShared.js'
 
@@ -183,6 +185,10 @@ function createCollectorFieldRef(
 		// This is accessed lazily to create the child scope only when needed
 		get [SCOPE_REF](): SelectionScope {
 			return getChildScope()
+		},
+		[HAS_MANY_PARAMS_COLLECTOR]: (params: HasManyParams): HasManyParamsCollector => {
+			const scope = parentScope.hasManyChild(fieldName, params)
+			return { item: createCollectorProxy<unknown>(scope, targetEntityName, schemaRegistry), scope }
 		},
 
 		// FieldRef properties (non-$ versions)
