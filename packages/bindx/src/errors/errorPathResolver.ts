@@ -9,7 +9,7 @@
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
 import type { PathElement, ContemberMutationResult } from './pathMapper.js'
-import { createServerError, type ServerError } from './types.js'
+import { createServerError, isExecutionErrorType, type ExecutionErrorType, type ServerError } from './types.js'
 
 /**
  * The resolved target of an error path.
@@ -175,28 +175,20 @@ function resolveHasManyItemId(
  * Converts error type string to a user-friendly error code.
  */
 function getErrorCode(errorType?: string): string | undefined {
-	if (!errorType) return undefined
+	if (errorType === undefined || !isExecutionErrorType(errorType)) return undefined
+	return executionErrorCodes[errorType]
+}
 
-	switch (errorType) {
-		case 'UniqueConstraintViolation':
-			return 'UNIQUE_CONSTRAINT'
-		case 'NotNullConstraintViolation':
-			return 'NOT_NULL'
-		case 'ForeignKeyConstraintViolation':
-			return 'FOREIGN_KEY'
-		case 'NotFoundOrDenied':
-			return 'NOT_FOUND'
-		case 'NonUniqueWhereInput':
-			return 'NON_UNIQUE_WHERE'
-		case 'InvalidDataInput':
-			return 'INVALID_DATA'
-		case 'SqlError':
-			return 'SQL_ERROR'
-		case 'ResourceExhausted':
-			return 'RESOURCE_EXHAUSTED'
-		default:
-			return undefined
-	}
+const executionErrorCodes: Record<ExecutionErrorType, string> = {
+	UniqueConstraintViolation: 'UNIQUE_CONSTRAINT',
+	NotNullConstraintViolation: 'NOT_NULL',
+	ForeignKeyConstraintViolation: 'FOREIGN_KEY',
+	CheckConstraintViolation: 'CHECK_CONSTRAINT',
+	NotFoundOrDenied: 'NOT_FOUND',
+	NonUniqueWhereInput: 'NON_UNIQUE_WHERE',
+	InvalidDataInput: 'INVALID_DATA',
+	SqlError: 'SQL_ERROR',
+	ResourceExhausted: 'RESOURCE_EXHAUSTED',
 }
 
 /**
