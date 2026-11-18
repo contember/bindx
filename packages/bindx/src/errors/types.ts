@@ -21,6 +21,7 @@ export const ExecutionErrorTypes: Record<ExecutionErrorType, ExecutionErrorType>
 	NotNullConstraintViolation: 'NotNullConstraintViolation',
 	UniqueConstraintViolation: 'UniqueConstraintViolation',
 	ForeignKeyConstraintViolation: 'ForeignKeyConstraintViolation',
+	CheckConstraintViolation: 'CheckConstraintViolation',
 	NotFoundOrDenied: 'NotFoundOrDenied',
 	NonUniqueWhereInput: 'NonUniqueWhereInput',
 	InvalidDataInput: 'InvalidDataInput',
@@ -56,6 +57,7 @@ export function classifyError(errorType?: string): ErrorCategory {
 		case 'NotNullConstraintViolation':
 		case 'UniqueConstraintViolation':
 		case 'ForeignKeyConstraintViolation':
+		case 'CheckConstraintViolation':
 			return 'constraint'
 		case 'InvalidDataInput':
 		case 'NonUniqueWhereInput':

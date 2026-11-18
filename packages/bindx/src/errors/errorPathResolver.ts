@@ -184,6 +184,8 @@ function getErrorCode(errorType?: string): string | undefined {
 			return 'NOT_NULL'
 		case 'ForeignKeyConstraintViolation':
 			return 'FOREIGN_KEY'
+		case 'CheckConstraintViolation':
+			return 'CHECK_CONSTRAINT'
 		case 'NotFoundOrDenied':
 			return 'NOT_FOUND'
 		case 'NonUniqueWhereInput':

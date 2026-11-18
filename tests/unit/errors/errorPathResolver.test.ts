@@ -375,6 +375,30 @@ describe('errorPathResolver', () => {
 			expect(resolved[0]!.error.retryable).toBe(false)
 		})
 
+		test('should report a check constraint violation as a non-retryable entity-level constraint error', () => {
+			const store = new SnapshotStore()
+
+			const mutationResult: ContemberMutationResult = {
+				ok: false,
+				errorMessage: null,
+				errors: [{
+					paths: [],
+					message: 'new row for relation "article" violates check constraint "article_rating_range"',
+					type: 'CheckConstraintViolation',
+				}],
+				validation: { valid: true, errors: [] },
+			}
+
+			const resolved = resolveAllErrors(mutationResult, 'Article', 'a-1', createContext(store))
+
+			expect(resolved).toHaveLength(1)
+			expect(resolved[0]!.target).toEqual({ entityType: 'Article', entityId: 'a-1', type: 'entity' })
+			expect(resolved[0]!.error.type).toBe('CheckConstraintViolation')
+			expect(resolved[0]!.error.code).toBe('CHECK_CONSTRAINT')
+			expect(resolved[0]!.error.category).toBe('constraint')
+			expect(resolved[0]!.error.retryable).toBe(false)
+		})
+
 		test('should resolve multiple errors to different entities', () => {
 			const store = new SnapshotStore()
 			store.getOrCreateRelation('Article', 'a-1', 'author', {

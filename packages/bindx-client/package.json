@@ -17,9 +17,9 @@
 	],
 	"license": "MIT",
 	"dependencies": {
-		"@contember/graphql-builder": "2.2.0-alpha.17",
-		"@contember/graphql-client": "2.2.0-alpha.17",
-		"@contember/schema": "2.2.0-alpha.17"
+		"@contember/graphql-builder": "2.2.0-alpha.19",
+		"@contember/graphql-client": "2.2.0-alpha.19",
+		"@contember/schema": "2.2.0-alpha.19"
 	},
 	"repository": {
 		"type": "git",

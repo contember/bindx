@@ -18,7 +18,7 @@
 	"license": "MIT",
 	"dependencies": {
 		"@contember/bindx-client": "workspace:*",
-		"@contember/graphql-client": "2.2.0-alpha.17"
+		"@contember/graphql-client": "2.2.0-alpha.19"
 	},
 	"repository": {
 		"type": "git",

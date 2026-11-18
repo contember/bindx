@@ -23,6 +23,7 @@ describe('error classification', () => {
 			['NotNullConstraintViolation', 'constraint'],
 			['UniqueConstraintViolation', 'constraint'],
 			['ForeignKeyConstraintViolation', 'constraint'],
+			['CheckConstraintViolation', 'constraint'],
 			['InvalidDataInput', 'validation'],
 			['NonUniqueWhereInput', 'validation'],
 			['NotFoundOrDenied', 'not_found'],
@@ -55,6 +56,7 @@ describe('error classification', () => {
 			expect(isExecutionErrorType('NotNullConstraintViolation')).toBe(true)
 			expect(isExecutionErrorType('UniqueConstraintViolation')).toBe(true)
 			expect(isExecutionErrorType('ForeignKeyConstraintViolation')).toBe(true)
+			expect(isExecutionErrorType('CheckConstraintViolation')).toBe(true)
 			expect(isExecutionErrorType('NotFoundOrDenied')).toBe(true)
 			expect(isExecutionErrorType('NonUniqueWhereInput')).toBe(true)
 			expect(isExecutionErrorType('InvalidDataInput')).toBe(true)
@@ -71,10 +73,11 @@ describe('error classification', () => {
 
 	describe('ExecutionErrorTypes', () => {
 		test('should contain all error types', () => {
-			expect(Object.keys(ExecutionErrorTypes)).toHaveLength(8)
+			expect(Object.keys(ExecutionErrorTypes)).toHaveLength(9)
 			expect(ExecutionErrorTypes.NotNullConstraintViolation).toBe('NotNullConstraintViolation')
 			expect(ExecutionErrorTypes.UniqueConstraintViolation).toBe('UniqueConstraintViolation')
 			expect(ExecutionErrorTypes.ForeignKeyConstraintViolation).toBe('ForeignKeyConstraintViolation')
+			expect(ExecutionErrorTypes.CheckConstraintViolation).toBe('CheckConstraintViolation')
 			expect(ExecutionErrorTypes.NotFoundOrDenied).toBe('NotFoundOrDenied')
 			expect(ExecutionErrorTypes.NonUniqueWhereInput).toBe('NonUniqueWhereInput')
 			expect(ExecutionErrorTypes.InvalidDataInput).toBe('InvalidDataInput')
