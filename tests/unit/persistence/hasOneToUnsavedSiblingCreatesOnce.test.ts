@@ -24,7 +24,7 @@ const schema: SchemaNames = {
 			fields: {
 				id: { type: 'column' },
 				name: { type: 'column' },
-				sections: { type: 'many', entity: 'Section' },
+				sections: { type: 'many', entity: 'Section', relationKind: 'oneHasMany', inverse: 'website' },
 			},
 		},
 		Section: {
@@ -33,6 +33,7 @@ const schema: SchemaNames = {
 			fields: {
 				id: { type: 'column' },
 				name: { type: 'column' },
+				website: { type: 'one', entity: 'Website', nullable: false, inverse: 'sections' },
 				parent: { type: 'one', entity: 'Section', nullable: true },
 			},
 		},
