@@ -15,6 +15,8 @@ import {
 	buildCountSelection,
 	mutationFragments,
 	unwrapPaginateResult,
+	SchemaLoader,
+	type SchemaLoaderClient,
 } from '@contember/bindx-client'
 import type { GraphQlClient } from '@contember/graphql-client'
 import type { QuerySpec, QueryFieldSpec } from '../selection/buildQuery.js'
@@ -37,11 +39,19 @@ export interface ContemberAdapterOptions {
  * Uses @contember/bindx-client for GraphQL operations.
  */
 export class ContemberAdapter implements BackendAdapter {
+	private readonly schemaLoader = new SchemaLoader()
 
 	constructor(
 		private readonly contentClient: ContentClient,
 		private readonly schemaRegistry: SchemaRegistry,
+		private readonly introspectionClient: SchemaLoaderClient,
 	) {
+	}
+
+	async isCustomPrimaryAllowed(entityType: string): Promise<boolean> {
+		// The permission depends on the identity, so it comes from introspection, not from generated names.
+		const schema = await this.schemaLoader.loadSchema(this.introspectionClient)
+		return schema.getEntity(entityType)?.customPrimaryAllowed ?? false
 	}
 
 	async query(queries: readonly Query[], options?: QueryOptions): Promise<QueryResult[]> {

@@ -221,4 +221,10 @@ export interface BackendAdapter {
 	 * @returns Result with success status and per-mutation results
 	 */
 	persistTransaction?(mutations: readonly TransactionMutation[]): Promise<TransactionResult>
+
+	/**
+	 * Whether the backend accepts a client-chosen primary key when the current
+	 * identity creates an entity of this type. Missing means it does not.
+	 */
+	isCustomPrimaryAllowed?(entityType: string): Promise<boolean>
 }

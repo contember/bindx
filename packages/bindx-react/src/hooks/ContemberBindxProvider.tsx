@@ -24,9 +24,9 @@ export function schemaNamesToDef(schemaNames: SchemaNames): SchemaDefinition<Rec
 					fields[fieldName] = { type: 'scalar', columnType }
 				}
 			} else if (fieldDef.type === 'one') {
-				fields[fieldName] = { type: 'hasOne', target: fieldDef.entity, nullable: fieldDef.nullable }
+				fields[fieldName] = { type: 'hasOne', target: fieldDef.entity, nullable: fieldDef.nullable, inverse: fieldDef.inverse }
 			} else if (fieldDef.type === 'many') {
-				fields[fieldName] = { type: 'hasMany', target: fieldDef.entity, relationKind: fieldDef.relationKind, nullable: fieldDef.nullable }
+				fields[fieldName] = { type: 'hasMany', target: fieldDef.entity, relationKind: fieldDef.relationKind, nullable: fieldDef.nullable, inverse: fieldDef.inverse }
 			}
 		}
 		entities[entityName] = { fields }
@@ -83,7 +83,7 @@ export const ContemberBindxProvider = memo(function ContemberBindxProvider({
 
 		// Create adapter using new bindx-client ContentClient
 		const contentClient = new ContentClient(graphQlClient)
-		const adapter = new ContemberAdapter(contentClient, schemaRegistry)
+		const adapter = new ContemberAdapter(contentClient, schemaRegistry, graphQlClient)
 		const batcher = new QueryBatcher(adapter)
 
 		const store = customStore ?? new SnapshotStore()
