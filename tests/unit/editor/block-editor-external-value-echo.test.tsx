@@ -3,7 +3,7 @@ import '../../setup'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { act, cleanup, render } from '@testing-library/react'
 import React, { type ReactNode } from 'react'
-import type { Descendant } from 'slate'
+import { type Descendant, type Editor, Transforms } from 'slate'
 import { BindxProvider, MockAdapter, defineSchema, entityDef, scalar, useEntity, useUndo } from '@contember/bindx-react'
 import { BlockEditor, Editable, withParagraphs, type SerializableEditorNode } from '@contember/bindx-editor'
 
@@ -55,7 +55,7 @@ interface Harness {
 }
 
 let harness: Harness | null = null
-let slateUndoCount = 0
+let slateEditor: Editor | null = null
 
 function Page(): ReactNode {
 	const { undo, canRedo, undoCount, redoCount } = useUndo()
@@ -72,7 +72,7 @@ function Page(): ReactNode {
 	return (
 		<BlockEditor field={article.content} plugins={[withParagraphs({ render: ParagraphRenderer as never })]}>
 			{editor => {
-				slateUndoCount = editor.history.undos.length
+				slateEditor = editor
 				return <Editable renderElement={editor.renderElement} renderLeaf={editor.renderLeaf} onKeyDown={editor.onKeyDown} />
 			}}
 		</BlockEditor>
@@ -95,6 +95,11 @@ const renderEditor = async (content: SerializableEditorNode | null) => {
 	)
 	await settle()
 	if (!harness) throw new Error('editor did not render')
+}
+
+const currentEditor = (): Editor => {
+	if (!slateEditor) throw new Error('editor did not render')
+	return slateEditor
 }
 
 const current = (): Harness => {
@@ -145,6 +150,37 @@ describe('BlockEditor bound to a field changed from outside', () => {
 
 		expect(JSON.stringify(current().content)).toBe(JSON.stringify(doc('after')))
 		// Ctrl+Z inside the editor must not step back over a value the editor only followed.
-		expect(slateUndoCount).toBe(0)
+		expect(currentEditor().history.undos.length).toBe(0)
+	})
+
+	test('should not let the editor\'s own undo replay an edit made before a value set from outside', async () => {
+		await renderEditor(doc('before'))
+
+		await act(async () => Transforms.insertText(currentEditor(), 'abc', { at: { path: [0, 0], offset: 0 } }))
+		await settle()
+		expect(JSON.stringify(current().content)).toBe(JSON.stringify(doc('abcbefore')))
+
+		await act(async () => current().setContent(doc('external')))
+		await settle()
+
+		// The typed batch's offsets point into the replaced document; replaying it would corrupt the value.
+		await act(async () => currentEditor().undo())
+		await settle()
+
+		expect(JSON.stringify(current().content)).toBe(JSON.stringify(doc('external')))
+		expect(JSON.stringify(currentEditor().children)).toBe(JSON.stringify(doc('external').children))
+	})
+
+	test('should still write a user edit made after a value set from outside', async () => {
+		await renderEditor(doc('before'))
+
+		await act(async () => current().setContent(doc('after')))
+		await settle()
+
+		await act(async () => Transforms.insertText(currentEditor(), 'X', { at: { path: [0, 0], offset: 0 } }))
+		await settle()
+
+		expect(JSON.stringify(current().content)).toBe(JSON.stringify(doc('Xafter')))
+		expect(current().undoCount).toBe(2)
 	})
 })
