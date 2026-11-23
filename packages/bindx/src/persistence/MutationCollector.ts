@@ -3,7 +3,7 @@ import type { EntitySnapshot } from '../store/snapshots.js'
 import type { MutationSchemaProvider } from './MutationSchemaProvider.js'
 import type { MutationDataCollector } from './types.js'
 import { deepEqual } from '../utils/deepEqual.js'
-import { type CreateSite, type SharedCreate, type SharedCreateStrategy, isSameSite, planSharedCreate } from './sharedCreates.js'
+import { type CreateSite, type SharedCreate, type SharedCreateStrategy, isPlanCurrent, isSameSite, nonCarrierStrategyFor, planSharedCreate } from './sharedCreates.js'
 
 /**
  * Result of collecting mutations for an entity
@@ -111,7 +111,7 @@ export class MutationCollector implements MutationDataCollector {
 	 * changes, so the inner edge contributes nothing (see issue #88).
 	 */
 	private readonly _collecting = new Set<string>()
-	/** Every site where this session emitted an inline `create` of a temp entity, by entity key. */
+	/** Every site where this session reached a temp entity it creates inline, by entity key. */
 	private readonly _createSites = new Map<string, { readonly entityType: string; readonly entityId: string; readonly sites: CreateSite[] }>()
 	/** How each shared temp entity is created once. Survives the re-collections of one persist. */
 	private readonly _sharedCreatePlan = new Map<string, SharedCreateStrategy>()
@@ -208,7 +208,22 @@ export class MutationCollector implements MutationDataCollector {
 		return this._nestedUpdates
 	}
 
-	/** Temp entities the last collection emitted as `create` at more than one site and that have no plan yet. */
+	/**
+	 * Drops the plans whose sites differ from those the last collection reached, e.g. after an
+	 * interceptor vetoed the carrier. Returns whether that collection applied such a plan.
+	 */
+	dropStaleSharedCreatePlans(): boolean {
+		let applied = false
+		for (const [key, strategy] of this._sharedCreatePlan) {
+			const record = this._createSites.get(key)
+			if (record && isPlanCurrent(strategy, record.sites)) continue
+			this._sharedCreatePlan.delete(key)
+			if (record) applied = true
+		}
+		return applied
+	}
+
+	/** Temp entities the last collection reached at more than one site and that have no plan. */
 	getUnplannedSharedCreates(): SharedCreate[] {
 		const shared: SharedCreate[] = []
 		for (const [key, record] of this._createSites) {
@@ -258,10 +273,10 @@ export class MutationCollector implements MutationDataCollector {
 		else if (!record.sites.some(existing => isSameSite(existing, site))) record.sites.push(site)
 	}
 
-	/** The plan for a shared entity when this site is not where it is created. */
-	private nonCarrierStrategy(entityType: string, entityId: string, site: CreateSite): SharedCreateStrategy | undefined {
-		const strategy = this._sharedCreatePlan.get(this.entityKey(entityType, entityId))
-		return strategy && !isSameSite(strategy.carrier, site) ? strategy : undefined
+	/** Records the site and returns the plan when this site is not where the entity is created. */
+	private visitCreateSite(entityType: string, entityId: string, site: CreateSite): SharedCreateStrategy | undefined {
+		this.recordCreateSite(entityType, entityId, site)
+		return nonCarrierStrategyFor(this._sharedCreatePlan.get(this.entityKey(entityType, entityId)), site)
 	}
 
 	private recordRelationField(
@@ -641,14 +656,10 @@ export class MutationCollector implements MutationDataCollector {
 						// Temp entity — generate inline create with its collected data
 						if (targetType) {
 							const site: CreateSite = { relationType: 'hasOne', parentEntityType: entityType, parentEntityId: entityId, fieldName }
-							const shared = this.nonCarrierStrategy(targetType, currentId, site)
+							const shared = this.visitCreateSite(targetType, currentId, site)
 							if (shared?.kind === 'clientId') {
 								return record({ operation: 'connect', targetId: currentId }, { connect: { id: shared.id } })
 							}
-							if (shared) {
-								throw new Error(`Invariant: ${targetType}:${currentId} is folded into another site, but a has-one is never folded`)
-							}
-							this.recordCreateSite(targetType, currentId, site)
 							this.registerNestedEntity(targetType, currentId)
 							const createData = this.collectCreateData(targetType, currentId)
 							this._nestedCreates.push({
@@ -806,14 +817,13 @@ export class MutationCollector implements MutationDataCollector {
 				}
 				if (!targetType) continue
 				const site: CreateSite = { relationType: 'hasMany', parentEntityType: entityType, parentEntityId: entityId, fieldName }
-				const shared = this.nonCarrierStrategy(targetType, additionId, site)
+				const shared = this.visitCreateSite(targetType, additionId, site)
 				if (shared) {
 					// Created at another site: a client id connects it here, a fold made it join through its owning side.
 					if (shared.kind === 'clientId') operations.push({ connect: { id: shared.id }, alias: additionId })
 					additions.push({ itemId: additionId, kind: 'created' })
 					continue
 				}
-				this.recordCreateSite(targetType, additionId, site)
 				this.registerNestedEntity(targetType, additionId)
 				const createData = this.collectCreateData(targetType, additionId)
 				this._nestedCreates.push({

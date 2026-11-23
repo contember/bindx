@@ -24,11 +24,12 @@ export interface OwnerLink {
 	readonly ownerId: string
 }
 
+/** A plan holds only for the exact sites it was made for; any other set of sites is planned again. */
 export type SharedCreateStrategy =
 	/** Created at the carrier; every other site is a one-has-many membership expressed by an owner link. */
-	| { readonly kind: 'fold'; readonly carrier: CreateSite; readonly ownerLinks: readonly OwnerLink[] }
+	| { readonly kind: 'fold'; readonly sites: readonly CreateSite[]; readonly carrier: CreateSite; readonly ownerLinks: readonly OwnerLink[] }
 	/** Created at the carrier with a client-chosen primary key; every other site connects by it. */
-	| { readonly kind: 'clientId'; readonly carrier: CreateSite; readonly id: string }
+	| { readonly kind: 'clientId'; readonly sites: readonly CreateSite[]; readonly carrier: CreateSite; readonly id: string }
 
 export interface SharedCreatePlanContext {
 	getInverseField(entityType: string, fieldName: string): string | undefined
@@ -45,6 +46,21 @@ export function isSameSite(a: CreateSite, b: CreateSite): boolean {
 		&& a.parentEntityType === b.parentEntityType
 		&& a.parentEntityId === b.parentEntityId
 		&& a.fieldName === b.fieldName
+}
+
+/** The sites a collection reached are the ones the plan was made for. */
+export function isPlanCurrent(strategy: SharedCreateStrategy, sites: readonly CreateSite[]): boolean {
+	return sites.length === strategy.sites.length
+		&& sites.every(site => strategy.sites.some(planned => isSameSite(planned, site)))
+}
+
+/** The plan for a site where the entity is not created, if the plan covers that site. */
+export function nonCarrierStrategyFor(strategy: SharedCreateStrategy | undefined, site: CreateSite): SharedCreateStrategy | undefined {
+	if (!strategy || isSameSite(strategy.carrier, site)) return undefined
+	if (!strategy.sites.some(planned => isSameSite(planned, site))) return undefined
+	// A fold reaches only one-has-many memberships; any other site is emitted as a create and planned again.
+	if (strategy.kind === 'fold' && site.relationType !== 'hasMany') return undefined
+	return strategy
 }
 
 /**
@@ -78,7 +94,7 @@ function planFold(shared: SharedCreate, context: SharedCreatePlanContext): Share
 		usedFields.add(fieldName)
 		ownerLinks.push({ fieldName, ownerId: site.parentEntityId })
 	}
-	return { kind: 'fold', carrier, ownerLinks }
+	return { kind: 'fold', sites: [...shared.sites], carrier, ownerLinks }
 }
 
 /** The shared entity's many-has-one that owns a one-has-many site, if the schema names it. */
@@ -92,7 +108,7 @@ function planClientId(shared: SharedCreate, context: SharedCreatePlanContext): S
 	if (!context.isCustomPrimaryAllowed(shared.entityType)) return undefined
 	const carrier = shared.sites.find(site => site.relationType === 'hasMany') ?? shared.sites[0]
 	if (!carrier) return undefined
-	return { kind: 'clientId', carrier, id: context.generateId() }
+	return { kind: 'clientId', sites: [...shared.sites], carrier, id: context.generateId() }
 }
 
 export function describeSite(site: CreateSite): string {
@@ -101,12 +117,16 @@ export function describeSite(site: CreateSite): string {
 
 /** Thrown before anything is sent when a shared temp entity cannot be created once. */
 export class SharedCreateError extends Error {
-	constructor(readonly unplannable: readonly SharedCreate[]) {
+	/** {@link lookupError} is set when asking the backend about a client-chosen primary key failed. */
+	constructor(readonly unplannable: readonly SharedCreate[], lookupError?: Error) {
 		super(
 			unplannable.map(shared => (
 				`${shared.entityType}:${shared.entityId} is created in one persist through ${shared.sites.map(describeSite).join(', ')}. `
 				+ 'It can be created only once, and the other references cannot name it: '
-				+ 'none of them is a one-has-many membership the entity owns, and the backend does not allow a client-chosen primary key (customPrimary) for it.'
+				+ (lookupError
+					? `none of them is a one-has-many membership the entity owns, and asking the backend whether it allows a client-chosen primary key failed: ${lookupError.message}`
+					: 'none of them is a one-has-many membership the entity owns, and the backend does not allow a client-chosen primary key (customPrimary) for it. '
+						+ 'If the entity owns such a membership, regenerate the schema names so they carry the inverse side of relations.')
 			)).join(' '),
 		)
 		this.name = 'SharedCreateError'

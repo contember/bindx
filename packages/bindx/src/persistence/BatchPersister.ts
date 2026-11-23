@@ -287,11 +287,12 @@ export class BatchPersister {
 				let mutations: TransactionMutation[]
 				try {
 					mutations = this.buildMutations(topLevel, vetoedKeys, scope, collector)
-					// Only await when planning is needed: the persist is collected synchronously up to the send otherwise.
-					const shared = collector instanceof MutationCollector ? collector.getUnplannedSharedCreates() : []
-					if (collector instanceof MutationCollector && shared.length > 0) {
-						await this.planSharedCreates(collector, shared)
-						continue
+					if (collector instanceof MutationCollector) {
+						const replan = collector.dropStaleSharedCreatePlans()
+						const shared = collector.getUnplannedSharedCreates()
+						// Only await when planning is needed: the persist is collected synchronously up to the send otherwise.
+						if (shared.length > 0) await this.planSharedCreates(collector, shared)
+						if (replan || shared.length > 0) continue
 					}
 				} catch (error) {
 					if (!(error instanceof SharedCreateError) && !(error instanceof ClientPrimaryOrderError)) throw error
@@ -675,7 +676,13 @@ export class BatchPersister {
 		if (needingClientIds.length > 0) {
 			const allowed = new Set<string>()
 			for (const entityType of new Set(needingClientIds.map(entry => entry.entityType))) {
-				if (await this.adapter.isCustomPrimaryAllowed?.(entityType)) allowed.add(entityType)
+				let isAllowed: boolean | undefined
+				try {
+					isAllowed = await this.adapter.isCustomPrimaryAllowed?.(entityType)
+				} catch (error) {
+					throw new SharedCreateError(needingClientIds.filter(entry => entry.entityType === entityType), toError(error))
+				}
+				if (isAllowed) allowed.add(entityType)
 			}
 			const unplannable = collector.planSharedCreates(needingClientIds, allowed)
 			if (unplannable.length > 0) throw new SharedCreateError(unplannable)
@@ -921,8 +928,12 @@ export class BatchPersister {
 			!transactionResult.ok || transactionResult.results.some(entry => !entry.ok)
 		)
 
-		// Creates confirmed so far: a shared entity created in an earlier mutation is referenced by later ones.
+		// A shared entity created in one mutation is referenced by others (issue #169), so every
+		// mutation is reconciled before any temp id is mapped, and memberships of shared creates last.
 		const confirmedCreates = new Set<string>()
+		const reconciledMemberships = new Set<string>()
+		const failedOwners = new Set<string>()
+		const idMappings: { readonly entity: ExecutionEntity; readonly persistedId: string | undefined; readonly nestedIds: ReadonlyMap<string, string> }[] = []
 		for (const mutation of execution.mutations) {
 			const mutationResult = transactionResult.results.find(entry => (
 				entry.entityType === mutation.entityType && entry.entityId === mutation.entityId
@@ -939,6 +950,9 @@ export class BatchPersister {
 					: mutationResult?.errorMessage ?? 'Mutation result missing'
 				this.mapServerErrors(entity.entityType, entity.entityId, mutationResult?.mutationResult, message)
 				if (rollbackOnError) this.rollbackExecutionEntity(entity)
+				failedOwners.add(entityIdentityKey(entity.entityType, entity.entityId))
+				const graph = this.expectedNestedGraph(execution, mutation)
+				for (const nested of [...graph.creates, ...graph.updates]) failedOwners.add(entityIdentityKey(nested.entityType, nested.entityId))
 				results.push(toFailedResult(entity, message, mutationResult?.mutationResult))
 				for (const nested of this.expectedNestedEntities(execution, mutation)) {
 					nestedResults.push(toFailedResult(nested, message))
@@ -952,6 +966,7 @@ export class BatchPersister {
 				const message = `Create of ${entity.entityType}:${entity.entityId} succeeded without a server ID`
 				this.mapServerErrors(entity.entityType, entity.entityId, undefined, message)
 				results.push(toFailedResult(entity, message))
+				failedOwners.add(entityIdentityKey(entity.entityType, entity.entityId))
 				continue
 			}
 
@@ -959,8 +974,9 @@ export class BatchPersister {
 			const nestedUpdates = this.expectedNestedUpdates(execution, mutation)
 			const involved = [entity, ...resolvedNested.entities, ...nestedUpdates]
 			for (const key of resolvedNested.persistedIds.keys()) confirmedCreates.add(key)
-			const conflicts = this.reconcileConfirmedEntities(execution, involved, confirmedCreates)
-			this.mapConfirmedIds(entity, mutationResult.persistedId, resolvedNested.persistedIds)
+			const conflicts = this.reconcileConfirmedEntities(execution, involved, confirmedCreates, reconciledMemberships)
+			idMappings.push({ entity, persistedId: mutationResult.persistedId, nestedIds: resolvedNested.persistedIds })
+			for (const nested of resolvedNested.unresolved) failedOwners.add(entityIdentityKey(nested.entityType, nested.entityId))
 
 			for (const nested of resolvedNested.entities) {
 				const key = entityIdentityKey(nested.entityType, nested.entityId)
@@ -988,6 +1004,17 @@ export class BatchPersister {
 				results.push(toSuccessResult(entity, this.persistedIdFor(entity, mutationResult.persistedId)))
 			}
 		}
+
+		const membershipConflicts = this.reconcileSharedCreateMemberships(execution, confirmedCreates, failedOwners, reconciledMemberships)
+		for (const [ownerKey, message] of membershipConflicts) {
+			const owner = splitExecutionKey(ownerKey)
+			this.mapServerErrors(owner.entityType, owner.entityId, undefined, message)
+			const index = results.findIndex(entry => entityIdentityKey(entry.entityType, entry.entityId) === ownerKey)
+			const entity = execution.entities.find(entry => entityIdentityKey(entry.entityType, entry.entityId) === ownerKey)
+			if (index >= 0 && entity) results[index] = toFailedResult(entity, message)
+			else if (entity) results.push(toFailedResult(entity, message))
+		}
+		for (const mapping of idMappings) this.mapConfirmedIds(mapping.entity, mapping.persistedId, mapping.nestedIds)
 
 		for (const nested of execution.entities.filter(entity => entity.nested)) {
 			const key = entityIdentityKey(nested.entityType, nested.entityId)
@@ -1165,6 +1192,7 @@ export class BatchPersister {
 		execution: PersistExecution,
 		entities: readonly ExecutionEntity[],
 		confirmedNestedCreates: ReadonlySet<string>,
+		reconciledMemberships: Set<string>,
 	): ReadonlyMap<string, readonly string[]> {
 		const keys = new Set(entities.map(entity => entityIdentityKey(entity.entityType, entity.entityId)))
 		const conflicts = new Map<string, string[]>()
@@ -1210,13 +1238,13 @@ export class BatchPersister {
 		for (const change of execution.hasManyChanges) {
 			const ownerKey = entityIdentityKey(change.entityType, change.entityId)
 			if (!keys.has(ownerKey)) continue
-			const additions = change.additions.filter(addition => {
-				if (addition.kind !== 'created') return true
-				// A shared entity is created at one site only; the other lists reach it through its owner link or a connect.
-				const descriptor = execution.nestedCreates.find(item => item.entityId === addition.itemId)
-				return descriptor !== undefined && confirmedNestedCreates.has(entityIdentityKey(descriptor.entityType, descriptor.entityId))
-			})
+			const additions = change.additions.filter(addition => (
+				addition.kind !== 'created' || isConfirmedCreate(execution, confirmedNestedCreates, addition.itemId)
+			))
 			if (additions.length === 0 && change.removals.length === 0) continue
+			for (const addition of additions) {
+				if (addition.kind === 'created') reconciledMemberships.add(membershipKey(change, addition.itemId))
+			}
 			const outcome = this.store.reconcileSentHasMany(
 				change.entityType,
 				change.entityId,
@@ -1226,6 +1254,34 @@ export class BatchPersister {
 			if (outcome === 'conflict') addConflict(ownerKey, relationConflictMessage(change.entityType, change.entityId, change.fieldName))
 		}
 		this.purgeChildrenDeletedByParent(execution, keys)
+		return conflicts
+	}
+
+	/**
+	 * Commits the has-many memberships of creates that ran at another site of this persist:
+	 * a fold sets the membership through the entity's owner link, so the list's owner may have
+	 * no mutation, or one processed before the create was confirmed (issue #169).
+	 */
+	private reconcileSharedCreateMemberships(
+		execution: PersistExecution,
+		confirmedCreates: ReadonlySet<string>,
+		failedOwners: ReadonlySet<string>,
+		reconciledMemberships: Set<string>,
+	): ReadonlyMap<string, string> {
+		const conflicts = new Map<string, string>()
+		for (const change of execution.hasManyChanges) {
+			const ownerKey = entityIdentityKey(change.entityType, change.entityId)
+			if (failedOwners.has(ownerKey)) continue
+			const additions = change.additions.filter(addition => (
+				addition.kind === 'created'
+				&& !reconciledMemberships.has(membershipKey(change, addition.itemId))
+				&& isConfirmedCreate(execution, confirmedCreates, addition.itemId)
+			))
+			if (additions.length === 0) continue
+			for (const addition of additions) reconciledMemberships.add(membershipKey(change, addition.itemId))
+			const outcome = this.store.reconcileSentHasMany(change.entityType, change.entityId, change.fieldName, { additions, removals: [] })
+			if (outcome === 'conflict') conflicts.set(ownerKey, relationConflictMessage(change.entityType, change.entityId, change.fieldName))
+		}
 		return conflicts
 	}
 
@@ -1529,8 +1585,9 @@ export class BatchPersister {
 			} else if (!Array.isArray(value)) {
 				const op = value as Record<string, unknown>
 				const nodeField = nodeItem[key]
-				// A sent create or connect leaves the relation set, so a row where it is null is another row.
-				if (nodeField === null && ('create' in op || 'connect' in op)) return false
+				// A nested create leaves the relation set and readable, so a row where it is null is another row.
+				// A connect's target may be unreadable to the role and come back null, so it proves nothing.
+				if (nodeField === null && 'create' in op) return false
 				if (!nodeField || typeof nodeField !== 'object') continue
 
 				if ('connect' in op) {
@@ -1650,6 +1707,16 @@ function splitExecutionKey(key: string): { entityType: string; entityId: string 
 		entityType: separator < 0 ? '' : key.slice(0, separator),
 		entityId: separator < 0 ? key : key.slice(separator + 1),
 	}
+}
+
+/** A shared entity is created at one site only; the other lists reach it through its owner link or a connect. */
+function isConfirmedCreate(execution: PersistExecution, confirmedCreates: ReadonlySet<string>, itemId: string): boolean {
+	const descriptor = execution.nestedCreates.find(item => item.entityId === itemId)
+	return descriptor !== undefined && confirmedCreates.has(entityIdentityKey(descriptor.entityType, descriptor.entityId))
+}
+
+function membershipKey(change: { readonly entityType: string; readonly entityId: string; readonly fieldName: string }, itemId: string): string {
+	return `${relationIdentityKey(change.entityType, change.entityId, change.fieldName)}#${itemId}`
 }
 
 function relationIdentityKey(entityType: string, entityId: string, fieldName: string): string {

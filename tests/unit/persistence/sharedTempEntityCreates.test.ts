@@ -216,27 +216,37 @@ describe('a temp entity referenced from several places in one persist', () => {
 	let calls: AdapterCall[]
 	let customPrimaryChecks: string[]
 
-	const setup = (customPrimary: readonly string[]): { engine: MiniEngine; persister: BatchPersister } => {
+	const setup = (customPrimary: readonly string[]): { engine: MiniEngine; persister: BatchPersister; dispatcher: ActionDispatcher } => {
 		const engine = new MiniEngine(new Set(customPrimary))
-		const persister = new BatchPersister(createEngineAdapter(engine, calls, customPrimaryChecks), store, new ActionDispatcher(store), {
+		const dispatcher = new ActionDispatcher(store)
+		const persister = new BatchPersister(createEngineAdapter(engine, calls, customPrimaryChecks), store, dispatcher, {
 			mutationCollector: new MutationCollector(store, new ContemberSchemaMutationAdapter(schema)),
 		})
-		engine.seed('Website', 'website-1', { name: 'Site' })
-		store.setEntityData('Website', 'website-1', { id: 'website-1', name: 'Site' }, true)
-		store.setExistsOnServer('Website', 'website-1', true)
-		store.getOrCreateHasMany('Website', 'website-1', 'sections', [])
-		return { engine, persister }
+		for (const id of ['website-1', 'website-2']) {
+			engine.seed('Website', id, { name: id })
+			store.setEntityData('Website', id, { id, name: id }, true)
+			store.setExistsOnServer('Website', id, true)
+			store.getOrCreateHasMany('Website', id, 'sections', [])
+		}
+		return { engine, persister, dispatcher }
 	}
 
-	const addSection = (name: string, parent?: string): string => {
+	const addSection = (name: string, parent?: string, website = 'website-1'): string => {
 		const id = store.createEntity('Section', { name })
 		if (parent) {
 			store.getOrCreateRelation('Section', id, 'parent', {
 				currentId: parent, serverId: null, state: 'connected', serverState: 'disconnected', placeholderData: {},
 			})
 		}
-		store.addToHasMany('Website', 'website-1', 'sections', id)
+		store.addToHasMany('Website', website, 'sections', id)
 		return id
+	}
+
+	const persistAgain = async (persister: BatchPersister): Promise<void> => {
+		calls.length = 0
+		const second = await persister.persistAll()
+		expect(second.success).toBe(true)
+		expect(calls).toEqual([])
 	}
 
 	const setParent = (child: string, parent: string): void => {
@@ -309,6 +319,45 @@ describe('a temp entity referenced from several places in one persist', () => {
 			expect(calls).toEqual([])
 			expect(store.getHasMany('Website', 'website-1', 'sections')?.plannedAdditions.size).toBe(0)
 		})
+
+		test('should leave nothing to save when the parent joins a list of another website', async () => {
+			const { engine, persister } = setup([])
+			const root = addSection('Root')
+			addSection('Child', root, 'website-2')
+
+			const result = await persister.persistAll()
+
+			expect(result.success).toBe(true)
+			expect(createdNamed(engine, 'Root')).toBe(1)
+			expect(sectionRow(engine, 'Root')?.values.get('website')).toBe('website-1')
+			expect(sectionRow(engine, 'Child')?.values.get('website')).toBe('website-2')
+			await persistAgain(persister)
+		})
+
+		test('should leave nothing to save when that website is renamed in the same persist', async () => {
+			const { persister } = setup([])
+			store.setFieldValue('Website', 'website-1', ['name'], 'Renamed')
+			const root = addSection('Root')
+			addSection('Child', root, 'website-2')
+
+			expect((await persister.persistAll()).success).toBe(true)
+			await persistAgain(persister)
+		})
+
+		test('should create the parent through its list when an interceptor vetoes the child', async () => {
+			const { engine, persister, dispatcher } = setup([])
+			const root = addSection('Root')
+			const child = addSection('Child', root)
+			dispatcher.getEventEmitter().interceptEntity('entity:persisting', 'Section', child, () => ({ action: 'cancel' }))
+
+			const result = await persister.persist('Website', 'website-1')
+
+			expect(result.success).toBe(true)
+			expect(createdNamed(engine, 'Root')).toBe(1)
+			expect(createdNamed(engine, 'Child')).toBe(0)
+			expect(sectionRow(engine, 'Root')?.values.get('website')).toBe('website-1')
+			expect(store.getPersistedId('Section', root)).toBe(sectionRow(engine, 'Root')?.id ?? null)
+		})
 	})
 
 	describe('referenced by two has-ones, with a client-chosen primary key', () => {
@@ -358,6 +407,18 @@ describe('a temp entity referenced from several places in one persist', () => {
 			expect(calls).toEqual([])
 		})
 
+		test('should leave nothing to save when the sub-sections are in another website', async () => {
+			const { engine, persister } = setup(['Section'])
+			const root = addSection('Root')
+			addSection('A', root, 'website-2')
+			addSection('B', root, 'website-2')
+
+			expect((await persister.persistAll()).success).toBe(true)
+			expect(createdNamed(engine, 'Root')).toBe(1)
+			expect(sectionRow(engine, 'A')?.values.get('parent')).toBe(sectionRow(engine, 'Root')?.id)
+			await persistAgain(persister)
+		})
+
 		test('should send nothing and report why when the backend does not allow a client id', async () => {
 			const { persister } = setup([])
 			const root = addSection('Root')
@@ -371,6 +432,69 @@ describe('a temp entity referenced from several places in one persist', () => {
 			expect(customPrimaryChecks).toEqual(['Section'])
 			expect(result.results.map(entry => entry.entityId)).toEqual([root])
 			expect(result.results[0]?.error?.message).toContain('customPrimary')
+		})
+	})
+
+	describe('content matching of nested creates', () => {
+		test('should map ids of new sections whose connected parent the role cannot read', async () => {
+			const engine = new MiniEngine(new Set())
+			const base = createEngineAdapter(engine, calls, customPrimaryChecks)
+			const hideParents = (data: Data | undefined): Data | undefined => (data && Array.isArray(data['sections'])
+				? { ...data, sections: data['sections'].map((item: unknown) => (isData(item) ? { ...item, parent: null } : item)) }
+				: data)
+			const adapter: BackendAdapter = {
+				...base,
+				persist: async (entityType, entityId, changes) => {
+					const result = await base.persist(entityType, entityId, changes)
+					return result.ok ? { ...result, data: hideParents(result.data) } : result
+				},
+			}
+			const persister = new BatchPersister(adapter, store, new ActionDispatcher(store), {
+				mutationCollector: new MutationCollector(store, new ContemberSchemaMutationAdapter(schema)),
+			})
+			engine.seed('Website', 'website-1', { name: 'Site' })
+			store.setEntityData('Website', 'website-1', { id: 'website-1', name: 'Site' }, true)
+			store.setExistsOnServer('Website', 'website-1', true)
+			store.getOrCreateHasMany('Website', 'website-1', 'sections', [])
+			for (const id of ['hidden-1', 'hidden-2']) {
+				engine.seed('Section', id, { name: id, website: 'website-1' })
+				store.setEntityData('Section', id, { id, name: id }, true)
+				store.setExistsOnServer('Section', id, true)
+			}
+			const a = addSection('A', 'hidden-1')
+			const b = addSection('B', 'hidden-2')
+
+			const result = await persister.persistAll()
+
+			expect(result.success).toBe(true)
+			expect(store.getPersistedId('Section', a)).toBe(sectionRow(engine, 'A')?.id ?? null)
+			expect(store.getPersistedId('Section', b)).toBe(sectionRow(engine, 'B')?.id ?? null)
+		})
+	})
+
+	describe('when asking the backend about a client id fails', () => {
+		test('should send nothing and return a failed result', async () => {
+			const engine = new MiniEngine(new Set(['Section']))
+			engine.seed('Website', 'website-1', { name: 'Site' })
+			store.setEntityData('Website', 'website-1', { id: 'website-1', name: 'Site' }, true)
+			store.setExistsOnServer('Website', 'website-1', true)
+			store.getOrCreateHasMany('Website', 'website-1', 'sections', [])
+			const adapter: BackendAdapter = {
+				...createEngineAdapter(engine, calls, customPrimaryChecks),
+				isCustomPrimaryAllowed: () => Promise.reject(new Error('introspection unavailable')),
+			}
+			const persister = new BatchPersister(adapter, store, new ActionDispatcher(store), {
+				mutationCollector: new MutationCollector(store, new ContemberSchemaMutationAdapter(schema)),
+			})
+			const root = addSection('Root')
+			addSection('A', root)
+			addSection('B', root)
+
+			const result = await persister.persistAll()
+
+			expect(result.success).toBe(false)
+			expect(calls).toEqual([])
+			expect(result.results[0]?.error?.message).toContain('introspection unavailable')
 		})
 	})
 
@@ -397,6 +521,7 @@ describe('a temp entity referenced from several places in one persist', () => {
 			const tagId = store.getPersistedId('Tag', tag)
 			expect(engine.junctions.has(`article-1:tags:${tagId}`)).toBe(true)
 			expect(engine.junctions.has(`article-2:tags:${tagId}`)).toBe(true)
+			await persistAgain(persister)
 		})
 
 		test('should create an image used as both cover and thumbnail once', async () => {
