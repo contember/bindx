@@ -20,6 +20,8 @@ import { type ContemberMutationResult } from '../errors/pathMapper.js'
 import { resolveAllErrors } from '../errors/errorPathResolver.js'
 import { createServerError } from '../errors/types.js'
 import { MutationCollector } from './MutationCollector.js'
+import { type SharedCreate, SharedCreateError } from './sharedCreates.js'
+import { ClientPrimaryOrderError, orderClientPrimaryCreates } from './orderClientPrimaryCreates.js'
 import type { EntityPersistedEvent, EntityPersistFailedEvent, EntityPersistingEvent } from '../events/types.js'
 import { deepEqual } from '../utils/deepEqual.js'
 import {
@@ -282,7 +284,20 @@ export class BatchPersister {
 
 				const topLevel = sortedEntities.filter(entity => accepted.has(entityIdentityKey(entity.entityType, entity.entityId)))
 				const vetoedKeys = new Set(vetoed.keys())
-				const mutations = this.buildMutations(topLevel, vetoedKeys, scope, collector)
+				let mutations: TransactionMutation[]
+				try {
+					mutations = this.buildMutations(topLevel, vetoedKeys, scope, collector)
+					// Only await when planning is needed: the persist is collected synchronously up to the send otherwise.
+					const shared = collector instanceof MutationCollector ? collector.getUnplannedSharedCreates() : []
+					if (collector instanceof MutationCollector && shared.length > 0) {
+						await this.planSharedCreates(collector, shared)
+						continue
+					}
+				} catch (error) {
+					if (!(error instanceof SharedCreateError) && !(error instanceof ClientPrimaryOrderError)) throw error
+					result = unsendableResult(error, topLevel)
+					return result
+				}
 				const nested = collector instanceof MutationCollector ? collector.getNestedEntities() : []
 				const discovered: DirtyEntity[] = []
 				for (const entity of nested) {
@@ -643,12 +658,28 @@ export class BatchPersister {
 		// as nested inline creates inside another entity's mutation.
 		if (collector instanceof MutationCollector) {
 			const nestedKeys = new Set(collector.getNestedEntities().map(entity => entityIdentityKey(entity.entityType, entity.entityId)))
-			if (nestedKeys.size > 0) {
-				return mutations.filter(m => !(m.operation === 'create' && nestedKeys.has(entityIdentityKey(m.entityType, m.entityId))))
-			}
+			const standalone = mutations.filter(m => !(m.operation === 'create' && nestedKeys.has(entityIdentityKey(m.entityType, m.entityId))))
+			return orderClientPrimaryCreates(standalone, collector.getClientPrimaryKeys())
 		}
 
 		return mutations
+	}
+
+	/**
+	 * Plans how each temp entity the collection emitted at several sites is created once
+	 * (issue #169); the mutations are then collected again with the plan.
+	 * A client-chosen primary key is asked of the backend only when folding cannot help.
+	 */
+	private async planSharedCreates(collector: MutationCollector, shared: readonly SharedCreate[]): Promise<void> {
+		const needingClientIds = collector.planSharedCreates(shared, new Set())
+		if (needingClientIds.length > 0) {
+			const allowed = new Set<string>()
+			for (const entityType of new Set(needingClientIds.map(entry => entry.entityType))) {
+				if (await this.adapter.isCustomPrimaryAllowed?.(entityType)) allowed.add(entityType)
+			}
+			const unplannable = collector.planSharedCreates(needingClientIds, allowed)
+			if (unplannable.length > 0) throw new SharedCreateError(unplannable)
+		}
 	}
 
 	/**
@@ -890,6 +921,8 @@ export class BatchPersister {
 			!transactionResult.ok || transactionResult.results.some(entry => !entry.ok)
 		)
 
+		// Creates confirmed so far: a shared entity created in an earlier mutation is referenced by later ones.
+		const confirmedCreates = new Set<string>()
 		for (const mutation of execution.mutations) {
 			const mutationResult = transactionResult.results.find(entry => (
 				entry.entityType === mutation.entityType && entry.entityId === mutation.entityId
@@ -925,7 +958,8 @@ export class BatchPersister {
 			const resolvedNested = this.resolveNestedResults(execution, mutation, mutationResult)
 			const nestedUpdates = this.expectedNestedUpdates(execution, mutation)
 			const involved = [entity, ...resolvedNested.entities, ...nestedUpdates]
-			const conflicts = this.reconcileConfirmedEntities(execution, involved, new Set(resolvedNested.persistedIds.keys()))
+			for (const key of resolvedNested.persistedIds.keys()) confirmedCreates.add(key)
+			const conflicts = this.reconcileConfirmedEntities(execution, involved, confirmedCreates)
 			this.mapConfirmedIds(entity, mutationResult.persistedId, resolvedNested.persistedIds)
 
 			for (const nested of resolvedNested.entities) {
@@ -1178,12 +1212,8 @@ export class BatchPersister {
 			if (!keys.has(ownerKey)) continue
 			const additions = change.additions.filter(addition => {
 				if (addition.kind !== 'created') return true
-				const descriptor = execution.nestedCreates.find(item => (
-					item.parentEntityType === change.entityType
-					&& item.parentEntityId === change.entityId
-					&& item.fieldName === change.fieldName
-					&& item.entityId === addition.itemId
-				))
+				// A shared entity is created at one site only; the other lists reach it through its owner link or a connect.
+				const descriptor = execution.nestedCreates.find(item => item.entityId === addition.itemId)
 				return descriptor !== undefined && confirmedNestedCreates.has(entityIdentityKey(descriptor.entityType, descriptor.entityId))
 			})
 			if (additions.length === 0 && change.removals.length === 0) continue
@@ -1499,6 +1529,8 @@ export class BatchPersister {
 			} else if (!Array.isArray(value)) {
 				const op = value as Record<string, unknown>
 				const nodeField = nodeItem[key]
+				// A sent create or connect leaves the relation set, so a row where it is null is another row.
+				if (nodeField === null && ('create' in op || 'connect' in op)) return false
 				if (!nodeField || typeof nodeField !== 'object') continue
 
 				if ('connect' in op) {
@@ -1524,6 +1556,21 @@ export class BatchPersister {
  */
 function toError(error: unknown): Error {
 	return error instanceof Error ? error : new Error(String(error))
+}
+
+/** Nothing was sent: the shared creates of this persist cannot be expressed. */
+function unsendableResult(error: SharedCreateError | ClientPrimaryOrderError, entities: readonly DirtyEntity[]): PersistenceResult {
+	const failed: readonly Pick<EntityPersistResult, 'entityType' | 'entityId' | 'operation'>[] = error instanceof SharedCreateError
+		? error.unplannable.map(entry => ({ entityType: entry.entityType, entityId: entry.entityId, operation: 'create' }))
+		: entities.map(entity => ({ entityType: entity.entityType, entityId: entity.entityId, operation: entity.changeType }))
+	const results: EntityPersistResult[] = failed.map(entry => ({ ...entry, success: false, error: { message: error.message } }))
+	return {
+		success: false,
+		results,
+		successCount: 0,
+		failedCount: results.length,
+		skippedCount: error instanceof SharedCreateError ? entities.length : 0,
+	}
 }
 
 function emptyPersistenceResult(): PersistenceResult {

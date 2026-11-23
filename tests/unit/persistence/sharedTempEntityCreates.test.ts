@@ -20,6 +20,7 @@ import {
 	type SchemaNames,
 } from '@contember/bindx'
 import { buildNodeSelectionFromMutationData } from '@contember/bindx-client'
+import { GraphQlField, type GraphQlSelectionSet } from '@contember/graphql-builder'
 
 const schema: SchemaNames = {
 	entities: {
@@ -81,11 +82,10 @@ interface NodeSelection {
 	readonly children?: readonly NodeSelection[]
 }
 
-const readSelection = (selectionSet: readonly unknown[]): NodeSelection[] =>
-	selectionSet.map(item => {
-		const field = item as { name: string; selectionSet?: readonly unknown[] }
-		return { name: field.name, children: field.selectionSet ? readSelection(field.selectionSet) : undefined }
-	})
+const readSelection = (selectionSet: GraphQlSelectionSet): NodeSelection[] =>
+	selectionSet
+		.filter(item => item instanceof GraphQlField)
+		.map(field => ({ name: field.name, children: field.selectionSet ? readSelection(field.selectionSet) : undefined }))
 
 const isData = (value: unknown): value is Data => typeof value === 'object' && value !== null && !Array.isArray(value)
 
@@ -281,6 +281,19 @@ describe('a temp entity referenced from several places in one persist', () => {
 			expect(result.success).toBe(true)
 			expect(createdNamed(engine, 'Root')).toBe(1)
 			expect(sectionRow(engine, 'Child')?.values.get('parent')).toBe(sectionRow(engine, 'Root')?.id)
+		})
+
+		test('should map both ids when the two sections carry the same values', async () => {
+			const { engine, persister } = setup([])
+			const root = addSection('Same')
+			const child = addSection('Same', root)
+
+			const result = await persister.persistAll()
+
+			// The response lists both new rows in website.sections; only the child's row has the parent set.
+			expect(result.success).toBe(true)
+			const childRow = engine.rows.get(store.getPersistedId('Section', child) ?? '')
+			expect(childRow?.values.get('parent')).toBe(store.getPersistedId('Section', root))
 		})
 
 		test('should leave nothing to save afterwards', async () => {

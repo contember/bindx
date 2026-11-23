@@ -3,6 +3,7 @@ import type { EntitySnapshot } from '../store/snapshots.js'
 import type { MutationSchemaProvider } from './MutationSchemaProvider.js'
 import type { MutationDataCollector } from './types.js'
 import { deepEqual } from '../utils/deepEqual.js'
+import { type CreateSite, type SharedCreate, type SharedCreateStrategy, isSameSite, planSharedCreate } from './sharedCreates.js'
 
 /**
  * Result of collecting mutations for an entity
@@ -110,6 +111,10 @@ export class MutationCollector implements MutationDataCollector {
 	 * changes, so the inner edge contributes nothing (see issue #88).
 	 */
 	private readonly _collecting = new Set<string>()
+	/** Every site where this session emitted an inline `create` of a temp entity, by entity key. */
+	private readonly _createSites = new Map<string, { readonly entityType: string; readonly entityId: string; readonly sites: CreateSite[] }>()
+	/** How each shared temp entity is created once. Survives the re-collections of one persist. */
+	private readonly _sharedCreatePlan = new Map<string, SharedCreateStrategy>()
 
 	constructor(
 		private readonly store: SnapshotStore,
@@ -142,6 +147,7 @@ export class MutationCollector implements MutationDataCollector {
 		this._nestedCreates.length = 0
 		this._nestedUpdates.length = 0
 		this._collecting.clear()
+		this._createSites.clear()
 	}
 
 	setExcludedEntityKeys(keys: ReadonlySet<string>): void {
@@ -200,6 +206,62 @@ export class MutationCollector implements MutationDataCollector {
 
 	getCollectedNestedUpdates(): readonly CollectedNestedUpdate[] {
 		return this._nestedUpdates
+	}
+
+	/** Temp entities the last collection emitted as `create` at more than one site and that have no plan yet. */
+	getUnplannedSharedCreates(): SharedCreate[] {
+		const shared: SharedCreate[] = []
+		for (const [key, record] of this._createSites) {
+			if (record.sites.length > 1 && !this._sharedCreatePlan.has(key)) shared.push(record)
+		}
+		return shared
+	}
+
+	/**
+	 * Plans how each shared temp entity is created once; the next collection applies it.
+	 * Returns the entities no strategy covers.
+	 */
+	planSharedCreates(shared: readonly SharedCreate[], customPrimaryTypes: ReadonlySet<string>): SharedCreate[] {
+		const unplannable: SharedCreate[] = []
+		for (const entry of shared) {
+			const strategy = planSharedCreate(entry, {
+				getInverseField: (entityType, fieldName) => this.schemaProvider.getInverseField(entityType, fieldName),
+				getRelationType: (entityType, fieldName) => this.schemaProvider.getRelationType(entityType, fieldName),
+				isPersistedId,
+				conflictsWithOwnRelation: (entityType, entityId, fieldName, ownerId) => {
+					const relation = this.store.getRelation(entityType, entityId, fieldName)
+					return relation !== undefined && relation.state === 'connected' && relation.currentId !== ownerId
+				},
+				isCustomPrimaryAllowed: entityType => customPrimaryTypes.has(entityType),
+				generateId: () => crypto.randomUUID(),
+			})
+			if (strategy) this._sharedCreatePlan.set(this.entityKey(entry.entityType, entry.entityId), strategy)
+			else unplannable.push(entry)
+		}
+		return unplannable
+	}
+
+	/** Client-chosen primary keys of the planned shared creates. */
+	getClientPrimaryKeys(): ReadonlySet<string> {
+		const ids = new Set<string>()
+		for (const strategy of this._sharedCreatePlan.values()) {
+			if (strategy.kind === 'clientId') ids.add(strategy.id)
+		}
+		return ids
+	}
+
+	private recordCreateSite(entityType: string, entityId: string, site: CreateSite): void {
+		const key = this.entityKey(entityType, entityId)
+		const record = this._createSites.get(key)
+		// The same site recurs when its owner is collected both nested and as a standalone create.
+		if (!record) this._createSites.set(key, { entityType, entityId, sites: [site] })
+		else if (!record.sites.some(existing => isSameSite(existing, site))) record.sites.push(site)
+	}
+
+	/** The plan for a shared entity when this site is not where it is created. */
+	private nonCarrierStrategy(entityType: string, entityId: string, site: CreateSite): SharedCreateStrategy | undefined {
+		const strategy = this._sharedCreatePlan.get(this.entityKey(entityType, entityId))
+		return strategy && !isSameSite(strategy.carrier, site) ? strategy : undefined
 	}
 
 	private recordRelationField(
@@ -427,6 +489,15 @@ export class MutationCollector implements MutationDataCollector {
 			}
 		}
 
+		const strategy = this._sharedCreatePlan.get(this.entityKey(entityType, entityId))
+		if (strategy?.kind === 'clientId') {
+			createData['id'] = strategy.id
+		} else if (strategy?.kind === 'fold') {
+			for (const link of strategy.ownerLinks) {
+				createData[link.fieldName] = { connect: { id: link.ownerId } }
+			}
+		}
+
 		return Object.keys(createData).length > 0 ? createData : null
 	}
 
@@ -569,6 +640,15 @@ export class MutationCollector implements MutationDataCollector {
 						}
 						// Temp entity — generate inline create with its collected data
 						if (targetType) {
+							const site: CreateSite = { relationType: 'hasOne', parentEntityType: entityType, parentEntityId: entityId, fieldName }
+							const shared = this.nonCarrierStrategy(targetType, currentId, site)
+							if (shared?.kind === 'clientId') {
+								return record({ operation: 'connect', targetId: currentId }, { connect: { id: shared.id } })
+							}
+							if (shared) {
+								throw new Error(`Invariant: ${targetType}:${currentId} is folded into another site, but a has-one is never folded`)
+							}
+							this.recordCreateSite(targetType, currentId, site)
 							this.registerNestedEntity(targetType, currentId)
 							const createData = this.collectCreateData(targetType, currentId)
 							this._nestedCreates.push({
@@ -725,6 +805,15 @@ export class MutationCollector implements MutationDataCollector {
 					continue
 				}
 				if (!targetType) continue
+				const site: CreateSite = { relationType: 'hasMany', parentEntityType: entityType, parentEntityId: entityId, fieldName }
+				const shared = this.nonCarrierStrategy(targetType, additionId, site)
+				if (shared) {
+					// Created at another site: a client id connects it here, a fold made it join through its owning side.
+					if (shared.kind === 'clientId') operations.push({ connect: { id: shared.id }, alias: additionId })
+					additions.push({ itemId: additionId, kind: 'created' })
+					continue
+				}
+				this.recordCreateSite(targetType, additionId, site)
 				this.registerNestedEntity(targetType, additionId)
 				const createData = this.collectCreateData(targetType, additionId)
 				this._nestedCreates.push({
