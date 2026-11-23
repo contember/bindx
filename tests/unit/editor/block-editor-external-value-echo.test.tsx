@@ -55,6 +55,7 @@ interface Harness {
 }
 
 let harness: Harness | null = null
+let slateUndoCount = 0
 
 function Page(): ReactNode {
 	const { undo, canRedo, undoCount, redoCount } = useUndo()
@@ -70,7 +71,10 @@ function Page(): ReactNode {
 	}
 	return (
 		<BlockEditor field={article.content} plugins={[withParagraphs({ render: ParagraphRenderer as never })]}>
-			{editor => <Editable renderElement={editor.renderElement} renderLeaf={editor.renderLeaf} onKeyDown={editor.onKeyDown} />}
+			{editor => {
+				slateUndoCount = editor.history.undos.length
+				return <Editable renderElement={editor.renderElement} renderLeaf={editor.renderLeaf} onKeyDown={editor.onKeyDown} />
+			}}
 		</BlockEditor>
 	)
 }
@@ -131,5 +135,16 @@ describe('BlockEditor bound to a field changed from outside', () => {
 		// The editor writes its empty paragraph back, so the field no longer holds the restored null.
 		expect(current().content).toBeNull()
 		expect(current().canRedo).toBe(true)
+	})
+
+	test('should keep a value set from outside out of the editor\'s own undo history', async () => {
+		await renderEditor(doc('before'))
+
+		await act(async () => current().setContent(doc('after')))
+		await settle()
+
+		expect(JSON.stringify(current().content)).toBe(JSON.stringify(doc('after')))
+		// Ctrl+Z inside the editor must not step back over a value the editor only followed.
+		expect(slateUndoCount).toBe(0)
 	})
 })

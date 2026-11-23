@@ -1,5 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
-import { Descendant, Editor, Element as SlateElement, Node, Transforms } from 'slate'
+import { Descendant, Editor, Element as SlateElement, Node, type Operation, Transforms } from 'slate'
+import { HistoryEditor } from 'slate-history'
 import { Slate, useSlate, useSlateStatic, ReactEditor } from 'slate-react'
 import type { RenderElementProps } from 'slate-react'
 import { createEditor } from '../editor/createEditor.js'
@@ -51,18 +52,27 @@ export function BlockEditor<
 }
 
 /**
+ * Operations {@link SyncValue} applied to follow a field value set from outside the editor.
+ * Slate flushes `onChange` in a microtask with every operation queued since the last flush,
+ * so the change handler identifies them by object, not by a flag around the transforms.
+ */
+const fieldSyncOperations = new WeakSet<Operation>()
+
+/**
  * Builds the Slate `onChange` handler that mirrors the editor document back into the bindx field.
  *
  * Pure selection changes (click, arrow keys) leave the document untouched — writing them back
  * churns the field for nothing, and under React StrictMode's double-invoked commit that round
  * trip reverts the caret to its previous position. Skip them, mirroring Slate's onValueChange.
+ * Operations that only followed the field's own value are skipped too: writing them back would
+ * record a gesture the user never made (and turn a restored `null` into an empty paragraph).
  */
 function useEditorChangeHandler(
 	editor: Editor,
 	fullField: FieldAccessor<SerializableEditorNode | null>,
 ): (value: Descendant[]) => void {
 	return useCallback((value: Descendant[]) => {
-		if (!editor.operations.some(op => op.type !== 'set_selection')) {
+		if (!editor.operations.some(op => op.type !== 'set_selection' && !fieldSyncOperations.has(op))) {
 			return
 		}
 
@@ -269,12 +279,19 @@ function SyncValue({ nodes }: { nodes: Descendant[] }): null {
 	const editor = useSlate()
 	useEffect(() => {
 		if (editor.children !== nodes && JSON.stringify(editor.children) !== JSON.stringify(nodes)) {
-			Editor.withoutNormalizing(editor, () => {
-				for (const [, childPath] of Node.children(editor, [], { reverse: true })) {
-					Transforms.removeNodes(editor, { at: childPath })
-				}
-				Transforms.insertNodes(editor, nodes)
+			const firstSyncOperation = editor.operations.length
+			// Following the field is not an edit: keep it out of Slate's own undo history as well.
+			HistoryEditor.withoutSaving(editor, () => {
+				Editor.withoutNormalizing(editor, () => {
+					for (const [, childPath] of Node.children(editor, [], { reverse: true })) {
+						Transforms.removeNodes(editor, { at: childPath })
+					}
+					Transforms.insertNodes(editor, nodes)
+				})
 			})
+			for (const operation of editor.operations.slice(firstSyncOperation)) {
+				fieldSyncOperations.add(operation)
+			}
 		}
 	}, [editor, nodes])
 	return null
