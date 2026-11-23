@@ -311,6 +311,7 @@ describe('hasOne creating-state materialization', () => {
 				getRelationFields: () => ['user'] as const,
 				getRelationType: () => 'hasOne' as const,
 				getRelationTarget: () => undefined, // <- this is the breakage
+				getInverseField: () => undefined,
 				hasEntity: () => true,
 			}
 			const brokenCollector = new MutationCollector(store, brokenProvider)

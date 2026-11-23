@@ -12,8 +12,8 @@ export interface BindxSchemaEntityNames {
 	readonly fields: {
 		readonly [fieldName: string]:
 			| { readonly type: 'column'; readonly columnType?: string; readonly enumName?: string }
-			| { readonly type: 'one'; readonly entity: string; readonly nullable?: boolean }
-			| { readonly type: 'many'; readonly entity: string; readonly relationKind?: 'oneHasMany' | 'manyHasMany'; readonly nullable?: boolean }
+			| { readonly type: 'one'; readonly entity: string; readonly nullable?: boolean; readonly inverse?: string }
+			| { readonly type: 'many'; readonly entity: string; readonly relationKind?: 'oneHasMany' | 'manyHasMany'; readonly nullable?: boolean; readonly inverse?: string }
 	}
 }
 
@@ -40,6 +40,7 @@ export class NameSchemaGenerator {
 								type: 'one',
 								entity: ctx.targetEntity.name,
 								nullable: 'nullable' in ctx.relation ? ctx.relation.nullable : undefined,
+								inverse: ctx.targetRelation?.name,
 							}
 						},
 						visitHasMany: ctx => {
@@ -49,6 +50,7 @@ export class NameSchemaGenerator {
 								entity: ctx.targetEntity.name,
 								relationKind: isManyHasMany ? 'manyHasMany' : 'oneHasMany',
 								nullable: ctx.type === 'oneHasMany' ? ctx.targetRelation.nullable : undefined,
+								inverse: ctx.targetRelation?.name,
 							}
 						},
 						visitColumn: ctx => {
