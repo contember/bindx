@@ -104,10 +104,14 @@ function owningFieldOf(shared: SharedCreate, site: CreateSite, context: SharedCr
 	return context.getRelationType(shared.entityType, inverse) === 'hasOne' ? inverse : undefined
 }
 
-/** Created at a one-has-many membership when there is one, so a required owner is set; else at the first site reached. */
+/**
+ * Created at a one-has-many membership when there is one, so a required owner is set;
+ * else at a has-one site, since a row's has-one ops run before its has-many ones.
+ */
 function planClientId(shared: SharedCreate, context: SharedCreatePlanContext): SharedCreateStrategy | undefined {
 	if (!context.isCustomPrimaryAllowed(shared.entityType)) return undefined
 	const carrier = shared.sites.find(site => site.relationType === 'hasMany' && owningFieldOf(shared, site, context) !== undefined)
+		?? shared.sites.find(site => site.relationType === 'hasOne')
 		?? shared.sites[0]
 	if (!carrier) return undefined
 	return { kind: 'clientId', sites: [...shared.sites], carrier, id: context.generateId() }

@@ -118,6 +118,62 @@ describe('rows of a list response that no create of the list made', () => {
 		})
 	}
 
+	test('should map a new section whose folded parent in the same list comes back normalized', async () => {
+		const { engine, persister } = setup()
+		const root = addSection({ name: 'Root', date: '2026-02-02' })
+		addSection({ name: 'Child' }, 'website-1', root)
+
+		const result = await persister.persistAll()
+
+		expect(result.success).toBe(true)
+		expect(await persistAgain(persister)).toEqual([])
+		expect(createdNamed(engine, 'Root')).toBe(1)
+		expect(createdNamed(engine, 'Child')).toBe(1)
+	})
+
+	for (const [carrierWebsite, listWebsite] of [['website-1', 'website-2'], ['website-2', 'website-1']] as const) {
+		test(`should create each section once when a parent from ${carrierWebsite} that comes back normalized joins the list of ${listWebsite}`, async () => {
+			const { engine, persister } = setup()
+			const root = addSection({ name: 'Root', date: '2026-02-02' }, listWebsite)
+			addSection({ name: 'Child' }, carrierWebsite, root)
+			addSection({ name: 'Other', date: '2026-01-01' }, listWebsite)
+
+			const result = await persister.persistAll()
+
+			expect(result.success).toBe(true)
+			expect(await persistAgain(persister)).toEqual([])
+			expect(createdNamed(engine, 'Root')).toBe(1)
+			expect(createdNamed(engine, 'Other')).toBe(1)
+		})
+
+		test(`should create each section once when a parent from ${carrierWebsite} equals a new sibling in the list of ${listWebsite}`, async () => {
+			const { engine, persister } = setup()
+			const root = addSection({ name: 'Same' }, listWebsite)
+			addSection({ name: 'Child' }, carrierWebsite, root)
+			addSection({ name: 'Same' }, listWebsite)
+
+			const result = await persister.persistAll()
+
+			expect(result.success).toBe(true)
+			expect(await persistAgain(persister)).toEqual([])
+			expect(createdNamed(engine, 'Same')).toBe(2)
+		})
+	}
+
+	test('should not let a parent whose carrier persists later claim the row of a sibling', async () => {
+		const { engine, persister } = setup()
+		const root = addSection({ name: 'Root' }, 'website-1')
+		addSection({ name: 'Child' }, 'website-2', root)
+		addSection({ name: 'Root ' }, 'website-1')
+
+		const result = await persister.persistAll()
+
+		expect(result.success).toBe(true)
+		expect(await persistAgain(persister)).toEqual([])
+		expect(createdNamed(engine, 'Root')).toBe(1)
+		expect(createdNamed(engine, 'Root ')).toBe(1)
+	})
+
 	test('should map a new tag with a trimmed name next to a tag connected by a client id', async () => {
 		const { engine, persister } = setup(['Tag'])
 		const shared = store.createEntity('Tag', { name: 'Shared' })
@@ -213,6 +269,20 @@ describe('shared creates around a failed or refused mutation', () => {
 		calls.length = 0
 		await persister.persistAll()
 		expect(calls).toEqual([])
+	})
+
+	test('should create a new image used in the gallery and as thumbnail of one article once', async () => {
+		const { engine, persister } = setup(['Image'])
+		const image = store.createEntity('Image', { url: 'picture' })
+		store.addToHasMany('Article', 'article-1', 'gallery', image)
+		store.getOrCreateRelation('Article', 'article-1', 'thumbnail', {
+			currentId: image, serverId: null, state: 'connected', serverState: 'disconnected', placeholderData: {},
+		})
+
+		const result = await persister.persistAll()
+
+		expect(result.success).toBe(true)
+		expect(createdNamed(engine, 'picture')).toBe(1)
 	})
 
 	test('should count the entity that cannot be created once as failed, not also as skipped', async () => {
