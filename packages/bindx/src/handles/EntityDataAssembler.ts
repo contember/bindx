@@ -14,8 +14,10 @@ interface AssembledEntity {
  * snapshots. The store keeps every entity once (issue #170), so nested data is
  * assembled on read, under the keys the selection read it with.
  *
- * A selected column the snapshot holds no key for reads as null, as FieldHandle.value
- * does; the snapshot itself keeps the key absent, so a create mutation leaves it out.
+ * The snapshot keys a column by its field name; a selected column shows under its
+ * output key (its alias), and one the snapshot holds no key for reads as null, as
+ * FieldHandle.value does. The snapshot itself keeps the key absent, so a create
+ * mutation leaves it out.
  * A relation the store holds no state for has not been read and is left out.
  * A subtree whose columns and relations did not change keeps its identity from the
  * previous assembly, so a consumer memoizing on it re-runs only when it changed.
@@ -63,7 +65,7 @@ export class EntityDataAssembler {
 			: {
 				columns: snapshot.data,
 				relations,
-				data: { ...snapshot.data, ...unsetColumnsOf(snapshot.data, selection), ...Object.fromEntries(relations) },
+				data: { ...selectedColumnsOf(snapshot.data, selection), ...Object.fromEntries(relations) },
 			}
 		this.next.set(path, assembled)
 		return assembled.data
@@ -98,16 +100,19 @@ export class EntityDataAssembler {
 }
 
 /**
- * The selected columns the entity data holds no value for, each as null under its output key.
- * A read stores a column under its alias, a write under its field name, so both are checked.
+ * The entity's columns with each selected column under its output key, null when unset.
+ * A column selected only under an alias does not also show under its field name.
  */
-function unsetColumnsOf(columns: Record<string, unknown>, selection: SelectionMeta): Record<string, null> {
-	const unset: Record<string, null> = {}
-	for (const field of selection.fields.values()) {
-		if (field.isRelation || columns[field.alias] !== undefined || columns[field.fieldName] !== undefined) continue
-		unset[field.alias] = null
+function selectedColumnsOf(columns: Record<string, unknown>, selection: SelectionMeta): Record<string, unknown> {
+	const data = { ...columns }
+	const selectedColumns = [...selection.fields.values()].filter(field => !field.isRelation)
+	for (const field of selectedColumns) {
+		if (field.alias !== field.fieldName) delete data[field.fieldName]
 	}
-	return unset
+	for (const field of selectedColumns) {
+		data[field.alias] = columns[field.fieldName] ?? null
+	}
+	return data
 }
 
 function isSameList(before: unknown, after: unknown): boolean {

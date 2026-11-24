@@ -37,7 +37,6 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 		dispatcher: ActionDispatcher,
 		private readonly _enumName?: string,
 		private readonly _columnType?: string,
-		private readonly dataFieldPath: string[] = fieldPath,
 		// Absolute chain from the query root; see FieldRefMeta.fullPath.
 		private readonly _fullPath: readonly string[] = fieldPath,
 	) {
@@ -52,10 +51,9 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 		dispatcher: ActionDispatcher,
 		enumName?: string,
 		columnType?: string,
-		dataFieldPath?: string[],
 		fullPath?: readonly string[],
 	): FieldAccessor<T> {
-		return createAliasProxy<FieldHandle<T>, FieldAccessor<T>>(new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType, dataFieldPath, fullPath))
+		return createAliasProxy<FieldHandle<T>, FieldAccessor<T>>(new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType, fullPath))
 	}
 
 	static createRaw<T = unknown>(
@@ -66,10 +64,9 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 		dispatcher: ActionDispatcher,
 		enumName?: string,
 		columnType?: string,
-		dataFieldPath?: string[],
 		fullPath?: readonly string[],
 	): FieldHandle<T> {
-		return new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType, dataFieldPath, fullPath)
+		return new FieldHandle<T>(entityType, entityId, fieldPath, store, dispatcher, enumName, columnType, fullPath)
 	}
 
 	static wrapProxy<T>(handle: FieldHandle<T>): FieldAccessor<T> {
@@ -132,10 +129,9 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 		return this.readRawValue(data) ?? null
 	}
 
-	/** Reads the field by its schema path, falling back to the path it was read under. */
+	/** The store keys a column by its schema field name, whatever alias it was read under. */
 	private readRawValue(data: Record<string, unknown>): unknown {
-		const value = getNestedValue(data, this.fieldPath)
-		return value === undefined ? getNestedValue(data, this.dataFieldPath) : value
+		return getNestedValue(data, this.fieldPath)
 	}
 
 	/**
@@ -251,9 +247,6 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 			[...this.fieldPath, fieldName],
 			this.store,
 			this.dispatcher,
-			undefined,
-			undefined,
-			[...this.dataFieldPath, fieldName],
 		)
 	}
 

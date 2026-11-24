@@ -10,7 +10,7 @@ export interface ServerReadSchema {
 
 type EntityRecord = Record<string, unknown>
 
-/** An entity's own columns from one occurrence in a read, keyed as the read returned them. */
+/** An entity's own columns from one occurrence in a read, keyed by schema field name whatever alias the read used. */
 export interface ServerReadEntity {
 	readonly entityType: string
 	readonly id: string
@@ -101,7 +101,8 @@ function visitEntity(
 		const value = record[field.key]
 		const targetType = schema.getRelationTarget(entityType, field.fieldName)
 		if (targetType === undefined) {
-			columns[field.key] = value
+			// Writes key a column by its field name, so an aliased read must too: one key per column.
+			columns[field.fieldName] = value
 			continue
 		}
 		if (schema.isHasMany(entityType, field.fieldName)) {

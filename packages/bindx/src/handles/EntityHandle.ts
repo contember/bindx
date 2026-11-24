@@ -290,10 +290,9 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	 * Gets a field handle for a specific field.
 	 * Returns cached handle to ensure stable identity.
 	 */
-	field<K extends keyof T>(fieldName: K, dataFieldName = String(fieldName)): FieldAccessor<T[K]> {
+	field<K extends keyof T>(fieldName: K): FieldAccessor<T[K]> {
 		const schemaFieldName = String(fieldName)
-		const cacheKey = dataFieldName
-		const cached = this.fieldHandleCache.get(cacheKey)
+		const cached = this.fieldHandleCache.get(schemaFieldName)
 
 		if (cached) {
 			return cached.proxy as FieldAccessor<T[K]>
@@ -309,11 +308,10 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			this.dispatcher,
 			enumName,
 			columnType,
-			[dataFieldName],
 			[...this.entityPath, schemaFieldName],
 		)
 		const proxy = FieldHandle.wrapProxy(raw)
-		this.fieldHandleCache.set(cacheKey, { raw, proxy } as CachedFieldHandle)
+		this.fieldHandleCache.set(schemaFieldName, { raw, proxy } as CachedFieldHandle)
 
 		return proxy
 	}
@@ -509,19 +507,19 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 
 				const nestedSelection = fieldMeta?.nested
 				const schemaFieldName = fieldMeta?.fieldName ?? fieldName
-				const dataFieldName = fieldMeta?.alias ?? fieldName
+				const alias = fieldMeta?.alias ?? fieldName
 
 				// Use schema to determine field type
 				const fieldDef = this.schema.getFieldDef(this.entityType, schemaFieldName)
 
 				if (!fieldDef || fieldDef.type === 'scalar') {
 					// Scalar field - return FieldHandle
-					return this.field(schemaFieldName as keyof T, dataFieldName)
+					return this.field(schemaFieldName as keyof T)
 				}
 
 				if (fieldDef.type === 'hasOne') {
 					// Has-one relation - return HasOneHandle
-					return this.hasOne(schemaFieldName, nestedSelection, dataFieldName)
+					return this.hasOne(schemaFieldName, nestedSelection, alias)
 				}
 
 				if (fieldDef.type === 'hasMany') {
@@ -542,7 +540,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 				}
 
 				// Unknown field type - fallback to FieldHandle
-				return this.field(schemaFieldName as keyof T, dataFieldName)
+				return this.field(schemaFieldName as keyof T)
 			},
 		})
 	}

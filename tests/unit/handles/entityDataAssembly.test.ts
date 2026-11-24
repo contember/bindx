@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
 	EntityHandle,
+	buildQueryFromSelection,
 	SchemaRegistry,
 	type SchemaDefinition,
 	type SelectionFieldMeta,
@@ -116,7 +117,7 @@ describe('EntityHandle.data with a selection', () => {
 
 	test('should not add the field name of an aliased column it holds', () => {
 		const { store, dispatcher } = createTestDispatcher()
-		store.writeServerRead('Article', { id: 'article-1', headline: 'Hello' }, schema)
+		store.writeServerRead('Article', { id: 'article-1', headline: 'Hello' }, schema, { spec: buildQueryFromSelection(aliasedTitle) })
 		const article = EntityHandle.createRaw<object>('article-1', 'Article', store, dispatcher, schema, undefined, aliasedTitle)
 
 		expect(article.data).toStrictEqual({ id: 'article-1', headline: 'Hello' })
