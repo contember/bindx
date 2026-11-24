@@ -51,6 +51,9 @@ export {
 	debugSelection,
 } from './analyzer.js'
 
+// Selection entries for field refs passed as props
+export { fieldRefSelection } from './fieldRefSelection.js'
+
 // Components
 export { Attribute, AttributeWithMeta, type AttributeProps } from './components/Attribute.js'
 export { Field, FieldWithMeta } from './components/Field.js'

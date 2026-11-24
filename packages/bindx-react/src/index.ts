@@ -401,4 +401,5 @@ export {
 	collectSelection,
 	convertToQuerySelection,
 	debugSelection,
+	fieldRefSelection,
 } from './jsx/index.js'

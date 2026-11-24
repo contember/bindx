@@ -3,6 +3,7 @@ import type { FieldProps, SelectionFieldMeta, SelectionProvider } from '../types
 import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
 import { useField } from '../../hooks/useField.js'
 import { annotateElement, isDevAnnotationsEnabled } from '../devAnnotations.js'
+import { fieldRefSelection } from '../fieldRefSelection.js'
 
 /**
  * Field component - renders a scalar field value
@@ -56,29 +57,7 @@ export const Field = memo(FieldImpl) as typeof FieldImpl
 // Static method for selection extraction
 const fieldWithSelection = Field as typeof Field & SelectionProvider & { [BINDX_COMPONENT]: true }
 
-fieldWithSelection.getSelection = (props: FieldProps<unknown>): SelectionFieldMeta | null => {
-	// Handle undefined field (e.g., when accessing field on disconnected has-one relation)
-	if (props.field === undefined || props.field === null) {
-		return null
-	}
-	const meta = props.field[FIELD_REF_META]
-	if (!meta) {
-		return null
-	}
-	// During collection phase, field accesses are already tracked in the scope tree via proxy.
-	// Field.getSelection should not duplicate them as flat entries which causes incorrect queries.
-	// Collection-phase refs have empty entityId.
-	if (meta.entityId === '') {
-		return null
-	}
-	return {
-		fieldName: meta.fieldName,
-		alias: meta.fieldName,
-		path: meta.path,
-		isArray: false,
-		isRelation: false,
-	}
-}
+fieldWithSelection.getSelection = (props: FieldProps<unknown>): SelectionFieldMeta | null => fieldRefSelection(props.field)
 
 fieldWithSelection[BINDX_COMPONENT] = true
 

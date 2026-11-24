@@ -4,6 +4,7 @@ import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
 import type { SelectionProvider } from '../types.js'
 import { useField } from '../../hooks/useField.js'
 import { isDevAnnotationsEnabled } from '../devAnnotations.js'
+import { fieldRefSelection } from '../fieldRefSelection.js'
 
 /**
  * Props for Attribute component.
@@ -60,29 +61,12 @@ attributeWithSelection.getSelection = (
 	props: AttributeProps<unknown>,
 	collectNested: (children: ReactNode) => SelectionMeta,
 ): SelectionFieldMeta | null => {
-	if (props.field === undefined || props.field === null) {
-		return null
-	}
-
-	const meta = props.field[FIELD_REF_META]
-	if (!meta) {
-		return null
-	}
-
-	// During collection phase, skip — field access is already tracked by the collector proxy
-	if (meta.entityId === '') {
-		// But still analyze children for nested field selections
+	const selection = fieldRefSelection(props.field)
+	if (selection === null) {
+		// Nested components still record their fields through the collector proxy.
 		collectNested(props.children)
-		return null
 	}
-
-	return {
-		fieldName: meta.fieldName,
-		alias: meta.fieldName,
-		path: meta.path,
-		isArray: false,
-		isRelation: false,
-	}
+	return selection
 }
 
 attributeWithSelection[BINDX_COMPONENT] = true

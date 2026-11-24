@@ -1,6 +1,7 @@
 import React, { memo, type ReactElement, type ReactNode } from 'react'
-import type { IfProps, SelectionFieldMeta, SelectionMeta, SelectionProvider, FieldRef } from '../types.js'
-import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
+import type { IfProps, SelectionFieldMeta, SelectionMeta, SelectionProvider } from '../types.js'
+import { BINDX_COMPONENT } from '../types.js'
+import { conditionSelection } from '../fieldRefSelection.js'
 import { mergeSelections, createEmptySelection } from '../SelectionMeta.js'
 import { useField } from '../../hooks/useField.js'
 import { useRefSubscription } from '../../hooks/useFields.js'
@@ -96,35 +97,7 @@ ifWithSelection.getSelection = (
 		result.push(field)
 	}
 
-	// Collect fields from condition
-	if (typeof props.condition !== 'boolean') {
-		if (isCondition(props.condition)) {
-			// Condition DSL object - collect all referenced fields
-			const conditionFields = collectConditionFields(props.condition)
-			for (const field of conditionFields) {
-				if (field && typeof field === 'object' && FIELD_REF_META in field) {
-					const meta = (field as { [FIELD_REF_META]: { fieldName: string; path: string[]; isArray?: boolean; isRelation?: boolean } })[FIELD_REF_META]
-					result.push({
-						fieldName: meta.fieldName,
-						alias: meta.fieldName,
-						path: meta.path,
-						isArray: meta.isArray ?? false,
-						isRelation: meta.isRelation ?? false,
-					})
-				}
-			}
-		} else {
-			// FieldRef<boolean> - add that field
-			const meta = (props.condition as { [FIELD_REF_META]: { fieldName: string; path: string[]; isArray?: boolean; isRelation?: boolean } })[FIELD_REF_META]
-			result.push({
-				fieldName: meta.fieldName,
-				alias: meta.fieldName,
-				path: meta.path,
-				isArray: false,
-				isRelation: false,
-			})
-		}
-	}
+	result.push(...conditionSelection(props.condition))
 
 	return result.length > 0 ? result : null
 }

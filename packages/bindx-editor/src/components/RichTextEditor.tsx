@@ -5,9 +5,8 @@ import { createEditor } from '../editor/createEditor.js'
 import { paragraphElementType } from '../plugins/element/paragraphs/index.js'
 import { useRichTextFieldNodes } from '../internal/hooks/useRichTextFieldNodes.js'
 import type { FieldRef } from '@contember/bindx'
-import { FIELD_REF_META } from '@contember/bindx'
 import type { RichTextEditorProps } from '../types/editorProps.js'
-import { BINDX_COMPONENT, type SelectionFieldMeta, type SelectionProvider, useField } from '@contember/bindx-react'
+import { BINDX_COMPONENT, fieldRefSelection, type SelectionFieldMeta, type SelectionProvider, useField } from '@contember/bindx-react'
 import type { SerializableEditorNode } from '../types/editor.js'
 
 export type { RichTextEditorProps }
@@ -91,20 +90,7 @@ const richTextEditorAny = RichTextEditor as unknown as Record<string | symbol, u
 
 richTextEditorAny.getSelection = (props: unknown): SelectionFieldMeta | null => {
 	const editorProps = props as RichTextEditorProps
-	if (editorProps.field === undefined || editorProps.field === null) {
-		return null
-	}
-	const meta = editorProps.field[FIELD_REF_META]
-	if (!meta) {
-		return null
-	}
-	return {
-		fieldName: meta.fieldName,
-		alias: meta.fieldName,
-		path: meta.path,
-		isArray: false,
-		isRelation: false,
-	}
+	return fieldRefSelection(editorProps.field)
 }
 
 richTextEditorAny[BINDX_COMPONENT] = true
