@@ -105,4 +105,27 @@ describe('EntityHandle.data with a selection', () => {
 
 		expect(Object.keys(article.data ?? {})).toEqual(['id', 'title'])
 	})
+
+	test('should list a selected column the entity holds no value for as null, under its alias', () => {
+		const { store, dispatcher } = createTestDispatcher()
+		store.writeServerRead('Article', { id: 'article-1' }, schema)
+		const article = EntityHandle.createRaw<object>('article-1', 'Article', store, dispatcher, schema, undefined, aliasedTitle)
+
+		expect(article.data).toStrictEqual({ id: 'article-1', headline: null })
+	})
+
+	test('should not add the field name of an aliased column it holds', () => {
+		const { store, dispatcher } = createTestDispatcher()
+		store.writeServerRead('Article', { id: 'article-1', headline: 'Hello' }, schema)
+		const article = EntityHandle.createRaw<object>('article-1', 'Article', store, dispatcher, schema, undefined, aliasedTitle)
+
+		expect(article.data).toStrictEqual({ id: 'article-1', headline: 'Hello' })
+	})
 })
+
+const aliasedTitle: SelectionMeta = {
+	fields: new Map<string, SelectionFieldMeta>([
+		scalar('id'),
+		['headline', { fieldName: 'title', alias: 'headline', path: ['title'], isArray: false, isRelation: false }],
+	]),
+}
