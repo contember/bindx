@@ -231,6 +231,8 @@ describe('rows of a list response that no create of the list made', () => {
 
 		expect(result.success).toBe(true)
 		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
+		expect(store.getPersistedId('Section', mid)).toBe(sectionIdNamed(engine, 'Mid'))
+		expect(store.getPersistedId('Section', root)).toBe(sectionIdNamed(engine, 'Root'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
@@ -248,6 +250,8 @@ describe('rows of a list response that no create of the list made', () => {
 
 		expect(result.success).toBe(true)
 		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
+		expect(store.getPersistedId('Section', mid)).toBe(sectionIdNamed(engine, 'Mid'))
+		expect(store.getPersistedId('Section', root)).toBe(sectionIdNamed(engine, 'Root'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
@@ -269,6 +273,9 @@ describe('rows of a list response that no create of the list made', () => {
 
 		expect(result.success).toBe(true)
 		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
+		expect(store.getPersistedId('Section', mid)).toBe(sectionIdNamed(engine, 'Mid'))
+		expect(store.getPersistedId('Section', upper)).toBe(sectionIdNamed(engine, 'Upper'))
+		expect(store.getPersistedId('Section', root)).toBe(sectionIdNamed(engine, 'Root'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
@@ -287,6 +294,8 @@ describe('rows of a list response that no create of the list made', () => {
 
 		expect(result.success).toBe(true)
 		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
+		expect(store.getPersistedId('Section', mid)).toBe(sectionIdNamed(engine, 'Mid'))
+		expect(store.getPersistedId('Section', root)).toBe(sectionIdNamed(engine, 'Root'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
@@ -391,6 +400,7 @@ describe('rows of a list response that no create of the list made', () => {
 
 		expect(result.success).toBe(true)
 		expect(store.getPersistedId('Section', created)).toBe(sectionIdNamed(engine, 'New'))
+		expect(store.getPersistedId('Section', shared)).toBe(sectionIdNamed(engine, 'Shared'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'New')).toBe(1)
 		expect(createdNamed(engine, 'Shared')).toBe(1)
@@ -413,17 +423,51 @@ describe('rows of a list response that no create of the list made', () => {
 		expect(createdNamed(engine, 'New')).toBe(1)
 		expect(createdNamed(engine, 'Inner')).toBe(1)
 	})
-	// X's own row is lost to the known gap above; Up is the only free row with a parent, and it belongs to Leaf B.
-	test('should not map a new section to a row a paired sibling created', async () => {
-		const { engine, persister } = setup()
+	/** X connects an existing row of the list as a child, so the known gap above excludes X's own row. */
+	const addSectionLosingItsRow = (engine: MiniEngine): string => {
 		seedSection(engine, 'existing-1', { name: 'Existing', website: 'website-1' })
 		store.connectExistingToHasMany('Website', 'website-1', 'sections', 'existing-1')
-		const created = addSection({ name: 'X' }, 'website-1', newSection({ name: 'X parent' }, 'website-2'))
+		const parent = newSection({ name: 'X parent' }, 'website-2', newSection({ name: 'X grandparent' }, 'website-2'))
+		const created = addSection({ name: 'X' }, 'website-1', parent)
 		store.connectExistingToHasMany('Section', created, 'children', 'existing-1')
-		const rootA = newSection({ name: 'Root A' }, 'website-1')
-		addSection({ name: 'Leaf A' }, 'website-1', newSection({ name: 'Mid A' }, 'website-2', rootA))
-		const up = newSection({ name: 'Up' }, 'website-1', newSection({ name: 'Top' }, 'website-2'))
+		return created
+	}
+
+	// Up is the only other free row with a grandparent, and Leaf B created it.
+	test('should not map a new section that lost its row to a row a sibling created through a has-one', async () => {
+		const { engine, persister } = setup()
+		const created = addSectionLosingItsRow(engine)
+		addSection({ name: 'Leaf A' }, 'website-1', newSection({ name: 'Mid A' }, 'website-2', newSection({ name: 'Root A' }, 'website-1')))
+		const up = newSection({ name: 'Up' }, 'website-1', newSection({ name: 'Top' }, 'website-2', newSection({ name: 'Above top' }, 'website-2')))
 		addSection({ name: 'Leaf B' }, 'website-1', newSection({ name: 'Mid B' }, 'website-2', up))
+
+		await persister.persistAll()
+
+		expect([null, sectionIdNamed(engine, 'X')]).toContain(store.getPersistedId('Section', created))
+	})
+
+	test('should not map a new section that lost its row to a row a sibling created through a has-many', async () => {
+		const { engine, persister } = setup()
+		const created = addSectionLosingItsRow(engine)
+		// Kid B, a child Mid B creates, is the only other free row with a grandparent.
+		for (const [name, hasParent] of [['B', true], ['C', false]] as const) {
+			const mid = newSection({ name: `Mid ${name}` }, 'website-2', hasParent ? newSection({ name: 'Top' }, 'website-2') : undefined)
+			store.addToHasMany('Section', mid, 'children', newSection({ name: `Kid ${name}` }, 'website-1'))
+			addSection({ name: `Leaf ${name}` }, 'website-1', mid)
+		}
+
+		await persister.persistAll()
+
+		expect([null, sectionIdNamed(engine, 'X')]).toContain(store.getPersistedId('Section', created))
+	})
+
+	test('should not map a new section that lost its row to a row the client never loaded', async () => {
+		const { engine, persister } = setup()
+		const created = addSectionLosingItsRow(engine)
+		engine.seed('Section', 'unloaded-grandparent', { name: 'Unloaded grandparent', website: 'website-2' })
+		engine.seed('Section', 'unloaded-parent', { name: 'Unloaded parent', website: 'website-2', parent: 'unloaded-grandparent' })
+		engine.seed('Section', 'unloaded-1', { name: 'Unloaded', website: 'website-1', parent: 'unloaded-parent' })
+		engine.seed('Section', 'unloaded-2', { name: 'Unloaded orphan', website: 'website-1' })
 
 		await persister.persistAll()
 

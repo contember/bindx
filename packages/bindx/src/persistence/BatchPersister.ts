@@ -1493,16 +1493,23 @@ export class BatchPersister {
 			}))
 			const rows = recordArray(nodeData[fieldName])
 			const joiners = extraction.joiners.get(relationIdentityKey(parentEntityType, parentEntityId, fieldName))
+			const createdIds = new Set(idsCreatedThroughHasOne(createOps, rows))
 			const knownIds = new Set([
 				...fieldDescriptors.flatMap(item => item.knownServerIds),
 				...joiners?.knownIds ?? [],
-				...idsCreatedThroughHasOne(createOps, rows),
+				...createdIds,
 			])
 			const nodeItems = rows.filter(item => {
 				const id = getStringProperty(item, 'id')
 				return id === undefined || !knownIds.has(id)
 			})
-			for (const { op, nodeItem } of this.pairCreateOpsWithNodes(createOps, nodeItems, joiners?.ops ?? [])) {
+			// Of these exclusions only this one can remove a create's own row, which the shape tie-break needs present.
+			const ownRowsAreFree = rows.every(item => {
+				const id = getStringProperty(item, 'id')
+				return id === undefined || !createdIds.has(id)
+			})
+			const context = { joiningOps: joiners?.ops ?? [], ownRowsAreFree }
+			for (const { op, nodeItem } of this.pairCreateOpsWithNodes(createOps, nodeItems, context)) {
 				results.push(makeResult(op, nodeItem))
 			}
 		}
@@ -1544,11 +1551,12 @@ export class BatchPersister {
 	 * An unambiguous match is taken first. Indistinguishable siblings remain unresolved
 	 * instead of being paired by response position.
 	 *
-	 * A single op left over takes the only free row shaped like its creates. A server that
-	 * echoes a value back normalised (a date, a decimal) matches nothing byte-for-byte, and
-	 * discarding the pair would leave that op's whole subtree on temp IDs (issues #70, #177).
-	 * Rows an already paired op created through its has-ones are not candidates: the op's
-	 * own row may have been excluded, and such a row would otherwise take its place.
+	 * A single op and row left over are paired by elimination. A server that echoes a
+	 * value back normalised (a date, a decimal) matches nothing byte-for-byte, and
+	 * discarding the pair would leave that op's whole subtree on temp IDs (issue #70).
+	 * With more rows left, the op takes the only one shaped like its has-one creates
+	 * (issue #177), but only while no own row can be missing: its own row always fits,
+	 * so a unique fit is that row, and without it another entity's row could fit alone.
 	 *
 	 * A folded entity created in this mutation joins the list with a row of its own; its
 	 * op only claims a row it matches exactly, and is never returned.
@@ -1556,8 +1564,9 @@ export class BatchPersister {
 	private pairCreateOpsWithNodes(
 		createOps: readonly NodeCreateOp[],
 		nodeItems: readonly Record<string, unknown>[],
-		joiningOps: readonly NodeCreateOp[],
+		context: PairingContext,
 	): NodeCreatePair[] {
+		const { joiningOps, ownRowsAreFree } = context
 		const pairs: NodeCreatePair[] = []
 		const pendingOps = [...createOps, ...joiningOps]
 		const freeItems = [...nodeItems]
@@ -1586,11 +1595,9 @@ export class BatchPersister {
 		const ownPending = pendingOps.filter(op => !joining.has(op))
 		const lastOwn = ownPending[0]
 		if (ownPending.length === 1 && lastOwn) {
-			const madeByPaired = new Set(pairs.flatMap(pair => idsAlongHasOneCreates(pair.op.createData, pair.nodeItem)))
-			const fitting = freeItems.filter(item => {
-				const id = getStringProperty(item, 'id')
-				return (id === undefined || !madeByPaired.has(id)) && isCreateShapeMatchingNode(lastOwn.createData, item)
-			})
+			const fitting = freeItems.length > 1 && ownRowsAreFree
+				? freeItems.filter(item => isCreateShapeMatchingNode(lastOwn.createData, item))
+				: freeItems
 			if (fitting.length === 1) takePair(pendingOps.indexOf(lastOwn), fitting[0]!)
 		}
 
@@ -1679,10 +1686,9 @@ function idsCreatedThroughHasOne(createOps: readonly NodeCreateOp[], rows: reado
 	}))
 }
 
-/** Scalars are ignored, as the server may normalise them: a client id, each nested create and each readable connect must fit. */
+/** Scalars are ignored, as the server may normalise them: each nested create is set, each readable connect is its target. */
 function isCreateShapeMatchingNode(createData: Record<string, unknown>, node: Record<string, unknown>): boolean {
 	return Object.entries(createData).every(([fieldName, value]) => {
-		if (fieldName === 'id') return value === node['id']
 		if (!isRecord(value)) return true
 		const nested = node[fieldName]
 		if (isRecord(value['create'])) return isRecord(nested) && isCreateShapeMatchingNode(value['create'], nested)
@@ -1691,14 +1697,11 @@ function isCreateShapeMatchingNode(createData: Record<string, unknown>, node: Re
 	})
 }
 
-/** Ids of the rows a create made through its has-ones, read from its own response row. */
-function idsAlongHasOneCreates(createData: Record<string, unknown>, node: Record<string, unknown>): string[] {
-	return Object.entries(createData).flatMap(([fieldName, value]) => {
-		const nested = node[fieldName]
-		if (!isRecord(value) || !isRecord(value['create']) || !isRecord(nested)) return []
-		const id = getStringProperty(nested, 'id')
-		return [...id === undefined ? [] : [id], ...idsAlongHasOneCreates(value['create'], nested)]
-	})
+interface PairingContext {
+	/** Folded entities created in this mutation that join the list (issue #169). */
+	readonly joiningOps: readonly NodeCreateOp[]
+	/** No row of the list was excluded as created through a has-one, so every own create's row is a candidate. */
+	readonly ownRowsAreFree: boolean
 }
 
 interface NodeExtraction {
