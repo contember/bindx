@@ -177,24 +177,27 @@ export class HasOneStore {
 	 * Advances the server baseline to what a server read returned. A relation the
 	 * user changed locally keeps its local state, so a re-read cannot undo a connect.
 	 * Not an editable-layer write: undo splices its images onto the live baseline.
+	 * Returns whether the stored state changed.
 	 */
-	refreshServerRelation(key: string, serverId: string | null): void {
+	refreshServerRelation(key: string, serverId: string | null): boolean {
 		const existing = this.relationStates.get(key)
 		const serverState: HasOneRelationState = serverId === null ? 'disconnected' : 'connected'
 		if (!existing) {
 			this.writeRelation(key, { currentId: serverId, serverId, state: serverState, serverState, placeholderData: {}, version: 0 })
-			return
+			return true
 		}
-		if (isLocallyChanged(existing)) return
-		if (existing.serverId === serverId && existing.serverState === serverState) return
+		if (existing.serverId === serverId && existing.serverState === serverState) return false
+		const local = isLocallyChanged(existing)
+			? { currentId: existing.currentId, state: existing.state }
+			: { currentId: serverId, state: serverState }
 		this.writeRelation(key, {
 			...existing,
-			currentId: serverId,
+			...local,
 			serverId,
-			state: serverState,
 			serverState,
 			version: existing.version + 1,
 		})
+		return true
 	}
 
 	/**

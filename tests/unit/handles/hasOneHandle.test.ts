@@ -762,10 +762,9 @@ describe('HasOneHandle', () => {
 
 	// ==================== Server-baseline advance on re-fetch ====================
 	//
-	// On a parent re-fetch whose embedded related id changed, a non-dirty has-one
-	// must advance its server baseline to the new id (and stay clean), while a
-	// locally-dirty relation must survive the re-fetch. The advance runs during a
-	// render-phase read and must NOT notify subscribers (the re-fetch already did).
+	// A re-fetch always advances the server baseline. A clean relation follows it;
+	// a locally changed one keeps its local state, as a dirty scalar does. Reading
+	// the relation afterwards must NOT notify subscribers (the re-fetch already did).
 
 	describe('Server-baseline advance on re-fetch', () => {
 		test('a re-fetch that changes the related id advances the baseline and stays clean', () => {
@@ -873,11 +872,11 @@ describe('HasOneHandle', () => {
 			expect(handle.relatedId).toBe('auth-2')
 			expect(handle.state).toBe('connected')
 			expect(handle.isDirty).toBe(true)
-			expect(relation?.serverId).toBe('auth-1')
-			expect(relation?.serverState).toBe('connected')
+			expect(relation?.serverId).toBeNull()
+			expect(relation?.serverState).toBe('disconnected')
 		})
 
-		test('a locally-disconnected relation survives an explicit null re-fetch', () => {
+		test('a local disconnect that a null re-fetch confirms stays disconnected and is clean', () => {
 			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
@@ -899,9 +898,9 @@ describe('HasOneHandle', () => {
 			const relation = store.getRelation('Article', 'a-1', 'author')
 			expect(handle.relatedId).toBeNull()
 			expect(handle.state).toBe('disconnected')
-			expect(handle.isDirty).toBe(true)
-			expect(relation?.serverId).toBe('auth-1')
-			expect(relation?.serverState).toBe('connected')
+			expect(handle.isDirty).toBe(false)
+			expect(relation?.serverId).toBeNull()
+			expect(relation?.serverState).toBe('disconnected')
 		})
 
 		test('reading a relation after a re-fetch notifies no one', () => {

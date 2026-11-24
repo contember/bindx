@@ -1,5 +1,5 @@
 // Regression tests for https://github.com/contember/bindx/issues/170
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import {
 	SchemaRegistry,
 	SnapshotStore,
@@ -10,7 +10,7 @@ import {
 } from '@contember/bindx'
 import { normalizeServerRead } from '../../../packages/bindx/src/store/serverRead.js'
 
-interface Parent { id: string; code: string; name: string; status: string; extra: string; owner: Owner | null }
+interface Parent { id: string; code: string; name: string; status: string; extra: string; owner: Owner | null; items: Item[] }
 interface Owner { id: string; name: string }
 interface Tag { id: string; label: string }
 interface Item { id: string; title: string; meta: unknown; parent: Parent | null; tags: Tag[] }
@@ -42,6 +42,7 @@ const definition: SchemaDefinition<TestSchema> = {
 				status: { type: 'scalar' },
 				extra: { type: 'scalar' },
 				owner: { type: 'hasOne', target: 'Owner' },
+				items: { type: 'hasMany', target: 'Item' },
 			},
 		},
 		Owner: { fields: { id: { type: 'scalar' }, name: { type: 'scalar' } } },
@@ -171,17 +172,54 @@ describe('SnapshotStore.writeServerRead', () => {
 		expect(columns(store, 'Parent', 'parent-1')?.['name']).toBe('New')
 	})
 
-	test('should notify each row of a hub-shaped read a bounded number of times', () => {
-		// Every row points at one parent: interleaving edge and snapshot writes re-walks all rows per row.
-		const store = new SnapshotStore()
-		const rows = Array.from({ length: 400 }, (_, index) => ({
-			id: `item-${index}`,
-			title: `Row ${index}`,
-			parent: { id: 'parent-1', name: 'Shared', owner: { id: 'owner-1', name: 'Hub' } },
-		}))
-		store.writeServerRead('Item', rows, schema)
+	// Every row points at one parent. Interleaving relation writes with notifications
+	// re-walks every row already written for each row: quadratic in the row count.
+	const rowCount = 400
+	const hubRows = (): Record<string, unknown>[] => Array.from({ length: rowCount }, (_, index) => ({
+		id: `item-${index}`,
+		title: `Row ${index}`,
+		parent: { id: 'parent-1', name: 'Shared', owner: { id: 'owner-1', name: 'Hub' } },
+	}))
 
-		const maxRowVersion = Math.max(...rows.map(row => store.getEntitySnapshot('Item', row.id)?.version ?? 0))
-		expect(maxRowVersion).toBeLessThanOrEqual(3)
+	test('should walk the parents of a hub-shaped read a linear number of times', () => {
+		const store = new SnapshotStore()
+		const parentWalks = spyOn(store, 'bumpEntitySnapshotVersion')
+		store.writeServerRead('Item', hubRows(), schema)
+
+		expect(parentWalks.mock.calls.length).toBeLessThanOrEqual(3 * rowCount)
+	})
+
+	test('should walk the parents of a hub-shaped read linearly when the hub\'s own list is loaded', () => {
+		const store = new SnapshotStore()
+		store.writeServerRead('Parent', {
+			id: 'parent-1',
+			items: Array.from({ length: rowCount }, (_, index) => ({ id: `item-${index}` })),
+		}, schema)
+		const parentWalks = spyOn(store, 'bumpEntitySnapshotVersion')
+		store.writeServerRead('Item', hubRows(), schema)
+
+		expect(parentWalks.mock.calls.length).toBeLessThanOrEqual(3 * rowCount)
+	})
+
+	test('should keep the total count of a list view when a later read of it carries none', () => {
+		const store = new SnapshotStore()
+		const counted = Object.assign([{ id: 'tag-1', label: 'A' }], { totalCount: 5 })
+		store.writeServerRead('Item', { id: 'item-1', tags: counted }, schema)
+		store.writeServerRead('Item', { id: 'item-1', tags: [{ id: 'tag-1' }] }, schema)
+
+		expect(store.getHasManyTotalCount('Item', 'item-1', 'tags')).toBe(5)
+	})
+
+	test('should advance the has-one server baseline under a local change, keeping the change', () => {
+		const store = new SnapshotStore()
+		store.writeServerRead('Item', { id: 'item-1', parent: { id: 'parent-a' } }, schema)
+		store.setRelation('Item', 'item-1', 'parent', { currentId: 'parent-x', state: 'connected' })
+
+		store.writeServerRead('Item', { id: 'item-1', parent: { id: 'parent-y' } }, schema)
+
+		expect(store.getRelation('Item', 'item-1', 'parent')).toMatchObject({
+			currentId: 'parent-x',
+			serverId: 'parent-y',
+		})
 	})
 })

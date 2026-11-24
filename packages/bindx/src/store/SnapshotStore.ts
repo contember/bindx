@@ -22,7 +22,7 @@ import { generateTempId } from './entityId.js'
 import { DirtyTracker } from './DirtyTracker.js'
 import { EntitySnapshotStore } from './EntitySnapshotStore.js'
 import { RootRegistry } from './RootRegistry.js'
-import { normalizeServerRead, type ServerReadOptions, type ServerReadSchema } from './serverRead.js'
+import { normalizeServerRead, type ServerReadHasMany, type ServerReadOptions, type ServerReadSchema } from './serverRead.js'
 import { ReachabilityAnalyzer } from './ReachabilityAnalyzer.js'
 import { RekeyOrchestrator } from './RekeyOrchestrator.js'
 import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
@@ -296,9 +296,10 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	 * one entity therefore merge field by field, whichever sub-selection each had.
 	 * Local dirty edits survive, as in {@link refreshServerData}.
 	 *
-	 * Relation edges are written before any snapshot: a snapshot write walks its
-	 * parents through the edges, and that walk is shared by the batch only while
-	 * the edges do not change, so interleaving them makes a large read quadratic.
+	 * Every relation is written before the first notification: a notification walks
+	 * parents through the relation edges, and the batch shares that walk only while
+	 * the edges do not change, so interleaving writes and notifications makes a read
+	 * whose rows share a parent quadratic.
 	 */
 	writeServerRead(
 		entityType: string,
@@ -308,26 +309,32 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	): void {
 		const read = normalizeServerRead(entityType, data, schema, options)
 		this.batchNotifications(() => {
+			const changedRelations = new Set<string>()
 			for (const relation of read.hasOne) {
 				const key = this.getRelationKey(relation.parentType, relation.parentId, relation.fieldName)
-				this.relations.refreshServerRelation(key, relation.targetId)
-				this.notifyRelationSubscribers(key)
+				if (this.relations.refreshServerRelation(key, relation.targetId)) changedRelations.add(key)
 			}
 			for (const relation of read.hasMany) {
-				if (relation.membership !== undefined) {
-					this.relations.declareHasManyViewMembership(relation.parentType, relation.fieldName, relation.alias, relation.membership)
-				}
 				const key = this.getRelationKey(relation.parentType, relation.parentId, relation.fieldName)
-				this.relations.getOrCreateHasMany(key, relation.alias, [...relation.ids])
-				const viewKey = hasManyViewKey(key, relation.alias)
-				if (relation.totalCount === undefined) this.hasManyTotalCounts.delete(viewKey)
-				else this.hasManyTotalCounts.set(viewKey, relation.totalCount)
-				this.notifyRelationSubscribers(key)
+				if (this.writeServerHasMany(key, relation)) changedRelations.add(key)
 			}
+			for (const key of changedRelations) this.notifyRelationSubscribers(key)
 			for (const entity of read.entities) {
 				this.refreshServerData(entity.entityType, entity.id, entity.columns)
 			}
 		})
+	}
+
+	/** A read without a total count keeps the one an earlier read of the same view carried. */
+	private writeServerHasMany(key: string, relation: ServerReadHasMany): boolean {
+		if (relation.membership !== undefined) {
+			this.relations.declareHasManyViewMembership(relation.parentType, relation.fieldName, relation.alias, relation.membership)
+		}
+		const changed = this.relations.getOrCreateHasMany(key, relation.alias, [...relation.ids])
+		const viewKey = hasManyViewKey(key, relation.alias)
+		if (relation.totalCount === undefined || this.hasManyTotalCounts.get(viewKey) === relation.totalCount) return changed
+		this.hasManyTotalCounts.set(viewKey, relation.totalCount)
+		return true
 	}
 
 	/**
@@ -579,6 +586,11 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	): void {
 		const key = this.getRelationKey(parentType, parentId, fieldName)
 		this.relations.getOrCreateHasMany(key, alias ?? fieldName, serverIds)
+	}
+
+	/** Whether this view of the has-many was read or edited, as opposed to never touched. */
+	hasHasManyView(parentType: string, parentId: string, fieldName: string, alias?: string): boolean {
+		return this.relations.hasHasManyView(this.getRelationKey(parentType, parentId, fieldName), alias ?? fieldName)
 	}
 
 	/** The relation as persistence and dirty tracking see it — server baseline unioned across views. */
