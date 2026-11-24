@@ -5,10 +5,10 @@
  * stale has-one / has-many data even though the parent entity was re-fetched
  * from the server with correct data.
  *
- * Root causes:
- * - HasOneHandle.ensureRelatedEntitySnapshot() skips if child snapshot exists
- * - HasManyListHandle.items getter's getOrCreateHasMany() skips if state exists
- * - Neither updates when the parent's embedded data changes from a re-fetch
+ * A read is written on arrival: each entity's columns into its own snapshot and
+ * each relation into the relation store (issue #170). These tests pin that a
+ * re-fetch reaches the related entities and that local or committed state
+ * survives it.
  */
 
 import { describe, test, expect, beforeEach } from 'bun:test'
@@ -106,25 +106,23 @@ describe('Stale relation data after re-fetch', () => {
 	})
 
 	// ------------------------------------------------------------------
-	// HasOne: ensureRelatedEntitySnapshot should update stale child data
+	// HasOne: a re-fetch updates the related entity
 	// ------------------------------------------------------------------
 
 	describe('HasOne — child entity data staleness after re-fetch', () => {
 		test('child entity snapshot should update when parent is re-fetched with changed embedded data', () => {
 			// T0: Initial fetch — approval status is 'pending'
-			store.setEntityData('Program', 'prog-1', {
+			store.writeServerRead('Program', {
 				id: 'prog-1',
 				name: 'Test Program',
 				approval: { id: 'appr-1', status: 'pending' },
-			}, true)
+			}, schema, { rootId: 'prog-1' })
 
 			const handle1 = HasOneHandle.createRaw<TestApproval>(
 				'Program', 'prog-1', 'approval', 'Approval',
 				store, dispatcher, schema,
 			)
 
-			// Access the entity — this calls ensureRelatedEntitySnapshot
-			// which creates Approval:appr-1 snapshot from embedded data
 			expect(handle1.isConnected).toBe(true)
 			const entity1 = handle1.entityRaw
 			expect(entity1.id).toBe('appr-1')
@@ -135,11 +133,11 @@ describe('Stale relation data after re-fetch', () => {
 
 			// T1: Re-fetch — server now reports approval as 'approved'
 			// (e.g., a guarantor approved it while user was on another page)
-			store.setEntityData('Program', 'prog-1', {
+			store.writeServerRead('Program', {
 				id: 'prog-1',
 				name: 'Test Program',
 				approval: { id: 'appr-1', status: 'approved' },
-			}, true)
+			}, schema, { rootId: 'prog-1' })
 
 			// T2: Create new handle (simulating React re-render after snapshot change)
 			const handle2 = HasOneHandle.createRaw<TestApproval>(
@@ -149,12 +147,10 @@ describe('Stale relation data after re-fetch', () => {
 
 			expect(handle2.isConnected).toBe(true)
 
-			// Access the entity — this calls ensureRelatedEntitySnapshot again
 			const entity2 = handle2.entityRaw
 			expect(entity2.id).toBe('appr-1')
 
-			// BUG: The approval entity snapshot should have status 'approved'
-			// but ensureRelatedEntitySnapshot skips because Approval:appr-1 already exists
+			// The re-fetch reached the approval, although its snapshot already existed
 			const snap2 = store.getEntitySnapshot('Approval', 'appr-1')
 			expect((snap2!.data as Record<string, unknown>)['status']).toBe('approved')
 		})
@@ -187,7 +183,7 @@ describe('Stale relation data after re-fetch', () => {
 
 			// T3: User navigates away, then back — re-fetch returns updated data
 			// Server has added rounds and changed internal state
-			store.setEntityData('Program', 'prog-1', {
+			store.writeServerRead('Program', {
 				id: 'prog-1',
 				name: 'Test Program',
 				approval: {
@@ -195,7 +191,7 @@ describe('Stale relation data after re-fetch', () => {
 					status: 'pending',
 					rounds: [{ id: 'round-1', roundNumber: 1, status: 'pending' }],
 				},
-			}, true)
+			}, schema, { rootId: 'prog-1' })
 
 			// T4: New handle (re-render)
 			const handle2 = HasOneHandle.createRaw<TestApproval>(
@@ -204,21 +200,16 @@ describe('Stale relation data after re-fetch', () => {
 			)
 			expect(handle2.isConnected).toBe(true)
 
-			// Access entity to trigger ensureRelatedEntitySnapshot
 			const entity2 = handle2.entityRaw
 			expect(entity2.id).toBe('appr-1')
 
-			// BUG: Approval snapshot should include rounds from server re-fetch,
-			// but ensureRelatedEntitySnapshot skips because Approval:appr-1 already exists
-			const snap2 = store.getEntitySnapshot('Approval', 'appr-1')
-			const data2 = snap2!.data as Record<string, unknown>
-			expect(data2['rounds']).toBeDefined()
-			expect((data2['rounds'] as unknown[]).length).toBe(1)
+			// The re-fetch wrote the approval's rounds, although the approval already existed.
+			expect([...store.getHasMany('Approval', 'appr-1', 'rounds')?.serverIds ?? []]).toEqual(['round-1'])
 		})
 	})
 
 	// ------------------------------------------------------------------
-	// HasMany: getOrCreateHasMany should update stale serverIds
+	// HasMany: a re-fetch updates the server list
 	// ------------------------------------------------------------------
 
 	describe('HasMany — stale serverIds after parent re-fetch', () => {
@@ -231,11 +222,11 @@ describe('Stale relation data after re-fetch', () => {
 
 		test('has-many items should reflect new server data after parent entity is re-fetched', () => {
 			// T0: Approval with one round
-			store.setEntityData('Approval', 'appr-1', {
+			store.writeServerRead('Approval', {
 				id: 'appr-1',
 				status: 'pending',
 				rounds: [{ id: 'round-1', roundNumber: 1, status: 'pending' }],
-			}, true)
+			}, schema, { rootId: 'appr-1' })
 
 			const list1 = createRoundsList()
 
@@ -244,55 +235,50 @@ describe('Stale relation data after re-fetch', () => {
 			expect(items1.length).toBe(1)
 
 			// T1: Re-fetch — server now has two rounds (new round added)
-			store.setEntityData('Approval', 'appr-1', {
+			store.writeServerRead('Approval', {
 				id: 'appr-1',
 				status: 'pending',
 				rounds: [
 					{ id: 'round-1', roundNumber: 1, status: 'approved' },
 					{ id: 'round-2', roundNumber: 2, status: 'pending' },
 				],
-			}, true)
+			}, schema, { rootId: 'appr-1' })
 
 			// T2: New handle (re-render)
 			const list2 = createRoundsList()
 
-			// BUG: Should see 2 items, but getOrCreateHasMany skips because
-			// the has-many state already exists with serverIds = ['round-1']
+			// The re-fetch replaced the server list of the existing has-many state
 			const items2 = list2.items
 			expect(items2.length).toBe(2)
 		})
 
 		test('has-many item data should update when parent is re-fetched with changed embedded data', () => {
 			// T0: Round with status 'pending'
-			store.setEntityData('Approval', 'appr-1', {
+			store.writeServerRead('Approval', {
 				id: 'appr-1',
 				status: 'pending',
 				rounds: [{ id: 'round-1', roundNumber: 1, status: 'pending' }],
-			}, true)
+			}, schema, { rootId: 'appr-1' })
 
 			const list1 = createRoundsList()
 
-			// Access items — creates Round:round-1 snapshot with status 'pending'
+			// The read already wrote Round:round-1 with status 'pending'
 			const items1 = list1.items
 			expect(items1.length).toBe(1)
 			const roundSnap1 = store.getEntitySnapshot('Round', 'round-1')
 			expect((roundSnap1!.data as Record<string, unknown>)['status']).toBe('pending')
 
 			// T1: Re-fetch — round status changed to 'approved'
-			store.setEntityData('Approval', 'appr-1', {
+			store.writeServerRead('Approval', {
 				id: 'appr-1',
 				status: 'pending',
 				rounds: [{ id: 'round-1', roundNumber: 1, status: 'approved' }],
-			}, true)
+			}, schema, { rootId: 'appr-1' })
 
 			// T2: New handle (re-render)
 			const list2 = createRoundsList()
 
-			// Access items
-			list2.items
-
-			// BUG: Round snapshot should have status 'approved',
-			// but ensureItemSnapshots skips because Round:round-1 already exists
+			// The re-fetch reached the existing round
 			const roundSnap2 = store.getEntitySnapshot('Round', 'round-1')
 			expect((roundSnap2!.data as Record<string, unknown>)['status']).toBe('approved')
 		})
@@ -305,11 +291,11 @@ describe('Stale relation data after re-fetch', () => {
 	describe('Persist regression — committed has-many must survive re-render', () => {
 		test('has-many serverIds from commit must not be overwritten by stale parent embedded data', () => {
 			// T0: Program with no expert guarantors (initial server fetch)
-			store.setEntityData('Program', 'prog-1', {
+			store.writeServerRead('Program', {
 				id: 'prog-1',
 				name: 'Test Program',
 				expertGuarantors: [],
-			}, true)
+			}, schema, { rootId: 'prog-1' })
 
 			const list1 = HasManyListHandle.create<{ id: string; name: string }>(
 				'Program', 'prog-1', 'expertGuarantors', 'Guarantor',
@@ -333,38 +319,33 @@ describe('Stale relation data after re-fetch', () => {
 			// T2: Persist succeeds — commit has-many with new serverIds
 			store.commitAllRelations('Program', 'prog-1')
 
-			// Verify committed state via store directly (not through items getter,
-			// which would trigger the bug)
+			// Verify committed state via store directly
 			const orderedIds = store.getHasManyOrderedIds('Program', 'prog-1', 'expertGuarantors')
 			expect(orderedIds).toContain('g-1')
 
-			// T3: Re-render after persist — items getter reads stale parent embedded data
-			// Parent snapshot STILL has expertGuarantors: [] (old data from server)
-			// The fix must NOT overwrite committed serverIds ['g-1'] with stale []
+			// T3: Re-render after persist — the committed ['g-1'] must stay
 			const list3 = HasManyListHandle.create<{ id: string; name: string }>(
 				'Program', 'prog-1', 'expertGuarantors', 'Guarantor',
 				store, dispatcher, schema,
 			)
 
-			// BUG: This fails because getOrCreateHasMany overwrites serverIds
-			// from stale parent embedded data (empty array) over committed ['g-1']
 			expect(list3.items.length).toBe(1)
 		})
 
 		test('has-one child snapshot from commit must not be overwritten by stale parent embedded data', () => {
 			// T0: Program with approval status 'pending' (initial server fetch)
-			store.setEntityData('Program', 'prog-1', {
+			store.writeServerRead('Program', {
 				id: 'prog-1',
 				name: 'Test Program',
 				approval: { id: 'appr-1', status: 'pending' },
-			}, true)
+			}, schema, { rootId: 'prog-1' })
 
 			const handle1 = HasOneHandle.createRaw<TestApproval>(
 				'Program', 'prog-1', 'approval', 'Approval',
 				store, dispatcher, schema,
 			)
 
-			// Access entity to create child snapshot from embedded data
+			// The read already wrote the approval's own snapshot
 			expect(handle1.isConnected).toBe(true)
 			expect(handle1.entityRaw.id).toBe('appr-1')
 
@@ -379,14 +360,12 @@ describe('Stale relation data after re-fetch', () => {
 			expect((snapAfterCommit!.data as Record<string, unknown>)['status']).toBe('approved')
 			expect((snapAfterCommit!.serverData as Record<string, unknown>)['status']).toBe('approved')
 
-			// T3: Re-render — HasOneHandle reads stale parent embedded data
-			// Parent snapshot STILL has approval: { id: 'appr-1', status: 'pending' }
-			// The fix must NOT overwrite committed 'approved' with stale 'pending'
+			// T3: Re-render — reading the relation must not bring back the old 'pending'
 			const handle2 = HasOneHandle.createRaw<TestApproval>(
 				'Program', 'prog-1', 'approval', 'Approval',
 				store, dispatcher, schema,
 			)
-			handle2.entityRaw // triggers ensureRelatedEntitySnapshot
+			handle2.entityRaw
 
 			const snapAfterRerender = store.getEntitySnapshot('Approval', 'appr-1')
 			expect((snapAfterRerender!.data as Record<string, unknown>)['status']).toBe('approved')
@@ -394,7 +373,7 @@ describe('Stale relation data after re-fetch', () => {
 	})
 
 	// ------------------------------------------------------------------
-	// Rekey regression: lastPropagatedData must be rekeyed on persist
+	// Rekey regression: committed state must survive temp→real ID rekey
 	// ------------------------------------------------------------------
 
 	describe('Rekey regression — propagation tracking must survive temp→real ID rekey', () => {
@@ -437,19 +416,12 @@ describe('Stale relation data after re-fetch', () => {
 			store.commitAllRelations('Program', 'prog-1')
 
 			// T3: Re-render after persist — access rounds through new handles
-			// The Approval entity data has rounds: [] (from $create, the embedded array).
-			// After rekey, lastPropagatedData key changed from Approval:__temp_X:rounds
-			// to Approval:appr-1:rounds — but if rekeying is missing, the key is lost
-			// and hasEmbeddedDataChanged returns true → propagates stale [] → overwrites
-			// committed has-many state.
 			const roundsList2 = HasManyListHandle.create<TestRound>(
 				'Approval', 'appr-1', 'rounds', 'Round',
 				store, dispatcher, schema,
 			)
 
-			// BUG: lastPropagatedData is not rekeyed in mapTempIdToPersistedId
-			// so hasEmbeddedDataChanged returns true → getOrCreateHasMany overwrites
-			// committed serverIds ['round-1'] with stale embedded []
+			// The committed round survives the rekey
 			expect(roundsList2.items.length).toBe(1)
 		})
 
@@ -467,8 +439,7 @@ describe('Stale relation data after re-fetch', () => {
 			)
 			const tempId = handle1.create({ status: 'pending' })
 
-			// Access to trigger propagation tracking
-			handle1.entityRaw
+			expect(handle1.entityRaw.id).toBe(tempId)
 
 			// T2: User changes status locally before persist
 			store.setFieldValue('Approval', tempId, ['status'], 'submitted')
@@ -487,10 +458,9 @@ describe('Stale relation data after re-fetch', () => {
 				'Program', 'prog-1', 'approval', 'Approval',
 				store, dispatcher, schema,
 			)
-			handle2.entityRaw // triggers ensureRelatedEntitySnapshot
+			handle2.entityRaw
 
-			// BUG: lastPropagatedData lost the key after rekey → hasEmbeddedDataChanged
-			// returns true → overwrites 'submitted' with 'pending' from stale embedded data
+			// The committed 'submitted' survives the rekey
 			const snapAfter = store.getEntitySnapshot('Approval', 'appr-1')
 			expect((snapAfter!.data as Record<string, unknown>)['status']).toBe('submitted')
 		})
@@ -503,17 +473,17 @@ describe('Stale relation data after re-fetch', () => {
 	describe('Re-fetch with unchanged server data — local mutations preservation', () => {
 		test('has-one: unpersisted local mutation must survive parent re-fetch with same server data', () => {
 			// T0: Initial fetch
-			store.setEntityData('Program', 'prog-1', {
+			store.writeServerRead('Program', {
 				id: 'prog-1',
 				name: 'Test Program',
 				approval: { id: 'appr-1', status: 'pending' },
-			}, true)
+			}, schema, { rootId: 'prog-1' })
 
 			const handle1 = HasOneHandle.createRaw<TestApproval>(
 				'Program', 'prog-1', 'approval', 'Approval',
 				store, dispatcher, schema,
 			)
-			handle1.entityRaw // propagates embedded data
+			handle1.entityRaw
 
 			// T1: User edits approval status locally (not yet persisted)
 			store.setFieldValue('Approval', 'appr-1', ['status'], 'draft')
@@ -523,18 +493,18 @@ describe('Stale relation data after re-fetch', () => {
 			expect((snapAfterEdit!.serverData as Record<string, unknown>)['status']).toBe('pending')
 
 			// T2: Polling re-fetches parent with SAME server data (new object reference)
-			store.setEntityData('Program', 'prog-1', {
+			store.writeServerRead('Program', {
 				id: 'prog-1',
 				name: 'Test Program',
 				approval: { id: 'appr-1', status: 'pending' },
-			}, true)
+			}, schema, { rootId: 'prog-1' })
 
 			// T3: New handle (re-render after parent snapshot change)
 			const handle2 = HasOneHandle.createRaw<TestApproval>(
 				'Program', 'prog-1', 'approval', 'Approval',
 				store, dispatcher, schema,
 			)
-			handle2.entityRaw // triggers ensureRelatedEntitySnapshot
+			handle2.entityRaw
 
 			// The local mutation 'draft' must survive — server data hasn't actually changed
 			const snapAfterRefetch = store.getEntitySnapshot('Approval', 'appr-1')
@@ -544,17 +514,17 @@ describe('Stale relation data after re-fetch', () => {
 
 		test('has-many: unpersisted local mutation on item must survive parent re-fetch with same server data', () => {
 			// T0: Initial fetch
-			store.setEntityData('Approval', 'appr-1', {
+			store.writeServerRead('Approval', {
 				id: 'appr-1',
 				status: 'pending',
 				rounds: [{ id: 'round-1', roundNumber: 1, status: 'pending' }],
-			}, true)
+			}, schema, { rootId: 'appr-1' })
 
 			const list1 = HasManyListHandle.create<TestRound>(
 				'Approval', 'appr-1', 'rounds', 'Round',
 				store, dispatcher, schema,
 			)
-			list1.items // propagates embedded data
+			list1.items
 
 			// T1: User edits round status locally (not yet persisted)
 			store.setFieldValue('Round', 'round-1', ['status'], 'in-review')
@@ -564,18 +534,18 @@ describe('Stale relation data after re-fetch', () => {
 			expect((roundSnapAfterEdit!.serverData as Record<string, unknown>)['status']).toBe('pending')
 
 			// T2: Polling re-fetches parent with SAME server data (new object reference)
-			store.setEntityData('Approval', 'appr-1', {
+			store.writeServerRead('Approval', {
 				id: 'appr-1',
 				status: 'pending',
 				rounds: [{ id: 'round-1', roundNumber: 1, status: 'pending' }],
-			}, true)
+			}, schema, { rootId: 'appr-1' })
 
 			// T3: New handle (re-render)
 			const list2 = HasManyListHandle.create<TestRound>(
 				'Approval', 'appr-1', 'rounds', 'Round',
 				store, dispatcher, schema,
 			)
-			list2.items // triggers ensureItemSnapshots
+			expect(list2.items.length).toBe(1)
 
 			// The local mutation 'in-review' must survive — server data hasn't actually changed
 			const roundSnapAfterRefetch = store.getEntitySnapshot('Round', 'round-1')
@@ -604,7 +574,7 @@ describe('Stale relation data after re-fetch', () => {
 			expect(handle0.isConnected).toBe(false)
 
 			// T1: Detail page re-fetches with full data including approval
-			store.setEntityData('Program', 'prog-1', {
+			store.writeServerRead('Program', {
 				id: 'prog-1',
 				name: 'Ostrej3',
 				approval: {
@@ -612,7 +582,7 @@ describe('Stale relation data after re-fetch', () => {
 					status: 'pending',
 					rounds: [{ id: 'round-1', roundNumber: 1, status: 'pending' }],
 				},
-			}, true)
+			}, schema, { rootId: 'prog-1' })
 
 			// T2: New handle on re-render
 			const handle1 = HasOneHandle.createRaw<TestApproval>(
@@ -633,7 +603,7 @@ describe('Stale relation data after re-fetch', () => {
 			}, true)
 
 			// T1: Detail page re-fetches with full data
-			store.setEntityData('Program', 'prog-1', {
+			store.writeServerRead('Program', {
 				id: 'prog-1',
 				name: 'Ostrej3',
 				approval: {
@@ -641,7 +611,7 @@ describe('Stale relation data after re-fetch', () => {
 					status: 'pending',
 					rounds: [{ id: 'round-1', roundNumber: 1, status: 'pending' }],
 				},
-			}, true)
+			}, schema, { rootId: 'prog-1' })
 
 			const handle = HasOneHandle.createRaw<TestApproval>(
 				'Program', 'prog-1', 'approval', 'Approval',
@@ -652,11 +622,10 @@ describe('Stale relation data after re-fetch', () => {
 			const entity = handle.entityRaw
 			expect(entity.id).toBe('appr-1')
 
-			// Approval snapshot should contain embedded rounds data
-			const approvalSnap = store.getEntitySnapshot('Approval', 'appr-1')
-			expect(approvalSnap).toBeDefined()
-			expect((approvalSnap!.data as Record<string, unknown>)['status']).toBe('pending')
-			expect((approvalSnap!.data as Record<string, unknown>)['rounds']).toBeDefined()
+			// The approval holds its own columns; its rounds are a relation of their own.
+			const approvalSnap = store.getEntitySnapshot<Record<string, unknown>>('Approval', 'appr-1')
+			expect(approvalSnap?.data['status']).toBe('pending')
+			expect([...store.getHasMany('Approval', 'appr-1', 'rounds')?.serverIds ?? []]).toEqual(['round-1'])
 		})
 	})
 })

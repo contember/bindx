@@ -1,4 +1,4 @@
-import { EntityRelatedHandle, embeddedDataMatchesSnapshot } from './BaseHandle.js'
+import { EntityRelatedHandle } from './BaseHandle.js'
 import { EntityHandle } from './EntityHandle.js'
 import type { ActionDispatcher } from '../core/ActionDispatcher.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
@@ -150,8 +150,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * This is also where the item-accessor cache is pruned — see {@link syncItemHandleCache}.
 	 */
 	get items(): EntityAccessor<TEntity, TSelected>[] {
-		this.materializeEmbeddedItems()
-
 		// Use ordered IDs from store (handles removals, connections, and ordering)
 		const orderedIds = this.store.getPresentationHasManyOrderedIds(
 			this.entityType,
@@ -220,143 +218,9 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		return this.itemHandleCacheProxy.size
 	}
 
-	/**
-	 * Propagates the parent's embedded has-many data into per-item snapshots and
-	 * ensures the has-many state exists in the store.
-	 *
-	 * Materialisation must NOT be a side effect of iterating `items` only: the
-	 * block editor (and any consumer) resolves a single child via getById()
-	 * without ever reading `items`, and that path must also see populated data.
-	 * Idempotent within a render — guarded by hasEmbeddedDataChanged.
-	 *
-	 * For the same reason EVERY entry point that reads or writes the has-many state
-	 * calls this first — isDirty and the mutators as well as items/getById. An
-	 * embedded list has no state in the store until it is materialised, so a
-	 * consumer that never iterated saw isDirty === false and had its mutation land
-	 * on a state nobody reads. Keep new entry points on this guard.
-	 *
-	 * @returns false when there is no embedded list data to materialise.
-	 */
-	private materializeEmbeddedItems(): boolean {
-		const data = this.getEntityData()
-		if (!data) return false
-
-		const rawData = data[this.alias] ?? data[this.fieldName]
-		const listData = this.extractItems(rawData)
-		if (!listData) return false
-
-		const fieldKey = this.alias ?? this.fieldName
-
-		// Only propagate embedded data when the parent's reference changed (re-fetch).
-		// Same reference means the embedded data is stale and must not overwrite
-		// child state that may have been updated by a local commit.
-		if (this.store.hasEmbeddedDataChanged(this.entityType, this.entityId, fieldKey, rawData)) {
-			this.ensureItemSnapshots(listData)
-
-			const serverIds = listData
-				.map((item) => item['id'] as string | undefined)
-				.filter((id): id is string => id !== undefined)
-
-			this.store.getOrCreateHasMany(
-				this.entityType,
-				this.entityId,
-				this.fieldName,
-				serverIds,
-				this.alias,
-			)
-			this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, fieldKey, rawData)
-		} else {
-			// Ensure has-many state exists (without updating serverIds)
-			this.store.getOrCreateHasMany(
-				this.entityType,
-				this.entityId,
-				this.fieldName,
-				undefined,
-				this.alias,
-			)
-		}
-
-		return true
-	}
-
-	/**
-	 * Ensures snapshots exist for embedded has-many items.
-	 * Only called when parent's embedded data has changed (re-fetch detected).
-	 */
-	private ensureItemSnapshots(listData: Array<Record<string, unknown>>): void {
-		for (const embeddedItem of listData) {
-			const itemData = this.store.resolveServerOccurrence(embeddedItem)
-			const itemId = itemData['id'] as string
-			if (!itemId) continue
-
-			// Register parent-child relationship for change propagation
-			// This needs to happen even if the snapshot already exists
-			this.store.registerParentChild(this.entityType, this.entityId, this.itemType, itemId)
-
-			// Optimization: skip if item data matches existing snapshot
-			const existing = this.store.getEntitySnapshot(this.itemType, itemId)
-			if (existing?.serverData && embeddedDataMatchesSnapshot(itemData, existing.serverData as Record<string, unknown>)) {
-				continue
-			}
-
-			// Create or update snapshot from embedded data.
-			// Use refreshServerData (not setEntityData) so a re-fetch advances the
-			// item's server baseline without clobbering the user's local dirty edits
-			// on the item. Skip notification to avoid triggering React state updates
-			// during render.
-			this.store.refreshServerData(
-				this.itemType,
-				itemId,
-				itemData,
-				true, // skipNotify - called during render, data already exists embedded in parent
-			)
-		}
-	}
-
-	/**
-	 * Extracts items from either flat array or Connection format (paginateRelation).
-	 * Returns null if data is not in a recognized format.
-	 */
-	private extractItems(rawData: unknown): Array<Record<string, unknown>> | null {
-		// Flat array format: [{ id, name }, ...]
-		if (Array.isArray(rawData)) {
-			return rawData
-		}
-		// Connection format: { pageInfo: { totalCount }, edges: [{ node: { id, name } }] }
-		if (rawData && typeof rawData === 'object' && 'edges' in rawData) {
-			const connection = rawData as { edges: Array<{ node: Record<string, unknown> }> }
-			return connection.edges.map(edge => edge.node)
-		}
-		// Object with numeric keys (store may convert arrays to objects): { "0": {...}, "1": {...}, ...metadata }
-		if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
-			const obj = rawData as Record<string, unknown>
-			const items: Array<Record<string, unknown>> = []
-			for (const [key, value] of Object.entries(obj)) {
-				if (/^\d+$/.test(key) && value && typeof value === 'object' && 'id' in (value as object)) {
-					items.push(value as Record<string, unknown>)
-				}
-			}
-			if (items.length > 0) {
-				return items
-			}
-		}
-		return null
-	}
-
-	/**
-	 * Gets the total count from paginateRelation response.
-	 * Content client attaches totalCount as a non-enumerable property on the array.
-	 * Returns undefined if totalCount was not requested or not available.
-	 */
+	/** The total count the last server read of this view returned, when it asked for one. */
 	get totalCount(): number | undefined {
-		const data = this.getEntityData()
-		if (!data) return undefined
-
-		const rawData = data[this.alias] ?? data[this.fieldName]
-		if (Array.isArray(rawData) && 'totalCount' in rawData) {
-			return (rawData as Array<unknown> & { totalCount: number }).totalCount
-		}
-		return undefined
+		return this.store.getHasManyTotalCount(this.entityType, this.entityId, this.fieldName, this.alias)
 	}
 
 	/**
@@ -398,10 +262,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Returns an EntityAccessor with direct field access.
 	 */
 	getById(id: string): EntityAccessor<TEntity, TSelected> {
-		// Ensure embedded child data is propagated into the item snapshot even when
-		// the caller never iterates `items` (e.g. the block editor resolves each
-		// referenced entity by id). Without this the returned handle reads null.
-		this.materializeEmbeddedItems()
 		return this.getItemHandle(id)
 	}
 
@@ -414,8 +274,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * would be incoherent. Only the manual ordering is this view's own.
 	 */
 	get isDirty(): boolean {
-		this.materializeEmbeddedItems()
-
 		return (
 			this.store.hasPendingHasManyWrites(this.entityType, this.entityId, this.fieldName)
 			|| this.store.hasExplicitHasManyOrder(this.entityType, this.entityId, this.fieldName, this.alias)
@@ -434,7 +292,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Connects an existing entity to this has-many relation.
 	 */
 	connect(itemId: string): void {
-		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			connectToList(this.entityType, this.entityId, this.fieldName, itemId, this.itemType, this.alias),
 		)
@@ -446,7 +303,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * For created entities (via add()), cancels the add operation.
 	 */
 	disconnect(itemId: string): void {
-		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, 'disconnect'),
 		)
@@ -458,7 +314,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * For created entities (via add()), cancels the add operation.
 	 */
 	delete(itemId: string): void {
-		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, 'delete'),
 		)
@@ -470,8 +325,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * For connecting existing entities, use connect() instead.
 	 */
 	add(data?: Partial<TEntity>): string {
-		this.materializeEmbeddedItems()
-
 		// One gesture = one undo entry: the pre-create and the list-add are journaled
 		// together so undo removes (and redo re-creates) the whole row.
 		return this.store.transaction(() => {
@@ -497,7 +350,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * Falls back to disconnect when schema metadata is not available.
 	 */
 	remove(itemId: string): void {
-		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			removeFromList(this.entityType, this.entityId, this.fieldName, itemId, this.resolveRemovalType()),
 		)
@@ -528,7 +380,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * use an 'order' field on the entity.
 	 */
 	move(fromIndex: number, toIndex: number): void {
-		this.materializeEmbeddedItems()
 		this.dispatcher.dispatch(
 			moveInList(this.entityType, this.entityId, this.fieldName, fromIndex, toIndex, this.alias),
 		)
@@ -542,7 +393,6 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * per-view reset could not know which of them to drop.
 	 */
 	reset(): void {
-		this.materializeEmbeddedItems()
 		this.store.resetHasMany(
 			this.entityType,
 			this.entityId,

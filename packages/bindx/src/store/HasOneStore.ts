@@ -1,5 +1,4 @@
 import type { HasOneRelationState } from '../handles/types.js'
-import type { EntitySnapshot } from './snapshots.js'
 import { parentKeyFromOwnerPrefix, parentKeyFromRelationKey } from './relationKey.js'
 import { PlannedDeleteIndex } from './PlannedDeleteIndex.js'
 import { RelationEdgeIndex } from './RelationEdgeIndex.js'
@@ -146,34 +145,21 @@ export class HasOneStore {
 	}
 
 	/**
-	 * Updates relation state.
-	 * If the relation state doesn't exist, creates it using entity snapshot for server data.
+	 * Updates relation state. A relation with no state yet has no server baseline:
+	 * a server read writes it on arrival ({@link refreshServerRelation}).
 	 */
 	setRelation(
 		key: string,
 		updates: Partial<Omit<StoredRelationState, 'version'>>,
-		entitySnapshot: EntitySnapshot | undefined,
-		fieldName: string,
 	): void {
 		const existing = this.relationStates.get(key)
 
 		if (!existing) {
-			let serverId: string | null = null
-			let serverState: HasOneRelationState = 'disconnected'
-
-			if (entitySnapshot?.serverData) {
-				const relatedData = (entitySnapshot.serverData as Record<string, unknown>)[fieldName]
-				if (relatedData && typeof relatedData === 'object' && 'id' in relatedData) {
-					serverId = (relatedData as { id: string }).id
-					serverState = 'connected'
-				}
-			}
-
 			this.writeRelation(key, {
-				currentId: 'currentId' in updates ? updates.currentId! : serverId,
-				serverId,
-				state: 'state' in updates ? updates.state! : serverState,
-				serverState,
+				currentId: updates.currentId ?? null,
+				serverId: null,
+				state: updates.state ?? 'disconnected',
+				serverState: 'disconnected',
 				placeholderData: updates.placeholderData ?? {},
 				version: 0,
 			})
@@ -185,6 +171,33 @@ export class HasOneStore {
 			})
 		}
 		this.editableWriteVersion++
+	}
+
+	/**
+	 * Advances the server baseline to what a server read returned. A relation the
+	 * user changed locally keeps its local state, so a re-read cannot undo a connect.
+	 * Not an editable-layer write: undo splices its images onto the live baseline.
+	 * Returns whether the stored state changed.
+	 */
+	refreshServerRelation(key: string, serverId: string | null): boolean {
+		const existing = this.relationStates.get(key)
+		const serverState: HasOneRelationState = serverId === null ? 'disconnected' : 'connected'
+		if (!existing) {
+			this.writeRelation(key, { currentId: serverId, serverId, state: serverState, serverState, placeholderData: {}, version: 0 })
+			return true
+		}
+		if (existing.serverId === serverId && existing.serverState === serverState) return false
+		const local = isLocallyChanged(existing)
+			? { currentId: existing.currentId, state: existing.state }
+			: { currentId: serverId, state: serverState }
+		this.writeRelation(key, {
+			...existing,
+			...local,
+			serverId,
+			serverState,
+			version: existing.version + 1,
+		})
+		return true
 	}
 
 	/**
@@ -489,4 +502,10 @@ function reconcileHasOneRemoval(
 		},
 		result: isDeleteReversal ? 'conflict' : 'applied',
 	}
+}
+
+function isLocallyChanged(relation: StoredRelationState): boolean {
+	return relation.currentId !== relation.serverId
+		|| relation.state !== relation.serverState
+		|| Object.keys(relation.placeholderData).length > 0
 }

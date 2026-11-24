@@ -74,7 +74,7 @@ describe('orphan created-entity purge', () => {
 
 	describe('has-many reset', () => {
 		test('reset() after add() purges created children', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'T', comments: [] }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'T', comments: [] }, schema, { rootId: 'a-1' })
 			const h = hasMany('Article', 'a-1', 'comments', 'Comment')
 			h.add({ text: 'one' })
 			h.add({ text: 'two' })
@@ -83,7 +83,7 @@ describe('orphan created-entity purge', () => {
 		})
 
 		test('reset() keeps server children and reverts planned removals', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'T', comments: [{ id: 'c-1', text: 'srv' }] }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'T', comments: [{ id: 'c-1', text: 'srv' }] }, schema, { rootId: 'a-1' })
 			const h = hasMany('Article', 'a-1', 'comments', 'Comment')
 			h.items // materialize server child
 			h.add({ text: 'draft' })
@@ -97,7 +97,7 @@ describe('orphan created-entity purge', () => {
 
 	describe('has-one detach', () => {
 		test('create() then disconnect() purges the created target', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'T', author: null }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'T', author: null }, schema, { rootId: 'a-1' })
 			const h = hasOne('Article', 'a-1', 'author', 'Author')
 			h.$create({ name: 'draft' })
 			h.$disconnect()
@@ -105,7 +105,7 @@ describe('orphan created-entity purge', () => {
 		})
 
 		test('create() then reset() purges the created target', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'T', author: null }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'T', author: null }, schema, { rootId: 'a-1' })
 			const h = hasOne('Article', 'a-1', 'author', 'Author')
 			h.$create({ name: 'draft' })
 			h.$reset()
@@ -113,7 +113,7 @@ describe('orphan created-entity purge', () => {
 		})
 
 		test('create() then delete() cancels the create (no phantom)', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'T', author: null }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'T', author: null }, schema, { rootId: 'a-1' })
 			const h = hasOne('Article', 'a-1', 'author', 'Author')
 			h.$create({ name: 'draft' })
 			h.$delete()
@@ -121,7 +121,7 @@ describe('orphan created-entity purge', () => {
 		})
 
 		test('create() then connect(other) purges the displaced created target', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'T', author: null }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'T', author: null }, schema, { rootId: 'a-1' })
 			store.setEntityData('Author', 'au-1', { id: 'au-1', name: 'Existing' }, true)
 			const h = hasOne('Article', 'a-1', 'author', 'Author')
 			h.$create({ name: 'draft' })
@@ -130,7 +130,7 @@ describe('orphan created-entity purge', () => {
 		})
 
 		test('disconnect() of a SERVER target does not delete or orphan it', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'T', author: { id: 'au-1', name: 'Srv' } }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'T', author: { id: 'au-1', name: 'Srv' } }, schema, { rootId: 'a-1' })
 			const h = hasOne('Article', 'a-1', 'author', 'Author')
 			h.$entity // materialize server target
 			h.$disconnect()
@@ -142,7 +142,7 @@ describe('orphan created-entity purge', () => {
 
 	describe('cascade into descendants', () => {
 		test('remove(child) drops its created grandchildren and has-one targets from creates', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'T', comments: [] }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'T', comments: [] }, schema, { rootId: 'a-1' })
 			const comments = hasMany('Article', 'a-1', 'comments', 'Comment')
 			const tempC = comments.add({ text: 'draft' })
 			hasMany('Comment', tempC, 'reactions', 'Reaction').add({ kind: 'like' })
@@ -153,7 +153,7 @@ describe('orphan created-entity purge', () => {
 		})
 
 		test('has-one disconnect cascades through a created chain', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'T', author: null }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'T', author: null }, schema, { rootId: 'a-1' })
 			const top = hasOne('Article', 'a-1', 'author', 'Author')
 			const tempAuthor = top.$create({ name: 'mid' })
 			// nested created has-one under the created author
@@ -163,7 +163,7 @@ describe('orphan created-entity purge', () => {
 		})
 
 		test('removing a child with created descendants reports no create', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'T', comments: [] }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'T', comments: [] }, schema, { rootId: 'a-1' })
 			const comments = hasMany('Article', 'a-1', 'comments', 'Comment')
 			const tempC = comments.add({ text: 'draft' })
 			hasMany('Comment', tempC, 'reactions', 'Reaction').add({ kind: 'like' })
@@ -175,7 +175,7 @@ describe('orphan created-entity purge', () => {
 
 	describe('reset of a whole entity (rollback path)', () => {
 		test('resetAllRelations purges created children added after load', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'T', comments: [] }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'T', comments: [] }, schema, { rootId: 'a-1' })
 			hasMany('Article', 'a-1', 'comments', 'Comment').add({ text: 'draft' })
 			store.resetAllRelations('Article', 'a-1')
 			expect(creates()).toEqual([])

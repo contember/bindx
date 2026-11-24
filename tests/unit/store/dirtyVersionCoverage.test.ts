@@ -159,17 +159,4 @@ describe('SnapshotStore.getDirtyVersion covers the silent writes', () => {
 
 		expect(store.getVersion()).toBe(notifyVersion)
 	})
-
-	test('refreshServerData with skipNotify', () => {
-		const store = new SnapshotStore()
-		store.setEntityData('Article', 'a1', { id: 'a1', title: 'server' }, true)
-		store.setFieldValue('Article', 'a1', ['title'], 'edited')
-
-		const notifyVersion = store.getVersion()
-		const before = store.getDirtyVersion()
-		store.refreshServerData('Article', 'a1', { id: 'a1', title: 'edited' }, true)
-
-		expect(store.getVersion()).toBe(notifyVersion)
-		expect(store.getDirtyVersion()).toBeGreaterThan(before)
-	})
 })

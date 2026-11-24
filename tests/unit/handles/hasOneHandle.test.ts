@@ -110,7 +110,7 @@ describe('HasOneHandle', () => {
 		})
 
 		test('should return connected state when relation exists', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test', author: { id: 'auth-1', name: 'John' } }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'Test', author: { id: 'auth-1', name: 'John' } }, schema, { rootId: 'a-1' })
 			store.setRelation('Article', 'a-1', 'author', {
 				currentId: 'auth-1',
 				state: 'connected',
@@ -121,7 +121,7 @@ describe('HasOneHandle', () => {
 		})
 
 		test('should return deleted state when marked for deletion', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test', author: { id: 'auth-1', name: 'John' } }, true)
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
 			store.getOrCreateRelation('Article', 'a-1', 'author', {
 				currentId: 'auth-1',
 				serverId: 'auth-1',
@@ -150,11 +150,11 @@ describe('HasOneHandle', () => {
 		})
 
 		test('should return related ID from embedded data when no relation state', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			const handle = createHasOneHandleRaw()
 
 			expect(handle.relatedId).toBe('auth-1')
@@ -172,11 +172,11 @@ describe('HasOneHandle', () => {
 
 	describe('Entity Accessor', () => {
 		test('should return entity accessor for connected relation', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.setRelation('Article', 'a-1', 'author', {
 				currentId: 'auth-1',
 				state: 'connected',
@@ -199,11 +199,11 @@ describe('HasOneHandle', () => {
 		})
 
 		test('should cache entity handle', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.setRelation('Article', 'a-1', 'author', {
 				currentId: 'auth-1',
 				state: 'connected',
@@ -221,11 +221,11 @@ describe('HasOneHandle', () => {
 
 	describe('Fields Access', () => {
 		test('should access fields via fields proxy', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.setRelation('Article', 'a-1', 'author', {
 				currentId: 'auth-1',
 				state: 'connected',
@@ -242,11 +242,11 @@ describe('HasOneHandle', () => {
 
 	describe('Dirty State', () => {
 		test('should return false when relation matches server state', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.getOrCreateRelation('Article', 'a-1', 'author', {
 				currentId: 'auth-1',
 				serverId: 'auth-1',
@@ -261,11 +261,7 @@ describe('HasOneHandle', () => {
 		})
 
 		test('should return true when connected to different entity', () => {
-			store.setEntityData('Article', 'a-1', {
-				id: 'a-1',
-				title: 'Test',
-				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
 			store.getOrCreateRelation('Article', 'a-1', 'author', {
 				currentId: 'auth-2',
 				serverId: 'auth-1',
@@ -299,11 +295,11 @@ describe('HasOneHandle', () => {
 
 	describe('Pessimistic Presentation', () => {
 		test('local connect is hidden behind the server baseline while pessimistically in-flight', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			const handle = createHasOneHandleRaw()
 			expect(handle.relatedId).toBe('auth-1')
 
@@ -343,11 +339,11 @@ describe('HasOneHandle', () => {
 		})
 
 		test('should disconnect relation', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.setRelation('Article', 'a-1', 'author', {
 				currentId: 'auth-1',
 				state: 'connected',
@@ -362,11 +358,11 @@ describe('HasOneHandle', () => {
 		})
 
 		test('should mark relation for deletion', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.setRelation('Article', 'a-1', 'author', {
 				currentId: 'auth-1',
 				state: 'connected',
@@ -384,11 +380,11 @@ describe('HasOneHandle', () => {
 
 	describe('Remove (auto-detect)', () => {
 		test('should disconnect when FK is nullable', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.setRelation('Article', 'a-1', 'author', {
 				currentId: 'auth-1',
 				state: 'connected',
@@ -403,11 +399,11 @@ describe('HasOneHandle', () => {
 		})
 
 		test('should delete when FK is non-nullable', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				category: { id: 'cat-1', label: 'Tech' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.setRelation('Article', 'a-1', 'category', {
 				currentId: 'cat-1',
 				state: 'connected',
@@ -453,11 +449,11 @@ describe('HasOneHandle', () => {
 				},
 			})
 
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.setRelation('Article', 'a-1', 'author', {
 				currentId: 'auth-1',
 				state: 'connected',
@@ -484,11 +480,7 @@ describe('HasOneHandle', () => {
 
 	describe('Reset', () => {
 		test('should reset to server state', () => {
-			store.setEntityData('Article', 'a-1', {
-				id: 'a-1',
-				title: 'Test',
-				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
 			store.getOrCreateRelation('Article', 'a-1', 'author', {
 				currentId: 'auth-2',
 				serverId: 'auth-1',
@@ -572,11 +564,11 @@ describe('HasOneHandle', () => {
 		})
 
 		test('should subscribe to disconnect events', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.setRelation('Article', 'a-1', 'author', {
 				currentId: 'auth-1',
 				state: 'connected',
@@ -649,11 +641,11 @@ describe('HasOneHandle', () => {
 		})
 
 		test('should replace existing connection when called on already-connected relation', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'Old Author' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.setEntityData('Author', 'auth-1', { id: 'auth-1', name: 'Old Author' }, true)
 			store.setRelation('Article', 'a-1', 'author', {
 				currentId: 'auth-1',
@@ -716,112 +708,82 @@ describe('HasOneHandle', () => {
 	// state materializes the entry from embedded snapshot data, and there is no
 	// longer a snapshot fallback in the getters.
 
-	describe('Eager materialization', () => {
-		test('a loaded has-one materializes a RelationStore entry and is not dirty', () => {
-			store.setEntityData('Article', 'a-1', {
+	describe('Server read on arrival', () => {
+		test('a read writes a clean relation entry and leaves the parent snapshot without the related entity', () => {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema)
 
-			// No explicit setRelation — the entry only lives in embedded snapshot data.
-			expect(store.getRelation('Article', 'a-1', 'author')).toBeUndefined()
+			expect(store.getRelation('Article', 'a-1', 'author')).toMatchObject({
+				currentId: 'auth-1',
+				serverId: 'auth-1',
+				state: 'connected',
+				serverState: 'connected',
+			})
+			expect(store.getEntitySnapshot<Record<string, unknown>>('Article', 'a-1')?.data).toEqual({ id: 'a-1', title: 'Test' })
+			expect(store.getEntitySnapshot<Record<string, unknown>>('Author', 'auth-1')?.data).toEqual({ id: 'auth-1', name: 'John' })
 
 			const handle = createHasOneHandleRaw()
-
-			// Reading state materializes the entry.
-			expect(handle.state).toBe('connected')
 			expect(handle.relatedId).toBe('auth-1')
-
-			const relation = store.getRelation('Article', 'a-1', 'author')
-			expect(relation).toBeDefined()
-			expect(relation!.currentId).toBe('auth-1')
-			expect(relation!.serverId).toBe('auth-1')
-			expect(relation!.state).toBe('connected')
-			expect(relation!.serverState).toBe('connected')
-
-			// A freshly materialized loaded relation must NOT be dirty.
 			expect(handle.isDirty).toBe(false)
 		})
 
-		test('relatedId reads purely from RelationStore (no snapshot fallback)', () => {
-			store.setEntityData('Article', 'a-1', {
-				id: 'a-1',
-				title: 'Test',
-				author: { id: 'auth-1', name: 'John' },
-			}, true)
-
-			const handle = createHasOneHandleRaw()
-
-			// First read materializes the entry.
-			expect(handle.relatedId).toBe('auth-1')
-
-			// Disconnect at the relation level only — the parent's embedded data is
-			// left untouched (still { id: 'auth-1', ... }). A snapshot fallback would
-			// resurrect 'auth-1'; reading purely from the store must report null.
+		test('relatedId reads purely from the relation store', () => {
+			store.writeServerRead('Article', { id: 'a-1', title: 'Test', author: { id: 'auth-1', name: 'John' } }, schema)
 			store.setRelation('Article', 'a-1', 'author', { currentId: null, state: 'disconnected' })
 
-			const embedded = (store.getEntitySnapshot('Article', 'a-1')!.data as Record<string, unknown>)['author']
-			expect(embedded).toEqual({ id: 'auth-1', name: 'John' })
-
-			const handle2 = createHasOneHandleRaw()
-			expect(handle2.relatedId).toBeNull()
-			expect(handle2.state).toBe('disconnected')
+			const handle = createHasOneHandleRaw()
+			expect(handle.relatedId).toBeNull()
+			expect(handle.state).toBe('disconnected')
 		})
 
-		test('disconnected (no embedded data, no entry) leaves the relation unmaterialized', () => {
+		test('a relation never read stays without an entry', () => {
 			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
 
 			const handle = createHasOneHandleRaw()
 			expect(handle.relatedId).toBeNull()
 			expect(handle.state).toBe('disconnected')
-
-			// No spurious entry created for an empty relation.
 			expect(store.getRelation('Article', 'a-1', 'author')).toBeUndefined()
 		})
 
-		test('materialization does not clobber a local connect', () => {
-			store.setEntityData('Article', 'a-1', {
-				id: 'a-1',
-				title: 'Test',
-				author: { id: 'auth-1', name: 'John' },
-			}, true)
-			// Local connect to a different author than the embedded one.
+		test('a re-read does not clobber a local connect', () => {
+			store.writeServerRead('Article', { id: 'a-1', title: 'Test', author: { id: 'auth-1', name: 'John' } }, schema)
 			store.setRelation('Article', 'a-1', 'author', { currentId: 'auth-2', state: 'connected' })
+			store.writeServerRead('Article', { id: 'a-1', title: 'Test', author: { id: 'auth-1', name: 'John' } }, schema)
 
 			const handle = createHasOneHandleRaw()
-
-			// The local connect survives — embedded 'auth-1' must not win.
 			expect(handle.relatedId).toBe('auth-2')
 			expect(handle.isDirty).toBe(true)
 		})
 	})
 
+
 	// ==================== Server-baseline advance on re-fetch ====================
 	//
-	// On a parent re-fetch whose embedded related id changed, a non-dirty has-one
-	// must advance its server baseline to the new id (and stay clean), while a
-	// locally-dirty relation must survive the re-fetch. The advance runs during a
-	// render-phase read and must NOT notify subscribers (the re-fetch already did).
+	// A re-fetch always advances the server baseline. A clean relation follows it;
+	// a locally changed one keeps its local state, as a dirty scalar does. Reading
+	// the relation afterwards must NOT notify subscribers (the re-fetch already did).
 
 	describe('Server-baseline advance on re-fetch', () => {
 		test('a re-fetch that changes the related id advances the baseline and stays clean', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasOneHandleRaw()
 			expect(handle.relatedId).toBe('auth-1')
 			expect(handle.isDirty).toBe(false)
 
 			// Parent re-fetched: a NEW embedded author reference with a different id.
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-2', name: 'Jane' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			// Reading advances the server baseline to the new related id; still clean.
 			expect(handle.relatedId).toBe('auth-2')
@@ -835,21 +797,21 @@ describe('HasOneHandle', () => {
 		})
 
 		test('a re-fetch with explicit null advances a clean relation to disconnected', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasOneHandleRaw()
 			expect(handle.relatedId).toBe('auth-1')
 			expect(handle.isDirty).toBe(false)
 
-			store.refreshServerData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: null,
-			})
+			}, schema)
 
 			expect(handle.relatedId).toBeNull()
 			expect(handle.state).toBe('disconnected')
@@ -863,11 +825,11 @@ describe('HasOneHandle', () => {
 		})
 
 		test('a locally-connected relation survives a re-fetch that changes the embedded id', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			const handle = createHasOneHandleRaw()
 			expect(handle.relatedId).toBe('auth-1')
 
@@ -877,22 +839,22 @@ describe('HasOneHandle', () => {
 			expect(handle.isDirty).toBe(true)
 
 			// Parent re-fetched at yet another author — the local dirty connect wins.
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-3', name: 'Bob' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			expect(handle.relatedId).toBe('auth-2')
 			expect(handle.isDirty).toBe(true)
 		})
 
 		test('a locally-connected relation survives an explicit null re-fetch', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			const handle = createHasOneHandleRaw()
 			expect(handle.relatedId).toBe('auth-1')
 
@@ -900,26 +862,26 @@ describe('HasOneHandle', () => {
 			expect(handle.relatedId).toBe('auth-2')
 			expect(handle.isDirty).toBe(true)
 
-			store.refreshServerData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: null,
-			})
+			}, schema)
 
 			const relation = store.getRelation('Article', 'a-1', 'author')
 			expect(handle.relatedId).toBe('auth-2')
 			expect(handle.state).toBe('connected')
 			expect(handle.isDirty).toBe(true)
-			expect(relation?.serverId).toBe('auth-1')
-			expect(relation?.serverState).toBe('connected')
+			expect(relation?.serverId).toBeNull()
+			expect(relation?.serverState).toBe('disconnected')
 		})
 
-		test('a locally-disconnected relation survives an explicit null re-fetch', () => {
-			store.setEntityData('Article', 'a-1', {
+		test('a local disconnect that a null re-fetch confirms stays disconnected and is clean', () => {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			const handle = createHasOneHandleRaw()
 			expect(handle.relatedId).toBe('auth-1')
 
@@ -927,44 +889,43 @@ describe('HasOneHandle', () => {
 			expect(handle.relatedId).toBeNull()
 			expect(handle.isDirty).toBe(true)
 
-			store.refreshServerData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: null,
-			})
+			}, schema)
 
 			const relation = store.getRelation('Article', 'a-1', 'author')
 			expect(handle.relatedId).toBeNull()
 			expect(handle.state).toBe('disconnected')
-			expect(handle.isDirty).toBe(true)
-			expect(relation?.serverId).toBe('auth-1')
-			expect(relation?.serverState).toBe('connected')
+			expect(handle.isDirty).toBe(false)
+			expect(relation?.serverId).toBeNull()
+			expect(relation?.serverState).toBe('disconnected')
 		})
 
-		test('the baseline advance does not notify subscribers during a render-phase read', () => {
-			store.setEntityData('Article', 'a-1', {
+		test('reading a relation after a re-fetch notifies no one', () => {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-1', name: 'John' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			const handle = createHasOneHandleRaw()
 			expect(handle.relatedId).toBe('auth-1')
 
-			// Re-fetch with a new related id, setting up the advance on the next read.
-			store.setEntityData('Article', 'a-1', {
+			// The re-fetch writes the new related id on arrival.
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				author: { id: 'auth-2', name: 'Jane' },
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			// Subscribe AFTER the re-fetch notification: any callback fired now would be
-			// the illegal mid-read notification from the baseline advance (CORR-6).
+			// an illegal notification from a render-phase read (CORR-6).
 			const entityCb = mock(() => {})
 			const relationCb = mock(() => {})
 			store.subscribeToEntity('Article', 'a-1', entityCb)
 			store.subscribeToRelation('Article', 'a-1', 'author', relationCb)
 
-			// This read triggers advanceServerBaselineOnRefetch.
 			expect(handle.relatedId).toBe('auth-2')
 
 			expect(entityCb).not.toHaveBeenCalled()
@@ -972,39 +933,4 @@ describe('HasOneHandle', () => {
 		})
 	})
 
-	// ==================== Reachability / dirty for created has-one child ====================
-
-	describe('Created has-one child via embedded data', () => {
-		test('a created child connected via has-one appears as a create without explicit setRelation', () => {
-			// Server parent.
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test' }, true)
-
-			// User creates a new author (auto-rooted as a top-level create).
-			const childId = store.createEntity('Author', { name: 'Draft Author' })
-
-			// The connection lives ONLY in the parent's embedded current data —
-			// no store.setRelation() call.
-			store.setFieldValue('Article', 'a-1', ['author'], { id: childId, name: 'Draft Author' })
-
-			// Detach the auto-root so the child is reachable ONLY through the has-one
-			// edge once it is materialized (proves materialization drives reachability).
-			store.registerParentChild('Article', 'a-1', 'Author', childId)
-			store.unregisterRootEntity('Author', childId)
-
-			// Before any handle read, the relation entry does not exist yet, so the
-			// child is not reachable through it.
-			expect(store.getRelation('Article', 'a-1', 'author')).toBeUndefined()
-			const beforeCreates = store.getAllDirtyEntities().filter(e => e.changeType === 'create')
-			expect(beforeCreates.map(e => e.entityId)).not.toContain(childId)
-
-			// A handle read materializes the relation entry.
-			const handle = createHasOneHandleRaw()
-			expect(handle.relatedId).toBe(childId)
-
-			// Now the created child is reachable via the materialized has-one edge and
-			// reported as a create — no explicit setRelation was ever called.
-			const creates = store.getAllDirtyEntities().filter(e => e.changeType === 'create')
-			expect(creates.map(e => e.entityId)).toContain(childId)
-		})
-	})
 })

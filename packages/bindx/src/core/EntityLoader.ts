@@ -1,5 +1,6 @@
 import type { BackendAdapter } from '../adapter/types.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
+import type { ServerReadSchema } from '../store/serverRead.js'
 import type { QuerySpec } from '../selection/buildQuery.js'
 import type { EntityWhere, EntityOrderBy } from '../selection/queryTypes.js'
 import { createLoadError, type FieldError } from '../errors/types.js'
@@ -61,17 +62,16 @@ export interface LoadEntityListOptions<TEntity = unknown> {
  * Non-React service for loading entities.
  * Can be used in any JavaScript environment.
  *
- * It writes each response as it arrives, without uniting the occurrences of one
- * entity within it (see `SnapshotStore.indexServerResponse`): that needs the
- * selection and the schema, and the loader has only a `QuerySpec`. A query that
- * reaches one entity through two paths with different sub-selections can
- * therefore lose the wider one's fields, as described in
- * https://github.com/contember/bindx/issues/123. The React hooks do not go through it.
+ * It writes each response through `SnapshotStore.writeServerRead`, so the store
+ * keeps each entity's own columns in its snapshot and relations as references.
+ * A cached result is therefore the entity's own columns only. The React hooks do
+ * not go through it.
  */
 export class EntityLoader {
 	constructor(
 		private readonly adapter: BackendAdapter,
 		private readonly store: SnapshotStore,
+		private readonly schema: ServerReadSchema,
 	) {}
 
 	/**
@@ -99,8 +99,7 @@ export class EntityLoader {
 				return { status: 'not_found' }
 			}
 
-			// Store in snapshot store
-			this.store.setEntityData(entityType, id, result.data, true)
+			this.store.writeServerRead(entityType, result.data, this.schema, { spec: query, rootId: id })
 
 			return { status: 'success', data: result.data as T }
 		} catch (error) {
@@ -131,13 +130,7 @@ export class EntityLoader {
 				}
 			}
 
-			this.store.batchNotifications(() => {
-				for (const record of result.data) {
-					if (typeof record['id'] === 'string') {
-						this.store.setEntityData(entityType, record['id'], record, true)
-					}
-				}
-			})
+			this.store.writeServerRead(entityType, result.data, this.schema, { spec: query })
 
 			return { status: 'success', data: result.data as T[] }
 		} catch (error) {
@@ -171,6 +164,7 @@ export class EntityLoader {
 export function createEntityLoader(
 	adapter: BackendAdapter,
 	store: SnapshotStore,
+	schema: ServerReadSchema,
 ): EntityLoader {
-	return new EntityLoader(adapter, store)
+	return new EntityLoader(adapter, store, schema)
 }

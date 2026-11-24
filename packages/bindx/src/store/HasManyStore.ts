@@ -177,12 +177,12 @@ export class HasManyStore {
 
 	/**
 	 * Gets or creates the relation state and the addressed view, refreshing that
-	 * view's server baseline when one is supplied.
+	 * view's server baseline when one is supplied. Returns whether the stored state changed.
 	 */
-	getOrCreateHasMany(key: string, alias: string, serverIds?: string[]): void {
+	getOrCreateHasMany(key: string, alias: string, serverIds?: string[]): boolean {
 		const view = this.hasManyStates.get(key)?.views.get(alias)
 		if (view && (serverIds === undefined || setsEqual(view.serverIds, new Set(serverIds)))) {
-			return
+			return false
 		}
 
 		const state = this.editableState(key, alias)
@@ -193,6 +193,12 @@ export class HasManyStore {
 			next.orderedIds = null
 		}
 		this.commitEdit(key, state)
+		return true
+	}
+
+	/** Whether this view of the relation was read or edited, as opposed to never touched. */
+	hasView(key: string, alias: string): boolean {
+		return this.hasManyStates.get(key)?.views.has(alias) ?? false
 	}
 
 	/** Relation state, deep-copied. For the export / undo paths that move whole states. */
