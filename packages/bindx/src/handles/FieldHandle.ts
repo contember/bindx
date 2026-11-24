@@ -101,7 +101,7 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	get value(): T | null {
 		const data = this.getPresentationData()
 		if (!data) return null
-		return this.getCurrentValue(data) as T | null
+		return this.readValue(data) as T | null
 	}
 
 	/**
@@ -110,7 +110,7 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	get serverValue(): T | null {
 		const serverData = this.getServerData()
 		if (!serverData) return null
-		return this.getServerValue(serverData) as T | null
+		return this.readValue(serverData) as T | null
 	}
 
 	/**
@@ -119,17 +119,21 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	 * dirty even while its display shows the server baseline mid-pessimistic-persist.
 	 */
 	get isDirty(): boolean {
+		// Raw, as the persister diffs it: a cleared field the server data does not hold is still written.
 		const data = this.getEntityData()
-		const value = data ? (this.getCurrentValue(data) as T | null) : null
-		return !deepEqual(value, this.serverValue)
+		const serverData = this.getServerData()
+		const value = data ? this.readRawValue(data) : null
+		const serverValue = serverData ? this.readRawValue(serverData) : null
+		return !deepEqual(value, serverValue)
 	}
 
-	private getCurrentValue(data: Record<string, unknown>): unknown {
-		const value = getNestedValue(data, this.fieldPath)
-		return value === undefined ? getNestedValue(data, this.dataFieldPath) : value
+	/** A key the data does not hold reads as null: a created entity keeps only the keys set on it. */
+	private readValue(data: Record<string, unknown>): unknown {
+		return this.readRawValue(data) ?? null
 	}
 
-	private getServerValue(data: Record<string, unknown>): unknown {
+	/** Reads the field by its schema path, falling back to the path it was read under. */
+	private readRawValue(data: Record<string, unknown>): unknown {
 		const value = getNestedValue(data, this.fieldPath)
 		return value === undefined ? getNestedValue(data, this.dataFieldPath) : value
 	}
