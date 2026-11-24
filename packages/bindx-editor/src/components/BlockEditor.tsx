@@ -22,7 +22,7 @@ import { EditorErrorBoundary } from './EditorErrorBoundary.js'
 import { ReferenceElementWrapper } from '../plugins/references/ReferenceElementWrapper.js'
 import { EditorGetReferencedEntityProvider, useEditorGetReferencedEntity } from '../contexts/EditorReferencesContext.js'
 import { EditorBlockElementProvider } from '../contexts/EditorBlockElementContext.js'
-import { BINDX_COMPONENT, type FieldAccessor, type SelectionFieldMeta, type SelectionProvider, type SelectionMeta, createCollectorProxy, useField, useHasMany, useEntityBeforePersist } from '@contember/bindx-react'
+import { BINDX_COMPONENT, fieldRefSelection, type FieldAccessor, type SelectionFieldMeta, type SelectionProvider, type SelectionMeta, createCollectorProxy, useField, useHasMany, useEntityBeforePersist } from '@contember/bindx-react'
 import { SelectionScope } from '@contember/bindx'
 
 export type { BlockEditorBaseProps, BlockEditorWithReferencesProps, BlockEditorProps }
@@ -303,21 +303,8 @@ blockEditorAny.getSelection = (
 	collectNested: (children: ReactNode) => SelectionMeta,
 ): SelectionFieldMeta | SelectionFieldMeta[] | null => {
 	const editorProps = props as BlockEditorProps
-	if (editorProps.field === undefined || editorProps.field === null) {
-		return null
-	}
-	const fieldMeta = editorProps.field[FIELD_REF_META]
-	if (!fieldMeta) {
-		return null
-	}
-
-	const fieldSelection: SelectionFieldMeta = {
-		fieldName: fieldMeta.fieldName,
-		alias: fieldMeta.fieldName,
-		path: fieldMeta.path,
-		isArray: false,
-		isRelation: false,
-	}
+	const fieldSelection = fieldRefSelection(editorProps.field)
+	const fieldSelections = fieldSelection === null ? [] : [fieldSelection]
 
 	// If has references, also collect the has-many relation
 	if ('references' in editorProps && editorProps.references) {
@@ -357,7 +344,7 @@ blockEditorAny.getSelection = (
 				isRelation: true,
 				nested: refScope.toSelectionMeta(),
 			}
-			return [fieldSelection, referencesSelection]
+			return [...fieldSelections, referencesSelection]
 		}
 	}
 
