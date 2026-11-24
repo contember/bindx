@@ -54,7 +54,6 @@ export function useEntityErrors(entityType: string, entityId: string): EntityErr
 
 		// Collect field errors
 		const fieldErrorsMap = new Map<string, readonly FieldError[]>()
-		const keyPrefix = `${entityType}:${entityId}:`
 
 		// We need to iterate through all fields, but the store doesn't expose
 		// a method to list all field keys. Instead, we access the snapshot

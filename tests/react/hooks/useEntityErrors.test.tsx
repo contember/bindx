@@ -32,7 +32,7 @@ function renderProbe(store: SnapshotStore, log: ProbeLog): void {
 
 function createArticleStore(): SnapshotStore {
 	const store = new SnapshotStore()
-	store.setEntityData('Article', 'article-1', { id: 'article-1', title: 'Hello' }, true)
+	store.setEntityData('Article', 'article-1', { id: 'article-1', title: 'Hello', content: 'Body' }, true)
 	return store
 }
 
@@ -71,6 +71,44 @@ describe('useEntityErrors', () => {
 		expect(log.state?.hasServerErrors).toBe(true)
 	})
 
+	test('follows errors that are cleared, replaced or appended to an existing list', () => {
+		const store = createArticleStore()
+		const log: ProbeLog = { renders: 0, state: null }
+		renderProbe(store, log)
+
+		const lockedError = createServerError('Article is locked')
+		const archivedError = createServerError('Article is archived')
+		const titleRequiredError = createClientError({ message: 'Title is required' })
+		const titleTooLongError = createClientError({ message: 'Title is too long' })
+		const contentError = createClientError({ message: 'Content is required' })
+		act(() => {
+			store.addEntityError('Article', 'article-1', lockedError)
+			store.addFieldError('Article', 'article-1', 'title', titleRequiredError)
+			store.addFieldError('Article', 'article-1', 'content', contentError)
+		})
+
+		// One batched write in which every list keeps its length and only its errors change.
+		act(() => {
+			store.batchNotifications(() => {
+				store.clearEntityErrors('Article', 'article-1')
+				store.addEntityError('Article', 'article-1', archivedError)
+				store.clearFieldErrors('Article', 'article-1', 'title')
+				store.addFieldError('Article', 'article-1', 'title', titleTooLongError)
+			})
+		})
+		expect(log.state?.entityErrors).toEqual([archivedError])
+		expect(log.state?.fieldErrors.get('title')).toEqual([titleTooLongError])
+		expect(log.state?.allErrors).toEqual([archivedError, titleTooLongError, contentError])
+
+		act(() => {
+			store.clearFieldErrors('Article', 'article-1', 'content')
+			store.addEntityError('Article', 'article-1', lockedError)
+		})
+		expect(log.state?.entityErrors).toEqual([archivedError, lockedError])
+		expect(log.state?.fieldErrors.has('content')).toBe(false)
+		expect(log.state?.allErrors).toEqual([archivedError, lockedError, titleTooLongError])
+	})
+
 	test('keeps the returned state when an entity change leaves its errors unchanged', () => {
 		const store = createArticleStore()
 		const log: ProbeLog = { renders: 0, state: null }
@@ -81,7 +119,7 @@ describe('useEntityErrors', () => {
 		const stateBefore = log.state
 
 		act(() => {
-			store.setEntityData('Article', 'article-1', { id: 'article-1', title: 'Hello again' }, true)
+			store.setEntityData('Article', 'article-1', { id: 'article-1', title: 'Hello again', content: 'Body' }, true)
 		})
 
 		expect(log.state).toBe(stateBefore)
