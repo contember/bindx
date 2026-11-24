@@ -12,6 +12,8 @@ import {
 	buildDeleteArgs,
 	buildMutationSelection,
 	buildNodeSelectionFromMutationData,
+	containsCreateOperation,
+	type CreatedRowReadBack,
 	buildCountSelection,
 	mutationFragments,
 	unwrapPaginateResult,
@@ -52,6 +54,12 @@ export class ContemberAdapter implements BackendAdapter {
 		// The permission depends on the identity, so it comes from introspection, not from generated names.
 		const schema = await this.schemaLoader.loadSchema(this.introspectionClient)
 		return schema.getEntity(entityType)?.customPrimaryAllowed ?? false
+	}
+
+	/** The schema is loaded on the first create and cached; a plain update never needs it. */
+	private async createdRowReadBack(entityType: string, isRootCreated: boolean): Promise<CreatedRowReadBack> {
+		const schema = await this.schemaLoader.loadSchema(this.introspectionClient)
+		return { schema, entityType, isRootCreated }
 	}
 
 	async query(queries: readonly Query[], options?: QueryOptions): Promise<QueryResult[]> {
@@ -148,7 +156,8 @@ export class ContemberAdapter implements BackendAdapter {
 		changes: Record<string, unknown>,
 	): Promise<PersistResult> {
 		const args = buildUpdateArgs(entityType, { by: { id }, data: changes })
-		const nodeSelection = buildNodeSelectionFromMutationData(changes)
+		const readBack = containsCreateOperation(changes) ? await this.createdRowReadBack(entityType, false) : undefined
+		const nodeSelection = buildNodeSelectionFromMutationData(changes, readBack)
 		const selectionSet = buildMutationSelection('update', nodeSelection)
 
 		const mutation = new ContentOperation(
@@ -184,8 +193,7 @@ export class ContemberAdapter implements BackendAdapter {
 		data: Record<string, unknown>,
 	): Promise<CreateResult> {
 		const args = buildCreateArgs(entityType, { data })
-		// Select id on created node + nested created entity IDs
-		const nodeSelection = buildNodeSelectionFromMutationData(data)
+		const nodeSelection = buildNodeSelectionFromMutationData(data, await this.createdRowReadBack(entityType, true))
 		const selectionSet = buildMutationSelection('create', nodeSelection)
 
 		const mutation = new ContentOperation(
