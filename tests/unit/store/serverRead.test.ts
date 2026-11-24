@@ -89,7 +89,7 @@ describe('normalizeServerRead', () => {
 		}])
 	})
 
-	test('should read aliased fields and list views by the query, with the total count of a connection', () => {
+	test('should key aliased columns by field name and read list views by the query, with the total count of a connection', () => {
 		const selection: SelectionMeta = {
 			fields: new Map([
 				['id', scalarField('id')],
@@ -111,7 +111,7 @@ describe('normalizeServerRead', () => {
 			tags_filtered: { pageInfo: { totalCount: 7 }, edges: [{ node: { id: 'tag-1', label: 'A' } }] },
 		}, schema, { spec: buildQueryFromSelection(selection) })
 
-		expect(read.entities.find(entity => entity.id === 'item-1')?.columns).toEqual({ id: 'item-1', heading: 'Hello' })
+		expect(read.entities.find(entity => entity.id === 'item-1')?.columns).toEqual({ id: 'item-1', title: 'Hello' })
 		expect(read.hasMany).toEqual([{
 			parentType: 'Item',
 			parentId: 'item-1',

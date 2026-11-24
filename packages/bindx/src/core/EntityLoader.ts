@@ -64,8 +64,9 @@ export interface LoadEntityListOptions<TEntity = unknown> {
  *
  * It writes each response through `SnapshotStore.writeServerRead`, so the store
  * keeps each entity's own columns in its snapshot and relations as references.
- * A cached result is therefore the entity's own columns only. The React hooks do
- * not go through it.
+ * A cached result is therefore the entity's own columns only, keyed by schema field
+ * name; a fresh load returns the response keyed as its query aliased it. The React
+ * hooks do not go through it.
  */
 export class EntityLoader {
 	constructor(

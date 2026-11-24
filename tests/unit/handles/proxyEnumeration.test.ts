@@ -166,9 +166,9 @@ describe('entity accessor enumeration', () => {
 
 	test('writes and reconciles an aliased scalar through its schema field', async () => {
 		const store = new SnapshotStore()
-		store.setEntityData('Article', 'a-1', { id: 'a-1', data: 'Aliased title' }, true)
-		const dispatcher = new ActionDispatcher(store)
 		const schema = new SchemaRegistry(schemaDefinition)
+		store.writeServerRead('Article', { id: 'a-1', data: 'Aliased title' }, schema, { spec: buildQueryFromSelection(aliasedSelection) })
+		const dispatcher = new ActionDispatcher(store)
 		const handle = EntityHandle.createRaw<TestArticle>(
 			'a-1',
 			'Article',
@@ -178,7 +178,7 @@ describe('entity accessor enumeration', () => {
 			undefined,
 			aliasedSelection,
 		)
-		const title = handle.field('title', 'data')
+		const title = handle.field('title')
 		let changes = 0
 		title.onChange(() => { changes++ })
 
@@ -187,8 +187,7 @@ describe('entity accessor enumeration', () => {
 
 		const data = store.getEntitySnapshot<Record<string, unknown>>('Article', 'a-1')?.data
 		expect(title.value).toBe('Updated title')
-		expect(data?.['data']).toBe('Aliased title')
-		expect(data?.['title']).toBe('Updated title')
+		expect(data).toEqual({ id: 'a-1', title: 'Updated title' })
 		expect(title.isDirty).toBe(true)
 		expect(store.getDirtyFields('Article', 'a-1')).toContain('title')
 		expect(changes).toBe(1)
@@ -201,7 +200,7 @@ describe('entity accessor enumeration', () => {
 			query: () => Promise.resolve([]),
 			persist: () => Promise.resolve({
 				ok: true,
-				data: { id: 'a-1', data: 'Aliased title', title: 'Updated title' },
+				data: { id: 'a-1', title: 'Updated title' },
 			}),
 			create: (_entityType, createData) => Promise.resolve({ ok: true, data: createData }),
 			delete: () => Promise.resolve({ ok: true }),
@@ -214,6 +213,10 @@ describe('entity accessor enumeration', () => {
 		expect(title.serverValue).toBe('Updated title')
 		expect(title.isDirty).toBe(false)
 		expect(store.getDirtyFields('Article', 'a-1')).toEqual([])
+		expect(store.getEntitySnapshot<Record<string, unknown>>('Article', 'a-1')?.data).toEqual({ id: 'a-1', title: 'Updated title' })
+		// Typed by schema field name; the aliased selection shows the column under its alias.
+		const assembled: unknown = handle.data
+		expect(assembled).toEqual({ id: 'a-1', data: 'Updated title' })
 	})
 
 	test('keeps unselected fields unavailable', () => {
