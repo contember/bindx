@@ -50,21 +50,21 @@ describe('RelationEdgeIndex (unit)', () => {
 describe('RelationStore edge index integration', () => {
 	test('two has-one fields to the same child keep the parent until both drop', () => {
 		const relations = new RelationStore()
-		relations.setRelation('Author:a1:featured', { currentId: 'art1', state: 'connected' }, undefined, 'featured')
-		relations.setRelation('Author:a1:secondary', { currentId: 'art1', state: 'connected' }, undefined, 'secondary')
+		relations.setRelation('Author:a1:featured', { currentId: 'art1', state: 'connected' })
+		relations.setRelation('Author:a1:secondary', { currentId: 'art1', state: 'connected' })
 
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set(['Author:a1']))
 
-		relations.setRelation('Author:a1:featured', { currentId: null, state: 'disconnected' }, undefined, 'featured')
+		relations.setRelation('Author:a1:featured', { currentId: null, state: 'disconnected' })
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set(['Author:a1'])) // secondary still holds it
 
-		relations.setRelation('Author:a1:secondary', { currentId: null, state: 'disconnected' }, undefined, 'secondary')
+		relations.setRelation('Author:a1:secondary', { currentId: null, state: 'disconnected' })
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set())
 	})
 
 	test('a child reached via has-one AND has-many of one parent survives dropping either', () => {
 		const relations = new RelationStore()
-		relations.setRelation('Author:a1:featured', { currentId: 'art1', state: 'connected' }, undefined, 'featured')
+		relations.setRelation('Author:a1:featured', { currentId: 'art1', state: 'connected' })
 		relations.addToHasMany('Author:a1:articles', 'articles', 'art1')
 
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set(['Author:a1']))
@@ -72,14 +72,14 @@ describe('RelationStore edge index integration', () => {
 		relations.removeFromHasMany('Author:a1:articles', 'art1', 'disconnect')
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set(['Author:a1'])) // has-one still holds
 
-		relations.setRelation('Author:a1:featured', { currentId: null, state: 'disconnected' }, undefined, 'featured')
+		relations.setRelation('Author:a1:featured', { currentId: null, state: 'disconnected' })
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set())
 	})
 
 	test('replaceEntityId migrates the child id in both directions', () => {
 		const relations = new RelationStore()
 		relations.addToHasMany('Author:a1:articles', 'articles', 'old1')
-		relations.setRelation('Author:a1:featured', { currentId: 'old1', state: 'connected' }, undefined, 'featured')
+		relations.setRelation('Author:a1:featured', { currentId: 'old1', state: 'connected' })
 
 		expect(relations.getParentKeysForChild('old1')).toEqual(new Set(['Author:a1']))
 		expect(relations.getLiveChildIds('Author:a1:')).toContain('old1')
@@ -96,7 +96,7 @@ describe('RelationStore edge index integration', () => {
 	test('rekeyOwner migrates the parent key in both directions', () => {
 		const relations = new RelationStore()
 		relations.addToHasMany('Author:a1:articles', 'articles', 'art1')
-		relations.setRelation('Author:a1:featured', { currentId: 'art2', state: 'connected' }, undefined, 'featured')
+		relations.setRelation('Author:a1:featured', { currentId: 'art2', state: 'connected' })
 
 		relations.rekeyOwner('Author:a1:', 'Author:p1:')
 
@@ -109,7 +109,7 @@ describe('RelationStore edge index integration', () => {
 	test('removeOwnedRelations drops all of an owner edges', () => {
 		const relations = new RelationStore()
 		relations.addToHasMany('Author:a1:articles', 'articles', 'art1')
-		relations.setRelation('Author:a1:featured', { currentId: 'art2', state: 'connected' }, undefined, 'featured')
+		relations.setRelation('Author:a1:featured', { currentId: 'art2', state: 'connected' })
 
 		relations.removeOwnedRelations('Author:a1:')
 

@@ -22,7 +22,7 @@ import { generateTempId } from './entityId.js'
 import { DirtyTracker } from './DirtyTracker.js'
 import { EntitySnapshotStore } from './EntitySnapshotStore.js'
 import { RootRegistry } from './RootRegistry.js'
-import { ResponseOccurrenceIndex, type RelationTargetResolver } from './ResponseOccurrenceIndex.js'
+import { normalizeServerRead, type ServerReadOptions, type ServerReadSchema } from './serverRead.js'
 import { ReachabilityAnalyzer } from './ReachabilityAnalyzer.js'
 import { RekeyOrchestrator } from './RekeyOrchestrator.js'
 import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
@@ -86,15 +86,8 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	private readonly dirtyTracker: DirtyTracker
 	private readonly rekeyOrchestrator: RekeyOrchestrator
 
-	/**
-	 * Tracks the last embedded data reference propagated from parent to child.
-	 * Used to detect whether the parent was re-fetched (new reference) vs. stale
-	 * embedded data that should not overwrite committed child state.
-	 * Keyed by "parentType:parentId:fieldName".
-	 */
-	private readonly lastPropagatedData = new Map<string, unknown>()
-
-	private readonly responseOccurrences = new ResponseOccurrenceIndex()
+	/** The `totalCount` the last read of a has-many view carried, keyed by {@link hasManyViewKey}. */
+	private readonly hasManyTotalCounts = new Map<string, number>()
 
 	/**
 	 * Optional write-journal. When set (by an attached UndoManager), mutating
@@ -111,8 +104,8 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		// a separate parent-child registry.
 		this.subscriptions.setParentKeyLookup(this.relations)
 		// The participants are visited in this exact order on every rekey — see the
-		// ordering contract in RekeyOrchestrator.rekey(). Propagation tracking lives
-		// on this store, so it joins as a small inline adapter.
+		// ordering contract in RekeyOrchestrator.rekey(). The has-many total counts live
+		// on this store, so they join as a small inline adapter.
 		this.rekeyOrchestrator = new RekeyOrchestrator([
 			this.roots,
 			this.entitySnapshots,
@@ -121,7 +114,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 			this.relations,
 			this.errors,
 			this.touched,
-			{ rekey: ctx => this.rekeyPropagatedData(ctx.oldKeyPrefix, ctx.newKeyPrefix) },
+			{ rekey: ctx => this.rekeyHasManyTotalCounts(ctx.oldKeyPrefix, ctx.newKeyPrefix) },
 		])
 	}
 
@@ -242,46 +235,24 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		}
 	}
 
-	// ==================== Embedded Data Propagation Tracking ====================
+	// ==================== Has-Many Total Counts ====================
 
-	/**
-	 * Returns true if the embedded data reference differs from what was last propagated.
-	 * Uses reference identity — a new reference means the parent was re-fetched.
-	 */
-	hasEmbeddedDataChanged(parentType: string, parentId: string, fieldName: string, currentData: unknown): boolean {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
-		return this.lastPropagatedData.get(key) !== currentData
+	/** The `totalCount` the last server read of this has-many view carried, if it asked for one. */
+	getHasManyTotalCount(parentType: string, parentId: string, fieldName: string, alias?: string): number | undefined {
+		return this.hasManyTotalCounts.get(hasManyViewKey(this.getRelationKey(parentType, parentId, fieldName), alias ?? fieldName))
 	}
 
-	/**
-	 * Records the embedded data reference that was propagated to the child.
-	 */
-	markEmbeddedDataPropagated(parentType: string, parentId: string, fieldName: string, data: unknown): void {
-		const key = this.getRelationKey(parentType, parentId, fieldName)
-		this.lastPropagatedData.set(key, data)
-	}
-
-	/**
-	 * Removes all propagation tracking entries for a given parent entity.
-	 */
-	clearPropagatedDataForEntity(parentType: string, parentId: string): void {
-		const prefix = `${parentType}:${this.resolveEntityId(parentType, parentId)}:`
-		for (const key of this.lastPropagatedData.keys()) {
-			if (key.startsWith(prefix)) {
-				this.lastPropagatedData.delete(key)
-			}
+	private removeHasManyTotalCounts(keyPrefix: string): void {
+		for (const key of this.hasManyTotalCounts.keys()) {
+			if (key.startsWith(keyPrefix)) this.hasManyTotalCounts.delete(key)
 		}
 	}
 
-	/**
-	 * Rekeys propagation tracking entries when a temp ID is replaced by a persisted ID.
-	 */
-	private rekeyPropagatedData(oldPrefix: string, newPrefix: string): void {
-		for (const [key, value] of this.lastPropagatedData) {
-			if (key.startsWith(oldPrefix)) {
-				this.lastPropagatedData.delete(key)
-				this.lastPropagatedData.set(newPrefix + key.slice(oldPrefix.length), value)
-			}
+	private rekeyHasManyTotalCounts(oldPrefix: string, newPrefix: string): void {
+		for (const [key, value] of [...this.hasManyTotalCounts]) {
+			if (!key.startsWith(oldPrefix)) continue
+			this.hasManyTotalCounts.delete(key)
+			this.hasManyTotalCounts.set(newPrefix + key.slice(oldPrefix.length), value)
 		}
 	}
 
@@ -302,7 +273,6 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		id: string,
 		data: T,
 		isServerData: boolean = false,
-		skipNotify: boolean = false,
 	): EntitySnapshot<T> {
 		const key = this.getEntityKey(entityType, id)
 		// Server loads are not user gestures; only journal local data sets (incl. the
@@ -315,28 +285,49 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 			this.meta.setExistsOnServer(key, true)
 		}
 
-		if (!skipNotify) {
-			this.notifyEntitySubscribers(key)
-		}
+		this.notifyEntitySubscribers(key)
 
 		return newSnapshot as EntitySnapshot<T>
 	}
 
 	/**
-	 * Unites the occurrences of each entity within one server response, so the
-	 * narrower of two occurrences cannot replace fields the wider one carried.
-	 * Call it before any of the response is written. See {@link ResponseOccurrenceIndex}.
+	 * Writes a server read: each entity's own columns into its snapshot, each
+	 * relation only as a reference in the relation store (issue #170). Two reads of
+	 * one entity therefore merge field by field, whichever sub-selection each had.
+	 * Local dirty edits survive, as in {@link refreshServerData}.
+	 *
+	 * Relation edges are written before any snapshot: a snapshot write walks its
+	 * parents through the edges, and that walk is shared by the batch only while
+	 * the edges do not change, so interleaving them makes a large read quadratic.
 	 */
-	indexServerResponse(entityType: string, data: unknown, selection: SelectionMeta, schema: RelationTargetResolver): void {
-		this.responseOccurrences.index(entityType, data, selection, schema)
-	}
-
-	/**
-	 * What to write for an entity occurrence of a server response: the union of
-	 * its occurrences in that response, or the occurrence itself.
-	 */
-	resolveServerOccurrence(occurrence: Record<string, unknown>): Record<string, unknown> {
-		return this.responseOccurrences.resolve(occurrence)
+	writeServerRead(
+		entityType: string,
+		data: Record<string, unknown> | readonly Record<string, unknown>[],
+		schema: ServerReadSchema,
+		options?: ServerReadOptions,
+	): void {
+		const read = normalizeServerRead(entityType, data, schema, options)
+		this.batchNotifications(() => {
+			for (const relation of read.hasOne) {
+				const key = this.getRelationKey(relation.parentType, relation.parentId, relation.fieldName)
+				this.relations.refreshServerRelation(key, relation.targetId)
+				this.notifyRelationSubscribers(key)
+			}
+			for (const relation of read.hasMany) {
+				if (relation.membership !== undefined) {
+					this.relations.declareHasManyViewMembership(relation.parentType, relation.fieldName, relation.alias, relation.membership)
+				}
+				const key = this.getRelationKey(relation.parentType, relation.parentId, relation.fieldName)
+				this.relations.getOrCreateHasMany(key, relation.alias, [...relation.ids])
+				const viewKey = hasManyViewKey(key, relation.alias)
+				if (relation.totalCount === undefined) this.hasManyTotalCounts.delete(viewKey)
+				else this.hasManyTotalCounts.set(viewKey, relation.totalCount)
+				this.notifyRelationSubscribers(key)
+			}
+			for (const entity of read.entities) {
+				this.refreshServerData(entity.entityType, entity.id, entity.columns)
+			}
+		})
 	}
 
 	/**
@@ -347,14 +338,11 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		entityType: string,
 		id: string,
 		data: T,
-		skipNotify: boolean = false,
 	): EntitySnapshot<T> {
 		const key = this.getEntityKey(entityType, id)
 		const newSnapshot = this.entitySnapshots.refreshServerData(key, this.resolveEntityId(entityType, id), entityType, data)
 		this.meta.setExistsOnServer(key, true)
-		if (!skipNotify) {
-			this.notifyEntitySubscribers(key)
-		}
+		this.notifyEntitySubscribers(key)
 		return newSnapshot as EntitySnapshot<T>
 	}
 
@@ -420,7 +408,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		this.roots.unregister(key)
 		this.errors.clearAllErrors(key, keyPrefix)
 		this.touched.clearForEntity(keyPrefix)
-		this.clearPropagatedDataForEntity(entityType, id)
+		this.removeHasManyTotalCounts(keyPrefix)
 		this.relations.removeOwnedRelations(keyPrefix)
 
 		this.notifyEntitySubscribers(key)
@@ -1035,19 +1023,11 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		parentId: string,
 		fieldName: string,
 		updates: Partial<Omit<StoredRelationState, 'version'>>,
-		skipNotify: boolean = false,
 	): void {
 		const key = this.getRelationKey(parentType, parentId, fieldName)
 		this.journal?.recordRelation(key)
-		const entityKey = this.getEntityKey(parentType, parentId)
-		const entitySnapshot = this.entitySnapshots.get(entityKey)
-		this.relations.setRelation(key, updates, entitySnapshot, fieldName)
-		// skipNotify is for writes that happen during a render-phase read (e.g.
-		// HasOneHandle materialization) where the change that triggered them already
-		// notified subscribers — notifying again would call subscribers mid-render.
-		if (!skipNotify) {
-			this.notifyRelationSubscribers(key)
-		}
+		this.relations.setRelation(key, updates)
+		this.notifyRelationSubscribers(key)
 	}
 
 	commitRelation(parentType: string, parentId: string, fieldName: string): void {
@@ -1411,7 +1391,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 	 * Deliberately NOT derived from {@link getVersion} (the notification version):
 	 * several writes change dirtiness without notifying — `createEntity` registers
 	 * its root after its last notify, `registerParentChild` un-registers one,
-	 * `commit/resetAllRelations` never notify, and `refreshServerData` can skip it —
+	 * and `commit/resetAllRelations` never notify —
 	 * so a notification-keyed memo would serve a stale result. Counters bump inside
 	 * the write itself and cannot be bypassed that way.
 	 *
@@ -1489,7 +1469,7 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		this.touched.clear()
 		this.roots.clear()
 		this.rekeyOrchestrator.clear()
-		this.lastPropagatedData.clear()
+		this.hasManyTotalCounts.clear()
 		// Undo history describes the now-wiped world; drop it with the store.
 		this.journal?.clear()
 
@@ -1516,4 +1496,9 @@ function entityKeyOfRelationKey(key: string): string {
 	const first = key.indexOf(':')
 	const second = key.indexOf(':', first + 1)
 	return second === -1 ? key : key.slice(0, second)
+}
+
+/** A has-many view's key: the relation key and the alias the view was read under. */
+function hasManyViewKey(relationKey: string, alias: string): string {
+	return `${relationKey}@${alias}`
 }

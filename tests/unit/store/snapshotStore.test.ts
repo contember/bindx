@@ -693,8 +693,8 @@ describe('SnapshotStore', () => {
 				expect(state?.state).toBe('connected')
 			})
 
-			test('should initialize relation if not exists', () => {
-				store.setEntityData('Article', 'a-1', { id: 'a-1', author: { id: 'auth-1' } }, true)
+			test('should initialize a relation never read without a server baseline', () => {
+				store.setEntityData('Article', 'a-1', { id: 'a-1' }, true)
 				store.setRelation('Article', 'a-1', 'author', {
 					currentId: 'auth-2',
 					state: 'connected',
@@ -702,7 +702,8 @@ describe('SnapshotStore', () => {
 
 				const state = store.getRelation('Article', 'a-1', 'author')
 				expect(state?.currentId).toBe('auth-2')
-				expect(state?.serverId).toBe('auth-1')
+				expect(state?.serverId).toBeNull()
+				expect(state?.serverState).toBe('disconnected')
 			})
 
 			test('returned relation state mutations do not bypass the store write path', () => {

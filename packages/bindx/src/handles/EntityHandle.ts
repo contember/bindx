@@ -27,6 +27,7 @@ import type {
 import { HasOneHandle } from './HasOneHandle.js'
 import { HasManyListHandle } from './HasManyListHandle.js'
 import { createHandleProxy } from './proxyFactory.js'
+import { assembleEntityData } from './assembleEntityData.js'
 import type { SelectionMeta, SelectionFieldMeta } from '../selection/types.js'
 import { UnfetchedFieldError } from '../errors/UnfetchedFieldError.js'
 
@@ -69,6 +70,9 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 
 	/** Cache for relation handles */
 	private readonly relationHandleCache = new Map<string, CachedRelationHandle>()
+
+	private assembledData: Record<string, unknown> | null | undefined = undefined
+	private assembledDataVersion = -1
 
 	/** Runtime brand symbols for validation */
 	readonly __brands?: Set<symbol>
@@ -165,8 +169,17 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	 * dirty underneath.
 	 */
 	get data(): TSelected | null {
-		const snapshot = this.store.getPresentationSnapshot<T>(this.entityType, this.entityId)
-		return (snapshot?.data ?? null) as TSelected | null
+		if (!this.selection) {
+			const snapshot = this.store.getPresentationSnapshot<T>(this.entityType, this.entityId)
+			return (snapshot?.data ?? null) as TSelected | null
+		}
+		// Assembled per store version, so the value keeps its identity until something changes.
+		const version = this.store.getVersion()
+		if (this.assembledData === undefined || this.assembledDataVersion !== version) {
+			this.assembledData = assembleEntityData(this.store, this.schema, this.entityType, this.entityId, this.selection)
+			this.assembledDataVersion = version
+		}
+		return this.assembledData as TSelected | null
 	}
 
 	/**
@@ -304,8 +317,9 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 	/**
 	 * Gets a has-one relation handle.
 	 */
-	hasOne<TRelated extends object>(fieldName: string, nestedSelection?: SelectionMeta, dataFieldName = fieldName): HasOneAccessor<TRelated> {
-		const cacheKey = `hasOne:${dataFieldName}`
+	hasOne<TRelated extends object>(fieldName: string, nestedSelection?: SelectionMeta, alias = fieldName): HasOneAccessor<TRelated> {
+		// Each alias selects its own sub-selection of the one relation, so each gets its own handle.
+		const cacheKey = `hasOne:${alias}`
 		const cached = this.relationHandleCache.get(cacheKey)
 
 		if (cached) {
@@ -329,7 +343,6 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			this.schema,
 			undefined,
 			nestedSelection,
-			dataFieldName,
 			[...this.entityPath, fieldName],
 		)
 		const proxy = HasOneHandle.wrapProxy(raw)
@@ -405,7 +418,6 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			this.store,
 			this.dispatcher,
 			this.schema,
-			undefined,
 			undefined,
 			undefined,
 			[...this.entityPath, fieldName],

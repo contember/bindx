@@ -70,7 +70,7 @@ describe('HasManyListHandle item handle cache', () => {
 
 	/** Simulates a fetch/refetch of the parent with a given page of tags. */
 	function loadTags(tags: TestTag[]): void {
-		store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test', tags }, true)
+		store.writeServerRead('Article', { id: 'a-1', title: 'Test', tags }, schema)
 	}
 
 	function itemIds(handle: HasManyListHandle<TestTag>): string[] {

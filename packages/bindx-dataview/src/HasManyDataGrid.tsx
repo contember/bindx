@@ -31,7 +31,6 @@ import { FIELD_REF_META } from '@contember/bindx'
 import {
 	buildQueryFromSelection,
 	EntityHandle,
-	refreshServerData,
 } from '@contember/bindx'
 import type { SchemaRegistry } from '@contember/bindx'
 import type { StateStorageOrName } from './stateStorage.js'
@@ -209,14 +208,9 @@ function HasManyDataGridImpl<TEntity extends object>({
 					return
 				}
 
-				store.indexServerResponse(targetEntityType, relation.rows, selection, schemaRegistry)
-				const items = relation.rows.map(data => ({ id: getRowId(targetEntityType, data), data: store.resolveServerOccurrence(data) }))
-				store.batchNotifications(() => {
-					for (const item of items) {
-						// Revalidation preserves local edits while advancing the server baseline.
-						dispatcher.dispatch(refreshServerData(targetEntityType, item.id, item.data))
-					}
-				})
+				const items = relation.rows.map(data => ({ id: getRowId(targetEntityType, data), data }))
+				// Revalidation preserves local edits while advancing the server baselines.
+				store.writeServerRead(targetEntityType, relation.rows, schemaRegistry, { spec: buildQueryFromSelection(selection) })
 
 				setListState({ status: 'ready', items, totalCount: relation.totalCount, scopeKey, optionsKey, requestKey })
 			} catch (error) {
@@ -230,7 +224,7 @@ function HasManyDataGridImpl<TEntity extends object>({
 		return () => {
 			abortController.abort()
 		}
-	}, [parentEntityType, parentEntityId, fieldName, targetEntityType, scopeKey, optionsKey, requestKey, batcher, dispatcher, store, schemaRegistry])
+	}, [parentEntityType, parentEntityId, fieldName, targetEntityType, scopeKey, optionsKey, requestKey, batcher, store, schemaRegistry])
 
 	// Rows loaded for another relation (a different parent) are never shown, not even as stale.
 	const shownState = listState.scopeKey === scopeKey ? listState : INITIAL_LIST_STATE

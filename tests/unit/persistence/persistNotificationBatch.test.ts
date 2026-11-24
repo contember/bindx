@@ -44,7 +44,7 @@ test('a persist notifies independently of how many entities it saves', async () 
 test('loadMany notifies once for the whole list', async () => {
 	const rows = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`a${i}`, { id: `a${i}`, title: `Row ${i}` }]))
 	const store = new SnapshotStore()
-	const loader = createEntityLoader(new MockAdapter({ Article: rows }, { delay: 0 }), store)
+	const loader = createEntityLoader(new MockAdapter({ Article: rows }, { delay: 0 }), store, { getRelationTarget: () => undefined, isHasMany: () => false })
 	let notifications = 0
 	store.subscribe(() => { notifications++ })
 	const result = await loader.loadMany({ entityType: 'Article', query: buildQuery<Article, Article>(e => e.id().title()) })

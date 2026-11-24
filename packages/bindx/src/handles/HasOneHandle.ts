@@ -1,7 +1,6 @@
-import { EntityRelatedHandle, embeddedDataMatchesSnapshot } from './BaseHandle.js'
+import { EntityRelatedHandle } from './BaseHandle.js'
 import type { ActionDispatcher } from '../core/ActionDispatcher.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
-import type { StoredRelationState } from '../store/RelationStore.js'
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 import type { SelectionMeta } from '../selection/types.js'
 import {
@@ -65,7 +64,6 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		private readonly schema: SchemaRegistry,
 		brands?: Set<symbol>,
 		private readonly selection?: SelectionMeta,
-		private readonly dataFieldName: string = fieldName,
 		// Segments from the query root down to this relation; also the entity path
 		// of whatever it resolves to. See FieldRefMeta.fullPath.
 		private readonly relationPath: readonly string[] = [fieldName],
@@ -84,10 +82,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		schema: SchemaRegistry,
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
-		dataFieldName?: string,
 		relationPath?: readonly string[],
 	): HasOneAccessor<TEntity, TSelected> {
-		return HasOneHandle.wrapProxy(new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection, dataFieldName, relationPath))
+		return HasOneHandle.wrapProxy(new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection, relationPath))
 	}
 
 	static createRaw<TEntity extends object = object, TSelected = TEntity>(
@@ -100,10 +97,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		schema: SchemaRegistry,
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
-		dataFieldName?: string,
 		relationPath?: readonly string[],
 	): HasOneHandle<TEntity, TSelected> {
-		return new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection, dataFieldName, relationPath)
+		return new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection, relationPath)
 	}
 
 	static wrapProxy<TEntity extends object, TSelected>(handle: HasOneHandle<TEntity, TSelected>): HasOneAccessor<TEntity, TSelected> {
@@ -150,13 +146,8 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		}
 	}
 
-	/**
-	 * Gets the relation state.
-	 * Materializes the RelationStore entry from embedded snapshot data first, so a
-	 * server-loaded has-one reports 'connected' without a prior explicit entry.
-	 */
+	/** Gets the relation state. A server read writes it on arrival; a relation never read is disconnected. */
 	get state(): HasOneRelationState {
-		this.ensureEntry()
 		const relation = this.store.getPresentationRelation(
 			this.entityType,
 			this.entityId,
@@ -165,128 +156,14 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		return relation?.state ?? 'disconnected'
 	}
 
-	/**
-	 * Gets the current related entity ID — read exclusively from the RelationStore
-	 * after materializing the entry from embedded snapshot data.
-	 */
+	/** Gets the current related entity ID from the relation store. */
 	get relatedId(): string | null {
-		this.ensureEntry()
 		const relation = this.store.getPresentationRelation(
 			this.entityType,
 			this.entityId,
 			this.fieldName,
 		)
 		return relation?.currentId ?? null
-	}
-
-	/**
-	 * Materializes this has-one's RelationStore entry from the parent's embedded
-	 * snapshot data, so the store is the single source of truth (symmetric with
-	 * {@link HasManyListHandle.materializeEmbeddedItems}).
-	 *
-	 * Only the relation entry is touched here — child-snapshot propagation stays in
-	 * {@link ensureRelatedEntitySnapshot}, which owns the per-relation propagation
-	 * slot so the two paths never double-consume it.
-	 *
-	 * - No entry yet + the parent embeds a related object with an id → create a
-	 *   `connected` entry (non-notifying) whose server baseline comes from the
-	 *   parent's serverData, so a freshly loaded relation is not dirty
-	 *   (currentId === serverId, state === serverState).
-	 * - Existing entry + parent re-fetch (embedded reference changed) that is NOT
-	 *   locally dirty → advance the server baseline to the new related id.
-	 * - A local connect/disconnect, a placeholder, or a `creating` entry is left
-	 *   untouched — it is detected as a locally-dirty relation.
-	 * - No embedded data and no entry → the relation stays unmaterialized (null).
-	 */
-	private ensureEntry(): void {
-		const existing = this.store.getRelation(this.entityType, this.entityId, this.fieldName)
-		const embeddedData = this.readEmbeddedRelatedData()
-		const embeddedReference = readEmbeddedRelatedReference(embeddedData)
-
-		if (!existing) {
-			if (embeddedReference.kind !== 'connected') return
-			const serverId = this.readServerRelatedId()
-			this.store.getOrCreateRelation(this.entityType, this.entityId, this.fieldName, {
-				currentId: embeddedReference.id,
-				serverId,
-				state: 'connected',
-				serverState: serverId !== null ? 'connected' : 'disconnected',
-				placeholderData: {},
-			})
-			return
-		}
-
-		this.advanceServerBaselineOnRefetch(existing, embeddedReference, embeddedData)
-	}
-
-	/**
-	 * On a parent re-fetch (embedded reference changed) advances the relation's
-	 * server baseline to the embedded related id, but only when the relation is
-	 * not locally dirty — a local connect/disconnect/create must survive a re-fetch.
-	 *
-	 * Does NOT consume the propagation slot — {@link ensureRelatedEntitySnapshot}
-	 * owns it. The same reference-change signal drives both, so both run within the
-	 * one render that observes a new parent reference.
-	 *
-	 * The baseline write is NON-NOTIFYING: it runs during a render-phase read, and
-	 * the parent re-fetch that produced the new embedded reference already notified
-	 * subscribers. Notifying again here would mutate the store and synchronously call
-	 * subscribers mid-render, violating the external-store contract (cf.
-	 * {@link ensureRelatedEntitySnapshot}, which refreshes server data with skipNotify
-	 * for the same reason).
-	 */
-	private advanceServerBaselineOnRefetch(
-		existing: StoredRelationState,
-		embeddedReference: EmbeddedRelatedReference,
-		embeddedData: unknown,
-	): void {
-		if (embeddedReference.kind === 'absent') return
-		if (this.isLocallyDirty(existing)) return
-
-		if (embeddedReference.kind === 'null' && existing.serverId === null && existing.serverState === 'disconnected') {
-			return
-		}
-		if (embeddedReference.kind === 'connected' && existing.serverId === embeddedReference.id && existing.serverState === 'connected') {
-			return
-		}
-		if (!this.store.hasEmbeddedDataChanged(this.entityType, this.entityId, this.dataFieldName, embeddedData)) {
-			return
-		}
-
-		if (embeddedReference.kind === 'null') {
-			this.store.setRelation(this.entityType, this.entityId, this.fieldName, {
-				currentId: null,
-				serverId: null,
-				state: 'disconnected',
-				serverState: 'disconnected',
-			}, true)
-			return
-		}
-
-		this.store.setRelation(this.entityType, this.entityId, this.fieldName, {
-			currentId: embeddedReference.id,
-			serverId: embeddedReference.id,
-			state: 'connected',
-			serverState: 'connected',
-		}, true)
-	}
-
-	private isLocallyDirty(relation: StoredRelationState): boolean {
-		return (
-			relation.currentId !== relation.serverId ||
-			relation.state !== relation.serverState ||
-			Object.keys(relation.placeholderData).length > 0
-		)
-	}
-
-	/** Reads the embedded related object from the parent's canonical current data. */
-	private readEmbeddedRelatedData(): unknown {
-		return this.getEntityData()?.[this.dataFieldName]
-	}
-
-	/** Extracts the related id from the parent's embedded server data, or null. */
-	private readServerRelatedId(): string | null {
-		return extractRelatedId(this.getServerData()?.[this.dataFieldName])
 	}
 
 	/**
@@ -316,8 +193,6 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		const id = this.relatedId
 
 		if (id) {
-			this.ensureRelatedEntitySnapshot(id)
-
 			if (!this.entityHandleCacheRaw || this.entityHandleCacheRaw.id !== id) {
 				this.entityHandleCacheRaw = EntityHandle.createRaw<TEntity, TSelected>(
 					id,
@@ -360,10 +235,6 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		const id = this.relatedId
 
 		if (id) {
-			// Ensure the related entity has a snapshot in the store
-			// (it may be embedded in the parent entity's data)
-			this.ensureRelatedEntitySnapshot(id)
-
 			// Connected - return real entity handle (populate raw cache via entityRaw if needed)
 			if (!this.entityHandleCacheRaw || this.entityHandleCacheRaw.id !== id) {
 				// entityRaw populates both raw and proxy caches
@@ -378,69 +249,6 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 			this.entityRaw
 		}
 		return this.placeholderCacheProxy!
-	}
-
-	/**
-	 * Ensures the related entity has a snapshot in the store.
-	 * If the related entity is embedded in the parent's data (not yet normalized),
-	 * creates a snapshot from the embedded data.
-	 */
-	private ensureRelatedEntitySnapshot(id: string): void {
-		// Register parent-child relationship for change propagation
-		// This needs to happen even if the snapshot already exists
-		this.store.registerParentChild(this.entityType, this.entityId, this.targetType, id)
-
-		// Get embedded data from parent entity
-		const parentSnapshot = this.store.getEntitySnapshot(this.entityType, this.entityId)
-		if (!parentSnapshot?.data) {
-			return
-		}
-
-		const embeddedData = (parentSnapshot.data as Record<string, unknown>)[this.dataFieldName]
-		if (!embeddedData || typeof embeddedData !== 'object') {
-			return
-		}
-
-		// Only use embedded data if its ID matches the expected related entity ID.
-		// After $connect changes the relation to a different entity, the parent's embedded
-		// data still contains the OLD related entity — using it would store stale data
-		// under the new entity's key.
-		const embeddedId = (embeddedData as Record<string, unknown>)['id']
-		if (embeddedId !== id) {
-			return
-		}
-
-		// Skip if parent's embedded data reference hasn't changed since last propagation.
-		// A new reference means the parent was re-fetched from the server.
-		// Same reference means the embedded data is stale and must not overwrite
-		// child state that may have been updated by a local commit.
-		if (!this.store.hasEmbeddedDataChanged(this.entityType, this.entityId, this.dataFieldName, embeddedData)) {
-			return
-		}
-
-		const occurrence = this.store.resolveServerOccurrence(embeddedData as Record<string, unknown>)
-
-		// Skip if embedded data values match existing serverData — avoids overwriting
-		// unpersisted local mutations when a re-fetch returns the same server data
-		// (e.g. polling). A new reference with identical values means no actual change.
-		const existing = this.store.getEntitySnapshot(this.targetType, id)
-		if (existing?.serverData && embeddedDataMatchesSnapshot(occurrence, existing.serverData as Record<string, unknown>)) {
-			this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, this.dataFieldName, embeddedData)
-			return
-		}
-
-		// Create or update snapshot from embedded data.
-		// Use refreshServerData (not setEntityData) so a re-fetch advances the
-		// child's server baseline without clobbering the user's local dirty edits
-		// on the related entity. Skip notification to avoid triggering React state
-		// updates during render.
-		this.store.refreshServerData(
-			this.targetType,
-			id,
-			occurrence,
-			true, // skipNotify - called during render, data already exists embedded in parent
-		)
-		this.store.markEmbeddedDataPropagated(this.entityType, this.entityId, this.dataFieldName, embeddedData)
 	}
 
 	/**
@@ -463,7 +271,6 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 	 * Checks if the relation is dirty.
 	 */
 	get isDirty(): boolean {
-		this.ensureEntry()
 		const relation = this.store.getRelation(
 			this.entityType,
 			this.entityId,
@@ -471,7 +278,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		)
 		if (!relation) return false
 
-		return this.isLocallyDirty(relation)
+		return relation.currentId !== relation.serverId
+			|| relation.state !== relation.serverState
+			|| Object.keys(relation.placeholderData).length > 0
 	}
 
 	/**
@@ -683,29 +492,4 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		return this.entityRaw.interceptPersisting(interceptor)
 	}
 
-}
-
-type EmbeddedRelatedReference =
-	| { kind: 'absent' }
-	| { kind: 'null' }
-	| { kind: 'connected'; id: string }
-
-/**
- * Reads an embedded has-one value while preserving explicit null.
- */
-function readEmbeddedRelatedReference(embedded: unknown): EmbeddedRelatedReference {
-	if (embedded === undefined) return { kind: 'absent' }
-	if (embedded === null) return { kind: 'null' }
-	if (typeof embedded !== 'object' || !('id' in embedded)) return { kind: 'absent' }
-	const id = embedded.id
-	return typeof id === 'string' ? { kind: 'connected', id } : { kind: 'absent' }
-}
-
-/**
- * Extracts the related entity id from an embedded has-one object, or null when
- * the value is not an object with a string id.
- */
-function extractRelatedId(embedded: unknown): string | null {
-	const reference = readEmbeddedRelatedReference(embedded)
-	return reference.kind === 'connected' ? reference.id : null
 }

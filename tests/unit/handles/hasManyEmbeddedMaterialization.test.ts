@@ -58,16 +58,15 @@ describe('has-many with embedded parent data, never iterated', () => {
 		store = new SnapshotStore()
 		const dispatcher = new ActionDispatcher(store)
 
-		// Embedded shape: the list arrives inside the parent's snapshot and nothing calls
-		// getOrCreateHasMany — exactly what a query with a nested selection produces.
-		store.setEntityData('Article', 'article-1', {
+		// The list arrives with the parent's read, and nothing reads `items` before the mutations.
+		const schema = new SchemaRegistry(testSchemaDefinition)
+		store.writeServerRead('Article', {
 			id: 'article-1',
 			title: 'T',
 			tags: [{ id: 'tag-1', name: 'A' }, { id: 'tag-2', name: 'B' }],
-		}, true)
+		}, schema, { rootId: 'article-1' })
 		store.setExistsOnServer('Article', 'article-1', true)
 
-		const schema = new SchemaRegistry(testSchemaDefinition)
 		const article = EntityHandle.create<TestArticle>(
 			'article-1',
 			'Article',

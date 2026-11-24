@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react'
 import type { EntityDef, EntityAccessor, SelectionInput, SelectionMeta, FieldError, SchemaRegistry, CommonEntity, EntityForRoles, RoleNames } from '@contember/bindx'
-import { EntityHandle, isTempId, resolveSelectionMeta, buildQueryFromSelection, refreshServerData, createLoadError } from '@contember/bindx'
+import { EntityHandle, isTempId, resolveSelectionMeta, buildQueryFromSelection, createLoadError } from '@contember/bindx'
 import { useBindxContext, useSchemaRegistry } from './BackendAdapterContext.js'
 import { useStoreSubscription } from './useStoreSubscription.js'
 import { ItemAccessorCache } from './ItemAccessorCache.js'
@@ -473,13 +473,10 @@ export function useEntityList(
 					throw new Error('Unexpected query result type')
 				}
 
-				store.indexServerResponse(entityType, result.data, selectionMeta, schemaRegistry)
-				const items = result.data.map(data => ({ id: getRowId(entityType, data), data: store.resolveServerOccurrence(data) }))
+				const items = result.data.map(data => ({ id: getRowId(entityType, data), data }))
 				store.batchNotifications(() => {
-					for (const item of items) {
-						// Revalidation preserves local edits while advancing the server baseline.
-						dispatcher.dispatch(refreshServerData(entityType, item.id, item.data))
-					}
+					// Revalidation preserves local edits while advancing the server baselines.
+					store.writeServerRead(entityType, result.data, schemaRegistry, { spec })
 					listStateRef.current = { status: 'ready', items, isRefetching: false, requestKey }
 					versionRef.current++
 					store.notify()

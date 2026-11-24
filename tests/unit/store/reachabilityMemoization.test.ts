@@ -129,7 +129,7 @@ describe('reachability memoization', () => {
 		expect(sortedKeys(h.analyzer.computeReachableCreated())).toEqual([])
 		const calls = h.walkCount()
 
-		h.relations.setRelation('Article:a1:author', { currentId: 'au1', state: 'connected' }, undefined, 'author')
+		h.relations.setRelation('Article:a1:author', { currentId: 'au1', state: 'connected' })
 
 		const result = h.analyzer.computeReachableCreated()
 		expect(h.walkCount()).toBeGreaterThan(calls) // recomputed, not served stale
@@ -141,11 +141,11 @@ describe('reachability memoization', () => {
 		h.entitySnapshots.setData('Article:a1', 'a1', 'Article', { id: 'a1' }, true)
 		h.meta.setExistsOnServer('Article:a1', true)
 		h.entitySnapshots.setData('Author:au1', 'au1', 'Author', { id: 'au1' }, false)
-		h.relations.setRelation('Article:a1:author', { currentId: 'au1', state: 'connected' }, undefined, 'author')
+		h.relations.setRelation('Article:a1:author', { currentId: 'au1', state: 'connected' })
 		expect(sortedKeys(h.analyzer.computeReachableCreated())).toEqual(['Author:au1'])
 		const calls = h.walkCount()
 
-		h.relations.setRelation('Article:a1:author', { currentId: null, state: 'disconnected' }, undefined, 'author')
+		h.relations.setRelation('Article:a1:author', { currentId: null, state: 'disconnected' })
 
 		const result = h.analyzer.computeReachableCreated()
 		expect(h.walkCount()).toBeGreaterThan(calls)
@@ -156,7 +156,7 @@ describe('reachability memoization', () => {
 		const relations = new RelationStore()
 		const v0 = relations.getMutationVersion()
 
-		relations.setRelation('Article:a1:author', { currentId: 'au1', state: 'connected' }, undefined, 'author')
+		relations.setRelation('Article:a1:author', { currentId: 'au1', state: 'connected' })
 		const v1 = relations.getMutationVersion()
 		expect(v1).toBeGreaterThan(v0) // has-one write counted
 

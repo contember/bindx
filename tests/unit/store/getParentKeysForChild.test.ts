@@ -18,19 +18,13 @@ describe('RelationStore.getParentKeysForChild', () => {
 
 		relations.setRelation(
 			'Author:a1:featured',
-			{ currentId: 'art1', state: 'connected' },
-			undefined,
-			'featured',
-		)
+			{ currentId: 'art1', state: 'connected' })
 
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set(['Author:a1']))
 
 		relations.setRelation(
 			'Author:a1:featured',
-			{ currentId: null, state: 'disconnected' },
-			undefined,
-			'featured',
-		)
+			{ currentId: null, state: 'disconnected' })
 
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set())
 	})
@@ -40,10 +34,7 @@ describe('RelationStore.getParentKeysForChild', () => {
 
 		relations.setRelation(
 			'Author:a1:featured',
-			{ currentId: 'art1', state: 'deleted' },
-			undefined,
-			'featured',
-		)
+			{ currentId: 'art1', state: 'deleted' })
 
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set())
 	})
@@ -73,10 +64,7 @@ describe('RelationStore.getParentKeysForChild', () => {
 
 		relations.setRelation(
 			'Author:a1:featured',
-			{ currentId: 'art1', state: 'connected' },
-			undefined,
-			'featured',
-		)
+			{ currentId: 'art1', state: 'connected' })
 		relations.addToHasMany('Tag:t1:articles', 'articles', 'art1')
 
 		expect(relations.getParentKeysForChild('art1')).toEqual(new Set(['Author:a1', 'Tag:t1']))
@@ -92,7 +80,7 @@ describe('RelationStore.getParentKeysForChild', () => {
 		// contract: making the lookup type-aware in isolation would change this and
 		// must be a deliberate decision (it would also have to move in lockstep with
 		// the forward reachability walk, which matches on the same bare ids).
-		relations.setRelation('Author:a1:featured', { currentId: 'shared', state: 'connected' }, undefined, 'featured')
+		relations.setRelation('Author:a1:featured', { currentId: 'shared', state: 'connected' })
 		relations.addToHasMany('Tag:t1:articles', 'articles', 'shared')
 
 		expect(relations.getParentKeysForChild('shared')).toEqual(new Set(['Author:a1', 'Tag:t1']))
@@ -120,13 +108,13 @@ describe('RelationStore.getParentKeysForChild', () => {
 
 			switch (rand(7)) {
 				case 0:
-					relations.setRelation(hasOneKey, { currentId: child, state: 'connected' }, undefined, 'featured')
+					relations.setRelation(hasOneKey, { currentId: child, state: 'connected' })
 					break
 				case 1:
-					relations.setRelation(hasOneKey, { currentId: null, state: 'disconnected' }, undefined, 'featured')
+					relations.setRelation(hasOneKey, { currentId: null, state: 'disconnected' })
 					break
 				case 2:
-					relations.setRelation(hasOneKey, { currentId: child, state: 'deleted' }, undefined, 'featured')
+					relations.setRelation(hasOneKey, { currentId: child, state: 'deleted' })
 					break
 				case 3:
 					relations.addToHasMany(hasManyKey, 'articles', child)

@@ -287,18 +287,10 @@ describe('A: value-sync / data-flow', () => {
 	//   references.getById(referenceId)
 	// (packages/bindx-editor/src/internal/hooks/useBlockEditorReferences.ts:51-53).
 	//
-	// But embedded child snapshots are only materialised into the store as a
-	// SIDE EFFECT of reading HasManyListHandle.items (it calls ensureItemSnapshots
-	// -> store.refreshServerData, packages/bindx/src/handles/HasManyListHandle.ts:132-156).
-	// getById() / getItemHandle() (lines 259-287) does NOT materialise anything.
-	//
-	// Consequently, when getById is used without anyone ever touching .items
-	// (exactly the editor's situation), the referenced entity's fields read null.
-	//
-	// This test asserts the CORRECT behaviour: getById must return a populated
-	// accessor on its own. It FAILS on current code, proving the bug. The second
-	// expectation documents that touching .items first "fixes" it, pinpointing the
-	// missing materialisation in getById.
+	// Related entities once reached the store only as a side effect of reading
+	// HasManyListHandle.items, so getById() alone read null fields. A read is now
+	// written on arrival, so getById must return a populated accessor on its own,
+	// before and after .items is touched.
 	// ---------------------------------------------------------------------------
 	test('getById alone must return populated referenced entity (root cause)', async () => {
 		const adapter = new MockAdapter(makeMockData(), { delay: 0 })

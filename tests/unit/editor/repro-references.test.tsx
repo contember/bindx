@@ -268,11 +268,8 @@ describe('Block editor references (S1 / GENERAL)', () => {
 		expect(quoteAuthor?.textContent).toBe('Shakespeare')
 	})
 
-	// Root-cause proof: HasManyListHandle.getById() (used by getReferencedEntity)
-	// creates an item EntityHandle WITHOUT propagating the parent's embedded list
-	// data into the child snapshot. Only the `items` getter runs
-	// ensureItemSnapshots(). So getById() before any `.items` access returns an
-	// empty entity, but reading `.items` first populates the store and then it works.
+	// HasManyListHandle.getById() (used by getReferencedEntity) must resolve the
+	// referenced entity before any `.items` access: the read is in the store on arrival.
 	test('ROOT CAUSE: getById resolves empty until .items is read', async () => {
 		const adapter = new MockAdapter(createStore(), { delay: 0 })
 

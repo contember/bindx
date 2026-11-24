@@ -152,14 +152,14 @@ describe('HasMany with Alias Support', () => {
 		const inactiveAlias = generateHasManyAlias('tags', { filter: { active: false } })
 
 		beforeEach(() => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [
 					{ id: 't-1', name: 'Tag 1', active: true },
 					{ id: 't-2', name: 'Tag 2', active: false },
 				],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 		})
 
 		test('each view keeps the server rows its own args returned', () => {
@@ -397,11 +397,11 @@ describe('HasMany with Alias Support', () => {
 
 	describe('HasManyListHandle with Alias', () => {
 		test('a connection made through a view is a pending write of the relation', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const alias = generateHasManyAlias('tags', { filter: { active: true } })
 			const handle = createHasManyHandle(alias)
@@ -416,11 +416,11 @@ describe('HasMany with Alias Support', () => {
 		})
 
 		test('should add new items under the correct alias', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const alias = generateHasManyAlias('tags', { limit: 5 })
 			const handle = createHasManyHandle(alias)
@@ -432,11 +432,11 @@ describe('HasMany with Alias Support', () => {
 		})
 
 		test('should remove items through the relation', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const alias = generateHasManyAlias('tags', { filter: { active: true } })
 			const handle = createHasManyHandle(alias)
@@ -449,11 +449,11 @@ describe('HasMany with Alias Support', () => {
 		})
 
 		test('a view reports the relation as dirty, including a sibling view\'s change', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const activeAlias = generateHasManyAlias('tags', { filter: { active: true } })
 			const inactiveAlias = generateHasManyAlias('tags', { filter: { active: false } })
@@ -475,14 +475,14 @@ describe('HasMany with Alias Support', () => {
 		})
 
 		test('should move items within the correct alias', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [
 					{ id: 't-1', name: 'Tag 1' },
 					{ id: 't-2', name: 'Tag 2' },
 				],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const alias = generateHasManyAlias('tags', { orderBy: [{ name: 'asc' }] })
 			const handle = createHasManyHandle(alias)
@@ -495,11 +495,11 @@ describe('HasMany with Alias Support', () => {
 		})
 
 		test('reset clears the pending writes the view can see', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const alias = generateHasManyAlias('tags', { filter: { active: true } })
 			const handle = createHasManyHandle(alias)
@@ -520,11 +520,11 @@ describe('HasMany with Alias Support', () => {
 
 	describe('Backwards Compatibility', () => {
 		test('should work without alias (uses fieldName)', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle() // No alias
 
@@ -533,11 +533,11 @@ describe('HasMany with Alias Support', () => {
 		})
 
 		test('should connect/disconnect without alias', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle() // No alias
 			handle.items // Initialize

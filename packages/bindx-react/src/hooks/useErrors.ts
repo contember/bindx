@@ -45,7 +45,7 @@ export interface EntityErrorsState {
  * ```
  */
 export function useEntityErrors(entityType: string, entityId: string): EntityErrorsState {
-	const { store } = useBindxContext()
+	const { store, schema } = useBindxContext()
 
 	// Create a stable function to collect all errors for this entity
 	const collectErrors = useCallback((): EntityErrorsState => {
@@ -68,14 +68,12 @@ export function useEntityErrors(entityType: string, entityId: string): EntityErr
 			}
 		}
 
-		// Collect relation errors - similar approach
+		// Relations are not part of the snapshot, so the schema lists them.
 		const relationErrorsMap = new Map<string, readonly FieldError[]>()
-		if (snapshot?.data) {
-			for (const fieldName of Object.keys(snapshot.data as Record<string, unknown>)) {
-				const errors = store.getRelationErrors(entityType, entityId, fieldName)
-				if (errors.length > 0) {
-					relationErrorsMap.set(fieldName, errors)
-				}
+		for (const fieldName of schema.getRelationFields(entityType)) {
+			const errors = store.getRelationErrors(entityType, entityId, fieldName)
+			if (errors.length > 0) {
+				relationErrorsMap.set(fieldName, errors)
 			}
 		}
 
@@ -101,7 +99,7 @@ export function useEntityErrors(entityType: string, entityId: string): EntityErr
 			hasServerErrors,
 			allErrors,
 		}
-	}, [store, entityType, entityId])
+	}, [store, schema, entityType, entityId])
 
 	// Subscribe to entity changes
 	const subscribe = useCallback(

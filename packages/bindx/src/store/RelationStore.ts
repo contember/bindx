@@ -1,4 +1,3 @@
-import type { EntitySnapshot } from './snapshots.js'
 import type { RekeyContext, Rekeyable } from './RekeyOrchestrator.js'
 import {
 	HasOneStore,
@@ -83,13 +82,12 @@ export class RelationStore implements Rekeyable {
 		return this.hasOne.getRelation(key)
 	}
 
-	setRelation(
-		key: string,
-		updates: Partial<Omit<StoredRelationState, 'version'>>,
-		entitySnapshot: EntitySnapshot | undefined,
-		fieldName: string,
-	): void {
-		this.hasOne.setRelation(key, updates, entitySnapshot, fieldName)
+	setRelation(key: string, updates: Partial<Omit<StoredRelationState, 'version'>>): void {
+		this.hasOne.setRelation(key, updates)
+	}
+
+	refreshServerRelation(key: string, serverId: string | null): void {
+		this.hasOne.refreshServerRelation(key, serverId)
 	}
 
 	commitRelation(key: string): void {

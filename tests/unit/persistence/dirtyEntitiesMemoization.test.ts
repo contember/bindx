@@ -163,19 +163,6 @@ describe('ChangeRegistry dirty-scan memoization', () => {
 		expect(registry.getDirtyEntities()).toEqual([])
 	})
 
-	test('a silent server-baseline refresh invalidates the memo', () => {
-		const { store, registry } = createHarness()
-		seedEditedArticle(store)
-
-		expect(registry.getDirtyEntities()).toHaveLength(1)
-
-		// Revalidation that adopts the local value as the new baseline, with
-		// notification suppressed — the entity is clean afterwards.
-		store.refreshServerData('Article', 'a1', { id: 'a1', title: 'edited' }, true)
-
-		expect(registry.getDirtyEntities()).toEqual([])
-	})
-
 	test('scheduling a deletion invalidates the memo', () => {
 		const { store, registry } = createHarness()
 		store.setEntityData('Article', 'a1', { id: 'a1', title: 'server' }, true)

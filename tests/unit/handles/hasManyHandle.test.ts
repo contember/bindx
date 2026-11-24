@@ -111,14 +111,14 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should return items from embedded data', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [
 					{ id: 't-1', name: 'Tag 1' },
 					{ id: 't-2', name: 'Tag 2' },
 				],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 
@@ -128,14 +128,14 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('pessimistic in-flight presents the server list while canonical state stays dirty', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [
 					{ id: 't-1', name: 'Tag 1' },
 					{ id: 't-2', name: 'Tag 2' },
 				],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			const itemIds = (): string[] => handle.items.map(item => item[FIELD_REF_META].entityId)
@@ -156,14 +156,14 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should exclude planned removals', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [
 					{ id: 't-1', name: 'Tag 1' },
 					{ id: 't-2', name: 'Tag 2' },
 				],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			// Initialize hasMany state first with server IDs
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2'])
 			store.planHasManyRemoval('Article', 'a-1', 'tags', 't-1', 'disconnect')
@@ -175,11 +175,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should include planned connections', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.setEntityData('Tag', 't-2', { id: 't-2', name: 'Tag 2' }, true)
 
 			// Initialize hasMany state first (simulating what handle.items would do)
@@ -209,7 +209,7 @@ describe('HasManyListHandle', () => {
 
 	describe('Length', () => {
 		test('should return correct length', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [
@@ -217,7 +217,7 @@ describe('HasManyListHandle', () => {
 					{ id: 't-2', name: 'Tag 2' },
 					{ id: 't-3', name: 'Tag 3' },
 				],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 
@@ -229,14 +229,14 @@ describe('HasManyListHandle', () => {
 
 	describe('Map', () => {
 		test('should map over items', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [
 					{ id: 't-1', name: 'Tag 1' },
 					{ id: 't-2', name: 'Tag 2' },
 				],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			const ids = handle.map((item) => item.id as string)
@@ -245,14 +245,14 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should provide index in map callback', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [
 					{ id: 't-1', name: 'Tag 1' },
 					{ id: 't-2', name: 'Tag 2' },
 				],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			const indices: number[] = []
@@ -268,11 +268,11 @@ describe('HasManyListHandle', () => {
 
 	describe('Dirty State', () => {
 		test('should return false when no changes', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 
@@ -280,11 +280,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should return true when has planned removals', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.planHasManyRemoval('Article', 'a-1', 'tags', 't-1', 'disconnect')
 
 			const handle = createHasManyHandle()
@@ -293,11 +293,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should return true when has planned connections', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.planHasManyConnection('Article', 'a-1', 'tags', 't-1')
 
 			const handle = createHasManyHandle()
@@ -306,11 +306,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should return true when has created entities', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.addToHasMany('Article', 'a-1', 'tags', '__temp_123')
 
 			const handle = createHasManyHandle()
@@ -323,11 +323,11 @@ describe('HasManyListHandle', () => {
 
 	describe('Connect / Disconnect', () => {
 		test('should connect existing entity', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			handle.connect('t-1')
@@ -337,11 +337,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should disconnect entity', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			// Access items first to initialize hasMany state (as in real usage)
@@ -358,11 +358,11 @@ describe('HasManyListHandle', () => {
 
 	describe('Add / Remove', () => {
 		test('should add new entity and return temp ID', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			const tempId = handle.add({ name: 'New Tag' })
@@ -372,11 +372,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should add entity to items list', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			// Access items first to initialize hasMany state with server IDs
@@ -389,11 +389,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should remove created entity (cancel add)', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			const tempId = handle.add({ name: 'New Tag' })
@@ -406,11 +406,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should remove server entity — manyHasMany uses disconnect', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			// Access items first to initialize hasMany state
@@ -424,11 +424,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should remove server entity — oneHasMany (non-nullable FK) uses delete', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				comments: [{ id: 'c-1', text: 'Hello' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = HasManyListHandle.create<TestComment>(
 				'Article',
@@ -449,11 +449,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should remove server entity — oneHasMany (nullable FK) uses disconnect', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				notes: [{ id: 'n-1', body: 'A note' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = HasManyListHandle.create<TestNote>(
 				'Article',
@@ -478,11 +478,11 @@ describe('HasManyListHandle', () => {
 
 	describe('Delete', () => {
 		test('should delete entity from has-many relation', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
 
 			const handle = createHasManyHandle()
@@ -494,14 +494,14 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should exclude deleted items from items list', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [
 					{ id: 't-1', name: 'Tag 1' },
 					{ id: 't-2', name: 'Tag 2' },
 				],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			expect(handle.items.length).toBe(2)
@@ -542,11 +542,11 @@ describe('HasManyListHandle', () => {
 				},
 			})
 
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = HasManyListHandle.create<TestTag>(
 				'Article',
@@ -571,11 +571,11 @@ describe('HasManyListHandle', () => {
 
 	describe('remove() on created entities across relation kinds', () => {
 		test('should cancel add for oneHasMany created entity (not plan delete)', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				comments: [],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = HasManyListHandle.create<TestComment>(
 				'Article',
@@ -600,11 +600,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should cancel add for manyHasMany created entity (not plan disconnect)', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			const tempId = handle.add({ name: 'New Tag' })
@@ -620,11 +620,11 @@ describe('HasManyListHandle', () => {
 
 	describe('disconnect/delete on created entities', () => {
 		test('disconnect() on created entity should cancel the add, not plan disconnect', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			const tempId = handle.add({ name: 'New Tag' })
@@ -640,11 +640,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('delete() on created entity should cancel the add, not plan delete', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			const tempId = handle.add({ name: 'New Tag' })
@@ -664,11 +664,11 @@ describe('HasManyListHandle', () => {
 
 	describe('disconnect() type verification', () => {
 		test('should always store disconnect type in planned removals', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			expect(handle.items.length).toBe(1)
@@ -680,14 +680,14 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should exclude disconnected items from items list', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [
 					{ id: 't-1', name: 'Tag 1' },
 					{ id: 't-2', name: 'Tag 2' },
 				],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			expect(handle.items.length).toBe(2)
@@ -703,11 +703,11 @@ describe('HasManyListHandle', () => {
 
 	describe('Reconnect after removal', () => {
 		test('connect() after disconnect() should cancel the disconnect', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			expect(handle.items.length).toBe(1)
@@ -723,11 +723,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('connect() after delete() should cancel the delete', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
 
 			const handle = createHasManyHandle()
@@ -743,11 +743,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('remove() then connect() should re-add the item', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			expect(handle.items.length).toBe(1)
@@ -767,11 +767,11 @@ describe('HasManyListHandle', () => {
 
 	describe('isDirty with delete-type removals', () => {
 		test('should return true when has delete-type planned removals', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
 
 			const handle = createHasManyHandle()
@@ -785,7 +785,7 @@ describe('HasManyListHandle', () => {
 
 	describe('Mixed removal types', () => {
 		test('should track different removal types for different items', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [
@@ -793,7 +793,7 @@ describe('HasManyListHandle', () => {
 					{ id: 't-2', name: 'Tag 2' },
 					{ id: 't-3', name: 'Tag 3' },
 				],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1', 't-2', 't-3'])
 
 			const handle = createHasManyHandle()
@@ -814,7 +814,7 @@ describe('HasManyListHandle', () => {
 
 	describe('Move', () => {
 		test('should move item within list', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [
@@ -822,7 +822,7 @@ describe('HasManyListHandle', () => {
 					{ id: 't-2', name: 'Tag 2' },
 					{ id: 't-3', name: 'Tag 3' },
 				],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			// Access items first to initialize hasMany state
@@ -839,11 +839,11 @@ describe('HasManyListHandle', () => {
 
 	describe('Reset', () => {
 		test('should reset to server state', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 			// Initialize hasMany state first with server IDs
 			store.getOrCreateHasMany('Article', 'a-1', 'tags', ['t-1'])
 			store.planHasManyRemoval('Article', 'a-1', 'tags', 't-1', 'disconnect')
@@ -862,11 +862,11 @@ describe('HasManyListHandle', () => {
 
 	describe('Item Handle', () => {
 		test('should get item handle by ID', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			const itemHandle = handle.getById('t-1')
@@ -875,11 +875,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should cache item handles', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			const handle1 = handle.getById('t-1')
@@ -893,14 +893,14 @@ describe('HasManyListHandle', () => {
 
 	describe('getById', () => {
 		test('should return entity accessor by ID', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [
 					{ id: 't-1', name: 'Tag 1' },
 					{ id: 't-2', name: 'Tag 2' },
 				],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			// Initialize items first
@@ -911,11 +911,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should work for newly created entities via add()', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			const tempId = handle.add({ name: 'New Tag' })
@@ -925,11 +925,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should return cached handle (same instance)', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			const item1 = handle.getById('t-1')
@@ -943,7 +943,7 @@ describe('HasManyListHandle', () => {
 
 	describe('Errors', () => {
 		test('should return relation errors', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test', tags: [] }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'Test', tags: [] }, schema, { rootId: 'a-1' })
 			store.addRelationError('Article', 'a-1', 'tags', { message: 'At least one tag required', source: 'client' })
 
 			const handle = createHasManyHandle()
@@ -953,7 +953,7 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should check if relation has errors', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test', tags: [] }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'Test', tags: [] }, schema, { rootId: 'a-1' })
 			const handle = createHasManyHandle()
 
 			expect(handle.hasError).toBe(false)
@@ -963,7 +963,7 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should add error via addError()', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test', tags: [] }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'Test', tags: [] }, schema, { rootId: 'a-1' })
 			const handle = createHasManyHandle()
 
 			handle.addError({ message: 'Tags required' })
@@ -972,7 +972,7 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('should clear errors via clearErrors()', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test', tags: [] }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'Test', tags: [] }, schema, { rootId: 'a-1' })
 			store.addRelationError('Article', 'a-1', 'tags', { message: 'Error', source: 'client' })
 
 			const handle = createHasManyHandle()
@@ -986,7 +986,7 @@ describe('HasManyListHandle', () => {
 
 	describe('Event Subscriptions', () => {
 		test('connect() should fire hasMany:connected listener', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test', tags: [] }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'Test', tags: [] }, schema, { rootId: 'a-1' })
 			store.setEntityData('Tag', 't-1', { id: 't-1', name: 'Tag 1' }, true)
 			store.getOrCreateHasMany('Article', 'a-1', 'tags')
 
@@ -1000,11 +1000,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('disconnect() should fire hasMany:disconnected listener', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			expect(handle.items.length).toBe(1)
@@ -1018,7 +1018,7 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('add() should fire hasMany:connected listener', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test', tags: [] }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'Test', tags: [] }, schema, { rootId: 'a-1' })
 			store.getOrCreateHasMany('Article', 'a-1', 'tags')
 
 			const handle = createHasManyHandle()
@@ -1031,11 +1031,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('remove() should fire hasMany:disconnected listener', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			expect(handle.items.length).toBe(1)
@@ -1049,7 +1049,7 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('interceptor can cancel connect()', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test', tags: [] }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'Test', tags: [] }, schema, { rootId: 'a-1' })
 			store.getOrCreateHasMany('Article', 'a-1', 'tags')
 
 			const handle = createHasManyHandle()
@@ -1062,11 +1062,11 @@ describe('HasManyListHandle', () => {
 		})
 
 		test('interceptor can cancel disconnect()', () => {
-			store.setEntityData('Article', 'a-1', {
+			store.writeServerRead('Article', {
 				id: 'a-1',
 				title: 'Test',
 				tags: [{ id: 't-1', name: 'Tag 1' }],
-			}, true)
+			}, schema, { rootId: 'a-1' })
 
 			const handle = createHasManyHandle()
 			expect(handle.items.length).toBe(1)
@@ -1085,7 +1085,7 @@ describe('HasManyListHandle', () => {
 
 	describe('Type Brands', () => {
 		test('should return item entity name via __entityName', () => {
-			store.setEntityData('Article', 'a-1', { id: 'a-1', title: 'Test', tags: [] }, true)
+			store.writeServerRead('Article', { id: 'a-1', title: 'Test', tags: [] }, schema, { rootId: 'a-1' })
 			const handle = createHasManyHandle()
 
 			expect(handle.__entityName).toBe('Tag')

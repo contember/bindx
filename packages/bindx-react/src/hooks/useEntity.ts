@@ -18,7 +18,6 @@ import {
 	EntityHandle,
 	resolveSelectionMeta,
 	buildQueryFromSelection,
-	refreshServerData,
 	setLoadState,
 	createLoadError,
 } from '@contember/bindx'
@@ -292,12 +291,11 @@ export function useEntity(
 				if (result.type === 'get' && result.data === null) {
 					dispatcher.dispatch(setLoadState(entityType, id, 'not_found'))
 				} else if (result.type === 'get' && result.data) {
-					store.indexServerResponse(entityType, result.data, selectionMeta, schemaRegistry)
-					const data = store.resolveServerOccurrence(result.data)
-					// Revalidation: advance the server baseline but keep local dirty
+					const data = result.data
+					// Revalidation: advance the server baselines but keep local dirty
 					// edits intact (see EntitySnapshotStore.refreshServerData).
 					store.batchNotifications(() => {
-						dispatcher.dispatch(refreshServerData(entityType, id, data))
+						store.writeServerRead(entityType, data, schemaRegistry, { spec, rootId: id })
 						dispatcher.dispatch(setLoadState(entityType, id, 'success'))
 					})
 				}

@@ -2,6 +2,7 @@ import { describe, test, expect } from 'bun:test'
 import {
 	ActionDispatcher,
 	BatchPersister,
+	buildQueryFromSelection,
 	EntityHandle,
 	FIELD_REF_META,
 	MutationCollector,
@@ -103,19 +104,20 @@ const aliasedSelection: SelectionMeta = {
 
 function createAliasedHandle(): EntityHandle<TestArticle> {
 	const store = new SnapshotStore()
-	store.setEntityData('Article', 'a-1', {
+	const schema = new SchemaRegistry(schemaDefinition)
+	store.writeServerRead('Article', {
 		id: 'a-1',
 		data: 'Aliased title',
 		isDirty: { id: 'author-1', name: 'Ada' },
 		tags_filtered: [{ id: 'tag-1', name: 'One' }],
 		tags_auto_hash: [{ id: 'tag-2', name: 'Two' }],
-	}, true)
+	}, schema, { spec: buildQueryFromSelection(aliasedSelection) })
 	return EntityHandle.createRaw<TestArticle>(
 		'a-1',
 		'Article',
 		store,
 		new ActionDispatcher(store),
-		new SchemaRegistry(schemaDefinition),
+		schema,
 		undefined,
 		aliasedSelection,
 	)
