@@ -101,7 +101,7 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	get value(): T | null {
 		const data = this.getPresentationData()
 		if (!data) return null
-		return this.getCurrentValue(data) as T | null
+		return this.readValue(data) as T | null
 	}
 
 	/**
@@ -110,7 +110,7 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	get serverValue(): T | null {
 		const serverData = this.getServerData()
 		if (!serverData) return null
-		return this.getServerValue(serverData) as T | null
+		return this.readValue(serverData) as T | null
 	}
 
 	/**
@@ -120,18 +120,18 @@ export class FieldHandle<T = unknown> extends EntityRelatedHandle {
 	 */
 	get isDirty(): boolean {
 		const data = this.getEntityData()
-		const value = data ? (this.getCurrentValue(data) as T | null) : null
+		const value = data ? (this.readValue(data) as T | null) : null
 		return !deepEqual(value, this.serverValue)
 	}
 
-	private getCurrentValue(data: Record<string, unknown>): unknown {
+	/**
+	 * Reads the field by its schema path, falling back to the path it was read under.
+	 * A key the data does not hold reads as null: a created entity keeps only the
+	 * fields set on it, so its create mutation leaves the rest to the database (issue #175).
+	 */
+	private readValue(data: Record<string, unknown>): unknown {
 		const value = getNestedValue(data, this.fieldPath)
-		return value === undefined ? getNestedValue(data, this.dataFieldPath) : value
-	}
-
-	private getServerValue(data: Record<string, unknown>): unknown {
-		const value = getNestedValue(data, this.fieldPath)
-		return value === undefined ? getNestedValue(data, this.dataFieldPath) : value
+		return (value === undefined ? getNestedValue(data, this.dataFieldPath) : value) ?? null
 	}
 
 	/**
