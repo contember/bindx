@@ -89,6 +89,12 @@ describe('rows of a list response that no create of the list made', () => {
 		return id
 	}
 
+	const sectionIdNamed = (engine: MiniEngine, name: string): string => {
+		const row = [...engine.rows.values()].find(item => item.entity === 'Section' && item.values.get('name') === name)
+		if (!row) throw new Error(`No section named ${name}`)
+		return row.id
+	}
+
 	const persistAgain = async (persister: BatchPersister): Promise<AdapterCall[]> => {
 		calls.length = 0
 		await persister.persistAll()
@@ -224,7 +230,7 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', leaf)).not.toBeNull()
+		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
@@ -241,7 +247,7 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', leaf)).not.toBeNull()
+		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
@@ -262,7 +268,7 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', leaf)).not.toBeNull()
+		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
@@ -280,7 +286,7 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', leaf)).not.toBeNull()
+		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
@@ -307,7 +313,7 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', shared)).not.toBeNull()
+		expect(store.getPersistedId('Section', shared)).toBe(sectionIdNamed(engine, 'Shared'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Shared')).toBe(1)
 	})
@@ -320,7 +326,7 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', shared)).not.toBeNull()
+		expect(store.getPersistedId('Section', shared)).toBe(sectionIdNamed(engine, 'Shared'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Shared')).toBe(1)
 	})
@@ -351,7 +357,7 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', created)).not.toBeNull()
+		expect(store.getPersistedId('Section', created)).toBe(sectionIdNamed(engine, 'New'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'New')).toBe(1)
 	})
@@ -368,7 +374,7 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', created)).not.toBeNull()
+		expect(store.getPersistedId('Section', created)).toBe(sectionIdNamed(engine, 'New'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'New')).toBe(1)
 	})
@@ -384,7 +390,7 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', created)).not.toBeNull()
+		expect(store.getPersistedId('Section', created)).toBe(sectionIdNamed(engine, 'New'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'New')).toBe(1)
 		expect(createdNamed(engine, 'Shared')).toBe(1)
@@ -402,10 +408,26 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', created)).not.toBeNull()
+		expect(store.getPersistedId('Section', created)).toBe(sectionIdNamed(engine, 'New'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'New')).toBe(1)
 		expect(createdNamed(engine, 'Inner')).toBe(1)
+	})
+	// X's own row is lost to the known gap above; Up is the only free row with a parent, and it belongs to Leaf B.
+	test('should not map a new section to a row a paired sibling created', async () => {
+		const { engine, persister } = setup()
+		seedSection(engine, 'existing-1', { name: 'Existing', website: 'website-1' })
+		store.connectExistingToHasMany('Website', 'website-1', 'sections', 'existing-1')
+		const created = addSection({ name: 'X' }, 'website-1', newSection({ name: 'X parent' }, 'website-2'))
+		store.connectExistingToHasMany('Section', created, 'children', 'existing-1')
+		const rootA = newSection({ name: 'Root A' }, 'website-1')
+		addSection({ name: 'Leaf A' }, 'website-1', newSection({ name: 'Mid A' }, 'website-2', rootA))
+		const up = newSection({ name: 'Up' }, 'website-1', newSection({ name: 'Top' }, 'website-2'))
+		addSection({ name: 'Leaf B' }, 'website-1', newSection({ name: 'Mid B' }, 'website-2', up))
+
+		await persister.persistAll()
+
+		expect([null, sectionIdNamed(engine, 'X')]).toContain(store.getPersistedId('Section', created))
 	})
 })
 
