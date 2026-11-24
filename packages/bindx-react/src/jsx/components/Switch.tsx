@@ -12,8 +12,9 @@ import type {
 	SelectionMeta,
 	SelectionProvider,
 } from '../types.js'
-import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
+import { BINDX_COMPONENT } from '../types.js'
 import { useFields, useRefSubscription } from '../../hooks/useFields.js'
+import { conditionSelection, fieldRefSelection } from '../fieldRefSelection.js'
 import {
 	type Condition,
 	isCondition,
@@ -78,10 +79,6 @@ interface DefaultEntry {
 interface SwitchEntries {
 	readonly cases: readonly CaseEntry[]
 	readonly defaultEntry: DefaultEntry | null
-}
-
-function isFieldRef(value: unknown): value is FieldRef<unknown> {
-	return typeof value === 'object' && value !== null && FIELD_REF_META in value
 }
 
 function extractEntries(children: ReactNode): SwitchEntries {
@@ -199,17 +196,6 @@ export const Switch = memo(SwitchImpl)
 // Selection analysis
 // =============================================================================
 
-function fieldRefToSelectionField(ref: FieldRef<unknown>): SelectionFieldMeta {
-	const meta = ref[FIELD_REF_META]
-	return {
-		fieldName: meta.fieldName,
-		alias: meta.fieldName,
-		path: meta.path,
-		isArray: meta.isArray ?? false,
-		isRelation: meta.isRelation ?? false,
-	}
-}
-
 function pushNestedFields(
 	target: SelectionFieldMeta[],
 	nested: SelectionMeta,
@@ -228,20 +214,12 @@ caseWithSelection.getSelection = (
 	const result: SelectionFieldMeta[] = []
 
 	if ('show' in props && props.show !== undefined) {
-		result.push(fieldRefToSelectionField(props.show))
-	} else if ('if' in props && props.if !== undefined) {
-		const condition = props.if
-		if (typeof condition !== 'boolean') {
-			if (isCondition(condition)) {
-				for (const field of collectConditionFields(condition)) {
-					if (isFieldRef(field)) {
-						result.push(fieldRefToSelectionField(field))
-					}
-				}
-			} else if (isFieldRef(condition)) {
-				result.push(fieldRefToSelectionField(condition))
-			}
+		const fieldSelection = fieldRefSelection(props.show)
+		if (fieldSelection !== null) {
+			result.push(fieldSelection)
 		}
+	} else if ('if' in props && props.if !== undefined) {
+		result.push(...conditionSelection(props.if))
 	}
 
 	// Callback children can't be statically analyzed.

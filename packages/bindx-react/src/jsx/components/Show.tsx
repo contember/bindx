@@ -1,7 +1,8 @@
 import React, { memo, type ReactElement, type ReactNode } from 'react'
 import type { FieldRef, FieldAccessor, SelectionFieldMeta, SelectionMeta, SelectionProvider } from '../types.js'
-import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
+import { BINDX_COMPONENT } from '../types.js'
 import { useField } from '../../hooks/useField.js'
+import { fieldRefSelection } from '../fieldRefSelection.js'
 
 /**
  * Props for Show component
@@ -57,14 +58,11 @@ showWithSelection.getSelection = (
 	props: ShowProps<unknown>,
 	collectNested: (children: ReactNode) => SelectionMeta,
 ): SelectionFieldMeta[] | null => {
-	const meta = props.field[FIELD_REF_META]
-	const result: SelectionFieldMeta[] = [{
-		fieldName: meta.fieldName,
-		alias: meta.fieldName,
-		path: meta.path,
-		isArray: false,
-		isRelation: false,
-	}]
+	const result: SelectionFieldMeta[] = []
+	const fieldSelection = fieldRefSelection(props.field)
+	if (fieldSelection !== null) {
+		result.push(fieldSelection)
+	}
 
 	// Plain ReactNode children may contain nested <Field>/<HasOne>/etc.
 	// Callback children can't be analyzed statically (skipped).
@@ -75,7 +73,7 @@ showWithSelection.getSelection = (
 		}
 	}
 
-	return result
+	return result.length > 0 ? result : null
 }
 
 showWithSelection[BINDX_COMPONENT] = true
