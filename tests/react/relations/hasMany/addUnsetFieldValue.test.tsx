@@ -35,6 +35,8 @@ interface Probe {
 	clearAddedColors: () => void
 	/** The `color` field of every tag that is not one of the loaded ones, as read through `$fields`. */
 	addedTags: () => AddedTag[]
+	/** `$data` of every tag that is not one of the loaded ones. */
+	addedTagData: () => unknown[]
 }
 
 function Article({ publish }: { publish: (probe: Probe) => void }): React.ReactElement {
@@ -54,6 +56,7 @@ function Article({ publish }: { publish: (probe: Probe) => void }): React.ReactE
 				serverColor: tag.$fields.color.serverValue,
 				isColorDirty: tag.$fields.color.isDirty,
 			})),
+		addedTagData: () => addedTagsOf(article.tags.items).map(tag => tag.$data),
 	})
 	return <span data-testid="tag-count">{article.tags.length}</span>
 }
@@ -118,5 +121,28 @@ describe('HasMany add() — a field the call did not set', () => {
 			await probe().persistAll()
 		})
 		expect(adapter.persisted.slice(1)).toStrictEqual([{ color: null }])
+	})
+})
+
+describe('HasMany add() — $data of the added entity', () => {
+	test('lists a selected field the call did not set as null, before and after the persist', async () => {
+		const { probe } = await mount()
+		act(() => probe().add())
+		const expected = [{ id: expect.any(String), name: 'New tag', color: null }]
+		expect(probe().addedTagData()).toStrictEqual(expected)
+		await act(async () => {
+			await probe().persistAll()
+		})
+		expect(probe().addedTagData()).toStrictEqual(expected)
+	})
+
+	test('reading it leaves the field out of the create mutation', async () => {
+		const { adapter, probe } = await mount()
+		act(() => probe().add())
+		probe().addedTagData()
+		await act(async () => {
+			await probe().persistAll()
+		})
+		expect(adapter.persisted).toStrictEqual([{ tags: [{ alias: expect.any(String), create: { name: 'New tag' } }] }])
 	})
 })
