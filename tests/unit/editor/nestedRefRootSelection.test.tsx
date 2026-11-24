@@ -1,6 +1,6 @@
 import '../../setup'
 // An editor bound to a field reached through a has-one (`page.body.content`) must
-// select it under that relation only, not also as a root `content` column (T1194).
+// select it under that relation only, not also as a root `content` column.
 import { describe, expect, test } from 'bun:test'
 import type { ReactNode } from 'react'
 import React from 'react'

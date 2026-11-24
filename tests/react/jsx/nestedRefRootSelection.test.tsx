@@ -1,7 +1,7 @@
 import '../../setup'
 // A field ref reached through a has-one (`article.author.email`) and passed to a
 // selection-building component must be selected under that relation only — not
-// also as a stray `email` column of the root entity (T1194).
+// also as a stray `email` column of the root entity.
 import { afterEach, describe, expect, test } from 'bun:test'
 import { cleanup, render, waitFor } from '@testing-library/react'
 import React, { type ReactNode } from 'react'
