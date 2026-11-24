@@ -14,6 +14,8 @@ interface AssembledEntity {
  * snapshots. The store keeps every entity once (issue #170), so nested data is
  * assembled on read, under the keys the selection read it with.
  *
+ * A selected column the snapshot holds no key for reads as null, as FieldHandle.value
+ * does; the snapshot itself keeps the key absent, so a create mutation leaves it out.
  * A relation the store holds no state for has not been read and is left out.
  * A subtree whose columns and relations did not change keeps its identity from the
  * previous assembly, so a consumer memoizing on it re-runs only when it changed.
@@ -58,7 +60,11 @@ export class EntityDataAssembler {
 
 		const assembled = previous && previous.columns === snapshot.data && isSameRelations(previous.relations, relations)
 			? previous
-			: { columns: snapshot.data, relations, data: { ...snapshot.data, ...Object.fromEntries(relations) } }
+			: {
+				columns: snapshot.data,
+				relations,
+				data: { ...snapshot.data, ...unsetColumnsOf(snapshot.data, selection), ...Object.fromEntries(relations) },
+			}
 		this.next.set(path, assembled)
 		return assembled.data
 	}
@@ -89,6 +95,15 @@ export class EntityDataAssembler {
 			? null
 			: this.assembleEntity(targetType, relation.currentId, nested, pathPrefix)
 	}
+}
+
+/** The selected columns the entity data holds no value for, each as null. */
+function unsetColumnsOf(columns: Record<string, unknown>, selection: SelectionMeta): Record<string, null> {
+	const unset: Record<string, null> = {}
+	for (const field of selection.fields.values()) {
+		if (!field.isRelation && columns[field.fieldName] === undefined) unset[field.fieldName] = null
+	}
+	return unset
 }
 
 function isSameList(before: unknown, after: unknown): boolean {
