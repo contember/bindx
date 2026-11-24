@@ -66,8 +66,8 @@ export function nonCarrierStrategyFor(strategy: SharedCreateStrategy | undefined
 /**
  * Prefers folding, which needs no client id: the entity is created at its single
  * has-one site (or at one membership) and joins every other one-has-many through its
- * own owning relation. Otherwise a client-chosen primary key, created at a membership
- * so its owner is implicit. Undefined when neither applies.
+ * own owning relation. Otherwise a client-chosen primary key; every other site connects
+ * by it. Undefined when neither applies.
  */
 export function planSharedCreate(shared: SharedCreate, context: SharedCreatePlanContext): SharedCreateStrategy | undefined {
 	return planFold(shared, context) ?? planClientId(shared, context)
@@ -104,9 +104,11 @@ function owningFieldOf(shared: SharedCreate, site: CreateSite, context: SharedCr
 	return context.getRelationType(shared.entityType, inverse) === 'hasOne' ? inverse : undefined
 }
 
+/** Created at a one-has-many membership when there is one, so a required owner is set; else at the first site reached. */
 function planClientId(shared: SharedCreate, context: SharedCreatePlanContext): SharedCreateStrategy | undefined {
 	if (!context.isCustomPrimaryAllowed(shared.entityType)) return undefined
-	const carrier = shared.sites.find(site => site.relationType === 'hasMany') ?? shared.sites[0]
+	const carrier = shared.sites.find(site => site.relationType === 'hasMany' && owningFieldOf(shared, site, context) !== undefined)
+		?? shared.sites[0]
 	if (!carrier) return undefined
 	return { kind: 'clientId', sites: [...shared.sites], carrier, id: context.generateId() }
 }

@@ -41,6 +41,8 @@ export interface CollectedHasManyChange {
 	readonly fieldName: string
 	readonly additions: readonly { readonly itemId: string; readonly kind: 'created' | 'connected' }[]
 	readonly removals: readonly { readonly itemId: string; readonly type: 'delete' | 'disconnect' }[]
+	/** Created additions that a fold creates at another site; they join this list through their owner link. */
+	readonly joinedItemIds: readonly string[]
 }
 
 export interface CollectedRelationField {
@@ -59,6 +61,7 @@ export interface CollectedNestedCreate {
 	readonly entityType: string
 	readonly entityId: string
 	readonly createData: Readonly<Record<string, unknown>>
+	/** Ids of rows the list holds or connects; the response rows no create op of the list produced. */
 	readonly knownServerIds: readonly string[]
 }
 
@@ -792,6 +795,9 @@ export class MutationCollector implements MutationDataCollector {
 		const operations: Array<Record<string, unknown>> = []
 		const additions: Array<{ itemId: string; kind: 'created' | 'connected' }> = []
 		const removals: Array<{ itemId: string; type: 'delete' | 'disconnect' }> = []
+		const listCreates: Omit<CollectedNestedCreate, 'knownServerIds'>[] = []
+		const connectedIds: string[] = []
+		const joinedItemIds: string[] = []
 
 		// Planned removals -> disconnect/delete
 		for (const [removedId, removalType] of hasManyState.plannedRemovals) {
@@ -820,13 +826,18 @@ export class MutationCollector implements MutationDataCollector {
 				const shared = this.visitCreateSite(targetType, additionId, site)
 				if (shared) {
 					// Created at another site: a client id connects it here, a fold made it join through its owning side.
-					if (shared.kind === 'clientId') operations.push({ connect: { id: shared.id }, alias: additionId })
+					if (shared.kind === 'clientId') {
+						operations.push({ connect: { id: shared.id }, alias: additionId })
+						connectedIds.push(shared.id)
+					} else {
+						joinedItemIds.push(additionId)
+					}
 					additions.push({ itemId: additionId, kind: 'created' })
 					continue
 				}
 				this.registerNestedEntity(targetType, additionId)
 				const createData = this.collectCreateData(targetType, additionId)
-				this._nestedCreates.push({
+				listCreates.push({
 					parentEntityType: entityType,
 					parentEntityId: entityId,
 					fieldName,
@@ -834,14 +845,17 @@ export class MutationCollector implements MutationDataCollector {
 					entityType: targetType,
 					entityId: additionId,
 					createData: createData ?? {},
-					knownServerIds: [...hasManyState.serverIds],
 				})
 				operations.push({ create: createData ?? {}, alias: additionId })
 				additions.push({ itemId: additionId, kind: 'created' })
 			} else {
 				operations.push({ connect: { id: additionId }, alias: additionId })
 				additions.push({ itemId: additionId, kind: 'connected' })
+				connectedIds.push(additionId)
 			}
+		}
+		for (const create of listCreates) {
+			this._nestedCreates.push({ ...create, knownServerIds: [...hasManyState.serverIds, ...connectedIds] })
 		}
 
 		// Server items that aren't removed -> check for updates via entity snapshots
@@ -886,7 +900,7 @@ export class MutationCollector implements MutationDataCollector {
 		}
 
 		if (additions.length > 0 || removals.length > 0) {
-			this._hasManyChanges.push({ entityType, entityId, fieldName, additions, removals })
+			this._hasManyChanges.push({ entityType, entityId, fieldName, additions, removals, joinedItemIds })
 		}
 		return operations.length > 0 ? operations : null
 	}

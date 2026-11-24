@@ -1271,9 +1271,11 @@ export class BatchPersister {
 		const conflicts = new Map<string, string>()
 		for (const change of execution.hasManyChanges) {
 			const ownerKey = entityIdentityKey(change.entityType, change.entityId)
-			if (failedOwners.has(ownerKey)) continue
+			// A joined membership was set by the carrier's mutation, so the owner's own failure does not undo it.
+			const ownerFailed = failedOwners.has(ownerKey)
 			const additions = change.additions.filter(addition => (
 				addition.kind === 'created'
+				&& (!ownerFailed || change.joinedItemIds.includes(addition.itemId))
 				&& !reconciledMemberships.has(membershipKey(change, addition.itemId))
 				&& isConfirmedCreate(execution, confirmedCreates, addition.itemId)
 			))
@@ -1487,7 +1489,8 @@ export class BatchPersister {
 				entityType: descriptor.entityType,
 				createData: { ...descriptor.createData },
 			}))
-			for (const { op, nodeItem } of this.pairCreateOpsWithNodes(createOps, nodeItems)) {
+			const joiningOps = joiningCreateOps(execution, parentEntityType, parentEntityId, fieldName)
+			for (const { op, nodeItem } of this.pairCreateOpsWithNodes(createOps, nodeItems, joiningOps)) {
 				results.push(makeResult(op, nodeItem))
 			}
 		}
@@ -1532,13 +1535,17 @@ export class BatchPersister {
 	 * A single op and row left over are paired by elimination. A server that echoes a
 	 * value back normalised (a date, a decimal) matches nothing byte-for-byte, and
 	 * discarding the pair would leave that op's whole subtree on temp IDs (issue #70).
+	 *
+	 * A folded entity joining the list may have a row in it, or not yet when its carrier
+	 * runs later; its op only claims a row it matches exactly, and is never returned.
 	 */
 	private pairCreateOpsWithNodes(
 		createOps: readonly NodeCreateOp[],
 		nodeItems: readonly Record<string, unknown>[],
+		joiningOps: readonly NodeCreateOp[],
 	): NodeCreatePair[] {
 		const pairs: NodeCreatePair[] = []
-		const pendingOps = [...createOps]
+		const pendingOps = [...createOps, ...joiningOps]
 		const freeItems = [...nodeItems]
 
 		const takePair = (opIndex: number, nodeItem: Record<string, unknown>): void => {
@@ -1561,11 +1568,14 @@ export class BatchPersister {
 			break
 		}
 
-		if (pendingOps.length === 1 && freeItems.length === 1) {
-			takePair(0, freeItems[0]!)
+		const joining = new Set(joiningOps)
+		const ownPending = pendingOps.filter(op => !joining.has(op))
+		const lastOwn = ownPending[0]
+		if (ownPending.length === 1 && lastOwn && freeItems.length === 1) {
+			takePair(pendingOps.indexOf(lastOwn), freeItems[0]!)
 		}
 
-		return pairs
+		return pairs.filter(pair => !joining.has(pair.op))
 	}
 
 	/**
@@ -1626,8 +1636,32 @@ function unsendableResult(error: SharedCreateError | ClientPrimaryOrderError, en
 		results,
 		successCount: 0,
 		failedCount: results.length,
-		skippedCount: error instanceof SharedCreateError ? entities.length : 0,
+		skippedCount: error instanceof SharedCreateError ? countNotFailed(entities, failed) : 0,
 	}
+}
+
+function countNotFailed(
+	entities: readonly DirtyEntity[],
+	failed: readonly Pick<EntityPersistResult, 'entityType' | 'entityId'>[],
+): number {
+	const failedKeys = new Set(failed.map(entry => entityIdentityKey(entry.entityType, entry.entityId)))
+	return entities.filter(entity => !failedKeys.has(entityIdentityKey(entity.entityType, entity.entityId))).length
+}
+
+/** The creates of folded entities that join this list from their carrier site. */
+function joiningCreateOps(
+	execution: PersistExecution,
+	parentEntityType: string,
+	parentEntityId: string,
+	fieldName: string,
+): NodeCreateOp[] {
+	const change = execution.hasManyChanges.find(item => (
+		item.entityType === parentEntityType && item.entityId === parentEntityId && item.fieldName === fieldName
+	))
+	return (change?.joinedItemIds ?? []).flatMap(itemId => {
+		const carrier = execution.nestedCreates.find(create => create.entityId === itemId)
+		return carrier ? [{ alias: itemId, entityType: carrier.entityType, createData: { ...carrier.createData } }] : []
+	})
 }
 
 function emptyPersistenceResult(): PersistenceResult {
