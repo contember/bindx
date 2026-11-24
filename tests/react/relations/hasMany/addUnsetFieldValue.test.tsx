@@ -32,6 +32,7 @@ interface AddedTag {
 interface Probe {
 	add: () => void
 	persistAll: () => Promise<unknown>
+	clearAddedColors: () => void
 	/** The `color` field of every tag that is not one of the loaded ones, as read through `$fields`. */
 	addedTags: () => AddedTag[]
 }
@@ -45,9 +46,10 @@ function Article({ publish }: { publish: (probe: Probe) => void }): React.ReactE
 			article.tags.add({ name: 'New tag' })
 		},
 		persistAll,
-		addedTags: () => article.tags.items
-			.filter(tag => tag.id !== 'tag-1' && tag.id !== 'tag-2')
-			.map(tag => ({
+		clearAddedColors: () => {
+			for (const tag of addedTagsOf(article.tags.items)) tag.$fields.color.setValue(null)
+		},
+		addedTags: () => addedTagsOf(article.tags.items).map(tag => ({
 				color: tag.$fields.color.value,
 				serverColor: tag.$fields.color.serverValue,
 				isColorDirty: tag.$fields.color.isDirty,
@@ -65,7 +67,17 @@ async function mount(): Promise<{ adapter: RecordingAdapter; probe: () => Probe 
 		</BindxProvider>,
 	)
 	await waitFor(() => expect(queryByTestId(container, 'tag-count')).not.toBeNull())
-	return { adapter, probe: () => probe! }
+	return {
+		adapter,
+		probe: () => {
+			if (probe === null) throw new Error('The article has not rendered yet')
+			return probe
+		},
+	}
+}
+
+function addedTagsOf<TTag extends { id: string }>(tags: readonly TTag[]): TTag[] {
+	return tags.filter(tag => tag.id !== 'tag-1' && tag.id !== 'tag-2')
 }
 
 describe('HasMany add() — a field the call did not set', () => {
@@ -92,5 +104,19 @@ describe('HasMany add() — a field the call did not set', () => {
 		})
 		// Strict, so a `color: undefined` key would fail too, not only an explicit null.
 		expect(adapter.persisted).toStrictEqual([{ tags: [{ alias: expect.any(String), create: { name: 'New tag' } }] }])
+	})
+
+	test('is dirty when cleared after the create, as the next persist writes it', async () => {
+		const { adapter, probe } = await mount()
+		act(() => probe().add())
+		await act(async () => {
+			await probe().persistAll()
+		})
+		act(() => probe().clearAddedColors())
+		expect(probe().addedTags()).toEqual([{ color: null, serverColor: null, isColorDirty: true }])
+		await act(async () => {
+			await probe().persistAll()
+		})
+		expect(adapter.persisted.slice(1)).toStrictEqual([{ color: null }])
 	})
 })
