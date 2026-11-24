@@ -202,6 +202,42 @@ describe('rows of a list response that no create of the list made', () => {
 		expect(store.getPersistedId('Section', created)).not.toBeNull()
 		expect(await persistAgain(persister)).toEqual([])
 	})
+
+	// Root is created two has-ones below Leaf, in the same mutation, and its row is in the list too.
+	test('should map a new section whose grandparent, created inside it, belongs to the same list', async () => {
+		const { engine, persister } = setup()
+		const root = store.createEntity('Section', { name: 'Root', date: '2026-02-02' })
+		connectOne('Section', root, 'website', 'website-1')
+		const mid = store.createEntity('Section', { name: 'Mid' })
+		connectOne('Section', mid, 'website', 'website-2')
+		connectOne('Section', mid, 'parent', root)
+		const leaf = addSection({ name: 'Leaf' }, 'website-1', mid)
+
+		const result = await persister.persistAll()
+
+		expect(result.success).toBe(true)
+		expect(store.getPersistedId('Section', leaf)).not.toBeNull()
+		expect(await persistAgain(persister)).toEqual([])
+		expect(createdNamed(engine, 'Root')).toBe(1)
+		expect(createdNamed(engine, 'Leaf')).toBe(1)
+	})
+
+	test('should map a new section whose folded grandparent joins the same list', async () => {
+		const { engine, persister } = setup()
+		const root = addSection({ name: 'Root', date: '2026-02-02' })
+		const mid = store.createEntity('Section', { name: 'Mid' })
+		connectOne('Section', mid, 'website', 'website-2')
+		connectOne('Section', mid, 'parent', root)
+		const leaf = addSection({ name: 'Leaf' }, 'website-1', mid)
+
+		const result = await persister.persistAll()
+
+		expect(result.success).toBe(true)
+		expect(store.getPersistedId('Section', leaf)).not.toBeNull()
+		expect(await persistAgain(persister)).toEqual([])
+		expect(createdNamed(engine, 'Root')).toBe(1)
+		expect(createdNamed(engine, 'Leaf')).toBe(1)
+	})
 })
 
 describe('shared creates around a failed or refused mutation', () => {
