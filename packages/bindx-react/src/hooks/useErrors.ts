@@ -1,6 +1,7 @@
-import { useSyncExternalStore, useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 import type { FieldError } from '@contember/bindx'
 import { useBindxContext } from './BackendAdapterContext.js'
+import { useStoreSubscription } from './useStoreSubscription.js'
 
 /**
  * Error state for an entity, including all field and relation errors.
@@ -107,13 +108,36 @@ export function useEntityErrors(entityType: string, entityId: string): EntityErr
 		[store, entityType, entityId],
 	)
 
-	const errorsState = useSyncExternalStore(
+	// collectErrors builds a new state on every call; without the cache React sees a
+	// changed snapshot on each read and re-renders without end.
+	return useStoreSubscription({
 		subscribe,
-		collectErrors,
-		collectErrors,
-	)
+		getSnapshot: collectErrors,
+		isEqual: haveSameErrors,
+	})
+}
 
-	return errorsState
+function haveSameErrors(a: EntityErrorsState, b: EntityErrorsState): boolean {
+	return isSameErrorList(a.entityErrors, b.entityErrors)
+		&& isSameErrorMap(a.fieldErrors, b.fieldErrors)
+		&& isSameErrorMap(a.relationErrors, b.relationErrors)
+}
+
+function isSameErrorMap(
+	a: ReadonlyMap<string, readonly FieldError[]>,
+	b: ReadonlyMap<string, readonly FieldError[]>,
+): boolean {
+	if (a.size !== b.size) return false
+	for (const [key, errors] of a) {
+		const other = b.get(key)
+		if (other === undefined || !isSameErrorList(errors, other)) return false
+	}
+	return true
+}
+
+// The store keeps an error list's identity until it changes; an empty list is a fresh array per read.
+function isSameErrorList(a: readonly FieldError[], b: readonly FieldError[]): boolean {
+	return a === b || (a.length === 0 && b.length === 0)
 }
 
 /**
