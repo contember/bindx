@@ -1547,6 +1547,8 @@ export class BatchPersister {
 	 * A single op and row left over are paired by elimination. A server that echoes a
 	 * value back normalised (a date, a decimal) matches nothing byte-for-byte, and
 	 * discarding the pair would leave that op's whole subtree on temp IDs (issue #70).
+	 * With more rows left, the op takes the only one shaped like its has-one creates
+	 * (issue #177): an entity it created deeper down can be in the list too.
 	 *
 	 * A folded entity created in this mutation joins the list with a row of its own; its
 	 * op only claims a row it matches exactly, and is never returned.
@@ -1583,8 +1585,11 @@ export class BatchPersister {
 		const joining = new Set(joiningOps)
 		const ownPending = pendingOps.filter(op => !joining.has(op))
 		const lastOwn = ownPending[0]
-		if (ownPending.length === 1 && lastOwn && freeItems.length === 1) {
-			takePair(pendingOps.indexOf(lastOwn), freeItems[0]!)
+		if (ownPending.length === 1 && lastOwn) {
+			const shaped = freeItems.length === 1
+				? freeItems
+				: freeItems.filter(item => isCreateShapeMatchingNode(lastOwn.createData, item))
+			if (shaped.length === 1) takePair(pendingOps.indexOf(lastOwn), shaped[0]!)
 		}
 
 		return pairs.filter(pair => !joining.has(pair.op))
@@ -1670,6 +1675,17 @@ function idsCreatedThroughHasOne(createOps: readonly NodeCreateOp[], rows: reado
 		const id = isRecord(node) ? getStringProperty(node, 'id') : undefined
 		return id === undefined ? [] : [id]
 	}))
+}
+
+/** Scalars are ignored, as the server may normalise them: each nested create is set, each readable connect is its target. */
+function isCreateShapeMatchingNode(createData: Record<string, unknown>, node: Record<string, unknown>): boolean {
+	return Object.entries(createData).every(([fieldName, value]) => {
+		if (!isRecord(value)) return true
+		const nested = node[fieldName]
+		if (isRecord(value['create'])) return isRecord(nested) && isCreateShapeMatchingNode(value['create'], nested)
+		if (isRecord(value['connect']) && isRecord(nested)) return value['connect']['id'] === nested['id']
+		return true
+	})
 }
 
 interface NodeExtraction {
