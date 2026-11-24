@@ -74,6 +74,10 @@ export class SchemaLoader {
 		})()
 
 		this.cache.set(cacheKey, promise)
+		// A failed load is not kept, so the next call asks again.
+		promise.catch(() => {
+			if (this.cache.get(cacheKey) === promise) this.cache.delete(cacheKey)
+		})
 		return promise
 	}
 

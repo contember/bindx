@@ -27,6 +27,12 @@ export interface MutationSchemaProvider {
 	getRelationTarget(entityType: string, fieldName: string): string | undefined
 
 	/**
+	 * Gets the field on the target entity that is the other side of a relation.
+	 * Returns undefined for a unidirectional relation or a non-relation field.
+	 */
+	getInverseField(entityType: string, fieldName: string): string | undefined
+
+	/**
 	 * Checks if an entity type exists in the schema.
 	 */
 	hasEntity(entityType: string): boolean

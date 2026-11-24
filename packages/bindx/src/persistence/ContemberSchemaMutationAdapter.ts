@@ -9,8 +9,8 @@ export interface SchemaNames {
 			readonly fields: {
 				readonly [fieldName: string]:
 					| { readonly type: 'column'; readonly enumName?: string; readonly columnType?: string }
-					| { readonly type: 'one'; readonly entity: string; readonly nullable?: boolean }
-					| { readonly type: 'many'; readonly entity: string; readonly relationKind?: 'oneHasMany' | 'manyHasMany'; readonly nullable?: boolean }
+					| { readonly type: 'one'; readonly entity: string; readonly nullable?: boolean; readonly inverse?: string }
+					| { readonly type: 'many'; readonly entity: string; readonly relationKind?: 'oneHasMany' | 'manyHasMany'; readonly nullable?: boolean; readonly inverse?: string }
 			}
 		}
 	}
@@ -66,6 +66,14 @@ export class ContemberSchemaMutationAdapter implements MutationSchemaProvider {
 
 		if (fieldDef.type === 'one' || fieldDef.type === 'many') {
 			return fieldDef.entity
+		}
+		return undefined
+	}
+
+	getInverseField(entityType: string, fieldName: string): string | undefined {
+		const fieldDef = this.schema.entities[entityType]?.fields[fieldName]
+		if (fieldDef?.type === 'one' || fieldDef?.type === 'many') {
+			return fieldDef.inverse
 		}
 		return undefined
 	}
