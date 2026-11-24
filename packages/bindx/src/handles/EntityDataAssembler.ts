@@ -97,11 +97,15 @@ export class EntityDataAssembler {
 	}
 }
 
-/** The selected columns the entity data holds no value for, each as null. */
+/**
+ * The selected columns the entity data holds no value for, each as null under its output key.
+ * A read stores a column under its alias, a write under its field name, so both are checked.
+ */
 function unsetColumnsOf(columns: Record<string, unknown>, selection: SelectionMeta): Record<string, null> {
 	const unset: Record<string, null> = {}
 	for (const field of selection.fields.values()) {
-		if (!field.isRelation && columns[field.fieldName] === undefined) unset[field.fieldName] = null
+		if (field.isRelation || columns[field.alias] !== undefined || columns[field.fieldName] !== undefined) continue
+		unset[field.alias] = null
 	}
 	return unset
 }

@@ -139,7 +139,7 @@ describe('HasMany add() — $data of the added entity', () => {
 	test('reading it leaves the field out of the create mutation', async () => {
 		const { adapter, probe } = await mount()
 		act(() => probe().add())
-		probe().addedTagData()
+		expect(probe().addedTagData()).toHaveLength(1)
 		await act(async () => {
 			await probe().persistAll()
 		})
