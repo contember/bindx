@@ -71,6 +71,9 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	/** Handles of the other param aliases of this field, see {@link withParams}. */
 	private readonly paramViews = new Map<string, HasManyAccessor<TEntity, TSelected>>()
 
+	/** The proxy {@link create} wraps this handle in; what {@link withParams} hands out for itself. */
+	private publicHandle: HasManyAccessor<TEntity, TSelected> | null = null
+
 	private constructor(
 		parentEntityType: string,
 		parentEntityId: string,
@@ -109,9 +112,10 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		fieldAccess?: FieldAccessMode,
 		parentSelection?: SelectionMeta,
 	): HasManyAccessor<TEntity, TSelected> {
-		return createAliasProxy<HasManyListHandle<TEntity, TSelected>, HasManyAccessor<TEntity, TSelected>>(
-			HasManyListHandle.createRaw<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath, fieldAccess, parentSelection),
-		)
+		const handle = HasManyListHandle.createRaw<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath, fieldAccess, parentSelection)
+		const publicHandle = createAliasProxy<HasManyListHandle<TEntity, TSelected>, HasManyAccessor<TEntity, TSelected>>(handle)
+		handle.publicHandle = publicHandle
+		return publicHandle
 	}
 
 	/**
@@ -142,9 +146,10 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 * handle when the parent selects no such alias.
 	 */
 	withParams(params: HasManyParams): HasManyRef<TEntity, TSelected> {
+		const self = this.publicHandle ?? this
 		const alias = generateHasManyAlias(this.fieldName, params)
 		if (alias === this.alias) {
-			return this
+			return self
 		}
 		const cached = this.paramViews.get(alias)
 		if (cached) {
@@ -152,7 +157,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		}
 		const meta = this.parentSelection?.fields.get(alias)
 		if (!meta || !meta.isArray || meta.fieldName !== this.fieldName) {
-			return this
+			return self
 		}
 		this.store.declareHasManyViewMembership(
 			this.entityType,

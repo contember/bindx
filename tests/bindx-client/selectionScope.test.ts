@@ -37,28 +37,10 @@ describe('SelectionScope', () => {
 		expect(selection.fields.get('posts')?.hasManyParams).toBeUndefined()
 	})
 
-	test('a claimed relation is selected with its id until the claim is released', () => {
-		const scope = new SelectionScope()
-		scope.claimRelation('posts', true)
-		expect(describeSelection(scope.toSelectionMeta())).toEqual(['posts { id }'])
-
-		scope.releaseRelation('posts')
-		expect(describeSelection(scope.toSelectionMeta())).toEqual([])
-		expect(scope.hasFields()).toBe(false)
-	})
-
-	test('a released claim keeps a relation that is used for its own sake', () => {
-		const scope = new SelectionScope()
-		scope.claimRelation('posts', true)
-		scope.child('posts').addScalar('title')
-		scope.releaseRelation('posts')
-		expect(describeSelection(scope.toSelectionMeta())).toEqual(['posts { id title }'])
-	})
-
-	test('merge keeps the params aliases apart and carries open claims', () => {
+	test('merge keeps the params aliases apart', () => {
 		const other = new SelectionScope()
 		other.hasManyChild('posts', LIMIT_TWO).addScalar('rank')
-		other.claimRelation('author', false)
+		other.child('author')
 
 		const scope = new SelectionScope()
 		scope.child('posts').addScalar('title')
@@ -79,5 +61,15 @@ describe('SelectionScope', () => {
 		const roundTripped = SelectionScope.fromSelectionMeta(scope.toSelectionMeta()).toSelectionMeta()
 		expect(describeSelection(roundTripped)).toEqual(describeSelection(scope.toSelectionMeta()))
 		expect(roundTripped.fields.get(LIMIT_TWO_ALIAS)?.hasManyParams).toEqual(LIMIT_TWO)
+	})
+
+	test('a field selected as a relation under a params alias is no scalar', () => {
+		// Without a schema the collector first records a read field as a scalar.
+		const scope = new SelectionScope()
+		scope.addScalar('posts')
+		scope.hasManyChild('posts', LIMIT_TWO).addScalar('rank')
+		scope.addScalar('posts')
+
+		expect(describeSelection(scope.toSelectionMeta())).toEqual([`${LIMIT_TWO_ALIAS}:posts { id rank }`])
 	})
 })

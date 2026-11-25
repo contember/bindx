@@ -2,6 +2,8 @@ import '../../setup'
 // A relation ref reached through a has-one (`article.author.avatar`, `article.author.posts`)
 // and fed to <HasOne>/<HasMany> must put the relation and its children's selection under
 // the ref's own entity (`author`), not as a stray relation of the root entity.
+// A has-many read from the schema stays selected as `posts { id }` next to a params alias:
+// collection cannot see every consumer of the ref, and one may read it only at runtime.
 import { afterEach, describe, expect, test } from 'bun:test'
 import { cleanup, render, waitFor } from '@testing-library/react'
 import React, { type ReactNode } from 'react'
@@ -18,7 +20,9 @@ import {
 	hasMany,
 	hasOne,
 	scalar,
+	useHasMany,
 	type EntityRef,
+	type HasManyRef,
 } from '@contember/bindx-react'
 import type { Query, QueryOptions, QueryResult, QuerySpec, QueryFieldSpec } from '@contember/bindx'
 import { queryByTestId } from '../../shared'
@@ -94,6 +98,11 @@ const nestedSchema = defineSchema<NestedSchema>({
 const entities = {
 	Article: entityDef<Article>('Article'),
 	Author: entityDef<Author>('Author'),
+}
+
+/** Reads the relation only at runtime; a plain component, so selection collection does not see it. */
+function PostCount({ posts }: { posts: HasManyRef<Post> }): ReactNode {
+	return <span>{useHasMany(posts).length}</span>
 }
 
 const TopPosts = createComponent()
@@ -198,7 +207,7 @@ describe('a nested relation ref fed to <HasOne>/<HasMany>', () => {
 		))
 		expect(observed.query).toHaveLength(2)
 		expect(observed.query[1]).toBe('id')
-		expect(observed.query[0]).toMatch(/^author \{ id posts_\w+:posts\(orderBy=\[\{"rank":"asc"\}\],limit=2\) \{ id title \} \}$/)
+		expect(observed.query[0]).toMatch(/^author \{ id posts \{ id \} posts_\w+:posts\(orderBy=\[\{"rank":"asc"\}\],limit=2\) \{ id title \} \}$/)
 		expect(observed.text).toBe('SecondThird')
 	})
 
@@ -216,13 +225,13 @@ describe('a nested relation ref fed to <HasOne>/<HasMany>', () => {
 		const author = observed.query[0] ?? ''
 		expect(author).toMatch(/posts_\w+:posts\(filter=\{"rank":\{"eq":1\}\}\) \{ id title \}/)
 		expect(author).toMatch(/posts_\w+:posts\(filter=\{"rank":\{"eq":3\}\}\) \{ id rank \}/)
-		expect(author).not.toMatch(/ posts \{/)
+		expect(author).toMatch(/ posts \{ id \} /)
 		expect(observed.query[1]).toBe('id')
 		// Each list renders the rows of its own params.
 		expect(observed.text).toBe('Second3')
 	})
 
-	test('<HasMany> of a top-level relation with a limit queries only the aliased relation', async () => {
+	test('<HasMany> of a has-one\'s relation with a limit renders its aliased rows', async () => {
 		const observed = await observe(article => (
 			<HasOne field={article.author}>
 				{author => (
@@ -232,7 +241,7 @@ describe('a nested relation ref fed to <HasOne>/<HasMany>', () => {
 				)}
 			</HasOne>
 		))
-		expect(observed.query[0]).toMatch(/^author \{ id posts_\w+:posts\(limit=1\) \{ id title \} \}$/)
+		expect(observed.query[0]).toMatch(/^author \{ id posts \{ id \} posts_\w+:posts\(limit=1\) \{ id title \} \}$/)
 		expect(observed.text).toBe('First')
 	})
 
@@ -244,5 +253,21 @@ describe('a nested relation ref fed to <HasOne>/<HasMany>', () => {
 		))
 		expect(observed.query[0]).toMatch(/^author \{ id posts_\w+:posts\(orderBy=\[\{"rank":"asc"\}\],limit=1\) \{ id title \} \}$/)
 		expect(observed.text).toBe('Second')
+	})
+
+	test('a ref shared by a runtime-only reader and a <HasMany> with params keeps the whole relation', async () => {
+		const observed = await observe(article => {
+			const posts = article.author.posts
+			return (
+				<>
+					<PostCount posts={posts} />
+					<HasMany field={posts} limit={1}>
+						{post => <Field field={post.title} />}
+					</HasMany>
+				</>
+			)
+		})
+		expect(observed.query[0]).toMatch(/^author \{ id posts \{ id \} posts_\w+:posts\(limit=1\) \{ id title \} \}$/)
+		expect(observed.text).toBe('3First')
 	})
 })

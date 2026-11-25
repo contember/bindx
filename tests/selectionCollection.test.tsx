@@ -301,10 +301,8 @@ describe('Selection Collection with Schema', () => {
 		// Build query
 		const query = buildQueryFromSelection(selection)
 
-		// usages should be in the query once, under the alias of its orderBy
-		const usagesSpecs = query.fields.filter((f: any) => f.sourcePath[0] === 'usages')
-		expect(usagesSpecs).toHaveLength(1)
-		const usagesSpec = usagesSpecs[0]
+		// usages should be in the query under the alias of its orderBy
+		const usagesSpec = query.fields.find((f: any) => f.sourcePath[0] === 'usages' && f.orderBy !== undefined)
 		expect(usagesSpec!.orderBy).toEqual({ createdAt: 'desc' })
 		expect(usagesSpec!.nested).toBeDefined()
 

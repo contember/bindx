@@ -115,13 +115,14 @@ function createCollectorFieldRef(
 
 	// A ref from withParams() records into the relation selected under the alias of its params.
 	// A plain ref is initially added as scalar (upgraded to relation if .fields/.entity/.map is
-	// accessed). A relation known from the schema is claimed: selected (with its id) even if only
-	// the ref is passed on, until withParams() moves its use to a params alias.
-	let isClaimed = false
+	// accessed), or as a relation right away if the schema says so: a component that receives
+	// the ref may read it at runtime only, so it stays selected even next to a params alias.
 	if (hasManyParams === null) {
-		isClaimed = isHasOneRelation || isHasManyRelation
-		if (isClaimed) {
-			parentScope.claimRelation(fieldName, isHasManyRelation)
+		if (isHasOneRelation || isHasManyRelation) {
+			parentScope.child(fieldName)
+			if (isHasManyRelation) {
+				parentScope.markAsArray(fieldName)
+			}
 		} else {
 			parentScope.addScalar(fieldName)
 		}
@@ -139,10 +140,6 @@ function createCollectorFieldRef(
 	}
 
 	const withParams = (params: HasManyParams): CollectorRef => {
-		if (isClaimed) {
-			isClaimed = false
-			parentScope.releaseRelation(fieldName)
-		}
 		return createCollectorFieldRef(parentScope, fieldName, entityName, schemaRegistry, parentPath, params)
 	}
 

@@ -20,10 +20,6 @@ interface RelationNode {
 	readonly scope: SelectionScope
 	isArray: boolean
 	params?: HasManyParams
-	/** Selected for its own sake (fields read, merged in), not only through a claim. */
-	isUsed: boolean
-	/** Open claims of relation refs that were read but not consumed yet. */
-	claims: number
 }
 
 /**
@@ -42,9 +38,7 @@ export class SelectionScope {
 	 * Removes the field from scalars if it was there. New relation scopes select 'id'.
 	 */
 	child(fieldName: string): SelectionScope {
-		const node = this.ensureRelation(fieldName, fieldName)
-		node.isUsed = true
-		return node.scope
+		return this.ensureRelation(fieldName, fieldName).scope
 	}
 
 	/**
@@ -55,36 +49,11 @@ export class SelectionScope {
 	hasManyChild(fieldName: string, params: HasManyParams): SelectionScope {
 		const alias = generateHasManyAlias(fieldName, params)
 		const node = this.ensureRelation(fieldName, alias)
-		node.isUsed = true
 		node.isArray = true
 		if (alias !== fieldName || params.totalCount) {
 			node.params = mergeHasManyParams(node.params, params)
 		}
 		return node.scope
-	}
-
-	/**
-	 * Record that a ref to a relation field was read. The relation is selected (at least
-	 * its id) until {@link releaseRelation} is called for the same claim, because a component
-	 * that receives the ref may read it at runtime only.
-	 */
-	claimRelation(fieldName: string, isArray: boolean): void {
-		const node = this.ensureRelation(fieldName, fieldName)
-		node.claims++
-		if (isArray) {
-			node.isArray = true
-		}
-	}
-
-	/**
-	 * Drop a claim from {@link claimRelation}: the ref's consumer selected the relation
-	 * elsewhere (e.g. under a params alias), so the plain relation is not needed for it.
-	 */
-	releaseRelation(fieldName: string): void {
-		const node = this.relations.get(fieldName)
-		if (node && node.claims > 0) {
-			node.claims--
-		}
 	}
 
 	/**
@@ -111,15 +80,7 @@ export class SelectionScope {
 	 * Check if this scope has any fields (scalar or relation).
 	 */
 	hasFields(): boolean {
-		if (this.scalarFields.size > 0) {
-			return true
-		}
-		for (const node of this.relations.values()) {
-			if (isSelected(node)) {
-				return true
-			}
-		}
-		return false
+		return this.scalarFields.size > 0 || this.relations.size > 0
 	}
 
 	/**
@@ -134,8 +95,6 @@ export class SelectionScope {
 		for (const [alias, otherNode] of other.relations) {
 			const node = this.ensureRelation(otherNode.fieldName, alias)
 			node.scope.merge(otherNode.scope)
-			node.isUsed = node.isUsed || otherNode.isUsed
-			node.claims += otherNode.claims
 			node.isArray = node.isArray || otherNode.isArray
 			if (otherNode.params) {
 				node.params = mergeHasManyParams(node.params, otherNode.params)
@@ -184,9 +143,6 @@ export class SelectionScope {
 		}
 
 		for (const [alias, node] of this.relations) {
-			if (!isSelected(node)) {
-				continue
-			}
 			fields.set(alias, {
 				fieldName: node.fieldName,
 				alias,
@@ -228,14 +184,10 @@ export class SelectionScope {
 		}
 		const scope = new SelectionScope()
 		scope.addScalar('id')
-		const node: RelationNode = { fieldName, scope, isArray: false, isUsed: false, claims: 0 }
+		const node: RelationNode = { fieldName, scope, isArray: false }
 		this.relations.set(alias, node)
 		return node
 	}
-}
-
-function isSelected(node: RelationNode): boolean {
-	return node.isUsed || node.claims > 0
 }
 
 /** Params of one alias differ at most in `totalCount`, which is not part of the alias. */
