@@ -154,6 +154,8 @@ export interface TransactionMutationResult {
 	readonly ok: boolean
 	/** Server-assigned ID for creates */
 	readonly persistedId?: string
+	/** The created row as the server returned it; its columns the client did not send become server data. */
+	readonly data?: Record<string, unknown>
 	readonly errorMessage?: string
 	readonly mutationResult?: ContemberMutationResult
 	/**

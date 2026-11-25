@@ -978,7 +978,10 @@ export class BatchPersister {
 				confirmedCreates.add(key)
 				persistedSoFar.set(key, persistedId)
 			}
-			const conflicts = this.reconcileConfirmedEntities(execution, involved, confirmedCreates, reconciledMemberships)
+			const createdRows = new Map(resolvedNested.createdRows)
+			const createdRow = entity.operation === 'create' ? mutationResult.data ?? mutationResult.nodeData : undefined
+			if (createdRow) createdRows.set(entityIdentityKey(entity.entityType, entity.entityId), createdRow)
+			const conflicts = this.reconcileConfirmedEntities(execution, involved, createdRows, confirmedCreates, reconciledMemberships)
 			idMappings.push({ entity, persistedId: mutationResult.persistedId, nestedIds: resolvedNested.persistedIds })
 			for (const nested of resolvedNested.unresolved) failedOwners.add(entityIdentityKey(nested.entityType, nested.entityId))
 
@@ -1102,9 +1105,10 @@ export class BatchPersister {
 		readonly entities: readonly ExecutionEntity[]
 		readonly unresolved: readonly ExecutionEntity[]
 		readonly persistedIds: ReadonlyMap<string, string>
+		readonly createdRows: ReadonlyMap<string, Record<string, unknown>>
 	} {
 		const expected = this.expectedNestedEntities(execution, mutation)
-		if (expected.length === 0) return { entities: [], unresolved: [], persistedIds: new Map() }
+		if (expected.length === 0) return { entities: [], unresolved: [], persistedIds: new Map(), createdRows: new Map() }
 
 		let supplied = result.nestedResults ?? []
 		if (supplied.length === 0 && result.nodeData) {
@@ -1118,6 +1122,7 @@ export class BatchPersister {
 		}
 		const flattened = flattenMutationResults(supplied)
 		const persistedIds = new Map<string, string>()
+		const createdRows = new Map<string, Record<string, unknown>>()
 		const unresolved: ExecutionEntity[] = []
 		const typesById = new Map<string, Set<string>>()
 		for (const entity of expected) {
@@ -1140,10 +1145,15 @@ export class BatchPersister {
 				&& typesById.get(entity.entityId)?.size === 1
 			))
 			const persistedId = match?.persistedId ?? (!isTempId(entity.entityId) ? entity.entityId : undefined)
-			if (!persistedId) unresolved.push(entity)
-			else persistedIds.set(entityIdentityKey(entity.entityType, entity.entityId), persistedId)
+			if (!persistedId) {
+				unresolved.push(entity)
+				continue
+			}
+			const key = entityIdentityKey(entity.entityType, entity.entityId)
+			persistedIds.set(key, persistedId)
+			if (match?.data) createdRows.set(key, match.data)
 		}
-		return { entities: expected.filter(entity => !unresolved.includes(entity)), unresolved, persistedIds }
+		return { entities: expected.filter(entity => !unresolved.includes(entity)), unresolved, persistedIds, createdRows }
 	}
 
 	private expectedNestedEntities(
@@ -1197,6 +1207,7 @@ export class BatchPersister {
 	private reconcileConfirmedEntities(
 		execution: PersistExecution,
 		entities: readonly ExecutionEntity[],
+		createdRows: ReadonlyMap<string, Record<string, unknown>>,
 		confirmedNestedCreates: ReadonlySet<string>,
 		reconciledMemberships: Set<string>,
 	): ReadonlyMap<string, readonly string[]> {
@@ -1218,7 +1229,7 @@ export class BatchPersister {
 				this.store.removeEntity(entity.entityType, entity.entityId)
 				continue
 			}
-			this.store.refreshServerData(entity.entityType, entity.entityId, entity.scalarData)
+			this.store.refreshServerData(entity.entityType, entity.entityId, this.confirmedScalars(entity, createdRows.get(key)))
 		}
 
 		for (const change of execution.hasOneChanges) {
@@ -1261,6 +1272,21 @@ export class BatchPersister {
 		}
 		this.purgeChildrenDeletedByParent(execution, keys)
 		return conflicts
+	}
+
+	/**
+	 * The server data of a confirmed entity. A created row adds the columns the database
+	 * filled in; a sent column keeps the sent value, since a value the server normalised
+	 * would otherwise leave the field dirty with no edit to persist.
+	 */
+	private confirmedScalars(entity: ExecutionEntity, createdRow: Record<string, unknown> | undefined): Readonly<Record<string, unknown>> {
+		const schema = this.schema
+		if (entity.operation !== 'create' || !createdRow || !schema) return entity.scalarData
+		const filled: Record<string, unknown> = {}
+		for (const field of schema.getScalarFields(entity.entityType)) {
+			if (field !== 'id' && field in createdRow) filled[field] = createdRow[field]
+		}
+		return { ...filled, ...entity.scalarData }
 	}
 
 	/**
@@ -1466,6 +1492,7 @@ export class BatchPersister {
 				entityId: op.alias,
 				ok: true,
 				persistedId: getStringProperty(nodeItem, 'id'),
+				data: nodeItem,
 				nestedResults: childResults.length > 0 ? childResults : undefined,
 			}
 		}

@@ -5,6 +5,7 @@ import {
 	GraphQlInlineFragment,
 	type GraphQlSelectionSet,
 } from '@contember/graphql-builder'
+import type { ContemberSchema } from '../schema/ContemberSchema.js'
 
 export const mutationFragments: Record<string, GraphQlFragment> = {
 	MutationError: new GraphQlFragment('MutationError', '_MutationError', [
@@ -68,15 +69,49 @@ export function buildMutationSelection(
 }
 
 /**
+ * Asks for every column of each row a mutation creates, so the values the
+ * database filled in (defaults, `now`, sequences, triggers) reach the client.
+ */
+export interface CreatedRowReadBack {
+	/** The role's schema from introspection: it lists only the columns the role may read. */
+	readonly schema: ContemberSchema
+	readonly entityType: string
+	/** Whether the mutation creates its root row (`create`) or updates it (`update`). */
+	readonly isRootCreated: boolean
+}
+
+interface SelectionLevel {
+	readonly schema: ContemberSchema
+	readonly entityType: string
+	readonly isCreated: boolean
+}
+
+/**
  * Builds a GraphQL node selection set from mutation data.
  * Recursively traverses create/update operations to request `id` and scalar
  * fields at each nesting level. Scalar fields are needed for content-based
- * matching of nested entity IDs after persist.
+ * matching of nested entity IDs after persist. With `readBack`, created rows
+ * also request every readable column.
  */
 export function buildNodeSelectionFromMutationData(
 	data: Record<string, unknown>,
+	readBack?: CreatedRowReadBack,
 ): GraphQlSelectionSet {
-	return buildSelectionFromDataObjects([data])
+	const level = readBack
+		? { schema: readBack.schema, entityType: readBack.entityType, isCreated: readBack.isRootCreated }
+		: undefined
+	return buildSelectionFromDataObjects([data], level)
+}
+
+/**
+ * Whether the mutation data creates a row anywhere: the read-back schema is
+ * needed only then.
+ */
+export function containsCreateOperation(value: unknown): boolean {
+	if (Array.isArray(value)) return value.some(containsCreateOperation)
+	if (!isRecord(value)) return false
+	if (isRecord(value['create'])) return true
+	return Object.values(value).some(containsCreateOperation)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -122,6 +157,7 @@ function extractOperationData(op: unknown): Record<string, unknown> | undefined 
  */
 function buildSelectionFromDataObjects(
 	dataObjects: readonly Record<string, unknown>[],
+	level: SelectionLevel | undefined,
 ): GraphQlSelectionSet {
 	const scalarFields = new Set<string>()
 	const nestedOps = new Map<string, unknown[]>()
@@ -149,6 +185,12 @@ function buildSelectionFromDataObjects(
 		}
 	}
 
+	if (level?.isCreated) {
+		for (const fieldName of readableColumnsOf(level.schema, level.entityType)) {
+			if (fieldName !== 'id') scalarFields.add(fieldName)
+		}
+	}
+
 	const fields: GraphQlSelectionSet = [new GraphQlField(null, 'id')]
 
 	for (const fieldName of scalarFields) {
@@ -156,17 +198,34 @@ function buildSelectionFromDataObjects(
 	}
 
 	for (const [fieldName, ops] of nestedOps) {
-		const nested = buildSelectionFromOps(ops)
+		const nested = buildSelectionFromOps(ops, level && nestedLevel(level, fieldName, ops))
 		if (nested) fields.push(new GraphQlField(null, fieldName, {}, nested))
 	}
 
 	return fields
 }
 
+function readableColumnsOf(schema: ContemberSchema, entityType: string): string[] {
+	const entity = schema.getEntity(entityType)
+	if (!entity) return []
+	return [...entity.fields.values()].filter(field => field.__typename === '_Column').map(field => field.name)
+}
+
+/** Sibling ops share one selection, so the target's columns are asked for when any of them creates. */
+function nestedLevel(level: SelectionLevel, fieldName: string, ops: readonly unknown[]): SelectionLevel | undefined {
+	const field = level.schema.getEntityField(level.entityType, fieldName)
+	if (field?.__typename !== '_Relation') return undefined
+	return {
+		schema: level.schema,
+		entityType: field.targetEntity,
+		isCreated: ops.some(op => isRecord(op) && isRecord(op['create'])),
+	}
+}
+
 /**
  * Merges the selections of all create/update operations written to one field.
  */
-function buildSelectionFromOps(ops: readonly unknown[]): GraphQlSelectionSet | undefined {
+function buildSelectionFromOps(ops: readonly unknown[], level: SelectionLevel | undefined): GraphQlSelectionSet | undefined {
 	const dataObjects: Record<string, unknown>[] = []
 
 	for (const op of ops) {
@@ -176,5 +235,5 @@ function buildSelectionFromOps(ops: readonly unknown[]): GraphQlSelectionSet | u
 
 	if (dataObjects.length === 0) return undefined
 
-	return buildSelectionFromDataObjects(dataObjects)
+	return buildSelectionFromDataObjects(dataObjects, level)
 }
