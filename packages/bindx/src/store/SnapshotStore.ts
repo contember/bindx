@@ -710,6 +710,37 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		return result
 	}
 
+	/** Ids of the entities an entity's live relations point at. */
+	getLiveChildIds(entityType: string, id: string): string[] {
+		return this.relations.getLiveChildIds(`${this.getEntityKey(entityType, id)}:`)
+	}
+
+	/** Keys (`type:id`) of the entities with a live relation edge to {@link childId}. */
+	getParentKeysForChild(childId: string): Set<string> {
+		return this.relations.getParentKeysForChild(childId)
+	}
+
+	/**
+	 * Drops list creates a persist confirmed without a row to pair them with and lists
+	 * the response's unclaimed rows instead. A server write, like {@link reconcileSentHasMany}.
+	 * Returns the rows that joined the relation.
+	 *
+	 * Undo history is cleared: its images still hold the dropped items, and no rekey maps
+	 * them to a row, so undoing or redoing would bring back items that no longer exist.
+	 */
+	supersedeHasManyCreates(
+		parentType: string,
+		parentId: string,
+		fieldName: string,
+		change: { readonly dropped: ReadonlySet<string>; readonly adopted: readonly string[] },
+	): readonly string[] {
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		const adopted = this.relations.supersedeHasManyCreates(key, change.dropped, change.adopted)
+		if (change.dropped.size > 0) this.journal?.clear()
+		this.notifyRelationSubscribers(key)
+		return adopted
+	}
+
 	resetHasMany(
 		parentType: string,
 		parentId: string,

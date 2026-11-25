@@ -5,10 +5,12 @@ import {
 	ContemberSchemaMutationAdapter,
 	ActionDispatcher,
 	BatchPersister,
+	SchemaRegistry,
 	type BackendAdapter,
 	type SchemaNames,
 } from '@contember/bindx'
 import { buildNodeSelectionFromMutationData } from '@contember/bindx-client'
+import { schemaNamesToDef } from '@contember/bindx-react'
 
 /**
  * Page → blocks (hasMany) → button (hasOne) → link (hasOne).
@@ -139,10 +141,9 @@ function createMockServer(options: ServerOptions = {}): MockServer {
 }
 
 function createPersister(store: SnapshotStore, adapter: BackendAdapter): BatchPersister {
-	const schemaAdapter = new ContemberSchemaMutationAdapter(schema)
 	return new BatchPersister(adapter, store, new ActionDispatcher(store), {
-		mutationCollector: new MutationCollector(store, schemaAdapter),
-		schema: schemaAdapter as never, // ContemberSchemaMutationAdapter satisfies MutationSchemaProvider
+		mutationCollector: new MutationCollector(store, new ContemberSchemaMutationAdapter(schema)),
+		schema: new SchemaRegistry(schemaNamesToDef(schema)),
 	})
 }
 
@@ -162,6 +163,24 @@ function connect(store: SnapshotStore, parentType: string, parentId: string, fie
 	store.getOrCreateRelation(parentType, parentId, field, {
 		currentId: childId, serverId: null, state: 'connected', serverState: 'disconnected', placeholderData: {},
 	})
+}
+
+/**
+ * No client entity is guessed onto a row: the unpaired creates leave the store, the page
+ * lists the server's rows instead, and the next save sends nothing (bindx#177).
+ */
+async function expectServerRowsReplaceUnpaired(store: SnapshotStore, persister: BatchPersister, server: MockServer, blockIds: readonly string[]): Promise<void> {
+	const listed = store.getHasManyOrderedIds('Page', 'page-1', 'blocks')
+	expect(listed).toHaveLength(blockIds.length)
+	for (const id of listed) {
+		expect(server.rowsById.has(id)).toBe(true)
+		expect(store.existsOnServer('Block', id)).toBe(true)
+	}
+	for (const blockId of blockIds) {
+		expect(store.getPersistedId('Block', blockId)).toBeNull()
+		expect(store.getEntitySnapshot('Block', blockId)).toBeUndefined()
+	}
+	expect((await persister.persistAll()).results).toEqual([])
 }
 
 /** ISO-normalises a date-only value, the shape a datetime column echoes back. */
@@ -198,7 +217,7 @@ describe('Nested create reconciliation when the server normalises a scalar', () 
 		expect(store.getPersistedId('Block', blockWithLink)).not.toBe(store.getPersistedId('Block', plainBlock))
 	})
 
-	test('refuses to pair when two siblings are both unmatched, rather than guessing', async () => {
+	test('refuses to pair two siblings that are both unmatched, and lists their rows instead', async () => {
 		const store = new SnapshotStore()
 		const server = createMockServer({ normalise: normaliseDate })
 		const persister = createPersister(store, server.adapter)
@@ -215,11 +234,9 @@ describe('Nested create reconciliation when the server normalises a scalar', () 
 			return blockId
 		})
 
-		expect((await persister.persistAll()).success).toBe(false)
+		expect((await persister.persistAll()).success).toBe(true)
 
-		for (const blockId of blockIds) {
-			expect(store.getPersistedId('Block', blockId)).toBeNull()
-		}
+		await expectServerRowsReplaceUnpaired(store, persister, server, blockIds)
 	})
 })
 
@@ -247,7 +264,7 @@ describe('Pairing create operations with response rows', () => {
 		expect(server.rowsById.get(preciseId!)?.['type']).toBe('button')
 	})
 
-	test('leaves indistinguishable siblings unresolved instead of pairing by position', async () => {
+	test('does not pair indistinguishable siblings by position, and lists their rows instead', async () => {
 		const store = new SnapshotStore()
 		const server = createMockServer()
 		const persister = createPersister(store, server.adapter)
@@ -256,9 +273,8 @@ describe('Pairing create operations with response rows', () => {
 		const first = addBlock(store, { order: 1, type: 'button' })
 		const second = addBlock(store, { order: 1, type: 'button' })
 
-		expect((await persister.persistAll()).success).toBe(false)
+		expect((await persister.persistAll()).success).toBe(true)
 
-		expect(store.getPersistedId('Block', first)).toBeNull()
-		expect(store.getPersistedId('Block', second)).toBeNull()
+		await expectServerRowsReplaceUnpaired(store, persister, server, [first, second])
 	})
 })

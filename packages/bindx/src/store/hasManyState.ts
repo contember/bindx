@@ -406,3 +406,42 @@ export function reconcileHasManyState(
 		result,
 	}
 }
+
+/**
+ * Replaces list creates the server confirmed but no response row could be paired with:
+ * the created items leave the relation and the rows the response listed but nothing
+ * claimed join the views that cannot exclude them, taking the dropped items' place in
+ * explicit orders. With no such view the rows join nothing: a filtered view may exclude
+ * them, and without a loaded unfiltered view the client does not hold the full list.
+ */
+export function supersedeHasManyCreates(
+	existing: StoredHasManyState,
+	dropped: ReadonlySet<string>,
+	adopted: readonly string[],
+): { state: StoredHasManyState; adopted: readonly string[] } {
+	const views = cloneViews(existing.views)
+	const plannedAdditions = cloneAdditions(existing.plannedAdditions)
+	const plannedRemovals = new Map(existing.plannedRemovals)
+	for (const id of dropped) {
+		plannedAdditions.delete(id)
+		plannedRemovals.delete(id)
+	}
+	const targets = new Set(totalAliases(views))
+	const joined = targets.size > 0 ? adopted : []
+	for (const [alias, view] of views) {
+		const joining = targets.has(alias) ? joined.filter(id => !view.serverIds.has(id)) : []
+		for (const id of joining) view.serverIds.add(id)
+		if (view.orderedIds !== null) {
+			view.orderedIds = replaceInOrder(view.orderedIds, dropped, joining.filter(id => !view.orderedIds?.includes(id)))
+		}
+	}
+	return { state: { views, plannedRemovals, plannedAdditions, version: existing.version + 1 }, adopted: joined }
+}
+
+function replaceInOrder(order: readonly string[], dropped: ReadonlySet<string>, joining: readonly string[]): string[] {
+	const position = order.findIndex(id => dropped.has(id))
+	const kept = order.filter(id => !dropped.has(id))
+	if (position < 0) return [...kept, ...joining]
+	const insertAt = order.slice(0, position).filter(id => !dropped.has(id)).length
+	return [...kept.slice(0, insertAt), ...joining, ...kept.slice(insertAt)]
+}

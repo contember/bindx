@@ -26,10 +26,12 @@ import type { EntityPersistedEvent, EntityPersistFailedEvent, EntityPersistingEv
 import { deepEqual } from '../utils/deepEqual.js'
 import {
 	createPersistExecution,
+	editableWriteVersion,
 	entityIdentityKey,
 	type ExecutionEntity,
 	type PersistExecution,
 } from './PersistExecution.js'
+import { rowColumns, settleableUnpairedCreates, supersedeUnpairedCreates, type UnpairedListCreates } from './unpairedListCreates.js'
 
 /**
  * Options for BatchPersister
@@ -409,7 +411,7 @@ export class BatchPersister {
 		const emitter = this.dispatcher.getEventEmitter()
 
 		for (const entry of results) {
-			if (entry.skipped) continue
+			if (entry.skipped || entry.superseded) continue
 			if (entry.success) {
 				emitter.emit({
 					type: 'entity:persisted',
@@ -934,6 +936,10 @@ export class BatchPersister {
 		const reconciledMemberships = new Set<string>()
 		const failedOwners = new Set<string>()
 		const persistedSoFar = new Map<string, string>()
+		const supersededKeys = new Set<string>()
+		const unpairedLists: UnpairedListCreates[] = []
+		// Read before reconciling: a rollback below is a local write of the persister's own.
+		const editedInFlight = editableWriteVersion(this.store) !== execution.sentEditableWriteVersion
 		const idMappings: { readonly entity: ExecutionEntity; readonly persistedId: string | undefined; readonly nestedIds: ReadonlyMap<string, string> }[] = []
 		for (const mutation of execution.mutations) {
 			const mutationResult = transactionResult.results.find(entry => (
@@ -971,7 +977,7 @@ export class BatchPersister {
 				continue
 			}
 
-			const resolvedNested = this.resolveNestedResults(execution, mutation, mutationResult, persistedSoFar)
+			const resolvedNested = this.resolveNestedResults(execution, mutation, mutationResult, { persistedEarlier: persistedSoFar, editedInFlight })
 			const nestedUpdates = this.expectedNestedUpdates(execution, mutation)
 			const involved = [entity, ...resolvedNested.entities, ...nestedUpdates]
 			for (const [key, persistedId] of resolvedNested.persistedIds) {
@@ -984,6 +990,12 @@ export class BatchPersister {
 			const conflicts = this.reconcileConfirmedEntities(execution, involved, createdRows, confirmedCreates, reconciledMemberships)
 			idMappings.push({ entity, persistedId: mutationResult.persistedId, nestedIds: resolvedNested.persistedIds })
 			for (const nested of resolvedNested.unresolved) failedOwners.add(entityIdentityKey(nested.entityType, nested.entityId))
+			// The server made these rows; settled after every mutation is reconciled, the next save does not create them again.
+			for (const nested of resolvedNested.superseded) {
+				supersededKeys.add(entityIdentityKey(nested.entityType, nested.entityId))
+				nestedResults.push({ ...toSuccessResult(nested), superseded: true })
+			}
+			unpairedLists.push(...resolvedNested.unpairedLists)
 
 			for (const nested of resolvedNested.entities) {
 				const key = entityIdentityKey(nested.entityType, nested.entityId)
@@ -1022,6 +1034,13 @@ export class BatchPersister {
 			else if (entity) results.push(toFailedResult(entity, message))
 		}
 		for (const mapping of idMappings) this.mapConfirmedIds(mapping.entity, mapping.persistedId, mapping.nestedIds)
+		if (supersededKeys.size > 0) {
+			const confirmedIds = new Set([
+				...persistedSoFar.values(),
+				...idMappings.flatMap(mapping => mapping.persistedId === undefined ? [] : [mapping.persistedId]),
+			])
+			supersedeUnpairedCreates(this.store, this.schema, execution, { lists: unpairedLists, superseded: supersededKeys, confirmedIds })
+		}
 
 		for (const nested of execution.entities.filter(entity => entity.nested)) {
 			const key = entityIdentityKey(nested.entityType, nested.entityId)
@@ -1100,21 +1119,27 @@ export class BatchPersister {
 		execution: PersistExecution,
 		mutation: TransactionMutation,
 		result: ExecutedMutationResult,
-		persistedEarlier: ReadonlyMap<string, string>,
+		progress: { readonly persistedEarlier: ReadonlyMap<string, string>; readonly editedInFlight: boolean },
 	): {
 		readonly entities: readonly ExecutionEntity[]
 		readonly unresolved: readonly ExecutionEntity[]
 		readonly persistedIds: ReadonlyMap<string, string>
 		readonly createdRows: ReadonlyMap<string, Record<string, unknown>>
+		/** Unpaired list creates and everything created inside them; see {@link supersedeUnpairedCreates}. */
+		readonly superseded: readonly ExecutionEntity[]
+		readonly unpairedLists: readonly UnpairedListCreates[]
 	} {
 		const expected = this.expectedNestedEntities(execution, mutation)
-		if (expected.length === 0) return { entities: [], unresolved: [], persistedIds: new Map(), createdRows: new Map() }
+		if (expected.length === 0) {
+			return { entities: [], unresolved: [], persistedIds: new Map(), createdRows: new Map(), superseded: [], unpairedLists: [] }
+		}
 
 		let supplied = result.nestedResults ?? []
+		const unpairedLists: UnpairedListCreates[] = []
 		if (supplied.length === 0 && result.nodeData) {
 			const inThisMutation = new Set(expected.map(entity => entityIdentityKey(entity.entityType, entity.entityId)))
 			supplied = this.extractNestedResultsFromNode(
-				{ execution, joiners: listJoinersOf(execution, inThisMutation, persistedEarlier) },
+				{ execution, joiners: listJoinersOf(execution, inThisMutation, progress.persistedEarlier), unpairedLists },
 				result.nodeData,
 				mutation.entityType,
 				mutation.entityId,
@@ -1124,6 +1149,7 @@ export class BatchPersister {
 		const persistedIds = new Map<string, string>()
 		const createdRows = new Map<string, Record<string, unknown>>()
 		const unresolved: ExecutionEntity[] = []
+		const missing: ExecutionEntity[] = []
 		const typesById = new Map<string, Set<string>>()
 		for (const entity of expected) {
 			const types = typesById.get(entity.entityId)
@@ -1144,16 +1170,26 @@ export class BatchPersister {
 				&& entry.ok
 				&& typesById.get(entity.entityId)?.size === 1
 			))
-			const persistedId = match?.persistedId ?? (!isTempId(entity.entityId) ? entity.entityId : undefined)
+			const persistedId = match?.persistedId
+				?? (!isTempId(entity.entityId) ? entity.entityId : undefined)
+				?? clientPrimaryOf(execution, entity)
 			if (!persistedId) {
-				unresolved.push(entity)
+				missing.push(entity)
 				continue
 			}
 			const key = entityIdentityKey(entity.entityType, entity.entityId)
 			persistedIds.set(key, persistedId)
 			if (match?.data) createdRows.set(key, match.data)
 		}
-		return { entities: expected.filter(entity => !unresolved.includes(entity)), unresolved, persistedIds, createdRows }
+		const settleable = settleableUnpairedCreates(this.store, execution, {
+			lists: unpairedLists,
+			unresolved: new Set(missing.map(entity => entityIdentityKey(entity.entityType, entity.entityId))),
+			editedInFlight: progress.editedInFlight,
+		})
+		const superseded = missing.filter(entity => settleable.superseded.has(entityIdentityKey(entity.entityType, entity.entityId)))
+		unresolved.push(...missing.filter(entity => !superseded.includes(entity)))
+		const entities = expected.filter(entity => !unresolved.includes(entity) && !superseded.includes(entity))
+		return { entities, unresolved, persistedIds, createdRows, superseded, unpairedLists: settleable.lists }
 	}
 
 	private expectedNestedEntities(
@@ -1282,11 +1318,7 @@ export class BatchPersister {
 	private confirmedScalars(entity: ExecutionEntity, createdRow: Record<string, unknown> | undefined): Readonly<Record<string, unknown>> {
 		const schema = this.schema
 		if (entity.operation !== 'create' || !createdRow || !schema) return entity.scalarData
-		const filled: Record<string, unknown> = {}
-		for (const field of schema.getScalarFields(entity.entityType)) {
-			if (field !== 'id' && field in createdRow) filled[field] = createdRow[field]
-		}
-		return { ...filled, ...entity.scalarData }
+		return { ...rowColumns(schema, entity.entityType, createdRow), ...entity.scalarData }
 	}
 
 	/**
@@ -1520,6 +1552,7 @@ export class BatchPersister {
 			}))
 			const rows = recordArray(nodeData[fieldName])
 			const joiners = extraction.joiners.get(relationIdentityKey(parentEntityType, parentEntityId, fieldName))
+			const idPairs = pairCreateOpsByClientId(createOps, rows)
 			const knownIds = new Set([
 				...fieldDescriptors.flatMap(item => item.knownServerIds),
 				...joiners?.knownIds ?? [],
@@ -1527,11 +1560,32 @@ export class BatchPersister {
 			])
 			const nodeItems = rows.filter(item => {
 				const id = getStringProperty(item, 'id')
-				return id === undefined || !knownIds.has(id)
+				return (id === undefined || !knownIds.has(id)) && !idPairs.some(pair => pair.nodeItem === item)
 			})
-			for (const { op, nodeItem } of this.pairCreateOpsWithNodes(createOps, nodeItems, joiners?.ops ?? [])) {
+			const pairs = [
+				...idPairs,
+				...this.pairCreateOpsWithNodes(createOps.filter(op => !idPairs.some(pair => pair.op === op)), nodeItems, joiners?.ops ?? []),
+			]
+			for (const { op, nodeItem } of pairs) {
 				results.push(makeResult(op, nodeItem))
 			}
+			const unpaired = createOps.filter(op => !pairs.some(pair => pair.op === op))
+			const [firstUnpaired] = unpaired
+			// Without the list in the response nothing says what the server made, so the creates stay unresolved.
+			if (!firstUnpaired || !Array.isArray(nodeData[fieldName])) continue
+			// Rows the client did not know before the save; a row confirmed for one of its own entities is skipped later.
+			const clientKnown = new Set([...fieldDescriptors.flatMap(item => item.knownServerIds), ...joiners?.knownIds ?? []])
+			extraction.unpairedLists.push({
+				parentEntityType,
+				parentEntityId,
+				fieldName,
+				entityType: firstUnpaired.entityType,
+				unpairedIds: unpaired.map(op => op.alias),
+				rows: rows.filter(row => {
+					const id = getStringProperty(row, 'id')
+					return id !== undefined && !clientKnown.has(id) && !pairs.some(pair => pair.nodeItem === row)
+				}),
+			})
 		}
 		const updates = execution.nestedUpdates.filter(update => (
 			update.parentEntityType === parentEntityType && update.parentEntityId === parentEntityId
@@ -1687,6 +1741,22 @@ function countNotFailed(
 	return entities.filter(entity => !failedKeys.has(entityIdentityKey(entity.entityType, entity.entityId))).length
 }
 
+/** The primary key a nested create sent; a confirmed mutation made its row under that id. */
+function clientPrimaryOf(execution: PersistExecution, entity: ExecutionEntity): string | undefined {
+	const descriptor = execution.nestedCreates.find(item => item.entityType === entity.entityType && item.entityId === entity.entityId)
+	const id = descriptor?.createData['id']
+	return typeof id === 'string' ? id : undefined
+}
+
+/** A create that sent its own primary key made the row with that id: no content needs comparing. */
+function pairCreateOpsByClientId(createOps: readonly NodeCreateOp[], rows: readonly Record<string, unknown>[]): NodeCreatePair[] {
+	return createOps.flatMap(op => {
+		const id = op.createData['id']
+		const nodeItem = typeof id === 'string' ? rows.find(row => row['id'] === id) : undefined
+		return nodeItem ? [{ op, nodeItem }] : []
+	})
+}
+
 /** Rows the list's creates made through a nested has-one; such a row can be in the list too (issue #169). */
 function idsCreatedThroughHasOne(createOps: readonly NodeCreateOp[], rows: readonly Record<string, unknown>[]): string[] {
 	const fields = new Set(createOps.flatMap(op => Object.entries(op.createData)
@@ -1702,6 +1772,8 @@ function idsCreatedThroughHasOne(createOps: readonly NodeCreateOp[], rows: reado
 interface NodeExtraction {
 	readonly execution: PersistExecution
 	readonly joiners: ReadonlyMap<string, ListJoiners>
+	/** Collects the lists whose own creates no row matched. */
+	readonly unpairedLists: UnpairedListCreates[]
 }
 
 /** How the folded entities joining one list appear in a mutation's response (issue #169). */
