@@ -48,9 +48,9 @@ interface CachedRelationHandle {
 }
 
 /**
- * Whether reading a field outside the selection throws UnfetchedFieldError. A draft
- * subtree is `unchecked`: nothing was fetched for it, so its selection only shapes `$data`.
- * Relation and item handles inherit the mode of the handle they come from.
+ * Whether reading a field outside the selection throws UnfetchedFieldError. When
+ * `unchecked`, the selection only shapes `$data`. Relation and item handles inherit the
+ * mode, so an entity reached from an unchecked root reads an unfetched field as null.
  */
 export type FieldAccessMode = 'checked' | 'unchecked'
 

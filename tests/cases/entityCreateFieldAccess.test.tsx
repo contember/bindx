@@ -1,10 +1,10 @@
 import '../setup'
-// An <Entity create> root collects a selection to shape $data, but a draft has nothing
-// unfetched, so reading a field the collection did not see must keep working.
+// An <Entity create> root collects a selection to shape $data, but its field access stays
+// unchecked: reading a field the collection did not see must keep working.
 import { afterEach, describe, expect, test } from 'bun:test'
 import { act, cleanup, render } from '@testing-library/react'
 import React, { useState } from 'react'
-import { BindxProvider, Entity, Field, MockAdapter, useField, type EntityRef } from '@contember/bindx-react'
+import { BindxProvider, Entity, Field, MockAdapter, useAccessor, useField, type EntityRef } from '@contember/bindx-react'
 import { entityDefs, schema, type Tag } from '../react/relations/hasMany/setup'
 
 afterEach(() => {
@@ -27,6 +27,12 @@ function renderInProvider(ui: React.ReactElement): HTMLElement {
 function ColorText({ tag }: { tag: EntityRef<Tag> }): React.ReactElement {
 	const color = useField(tag.color)
 	return <span data-testid="color">{color.value ?? 'none'}</span>
+}
+
+/** Publishes `$data`; reading it is not a field read, so it does not widen what the test exercises. */
+function DataProbe({ tag, publish }: { tag: EntityRef<Tag>; publish: (data: unknown) => void }): null {
+	publish(useAccessor(tag).$data)
+	return null
 }
 
 function colorText(container: HTMLElement): string | null {
@@ -74,15 +80,22 @@ describe('<Entity create> — a field outside the collected selection', () => {
 
 	test('writes in a handler that runs after the render', () => {
 		let onPick: () => void = () => {}
+		let data: unknown = null
 		renderInProvider(
 			<CreateTag>
 				{tag => {
 					onPick = () => tag.color.setValue('red')
-					return <Field field={tag.name} />
+					return (
+						<>
+							<Field field={tag.name} />
+							<DataProbe tag={tag} publish={next => { data = next }} />
+						</>
+					)
 				}}
 			</CreateTag>,
 		)
 
 		expect(() => act(() => onPick())).not.toThrow()
+		expect(data).toMatchObject({ color: 'red' })
 	})
 })

@@ -298,8 +298,9 @@ function EntityCreateModeInner({
 		}
 	}, [persistedId, onPersisted])
 
-	// The selection shapes $data as in edit mode; field access stays unchecked, since a
-	// draft has nothing unfetched. A compiled selection skips the children(collector) walk here too.
+	// The selection shapes $data as in edit mode. Field access stays unchecked: create forms read
+	// fields the collection does not see (plain child components, conditions, handlers).
+	// A compiled selection skips the children(collector) walk here too.
 	const { selection } = useRootSelection({
 		entityType,
 		depsKey: tempId,
