@@ -326,3 +326,51 @@ describe('A created row read back after the create', () => {
 		expect(tag.dirty).toEqual([])
 	})
 })
+
+describe('A list create no response row matches', () => {
+	test('is replaced by the server rows with their filled-in columns, and not created again', async () => {
+		const store = new SnapshotStore()
+		const server = new Server()
+		// Both names come back trimmed, so neither create matches a row and elimination has two candidates.
+		server.normaliseName = value => typeof value === 'string' ? value.trim() : value
+		server.seedArticle('article-1', ['tag-1'])
+		server.seedTag('tag-1', { name: 'Existing', color: 'blue', createdAt: '2020-01-01T00:00:00.000Z' })
+		store.setEntityData('Article', 'article-1', { id: 'article-1', title: 'Article' }, true)
+		store.setExistsOnServer('Article', 'article-1', true)
+		store.setEntityData('Tag', 'tag-1', { id: 'tag-1', name: 'Existing', color: 'blue' }, true)
+		store.setExistsOnServer('Tag', 'tag-1', true)
+		store.getOrCreateHasMany('Article', 'article-1', 'tags', ['tag-1'])
+		const first = store.createEntity('Tag', { name: ' First ' })
+		store.addToHasMany('Article', 'article-1', 'tags', first)
+		const second = store.createEntity('Tag', { name: ' Second ' })
+		store.addToHasMany('Article', 'article-1', 'tags', second)
+		const persister = createPersister(store, server.adapter)
+
+		expect((await persister.persistAll()).success).toBe(true)
+
+		expect(store.getHasManyOrderedIds('Article', 'article-1', 'tags')).toEqual(['tag-1', 'server-1', 'server-2'])
+		expect(store.getEntitySnapshot<Row>('Tag', 'server-1')?.serverData).toMatchObject({ name: 'First', color: 'gray', createdAt: insertedAt(1) })
+		expect(store.getEntitySnapshot<Row>('Tag', 'server-2')?.serverData).toMatchObject({ name: 'Second', color: 'gray', createdAt: insertedAt(2) })
+		expect(store.getEntitySnapshot('Tag', first)).toBeUndefined()
+		expect(store.getEntitySnapshot('Tag', second)).toBeUndefined()
+		expect((await persister.persistAll()).results).toEqual([])
+		expect(server.sent).toHaveLength(1)
+	})
+
+	test('stays unresolved when the response does not list the relation at all', async () => {
+		const store = new SnapshotStore()
+		store.setEntityData('Article', 'article-1', { id: 'article-1', title: 'Article' }, true)
+		store.setExistsOnServer('Article', 'article-1', true)
+		store.getOrCreateHasMany('Article', 'article-1', 'tags', [])
+		const created = store.createEntity('Tag', { name: 'New' })
+		store.addToHasMany('Article', 'article-1', 'tags', created)
+		const silent: BackendAdapter = {
+			query: () => Promise.resolve([]),
+			delete: () => Promise.resolve({ ok: true }),
+			persist: (_entityType, id) => Promise.resolve({ ok: true, data: { id } }),
+		}
+
+		expect((await createPersister(store, silent).persistAll()).success).toBe(false)
+		expect(store.getEntitySnapshot('Tag', created)).not.toBeUndefined()
+	})
+})

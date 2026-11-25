@@ -710,6 +710,21 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		return result
 	}
 
+	/**
+	 * Drops list creates a persist confirmed without a row to pair them with and lists
+	 * the response's unclaimed rows instead. A server write, like {@link reconcileSentHasMany}.
+	 */
+	supersedeHasManyCreates(
+		parentType: string,
+		parentId: string,
+		fieldName: string,
+		change: { readonly dropped: ReadonlySet<string>; readonly adopted: readonly string[] },
+	): void {
+		const key = this.getRelationKey(parentType, parentId, fieldName)
+		this.relations.supersedeHasManyCreates(key, change.dropped, change.adopted)
+		this.notifyRelationSubscribers(key)
+	}
+
 	resetHasMany(
 		parentType: string,
 		parentId: string,

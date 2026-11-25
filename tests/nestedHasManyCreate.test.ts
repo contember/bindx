@@ -610,7 +610,7 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 	 * When the adapter returns fewer new items than create operations, only the uniquely
 	 * resolved child is committed. The unresolved child remains pending for retry.
 	 */
-	test('partial response commits resolved children and retains unresolved children for retry', async () => {
+	test('partial response commits resolved children and drops the unreturned one instead of creating it again', async () => {
 		let serverIdCounter = 0
 
 		const adapter: BackendAdapter = {
@@ -705,31 +705,20 @@ describe('Nested hasMany create — 3-level deep (Program → Approval → Round
 		store.addToHasMany('Approval', approvalId, 'rounds', roundId)
 
 		const result = await persister.persistAll()
-		expect(result.success).toBe(false)
+		// The server made both reviews; the one it did not return is dropped, not created again (bindx#177).
+		expect(result.success).toBe(true)
 
 		const reviewsState = store.getHasMany('Round', roundId, 'reviews')
 		expect(reviewsState).not.toBeUndefined()
 		if (reviewsState === undefined) throw new Error('Expected reviews state')
 		expect(reviewsState.serverIds.size).toBe(1)
-		expect(reviewsState.plannedAdditions.size).toBe(1)
-
-		const resolvedId = [...reviewsState.serverIds][0]
-		const unresolvedId = [...reviewsState.plannedAdditions.keys()][0]
-		expect(resolvedId).toMatch(/^server-/)
-		expect(unresolvedId).toBeDefined()
-		if (resolvedId === undefined || unresolvedId === undefined) throw new Error('Expected resolved and pending reviews')
-		expect(store.existsOnServer('Review', resolvedId)).toBe(true)
-		expect(store.existsOnServer('Review', unresolvedId)).toBe(false)
-		expect(store.getPersistedId('Review', unresolvedId)).toBeNull()
-		expect(store.getEntitySnapshot('Review', unresolvedId)).not.toBeUndefined()
+		expect(reviewsState.plannedAdditions.size).toBe(0)
+		expect([...reviewsState.serverIds][0]).toMatch(/^server-/)
 
 		const retry = await persister.persistAll()
 		expect(retry.success).toBe(true)
-		const retriedState = store.getHasMany('Round', roundId, 'reviews')
-		expect(retriedState).not.toBeUndefined()
-		if (retriedState === undefined) throw new Error('Expected reviews state after retry')
-		expect(retriedState.serverIds.size).toBe(2)
-		expect(retriedState.plannedAdditions.size).toBe(0)
+		expect(retry.results).toEqual([])
+		expect(store.getHasMany('Round', roundId, 'reviews')?.serverIds.size).toBe(1)
 	})
 
 	/**

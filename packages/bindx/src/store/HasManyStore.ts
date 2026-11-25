@@ -13,6 +13,7 @@ import {
 	liveHasManyChildIds,
 	plannedDeleteChildIds,
 	reconcileHasManyState,
+	supersedeHasManyCreates,
 	relationServerIds,
 	setsEqual,
 	toRelationProjection,
@@ -370,6 +371,13 @@ export class HasManyStore {
 		const next = reconcileHasManyState(existing, delta, fieldFromRelationKey(key))
 		this.writeHasMany(key, next.state)
 		return next.result
+	}
+
+	/** See {@link supersedeHasManyCreates}. */
+	supersedeCreates(key: string, dropped: ReadonlySet<string>, adopted: readonly string[]): void {
+		const existing = this.hasManyStates.get(key)
+		if (!existing) return
+		this.writeHasMany(key, supersedeHasManyCreates(existing, dropped, adopted, fieldFromRelationKey(key)))
 	}
 
 	/**

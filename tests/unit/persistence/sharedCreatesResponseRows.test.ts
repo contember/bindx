@@ -11,9 +11,11 @@ import {
 	BatchPersister,
 	ContemberSchemaMutationAdapter,
 	MutationCollector,
+	SchemaRegistry,
 	SnapshotStore,
 	type BackendAdapter,
 } from '@contember/bindx'
+import { schemaNamesToDef } from '@contember/bindx-react'
 import { type AdapterCall, type Data, MiniEngine, createEngineAdapter, createdNamed, isData, schema } from './miniContemberEngine.js'
 
 /** Echoes values the way a server normalizes them: a date gains a time, text is trimmed. */
@@ -51,6 +53,7 @@ describe('rows of a list response that no create of the list made', () => {
 		const engine = new MiniEngine(new Set(customPrimary))
 		const persister = new BatchPersister(withNormalizedEcho(createEngineAdapter(engine, calls, [])), store, new ActionDispatcher(store), {
 			mutationCollector: new MutationCollector(store, new ContemberSchemaMutationAdapter(schema)),
+			schema: new SchemaRegistry(schemaNamesToDef(schema)),
 		})
 		for (const id of ['website-1', 'website-2']) {
 			engine.seed('Website', id, { name: id })
@@ -93,6 +96,24 @@ describe('rows of a list response that no create of the list made', () => {
 		const row = [...engine.rows.values()].find(item => item.entity === 'Section' && item.values.get('name') === name)
 		if (!row) throw new Error(`No section named ${name}`)
 		return row.id
+	}
+
+	/**
+	 * A list create that matches no row of the response is dropped from the store, and the
+	 * response's rows join the list as persisted entities (bindx#177). Nothing maps a temp
+	 * id to a row, since that would be a guess.
+	 */
+	const expectServerRowsListed = (engine: MiniEngine, names: readonly string[], dropped: readonly string[]): void => {
+		const listed = store.getHasManyOrderedIds('Website', 'website-1', 'sections')
+		for (const name of names) {
+			const id = sectionIdNamed(engine, name)
+			expect(listed).toContain(id)
+			expect(store.existsOnServer('Section', id)).toBe(true)
+		}
+		for (const id of dropped) {
+			expect(store.getEntitySnapshot('Section', id)).toBeUndefined()
+			expect(listed).not.toContain(id)
+		}
 	}
 
 	const persistAgain = async (persister: BatchPersister): Promise<AdapterCall[]> => {
@@ -218,8 +239,7 @@ describe('rows of a list response that no create of the list made', () => {
 	})
 
 	// Root is created two has-ones below Leaf, in the same mutation, and its row is in the list too.
-	// Skipped: fails on main, the list create stays unresolved and is created again (bindx#177).
-	test.skip('should map a new section whose grandparent, created inside it, belongs to the same list', async () => {
+	test('should list the server rows of a new section whose grandparent, created inside it, belongs to the same list', async () => {
 		const { engine, persister } = setup()
 		const root = store.createEntity('Section', { name: 'Root', date: '2026-02-02' })
 		connectOne('Section', root, 'website', 'website-1')
@@ -231,16 +251,16 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
-		expect(store.getPersistedId('Section', mid)).toBe(sectionIdNamed(engine, 'Mid'))
-		expect(store.getPersistedId('Section', root)).toBe(sectionIdNamed(engine, 'Root'))
+		expectServerRowsListed(engine, ['Leaf', 'Root'], [leaf, mid, root])
+		// The adopted row carries the has-one rows the response nested in it.
+		expect(store.getRelation('Section', sectionIdNamed(engine, 'Leaf'), 'parent')?.serverId).toBe(sectionIdNamed(engine, 'Mid'))
+		expect(store.getEntitySnapshot<Data>('Section', sectionIdNamed(engine, 'Mid'))?.serverData).toMatchObject({ name: 'Mid' })
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
 	})
 
-	// Skipped: fails on main, the list create stays unresolved and is created again (bindx#177).
-	test.skip('should map a new section whose folded grandparent joins the same list', async () => {
+	test('should list the server rows of a new section whose folded grandparent joins the same list', async () => {
 		const { engine, persister } = setup()
 		const root = addSection({ name: 'Root', date: '2026-02-02' })
 		const mid = store.createEntity('Section', { name: 'Mid' })
@@ -251,16 +271,13 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
-		expect(store.getPersistedId('Section', mid)).toBe(sectionIdNamed(engine, 'Mid'))
-		expect(store.getPersistedId('Section', root)).toBe(sectionIdNamed(engine, 'Root'))
+		expectServerRowsListed(engine, ['Leaf', 'Root'], [leaf, mid, root])
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
 	})
 
-	// Skipped: fails on main, the list create stays unresolved and is created again (bindx#177).
-	test.skip('should map a new section whose great-grandparent, created inside it, belongs to the same list', async () => {
+	test('should list the server rows of a new section whose great-grandparent, created inside it, belongs to the same list', async () => {
 		const { engine, persister } = setup()
 		const root = store.createEntity('Section', { name: 'Root', date: '2026-02-02' })
 		connectOne('Section', root, 'website', 'website-1')
@@ -275,17 +292,13 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
-		expect(store.getPersistedId('Section', mid)).toBe(sectionIdNamed(engine, 'Mid'))
-		expect(store.getPersistedId('Section', upper)).toBe(sectionIdNamed(engine, 'Upper'))
-		expect(store.getPersistedId('Section', root)).toBe(sectionIdNamed(engine, 'Root'))
+		expectServerRowsListed(engine, ['Leaf', 'Root'], [leaf, mid, upper, root])
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
 	})
 
-	// Skipped: fails on main, the list create stays unresolved and is created again (bindx#177).
-	test.skip('should map a new section with a normalized date whose grandparent, created inside it, belongs to the same list', async () => {
+	test('should list the server rows of a new section with a normalized date whose grandparent, created inside it, belongs to the same list', async () => {
 		const { engine, persister } = setup()
 		const root = store.createEntity('Section', { name: 'Root' })
 		connectOne('Section', root, 'website', 'website-1')
@@ -297,9 +310,7 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
-		expect(store.getPersistedId('Section', mid)).toBe(sectionIdNamed(engine, 'Mid'))
-		expect(store.getPersistedId('Section', root)).toBe(sectionIdNamed(engine, 'Root'))
+		expectServerRowsListed(engine, ['Leaf', 'Root'], [leaf, mid, root])
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
@@ -331,8 +342,7 @@ describe('rows of a list response that no create of the list made', () => {
 		expect(createdNamed(engine, 'Shared')).toBe(1)
 	})
 
-	// Skipped: fails on main, the one-level exclusion follows Leaf2's `parent` through Leaf1's row (related to bindx#177).
-	test.skip('should map a client-id section that a sibling connects one has-one deep', async () => {
+	test('should map a client-id section that a sibling connects one has-one deep', async () => {
 		const { engine, persister } = setup(['Section'])
 		const shared = addClientIdSectionConnectedAtDepth(1)
 
@@ -358,8 +368,7 @@ describe('rows of a list response that no create of the list made', () => {
 	}
 
 	// New's `children` points a row of the list, or a section above one, at New, so that row's parents lead to New.
-	// Skipped: fails on main, the one-level exclusion follows Leaf's `parent` through the existing row (related to bindx#177).
-	test.skip('should map a new section whose children connect an existing section of the same list', async () => {
+	test('should list the server row of a new section whose children connect an existing section of the same list', async () => {
 		const { engine, persister } = setup()
 		seedSection(engine, 'existing-1', { name: 'Existing', website: 'website-1' })
 		store.connectExistingToHasMany('Website', 'website-1', 'sections', 'existing-1')
@@ -370,7 +379,7 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expect(store.getPersistedId('Section', created)).toBe(sectionIdNamed(engine, 'New'))
+		expectServerRowsListed(engine, ['New'], [created])
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'New')).toBe(1)
 	})
@@ -492,6 +501,7 @@ describe('shared creates around a failed or refused mutation', () => {
 		const engine = new MiniEngine(new Set(customPrimary))
 		const persister = new BatchPersister(createEngineAdapter(engine, calls, []), store, new ActionDispatcher(store), {
 			mutationCollector: new MutationCollector(store, new ContemberSchemaMutationAdapter(schema)),
+			schema: new SchemaRegistry(schemaNamesToDef(schema)),
 		})
 		for (const id of ['website-1', 'website-2']) {
 			engine.seed('Website', id, { name: id })
