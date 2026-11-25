@@ -29,7 +29,8 @@ export const schema: SchemaNames = {
 				name: { type: 'column' },
 				date: { type: 'column' },
 				website: { type: 'one', entity: 'Website', nullable: false, inverse: 'sections' },
-				parent: { type: 'one', entity: 'Section', nullable: true },
+				parent: { type: 'one', entity: 'Section', nullable: true, inverse: 'children' },
+				children: { type: 'many', entity: 'Section', relationKind: 'oneHasMany', inverse: 'parent' },
 			},
 		},
 		Article: {
