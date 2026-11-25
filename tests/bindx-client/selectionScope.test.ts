@@ -87,4 +87,50 @@ describe('SelectionScope', () => {
 			expect(scope.toSelectionMeta().fields.get(LIMIT_TWO_ALIAS)?.hasManyParams).toEqual({ ...LIMIT_TWO, totalCount: true })
 		}
 	})
+
+	test('a scalar selected under an alias is its own field next to the plain one', () => {
+		const scope = new SelectionScope()
+		scope.addScalar('title', 'headline')
+		scope.addScalar('title')
+
+		const selection = scope.toSelectionMeta()
+		expect(describeSelection(selection)).toEqual(['headline:title', 'title'])
+		expect(selection.fields.get('headline')?.path).toEqual(['title'])
+	})
+
+	test('mergeFromSelectionMeta keeps scalar and relation aliases', () => {
+		const source = new SelectionScope()
+		source.addScalar('title', 'headline')
+		source.child('author', 'writer').addScalar('name', 'fullName')
+		source.hasManyChild('posts', LIMIT_TWO, 'topPosts').addScalar('rank')
+
+		const roundTripped = SelectionScope.fromSelectionMeta(source.toSelectionMeta()).toSelectionMeta()
+		expect(describeSelection(roundTripped)).toEqual([
+			'headline:title',
+			'topPosts:posts { id rank }',
+			'writer:author { fullName:name id }',
+		])
+		expect(roundTripped.fields.get('topPosts')?.hasManyParams).toEqual(LIMIT_TWO)
+		expect(roundTripped.fields.get('topPosts')?.isArray).toBe(true)
+	})
+
+	test('merge keeps scalar aliases', () => {
+		const other = new SelectionScope()
+		other.addScalar('title', 'headline')
+		const scope = new SelectionScope()
+		scope.addScalar('title')
+		scope.merge(other)
+
+		expect(describeSelection(scope.toSelectionMeta())).toEqual(['headline:title', 'title'])
+	})
+
+	test('a field upgraded to a relation drops its scalar entries under every alias', () => {
+		// Without a schema the collector first records a read field as a scalar.
+		const scope = new SelectionScope()
+		scope.addScalar('author')
+		scope.addScalar('author', 'writer')
+		scope.child('author')
+
+		expect(describeSelection(scope.toSelectionMeta())).toEqual(['author { id }'])
+	})
 })
