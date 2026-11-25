@@ -373,11 +373,13 @@ export class HasManyStore {
 		return next.result
 	}
 
-	/** See {@link supersedeHasManyCreates}. */
-	supersedeCreates(key: string, dropped: ReadonlySet<string>, adopted: readonly string[]): void {
+	/** See {@link supersedeHasManyCreates}. Returns the rows that joined the relation. */
+	supersedeCreates(key: string, dropped: ReadonlySet<string>, adopted: readonly string[]): readonly string[] {
 		const existing = this.hasManyStates.get(key)
-		if (!existing) return
-		this.writeHasMany(key, supersedeHasManyCreates(existing, dropped, adopted, fieldFromRelationKey(key)))
+		if (!existing) return []
+		const next = supersedeHasManyCreates(existing, dropped, adopted)
+		this.writeHasMany(key, next.state)
+		return next.adopted
 	}
 
 	/**

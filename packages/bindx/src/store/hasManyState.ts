@@ -410,15 +410,15 @@ export function reconcileHasManyState(
 /**
  * Replaces list creates the server confirmed but no response row could be paired with:
  * the created items leave the relation and the rows the response listed but nothing
- * claimed join its baseline, the way a server read would list them. The rows join the
- * views that cannot exclude them and take the place of the dropped items in explicit orders.
+ * claimed join the views that cannot exclude them, taking the dropped items' place in
+ * explicit orders. With no such view the rows join nothing: a filtered view may exclude
+ * them, and without a loaded unfiltered view the client does not hold the full list.
  */
 export function supersedeHasManyCreates(
 	existing: StoredHasManyState,
 	dropped: ReadonlySet<string>,
 	adopted: readonly string[],
-	fieldName: string,
-): StoredHasManyState {
+): { state: StoredHasManyState; adopted: readonly string[] } {
 	const views = cloneViews(existing.views)
 	const plannedAdditions = cloneAdditions(existing.plannedAdditions)
 	const plannedRemovals = new Map(existing.plannedRemovals)
@@ -426,17 +426,16 @@ export function supersedeHasManyCreates(
 		plannedAdditions.delete(id)
 		plannedRemovals.delete(id)
 	}
-	const targets = new Set(renderTargets(views, fieldName, []))
-	for (const alias of targets) {
-		const view = views.get(alias)
-		if (view) for (const id of adopted) view.serverIds.add(id)
-	}
+	const targets = new Set(totalAliases(views))
+	const joined = targets.size > 0 ? adopted : []
 	for (const [alias, view] of views) {
-		if (view.orderedIds === null) continue
-		const joining = targets.has(alias) ? adopted.filter(id => !view.orderedIds?.includes(id)) : []
-		view.orderedIds = replaceInOrder(view.orderedIds, dropped, joining)
+		const joining = targets.has(alias) ? joined.filter(id => !view.serverIds.has(id)) : []
+		for (const id of joining) view.serverIds.add(id)
+		if (view.orderedIds !== null) {
+			view.orderedIds = replaceInOrder(view.orderedIds, dropped, joining.filter(id => !view.orderedIds?.includes(id)))
+		}
 	}
-	return { views, plannedRemovals, plannedAdditions, version: existing.version + 1 }
+	return { state: { views, plannedRemovals, plannedAdditions, version: existing.version + 1 }, adopted: joined }
 }
 
 function replaceInOrder(order: readonly string[], dropped: ReadonlySet<string>, joining: readonly string[]): string[] {

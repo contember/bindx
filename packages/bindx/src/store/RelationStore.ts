@@ -172,8 +172,8 @@ export class RelationStore implements Rekeyable {
 		return this.hasMany.reconcileSentDelta(key, delta)
 	}
 
-	supersedeHasManyCreates(key: string, dropped: ReadonlySet<string>, adopted: readonly string[]): void {
-		this.hasMany.supersedeCreates(key, dropped, adopted)
+	supersedeHasManyCreates(key: string, dropped: ReadonlySet<string>, adopted: readonly string[]): readonly string[] {
+		return this.hasMany.supersedeCreates(key, dropped, adopted)
 	}
 
 	resetHasMany(key: string): void {

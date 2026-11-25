@@ -710,19 +710,26 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		return result
 	}
 
+	/** Keys (`type:id`) of the entities with a live relation edge to {@link childId}. */
+	getParentKeysForChild(childId: string): Set<string> {
+		return this.relations.getParentKeysForChild(childId)
+	}
+
 	/**
 	 * Drops list creates a persist confirmed without a row to pair them with and lists
 	 * the response's unclaimed rows instead. A server write, like {@link reconcileSentHasMany}.
+	 * Returns the rows that joined the relation.
 	 */
 	supersedeHasManyCreates(
 		parentType: string,
 		parentId: string,
 		fieldName: string,
 		change: { readonly dropped: ReadonlySet<string>; readonly adopted: readonly string[] },
-	): void {
+	): readonly string[] {
 		const key = this.getRelationKey(parentType, parentId, fieldName)
-		this.relations.supersedeHasManyCreates(key, change.dropped, change.adopted)
+		const adopted = this.relations.supersedeHasManyCreates(key, change.dropped, change.adopted)
 		this.notifyRelationSubscribers(key)
+		return adopted
 	}
 
 	resetHasMany(

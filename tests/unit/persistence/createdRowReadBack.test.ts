@@ -7,6 +7,7 @@ import {
 	BatchPersister,
 	SchemaRegistry,
 	type BackendAdapter,
+	type EntityPersistResult,
 	type SchemaNames,
 } from '@contember/bindx'
 import { schemaNamesToDef } from '@contember/bindx-react'
@@ -191,8 +192,8 @@ class Server {
 }
 
 /** Wired the way ContemberBindxProvider wires it. */
-function createPersister(store: SnapshotStore, adapter: BackendAdapter): BatchPersister {
-	return new BatchPersister(adapter, store, new ActionDispatcher(store), {
+function createPersister(store: SnapshotStore, adapter: BackendAdapter, dispatcher = new ActionDispatcher(store)): BatchPersister {
+	return new BatchPersister(adapter, store, dispatcher, {
 		mutationCollector: new MutationCollector(store, new ContemberSchemaMutationAdapter(schema)),
 		schema: new SchemaRegistry(schemaNamesToDef(schema)),
 	})
@@ -327,23 +328,28 @@ describe('A created row read back after the create', () => {
 	})
 })
 
+/** An article with one tag and two new ones; the server trims their names, so neither matches its row. */
+function articleWithTwoTrimmedCreates(server: Server, store: SnapshotStore): { first: string; second: string } {
+	server.seedArticle('article-1', ['tag-1'])
+	server.seedTag('tag-1', { name: 'Existing', color: 'blue', createdAt: '2020-01-01T00:00:00.000Z' })
+	store.setEntityData('Article', 'article-1', { id: 'article-1', title: 'Article' }, true)
+	store.setExistsOnServer('Article', 'article-1', true)
+	store.setEntityData('Tag', 'tag-1', { id: 'tag-1', name: 'Existing', color: 'blue' }, true)
+	store.setExistsOnServer('Tag', 'tag-1', true)
+	store.getOrCreateHasMany('Article', 'article-1', 'tags', ['tag-1'])
+	const first = store.createEntity('Tag', { name: ' First ' })
+	store.addToHasMany('Article', 'article-1', 'tags', first)
+	const second = store.createEntity('Tag', { name: ' Second ' })
+	store.addToHasMany('Article', 'article-1', 'tags', second)
+	return { first, second }
+}
+
 describe('A list create no response row matches', () => {
 	test('is replaced by the server rows with their filled-in columns, and not created again', async () => {
 		const store = new SnapshotStore()
 		const server = new Server()
-		// Both names come back trimmed, so neither create matches a row and elimination has two candidates.
 		server.normaliseName = value => typeof value === 'string' ? value.trim() : value
-		server.seedArticle('article-1', ['tag-1'])
-		server.seedTag('tag-1', { name: 'Existing', color: 'blue', createdAt: '2020-01-01T00:00:00.000Z' })
-		store.setEntityData('Article', 'article-1', { id: 'article-1', title: 'Article' }, true)
-		store.setExistsOnServer('Article', 'article-1', true)
-		store.setEntityData('Tag', 'tag-1', { id: 'tag-1', name: 'Existing', color: 'blue' }, true)
-		store.setExistsOnServer('Tag', 'tag-1', true)
-		store.getOrCreateHasMany('Article', 'article-1', 'tags', ['tag-1'])
-		const first = store.createEntity('Tag', { name: ' First ' })
-		store.addToHasMany('Article', 'article-1', 'tags', first)
-		const second = store.createEntity('Tag', { name: ' Second ' })
-		store.addToHasMany('Article', 'article-1', 'tags', second)
+		const { first, second } = articleWithTwoTrimmedCreates(server, store)
 		const persister = createPersister(store, server.adapter)
 
 		expect((await persister.persistAll()).success).toBe(true)
@@ -355,6 +361,53 @@ describe('A list create no response row matches', () => {
 		expect(store.getEntitySnapshot('Tag', second)).toBeUndefined()
 		expect((await persister.persistAll()).results).toEqual([])
 		expect(server.sent).toHaveLength(1)
+	})
+
+	test('is reported as superseded, with no persisted event', async () => {
+		const store = new SnapshotStore()
+		const server = new Server()
+		server.normaliseName = value => typeof value === 'string' ? value.trim() : value
+		const { first, second } = articleWithTwoTrimmedCreates(server, store)
+		const dispatcher = new ActionDispatcher(store)
+		const persisted: string[] = []
+		dispatcher.getEventEmitter().on('entity:persisted', event => persisted.push(event.entityId))
+
+		const outcomes: EntityPersistResult[] = []
+
+		await createPersister(store, server.adapter, dispatcher).persistAll({ onEntityPersisted: entry => outcomes.push(entry) })
+
+		for (const id of [first, second]) {
+			const entry = outcomes.find(item => item.entityId === id)
+			expect(entry).toMatchObject({ success: true, superseded: true })
+			expect(entry?.persistedId).toBeUndefined()
+		}
+		expect(persisted).toEqual(['article-1'])
+	})
+
+	test('joins no view when only a filtered view of the list is loaded', async () => {
+		const store = new SnapshotStore()
+		const server = new Server()
+		server.normaliseName = value => typeof value === 'string' ? value.trim() : value
+		server.seedArticle('article-1', ['tag-1', 'tag-hidden'])
+		server.seedTag('tag-1', { name: 'Red', color: 'red' })
+		server.seedTag('tag-hidden', { name: 'Blue', color: 'blue' })
+		store.setEntityData('Article', 'article-1', { id: 'article-1', title: 'Article' }, true)
+		store.setExistsOnServer('Article', 'article-1', true)
+		store.declareHasManyViewMembership('Article', 'tags', 'redTags', 'partial')
+		store.getOrCreateHasMany('Article', 'article-1', 'tags', ['tag-1'], 'redTags')
+		const first = store.createEntity('Tag', { name: ' First ' })
+		store.addToHasMany('Article', 'article-1', 'tags', first, 'redTags')
+		const second = store.createEntity('Tag', { name: ' Second ' })
+		store.addToHasMany('Article', 'article-1', 'tags', second, 'redTags')
+		const persister = createPersister(store, server.adapter)
+
+		expect((await persister.persistAll()).success).toBe(true)
+
+		expect(store.getHasManyOrderedIds('Article', 'article-1', 'tags', 'redTags')).toEqual(['tag-1'])
+		expect([...store.getHasMany('Article', 'article-1', 'tags')?.serverIds ?? []]).toEqual(['tag-1'])
+		expect(store.getEntitySnapshot('Tag', 'tag-hidden')).toBeUndefined()
+		expect(store.getEntitySnapshot('Tag', first)).toBeUndefined()
+		expect((await persister.persistAll()).results).toEqual([])
 	})
 
 	test('stays unresolved when the response does not list the relation at all', async () => {

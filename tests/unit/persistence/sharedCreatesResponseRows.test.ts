@@ -486,6 +486,45 @@ describe('rows of a list response that no create of the list made', () => {
 
 		expect([null, sectionIdNamed(engine, 'X')]).toContain(store.getPersistedId('Section', created))
 	})
+
+	/** Two new sections whose dates come back normalized: neither matches a row, and elimination has two candidates. */
+	const addUnpairedSections = (): [string, string] => [
+		addSection({ name: 'A', date: '2026-02-02' }),
+		addSection({ name: 'B', date: '2026-02-03' }),
+	]
+
+	// The image is shared, so it is created with a client id inside the section and connected by it in the gallery.
+	test('should keep a client-id create inside a dropped section as the row it made', async () => {
+		const { engine, persister } = setup(['Image'])
+		const [first] = addUnpairedSections()
+		const image = store.createEntity('Image', { url: 'cover.png' })
+		connectOne('Section', first, 'image', image)
+		store.addToHasMany('Article', 'article-1', 'gallery', image)
+
+		const result = await persister.persistAll()
+
+		expect(result.success).toBe(true)
+		expectServerRowsListed(engine, ['A', 'B'], [first])
+		expect(store.getEntitySnapshot('Image', image)).toBeDefined()
+		expect(store.existsOnServer('Image', image)).toBe(true)
+		expect(result.results.find(entry => entry.entityId === image)?.superseded).toBeUndefined()
+		expect(await persistAgain(persister)).toEqual([])
+		expect(engine.sentCreates.filter(item => item.entity === 'Image')).toHaveLength(1)
+	})
+
+	test('should keep the creates of a list unresolved while a section outside the save references one', async () => {
+		const { engine, persister } = setup()
+		const [first, second] = addUnpairedSections()
+		seedSection(engine, 'outside', { name: 'Outside', website: 'website-2' })
+		connectOne('Section', 'outside', 'parent', first)
+
+		const result = await persister.persistScope({ type: 'entity', entityType: 'Website', entityId: 'website-1' })
+
+		expect(result.success).toBe(false)
+		expect(store.getEntitySnapshot('Section', first)).toBeDefined()
+		expect(store.getEntitySnapshot('Section', second)).toBeDefined()
+		expect(store.getRelation('Section', 'outside', 'parent')?.currentId).toBe(first)
+	})
 })
 
 describe('shared creates around a failed or refused mutation', () => {

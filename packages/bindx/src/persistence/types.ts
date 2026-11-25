@@ -107,6 +107,12 @@ export interface EntityPersistResult {
 	readonly fieldResults?: readonly FieldPersistResult[]
 	/** Server-assigned ID for creates (when tempId was used) */
 	readonly persistedId?: string
+	/**
+	 * The server created the row, but no response row could be told to be this entity's:
+	 * the entity left the store and its list lists the server's rows instead. `success`
+	 * is true, there is no `persistedId`, and no `entity:persisted` event is emitted.
+	 */
+	readonly superseded?: true
 }
 
 /**

@@ -31,6 +31,7 @@ export const schema: SchemaNames = {
 				website: { type: 'one', entity: 'Website', nullable: false, inverse: 'sections' },
 				parent: { type: 'one', entity: 'Section', nullable: true, inverse: 'children' },
 				children: { type: 'many', entity: 'Section', relationKind: 'oneHasMany', inverse: 'parent' },
+				image: { type: 'one', entity: 'Image', nullable: true },
 			},
 		},
 		Article: {

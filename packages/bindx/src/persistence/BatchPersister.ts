@@ -30,7 +30,7 @@ import {
 	type ExecutionEntity,
 	type PersistExecution,
 } from './PersistExecution.js'
-import { rowColumns, supersedeUnpairedCreates, withNestedCreates, type UnpairedListCreates } from './unpairedListCreates.js'
+import { rowColumns, settleableUnpairedCreates, supersedeUnpairedCreates, type UnpairedListCreates } from './unpairedListCreates.js'
 
 /**
  * Options for BatchPersister
@@ -410,7 +410,7 @@ export class BatchPersister {
 		const emitter = this.dispatcher.getEventEmitter()
 
 		for (const entry of results) {
-			if (entry.skipped) continue
+			if (entry.skipped || entry.superseded) continue
 			if (entry.success) {
 				emitter.emit({
 					type: 'entity:persisted',
@@ -990,7 +990,7 @@ export class BatchPersister {
 			// The server made these rows; settled after every mutation is reconciled, the next save does not create them again.
 			for (const nested of resolvedNested.superseded) {
 				supersededKeys.add(entityIdentityKey(nested.entityType, nested.entityId))
-				nestedResults.push(toSuccessResult(nested))
+				nestedResults.push({ ...toSuccessResult(nested), superseded: true })
 			}
 			unpairedLists.push(...resolvedNested.unpairedLists)
 
@@ -1142,14 +1142,11 @@ export class BatchPersister {
 				mutation.entityId,
 			)
 		}
-		const supersededKeys = withNestedCreates(execution, unpairedLists.flatMap(list => (
-			list.unpairedIds.map(id => entityIdentityKey(list.entityType, id))
-		)))
 		const flattened = flattenMutationResults(supplied)
 		const persistedIds = new Map<string, string>()
 		const createdRows = new Map<string, Record<string, unknown>>()
 		const unresolved: ExecutionEntity[] = []
-		const superseded: ExecutionEntity[] = []
+		const missing: ExecutionEntity[] = []
 		const typesById = new Map<string, Set<string>>()
 		for (const entity of expected) {
 			const types = typesById.get(entity.entityId)
@@ -1170,18 +1167,27 @@ export class BatchPersister {
 				&& entry.ok
 				&& typesById.get(entity.entityId)?.size === 1
 			))
-			const persistedId = match?.persistedId ?? (!isTempId(entity.entityId) ? entity.entityId : undefined)
+			const persistedId = match?.persistedId
+				?? (!isTempId(entity.entityId) ? entity.entityId : undefined)
+				?? clientPrimaryOf(execution, entity)
 			if (!persistedId) {
-				if (supersededKeys.has(entityIdentityKey(entity.entityType, entity.entityId))) superseded.push(entity)
-				else unresolved.push(entity)
+				missing.push(entity)
 				continue
 			}
 			const key = entityIdentityKey(entity.entityType, entity.entityId)
 			persistedIds.set(key, persistedId)
 			if (match?.data) createdRows.set(key, match.data)
 		}
+		const settleable = settleableUnpairedCreates(
+			this.store,
+			execution,
+			unpairedLists,
+			new Set(missing.map(entity => entityIdentityKey(entity.entityType, entity.entityId))),
+		)
+		const superseded = missing.filter(entity => settleable.superseded.has(entityIdentityKey(entity.entityType, entity.entityId)))
+		unresolved.push(...missing.filter(entity => !superseded.includes(entity)))
 		const entities = expected.filter(entity => !unresolved.includes(entity) && !superseded.includes(entity))
-		return { entities, unresolved, persistedIds, createdRows, superseded, unpairedLists }
+		return { entities, unresolved, persistedIds, createdRows, superseded, unpairedLists: settleable.lists }
 	}
 
 	private expectedNestedEntities(
@@ -1731,6 +1737,13 @@ function countNotFailed(
 ): number {
 	const failedKeys = new Set(failed.map(entry => entityIdentityKey(entry.entityType, entry.entityId)))
 	return entities.filter(entity => !failedKeys.has(entityIdentityKey(entity.entityType, entity.entityId))).length
+}
+
+/** The primary key a nested create sent; a confirmed mutation made its row under that id. */
+function clientPrimaryOf(execution: PersistExecution, entity: ExecutionEntity): string | undefined {
+	const descriptor = execution.nestedCreates.find(item => item.entityType === entity.entityType && item.entityId === entity.entityId)
+	const id = descriptor?.createData['id']
+	return typeof id === 'string' ? id : undefined
 }
 
 /** A create that sent its own primary key made the row with that id: no content needs comparing. */
