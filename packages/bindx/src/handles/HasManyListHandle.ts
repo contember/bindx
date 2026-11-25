@@ -1,5 +1,5 @@
 import { EntityRelatedHandle } from './BaseHandle.js'
-import { EntityHandle } from './EntityHandle.js'
+import { EntityHandle, type FieldAccessMode } from './EntityHandle.js'
 import type { ActionDispatcher } from '../core/ActionDispatcher.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
 import type { HasManyRemovalType } from '../store/RelationStore.js'
@@ -80,6 +80,7 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		// Segments from the query root down to this relation. Items do NOT inherit it:
 		// a has-many restarts the chain, mirroring the collector proxy.
 		private readonly relationPath: readonly string[] = [fieldName],
+		private readonly fieldAccess: FieldAccessMode = 'checked',
 	) {
 		super(parentEntityType, parentEntityId, store, dispatcher)
 		this.__brands = brands
@@ -98,9 +99,10 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		alias?: string,
 		selection?: SelectionMeta,
 		relationPath?: readonly string[],
+		fieldAccess?: FieldAccessMode,
 	): HasManyAccessor<TEntity, TSelected> {
 		return createAliasProxy<HasManyListHandle<TEntity, TSelected>, HasManyAccessor<TEntity, TSelected>>(
-			HasManyListHandle.createRaw<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath),
+			HasManyListHandle.createRaw<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath, fieldAccess),
 		)
 	}
 
@@ -120,8 +122,9 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		alias?: string,
 		selection?: SelectionMeta,
 		relationPath?: readonly string[],
+		fieldAccess?: FieldAccessMode,
 	): HasManyListHandle<TEntity, TSelected> {
-		return new HasManyListHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath)
+		return new HasManyListHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath, fieldAccess)
 	}
 
 	/**
@@ -248,6 +251,8 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 				this.schema,
 				this.__brands,
 				this.selection,
+				undefined,
+				this.fieldAccess,
 			)
 			proxy = EntityHandle.wrapProxy(raw)
 			this.itemHandleCacheProxy.set(key, proxy)

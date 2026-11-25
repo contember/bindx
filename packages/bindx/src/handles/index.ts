@@ -1,6 +1,6 @@
 export { BaseHandle, EntityRelatedHandle } from './BaseHandle.js'
 export { FieldHandle } from './FieldHandle.js'
-export { EntityHandle } from './EntityHandle.js'
+export { EntityHandle, type FieldAccessMode } from './EntityHandle.js'
 export { HasOneHandle } from './HasOneHandle.js'
 export { PlaceholderHandle } from './PlaceholderHandle.js'
 export { HasManyListHandle } from './HasManyListHandle.js'

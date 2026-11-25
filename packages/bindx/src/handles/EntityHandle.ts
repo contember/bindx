@@ -48,6 +48,13 @@ interface CachedRelationHandle {
 }
 
 /**
+ * Whether reading a field outside the selection throws UnfetchedFieldError. When
+ * `unchecked`, the selection only shapes `$data`. Relation and item handles inherit the
+ * mode, so an entity reached from an unchecked root reads an unfetched field as null.
+ */
+export type FieldAccessMode = 'checked' | 'unchecked'
+
+/**
  * EntityHandle provides stable access to an entity.
  * Implements EntityRef interface for consistent usage across the system.
  *
@@ -89,6 +96,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 		// Segments from the query root down to this entity. Empty at a root and at
 		// every has-many item, so item chains restart their own `fullPath`.
 		private readonly entityPath: readonly string[] = [],
+		private readonly fieldAccess: FieldAccessMode = 'checked',
 	) {
 		super(entityType, id, store, dispatcher)
 		this.__brands = brands
@@ -103,8 +111,9 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
 		entityPath?: readonly string[],
+		fieldAccess?: FieldAccessMode,
 	): EntityAccessor<T, TSelected> {
-		return EntityHandle.wrapProxy(new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands, selection, entityPath))
+		return EntityHandle.wrapProxy(new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands, selection, entityPath, fieldAccess))
 	}
 
 	static createRaw<T extends object = object, TSelected = T>(
@@ -116,8 +125,9 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
 		entityPath?: readonly string[],
+		fieldAccess?: FieldAccessMode,
 	): EntityHandle<T, TSelected> {
-		return new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands, selection, entityPath)
+		return new EntityHandle<T, TSelected>(id, entityType, store, dispatcher, schema, brands, selection, entityPath, fieldAccess)
 	}
 
 	static wrapProxy<T extends object, TSelected>(handle: EntityHandle<T, TSelected>): EntityAccessor<T, TSelected> {
@@ -346,6 +356,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			undefined,
 			nestedSelection,
 			[...this.entityPath, fieldName],
+			this.fieldAccess,
 		)
 		const proxy = HasOneHandle.wrapProxy(raw)
 		this.relationHandleCache.set(cacheKey, { raw, proxy })
@@ -387,6 +398,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			effectiveAlias,
 			nestedSelection,
 			[...this.entityPath, fieldName],
+			this.fieldAccess,
 		)
 		this.relationHandleCache.set(cacheKey, { raw: handle as unknown as RelationHandleRaw, proxy: handle })
 
@@ -501,7 +513,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 				const fieldMeta = this.resolveSelectionField(fieldName)
 
 				// Selection validation
-				if (this.selection && !fieldMeta) {
+				if (this.selection && !fieldMeta && this.fieldAccess === 'checked') {
 					throw new UnfetchedFieldError(this.entityType, this.entityId, [fieldName])
 				}
 
