@@ -14,7 +14,7 @@ import {
 	hasMany,
 	scalar,
 } from '@contember/bindx-react'
-import { DataGridLayout, HasManyDataGrid, useDataViewContext } from '@contember/bindx-dataview'
+import { DataGridLayout, DataGridTextColumn, HasManyDataGrid, useDataViewContext } from '@contember/bindx-dataview'
 import type { EntityRef, Query, QueryOptions, QueryResult, QuerySpec } from '@contember/bindx'
 
 afterEach(cleanup)
@@ -87,8 +87,8 @@ function TileRows(): ReactElement | null {
 	return <>{items.map(item => <div key={item.id}>{renderTile(item)}</div>)}</>
 }
 
-function headlines(container: HTMLElement): (string | null)[] {
-	return Array.from(container.querySelectorAll('[data-testid="headline"]')).map(el => el.textContent)
+function textsOf(container: HTMLElement, testId: string): (string | null)[] {
+	return Array.from(container.querySelectorAll(`[data-testid="${testId}"]`)).map(el => el.textContent)
 }
 
 describe('an aliased scalar selected by a createComponent fragment', () => {
@@ -101,14 +101,14 @@ describe('an aliased scalar selected by a createComponent fragment', () => {
 				</Entity>
 			</BindxProvider>,
 		)
-		await waitFor(() => expect(headlines(container)).toEqual(['Project']))
+		await waitFor(() => expect(textsOf(container, 'headline')).toEqual(['Project']))
 
 		const [query] = adapter.queries
 		if (query === undefined || query.type !== 'get') throw new Error('Expected one get query for the project')
 		expect(describeFields(query.spec)).toEqual(['headline:title', 'id'])
 	})
 
-	test('is shown in $data of HasManyDataGrid rows rendered through a layout', async () => {
+	test('is shown in $data of HasManyDataGrid rows next to a column of the plain field', async () => {
 		function ProjectTasks(): ReactElement {
 			return (
 				<Entity entity={projectDef} by={{ id: 'p1' }}>
@@ -116,8 +116,14 @@ describe('an aliased scalar selected by a createComponent fragment', () => {
 						<HasManyDataGrid field={project.tasks}>
 							{it => (
 								<>
+									<DataGridTextColumn field={it.title} header="Title" />
 									<DataGridLayout name="tiles" item={it}>
-										{(task: typeof it) => <TaskHeadline task={withHeadline(task)} />}
+										{(task: typeof it) => (
+											<>
+												<TaskHeadline task={withHeadline(task)} />
+												<span data-testid="title">{task.title.value}</span>
+											</>
+										)}
 									</DataGridLayout>
 									<TileRows />
 								</>
@@ -133,9 +139,10 @@ describe('an aliased scalar selected by a createComponent fragment', () => {
 				<ProjectTasks />
 			</BindxProvider>,
 		)
-		await waitFor(() => expect(headlines(container)).toEqual(['First', 'Second']))
+		await waitFor(() => expect(textsOf(container, 'headline')).toEqual(['First', 'Second']))
+		expect(textsOf(container, 'title')).toEqual(['First', 'Second'])
 		const gridQuery = adapter.queries.at(-1)
 		if (gridQuery === undefined || gridQuery.type !== 'get') throw new Error('Expected a get query for the grid rows')
-		expect(describeFields(gridQuery.spec)).toEqual(['id', expect.stringMatching(/^tasks_\w+:tasks \{ headline:title id \}$/)])
+		expect(describeFields(gridQuery.spec)).toEqual(['id', expect.stringMatching(/^tasks_\w+:tasks \{ headline:title id title \}$/)])
 	})
 })

@@ -44,8 +44,8 @@ export class SelectionScope {
 
 	/**
 	 * Create or get the scope of a has-many relation selected with {@link params}.
-	 * The relation is keyed by the alias the params generate, so each distinct set of
-	 * params is its own relation; without params this is the plain {@link child}.
+	 * The relation is keyed by {@link alias}, by default the one the params generate, so each
+	 * distinct set of params is its own relation; without params this is the plain {@link child}.
 	 */
 	hasManyChild(fieldName: string, params: HasManyParams, alias: string = generateHasManyAlias(fieldName, params)): SelectionScope {
 		const node = this.ensureRelation(fieldName, alias)
