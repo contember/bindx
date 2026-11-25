@@ -33,7 +33,7 @@ import type {
 	RelationConnectingEvent,
 	RelationDisconnectingEvent,
 } from '../events/types.js'
-import { EntityHandle } from './EntityHandle.js'
+import { EntityHandle, type FieldAccessMode } from './EntityHandle.js'
 import { PlaceholderHandle } from './PlaceholderHandle.js'
 import { createHandleProxy } from './proxyFactory.js'
 
@@ -67,6 +67,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		// Segments from the query root down to this relation; also the entity path
 		// of whatever it resolves to. See FieldRefMeta.fullPath.
 		private readonly relationPath: readonly string[] = [fieldName],
+		private readonly fieldAccess: FieldAccessMode = 'checked',
 	) {
 		super(parentEntityType, parentEntityId, store, dispatcher)
 		this.__brands = brands
@@ -83,8 +84,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
 		relationPath?: readonly string[],
+		fieldAccess?: FieldAccessMode,
 	): HasOneAccessor<TEntity, TSelected> {
-		return HasOneHandle.wrapProxy(new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection, relationPath))
+		return HasOneHandle.wrapProxy(new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection, relationPath, fieldAccess))
 	}
 
 	static createRaw<TEntity extends object = object, TSelected = TEntity>(
@@ -98,8 +100,9 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 		brands?: Set<symbol>,
 		selection?: SelectionMeta,
 		relationPath?: readonly string[],
+		fieldAccess?: FieldAccessMode,
 	): HasOneHandle<TEntity, TSelected> {
-		return new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection, relationPath)
+		return new HasOneHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, targetType, store, dispatcher, schema, brands, selection, relationPath, fieldAccess)
 	}
 
 	static wrapProxy<TEntity extends object, TSelected>(handle: HasOneHandle<TEntity, TSelected>): HasOneAccessor<TEntity, TSelected> {
@@ -203,6 +206,7 @@ export class HasOneHandle<TEntity extends object = object, TSelected = TEntity> 
 					this.__brands,
 					this.selection,
 					this.relationPath,
+					this.fieldAccess,
 				)
 				this.entityHandleCacheProxy = EntityHandle.wrapProxy(this.entityHandleCacheRaw)
 			}
