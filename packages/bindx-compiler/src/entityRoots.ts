@@ -113,7 +113,7 @@ export function analyzeEntityRoot(
 	}
 
 	const rootNode = new SelNode()
-	const analyzer = new BodyAnalyzer(bindings, moduleScope, lookup, targetKinds, true)
+	const analyzer = new BodyAnalyzer(bindings, moduleScope, lookup, targetKinds)
 	try {
 		analyzer.analyzeRootChildren(childrenFn, rootNode, ENTITY_ROOT_KEY)
 	} catch (error) {

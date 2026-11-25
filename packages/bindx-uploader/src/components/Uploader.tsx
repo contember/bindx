@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from 'react'
 import type { SelectionFieldMeta, SelectionMeta } from '@contember/bindx'
 import { FIELD_REF_META } from '@contember/bindx'
-import { BINDX_COMPONENT, type SelectionProvider, createEmptySelection } from '@contember/bindx-react'
+import { BINDX_COMPONENT, type SelectionProvider, collectionScopeOf, createEmptySelection } from '@contember/bindx-react'
 import type { FileType, PrepareUploadTarget, UploaderEvents, UploaderFillTarget } from '../types.js'
 import {
 	UploaderOptionsContext,
@@ -172,6 +172,15 @@ uploaderWithSelection.getSelection = (
 	// Only HasOneRef has FIELD_REF_META - EntityRef doesn't have it
 	// If passed an EntityRef directly, we can't build selection (return null)
 	if (!hasFieldRefMeta(props.entity)) {
+		return null
+	}
+
+	// A collector ref's path is relative to its own entity: record into the relation's scope there.
+	const relationScope = collectionScopeOf(props.entity)
+	if (relationScope !== null) {
+		for (const fieldName of fieldNames) {
+			relationScope.addScalar(fieldName)
+		}
 		return null
 	}
 

@@ -1,1 +1,1 @@
-export { createCollectorProxy } from './collectorProxy.js'
+export { createCollectorProxy, collectionScopeOf, hasManyCollectionScope } from './collectorProxy.js'

@@ -301,9 +301,9 @@ describe('Selection Collection with Schema', () => {
 		// Build query
 		const query = buildQueryFromSelection(selection)
 
-		// usages should be in the query
-		const usagesSpec = query.fields.find((f: any) => f.name === 'usages')
-		expect(usagesSpec).toBeDefined()
+		// usages should be in the query under the alias of its orderBy
+		const usagesSpec = query.fields.find((f: any) => f.sourcePath[0] === 'usages' && f.orderBy !== undefined)
+		expect(usagesSpec!.orderBy).toEqual({ createdAt: 'desc' })
 		expect(usagesSpec!.nested).toBeDefined()
 
 		// organization should be nested inside usages with name

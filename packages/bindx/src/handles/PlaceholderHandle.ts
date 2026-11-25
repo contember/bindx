@@ -300,9 +300,13 @@ export class PlaceholderHandle<TEntity extends object = object, TSelected = TEnt
 				[...this.relationPath, fieldName],
 			)
 			// Intercept add() to lazily promote the placeholder to a real entity first — a child
-			// can't belong to a parent that doesn't exist. Reads pass through untouched.
+			// can't belong to a parent that doesn't exist. Reads pass through untouched; withParams()
+			// keeps the interception (a placeholder has no parent selection, so no other alias).
 			return new Proxy(handle as object, {
 				get: (target, prop, receiver) => {
+					if (prop === 'withParams') {
+						return (): unknown => receiver
+					}
 					const value = Reflect.get(target, prop, receiver)
 					if (prop === 'add' && typeof value === 'function') {
 						return (...args: unknown[]): unknown => {

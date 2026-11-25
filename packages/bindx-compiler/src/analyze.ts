@@ -104,7 +104,7 @@ function analyzeChain(
 		return { loc, bailout: chain.earlyBail }
 	}
 	const propRoots = new Map<string, SelNode>(chain.entityProps.map(prop => [prop, new SelNode()]))
-	const analyzer = new BodyAnalyzer(bindings, moduleScope, lookup, targetKinds, false)
+	const analyzer = new BodyAnalyzer(bindings, moduleScope, lookup, targetKinds)
 	try {
 		if (chain.conditionFn) {
 			analyzer.analyzeFunction(chain.conditionFn, propRoots)

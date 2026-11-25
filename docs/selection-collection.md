@@ -461,7 +461,7 @@ fields) is acceptable; under-approximation is impossible by construction (defaul
 deny). Anything it cannot classify makes the whole component **bail** with a
 machine-readable reason (e.g. `ENTITY_ESCAPES_TO_CALL`, `ENTITY_IN_EXPRESSION_PROP`,
 `FUNCTION_PROP_ON_HOLE`, `RENDER_LOCAL_ON_HOLE`, `ENTITY_REASSIGNMENT`, `ENTITY_SPREAD`,
-`COMPUTED_MEMBER`, `MEMBER_COMPONENT_TAG`, `ENTITY_ESCAPES_TO_VALUE`, `HASMANY_PARAMS_AT_ROOT`, `INTERFACES_MODE`,
+`COMPUTED_MEMBER`, `MEMBER_COMPONENT_TAG`, `ENTITY_ESCAPES_TO_VALUE`, `HASMANY_PARAMS`, `INTERFACES_MODE`,
 `UNCLASSIFIED`). Bailed chains are left untouched and fall back to the runtime proxy pass.
 
 `FUNCTION_PROP_ON_HOLE` / `RENDER_LOCAL_ON_HOLE` guard an under-fetch class: a hole element's

@@ -1,8 +1,8 @@
 import React, { memo, type ReactElement, type ReactNode } from 'react'
 import type { HasOneProps, SelectionFieldMeta, SelectionMeta, SelectionProvider, AnyBrand } from '../types.js'
-import { FIELD_REF_META, BINDX_COMPONENT, SCOPE_REF } from '../types.js'
-import { mergeSelections } from '../SelectionMeta.js'
-import { SelectionScope, type HasOneAccessor } from '@contember/bindx'
+import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
+import { collectionScopeOf } from '../collectorProxy.js'
+import type { HasOneAccessor } from '@contember/bindx'
 import { useHasOne } from '../../hooks/useHasOne.js'
 import { annotateElement } from '../devAnnotations.js'
 
@@ -45,35 +45,28 @@ const hasOneWithSelection = HasOne as typeof HasOne & SelectionProvider & { [BIN
 hasOneWithSelection.getSelection = (
 	props: HasOneProps<unknown>,
 	collectNested: (children: ReactNode) => SelectionMeta,
-): SelectionFieldMeta => {
-	const meta = props.field[FIELD_REF_META]
+): SelectionFieldMeta | null => {
 	// During collection, field is a collector proxy with all accessor properties
 	const fullField = props.field as unknown as HasOneAccessor<unknown>
+	const relatedEntity = fullField.$entity
+	const jsxSelection = collectNested(props.children(relatedEntity))
 
-	// Use field's $entity which has a properly configured scope with schema info
-	const nestedCollector = fullField.$entity
+	// A collector ref's path is relative to its own entity: record into the relation's
+	// scope on that entity, not as a field of the selection root.
+	const relationScope = collectionScopeOf(relatedEntity)
+	if (relationScope !== null) {
+		relationScope.mergeFromSelectionMeta(jsxSelection)
+		return null
+	}
 
-	// Get the scope from the collector entity (it has SCOPE_REF)
-	const scopeRef = (nestedCollector as unknown as Record<symbol, unknown>)[SCOPE_REF]
-	const childScope = scopeRef instanceof SelectionScope ? scopeRef : null
-
-	// Call children once to gather nested field access
-	const syntheticChildren = props.children(nestedCollector)
-
-	// Also analyze the JSX structure
-	const jsxSelection = collectNested(syntheticChildren)
-
-	// Convert scope to SelectionMeta and merge with JSX selection
-	const nestedSelection = childScope ? childScope.toSelectionMeta() : { fields: new Map() }
-	mergeSelections(nestedSelection, jsxSelection)
-
+	const meta = props.field[FIELD_REF_META]
 	return {
 		fieldName: meta.fieldName,
 		alias: meta.fieldName,
 		path: meta.path,
 		isArray: false,
 		isRelation: true,
-		nested: nestedSelection,
+		nested: jsxSelection,
 	}
 }
 

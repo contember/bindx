@@ -41,6 +41,8 @@ export {
 // Proxy creation
 export {
 	createCollectorProxy,
+	collectionScopeOf,
+	hasManyCollectionScope,
 } from './proxy.js'
 
 // JSX Analyzer

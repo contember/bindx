@@ -25,7 +25,7 @@ export const Card = createComponent()
     <div>
       <Field field={article.title} />
       <HasOne field={article.author}>{a => <Field field={a.name} />}</HasOne>
-      <HasMany field={article.tags} limit={5}>{tag => <Field field={tag.name} />}</HasMany>
+      <HasMany field={article.tags}>{tag => <Field field={tag.name} />}</HasMany>
     </div>
   ))
 `
@@ -41,7 +41,6 @@ describe('babel plugin injection', () => {
 		expect(output).toContain('author: {')
 		expect(output).toContain('fields: {')
 		expect(output).toContain('many: true')
-		expect(output).not.toContain('params:') // the runtime ignores <HasMany> params inside a component
 		// This chain has no holes → the holes key is omitted.
 		expect(output).not.toContain('holes:')
 	})
