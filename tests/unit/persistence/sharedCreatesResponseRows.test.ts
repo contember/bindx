@@ -137,6 +137,21 @@ describe('rows of a list response that no create of the list made', () => {
 		expect(createdNamed(engine, 'Root')).toBe(1)
 	})
 
+	// Mid's row is in the list only through its own website; Child, paired by content, made it.
+	test('should map a new section beside the row its paired sibling created through a has-one', async () => {
+		const { engine, persister } = setup()
+		const child = addSection({ name: 'Child' }, 'website-1', newSection({ name: 'Mid' }, 'website-1'))
+		const other = addSection({ name: 'Other', date: '2026-01-01' })
+
+		const result = await persister.persistAll()
+
+		expect(result.success).toBe(true)
+		expect(store.getPersistedId('Section', child)).toBe(sectionIdNamed(engine, 'Child'))
+		expect(store.getPersistedId('Section', other)).toBe(sectionIdNamed(engine, 'Other'))
+		expect(await persistAgain(persister)).toEqual([])
+		expect(createdNamed(engine, 'Mid')).toBe(1)
+	})
+
 	// Websites persist in load order, which decides whether the parent's row is already in the list response.
 	for (const [carrierWebsite, listWebsite] of [['website-1', 'website-2'], ['website-2', 'website-1']] as const) {
 		test(`should map a new section with a normalized date when a parent created in ${carrierWebsite} joins the list of ${listWebsite}`, async () => {
@@ -157,11 +172,13 @@ describe('rows of a list response that no create of the list made', () => {
 	test('should map a new section whose folded parent in the same list comes back normalized', async () => {
 		const { engine, persister } = setup()
 		const root = addSection({ name: 'Root', date: '2026-02-02' })
-		addSection({ name: 'Child' }, 'website-1', root)
+		const child = addSection({ name: 'Child' }, 'website-1', root)
 
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
+		expect(store.getPersistedId('Section', child)).toBe(sectionIdNamed(engine, 'Child'))
+		expect(store.getPersistedId('Section', root)).toBe(sectionIdNamed(engine, 'Root'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Child')).toBe(1)
@@ -369,7 +386,7 @@ describe('rows of a list response that no create of the list made', () => {
 	}
 
 	// New's `children` points a row of the list, or a section above one, at New, so that row's parents lead to New.
-	test('should list the server row of a new section whose children connect an existing section of the same list', async () => {
+	test('should map a new section whose children connect an existing section of the same list', async () => {
 		const { engine, persister } = setup()
 		seedSection(engine, 'existing-1', { name: 'Existing', website: 'website-1' })
 		store.connectExistingToHasMany('Website', 'website-1', 'sections', 'existing-1')
@@ -380,7 +397,7 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expectServerRowsListed(engine, ['New'], [created])
+		expect(store.getPersistedId('Section', created)).toBe(sectionIdNamed(engine, 'New'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'New')).toBe(1)
 	})

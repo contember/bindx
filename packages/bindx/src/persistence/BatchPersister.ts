@@ -1552,19 +1552,24 @@ export class BatchPersister {
 			}))
 			const rows = recordArray(nodeData[fieldName])
 			const joiners = extraction.joiners.get(relationIdentityKey(parentEntityType, parentEntityId, fieldName))
+			const joiningOps = joiners?.ops ?? []
+			// Rows the client did not know before the save; a row confirmed for one of its own entities is skipped later.
+			const clientKnown = new Set([...fieldDescriptors.flatMap(item => item.knownServerIds), ...joiners?.knownIds ?? []])
 			const idPairs = pairCreateOpsByClientId(createOps, rows)
-			const knownIds = new Set([
-				...fieldDescriptors.flatMap(item => item.knownServerIds),
-				...joiners?.knownIds ?? [],
-				...idsCreatedThroughHasOne(createOps, rows),
-			])
-			const nodeItems = rows.filter(item => {
-				const id = getStringProperty(item, 'id')
-				return (id === undefined || !knownIds.has(id)) && !idPairs.some(pair => pair.nodeItem === item)
-			})
+			const freeRows = rows.filter(row => !isRowKnown(row, clientKnown) && !idPairs.some(pair => pair.nodeItem === row))
+			// Rows are paired before the has-one exclusion, so it walks a paired create's own row only (issue #169).
+			const matchedPairs = this.matchCreateOpsUniquely(withoutPairedOps(createOps, idPairs), freeRows, joiningOps).pairs
+				.filter(pair => !joiningOps.includes(pair.op))
+			const ownPairs = [...idPairs, ...matchedPairs]
+			const unpairedOps = withoutPairedOps(createOps, ownPairs)
+			const unclaimedRows = freeRows.filter(row => !matchedPairs.some(pair => pair.nodeItem === row))
+			// An unpaired create's row is one of the unclaimed rows; which one is not known yet.
+			const candidatePairs = unpairedOps.flatMap(op => unclaimedRows.map(nodeItem => ({ op, nodeItem })))
+			const createdThroughHasOne = new Set(idsCreatedThroughHasOne([...ownPairs, ...candidatePairs]))
+			const nodeItems = unclaimedRows.filter(row => !isRowKnown(row, createdThroughHasOne))
 			const pairs = [
-				...idPairs,
-				...this.pairCreateOpsWithNodes(createOps.filter(op => !idPairs.some(pair => pair.op === op)), nodeItems, joiners?.ops ?? []),
+				...ownPairs,
+				...this.pairCreateOpsWithNodes(unpairedOps, nodeItems, joiningOps),
 			]
 			for (const { op, nodeItem } of pairs) {
 				results.push(makeResult(op, nodeItem))
@@ -1573,8 +1578,6 @@ export class BatchPersister {
 			const [firstUnpaired] = unpaired
 			// Without the list in the response nothing says what the server made, so the creates stay unresolved.
 			if (!firstUnpaired || !Array.isArray(nodeData[fieldName])) continue
-			// Rows the client did not know before the save; a row confirmed for one of its own entities is skipped later.
-			const clientKnown = new Set([...fieldDescriptors.flatMap(item => item.knownServerIds), ...joiners?.knownIds ?? []])
 			extraction.unpairedLists.push({
 				parentEntityType,
 				parentEntityId,
@@ -1637,6 +1640,24 @@ export class BatchPersister {
 		nodeItems: readonly Record<string, unknown>[],
 		joiningOps: readonly NodeCreateOp[],
 	): NodeCreatePair[] {
+		const { pairs, pendingOps, freeItems } = this.matchCreateOpsUniquely(createOps, nodeItems, joiningOps)
+
+		const joining = new Set(joiningOps)
+		const ownPending = pendingOps.filter(op => !joining.has(op))
+		const lastOwn = ownPending[0]
+		if (ownPending.length === 1 && lastOwn && freeItems.length === 1) {
+			pairs.push({ op: lastOwn, nodeItem: freeItems[0]! })
+		}
+
+		return pairs.filter(pair => !joining.has(pair.op))
+	}
+
+	/** Takes unambiguous content matches one at a time; returns them with the ops and rows left over. */
+	private matchCreateOpsUniquely(
+		createOps: readonly NodeCreateOp[],
+		nodeItems: readonly Record<string, unknown>[],
+		joiningOps: readonly NodeCreateOp[],
+	): { pairs: NodeCreatePair[]; pendingOps: NodeCreateOp[]; freeItems: Record<string, unknown>[] } {
 		const pairs: NodeCreatePair[] = []
 		const pendingOps = [...createOps, ...joiningOps]
 		const freeItems = [...nodeItems]
@@ -1661,14 +1682,7 @@ export class BatchPersister {
 			break
 		}
 
-		const joining = new Set(joiningOps)
-		const ownPending = pendingOps.filter(op => !joining.has(op))
-		const lastOwn = ownPending[0]
-		if (ownPending.length === 1 && lastOwn && freeItems.length === 1) {
-			takePair(pendingOps.indexOf(lastOwn), freeItems[0]!)
-		}
-
-		return pairs.filter(pair => !joining.has(pair.op))
+		return { pairs, pendingOps, freeItems }
 	}
 
 	/**
@@ -1757,16 +1771,22 @@ function pairCreateOpsByClientId(createOps: readonly NodeCreateOp[], rows: reado
 	})
 }
 
-/** Rows the list's creates made through a nested has-one; such a row can be in the list too (issue #169). */
-function idsCreatedThroughHasOne(createOps: readonly NodeCreateOp[], rows: readonly Record<string, unknown>[]): string[] {
-	const fields = new Set(createOps.flatMap(op => Object.entries(op.createData)
-		.filter(([, value]) => isRecord(value) && 'create' in value)
-		.map(([fieldName]) => fieldName)))
-	return rows.flatMap(row => [...fields].flatMap(fieldName => {
-		const node = row[fieldName]
-		const id = isRecord(node) ? getStringProperty(node, 'id') : undefined
+/** Rows the paired creates made through a nested has-one; such a row can be in the list too (issue #169). */
+function idsCreatedThroughHasOne(pairs: readonly NodeCreatePair[]): string[] {
+	return pairs.flatMap(({ op, nodeItem }) => Object.entries(op.createData).flatMap(([fieldName, value]) => {
+		const node = nodeItem[fieldName]
+		const id = isRecord(value) && 'create' in value && isRecord(node) ? getStringProperty(node, 'id') : undefined
 		return id === undefined ? [] : [id]
 	}))
+}
+
+function withoutPairedOps(createOps: readonly NodeCreateOp[], pairs: readonly NodeCreatePair[]): NodeCreateOp[] {
+	return createOps.filter(op => !pairs.some(pair => pair.op === op))
+}
+
+function isRowKnown(row: Record<string, unknown>, ids: ReadonlySet<string>): boolean {
+	const id = getStringProperty(row, 'id')
+	return id !== undefined && ids.has(id)
 }
 
 interface NodeExtraction {
