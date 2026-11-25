@@ -5,7 +5,7 @@ import { useEntity } from '../../hooks/useEntity.js'
 import { useRootSelection } from '../../hooks/useRootSelection.js'
 import type { CompiledSelection } from '../compiledSelection.js'
 import type { EntityAccessor, EntityRef, SelectionMeta } from '../types.js'
-import { type EntityDef, type EntityUniqueWhere, type AnyBrand, type FieldError, EntityHandle, type SnapshotStore, type ActionDispatcher, type SchemaRegistry, type CommonEntity } from '@contember/bindx'
+import { type EntityDef, type EntityUniqueWhere, type AnyBrand, type FieldError, type FieldAccessMode, EntityHandle, type SnapshotStore, type ActionDispatcher, type SchemaRegistry, type CommonEntity } from '@contember/bindx'
 
 // ==================== Props Types ====================
 
@@ -298,16 +298,15 @@ function EntityCreateModeInner({
 		}
 	}, [persistedId, onPersisted])
 
-	// Selection collection still works for building mutations. A compiled selection
-	// skips the children(collector) walk here too.
-	useRootSelection({
+	// The selection shapes $data as in edit mode; field access stays unchecked, since a
+	// draft has nothing unfetched. A compiled selection skips the children(collector) walk here too.
+	const { selection } = useRootSelection({
 		entityType,
 		depsKey: tempId,
 		children,
 		compiledSelection,
 	})
 
-	// Create EntityHandle (no selection for create mode - all fields accessible)
 	return (
 		<EntityHandleRenderer
 			entityId={tempId}
@@ -315,6 +314,8 @@ function EntityCreateModeInner({
 			store={store}
 			dispatcher={dispatcher}
 			schemaRegistry={schemaRegistry}
+			selection={selection}
+			fieldAccess="unchecked"
 			children={children}
 		/>
 	)
@@ -329,6 +330,7 @@ interface EntityHandleRendererProps {
 	dispatcher: ActionDispatcher
 	schemaRegistry: SchemaRegistry
 	selection?: SelectionMeta
+	fieldAccess?: FieldAccessMode
 	children: (entity: EntityAccessor<unknown>) => React.ReactNode
 }
 
@@ -351,6 +353,7 @@ function EntityHandleRenderer({
 	dispatcher,
 	schemaRegistry,
 	selection,
+	fieldAccess,
 	children,
 }: EntityHandleRendererProps): ReactElement {
 	const subscribe = useCallback(
@@ -369,8 +372,8 @@ function EntityHandleRenderer({
 	useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
 	const rawHandle = useMemo(
-		() => EntityHandle.createRaw(entityId, entityType, store, dispatcher, schemaRegistry, undefined, selection),
-		[entityId, entityType, store, dispatcher, schemaRegistry, selection],
+		() => EntityHandle.createRaw(entityId, entityType, store, dispatcher, schemaRegistry, undefined, selection, undefined, fieldAccess),
+		[entityId, entityType, store, dispatcher, schemaRegistry, selection, fieldAccess],
 	)
 
 	const handle = useMemo(
