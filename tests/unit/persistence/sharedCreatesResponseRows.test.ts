@@ -532,6 +532,20 @@ describe('rows of a list response that no create of the list made', () => {
 		addSection({ name: 'B', date: '2026-02-03' }),
 	]
 
+	test('should adopt a dropped section\'s row with the has-one rows the response nested in it', async () => {
+		const { engine, persister } = setup()
+		const [first] = addUnpairedSections()
+		connectOne('Section', first, 'parent', newSection({ name: 'Mid' }, 'website-2'))
+
+		const result = await persister.persistAll()
+
+		expect(result.success).toBe(true)
+		expectServerRowsListed(engine, ['A', 'B'], [first])
+		expect(store.getRelation('Section', sectionIdNamed(engine, 'A'), 'parent')?.serverId).toBe(sectionIdNamed(engine, 'Mid'))
+		expect(store.getEntitySnapshot<Data>('Section', sectionIdNamed(engine, 'Mid'))?.serverData).toMatchObject({ name: 'Mid' })
+		expect(createdNamed(engine, 'Mid')).toBe(1)
+	})
+
 	// The image is shared, so it is created with a client id inside the section and connected by it in the gallery.
 	test('should keep a client-id create inside a dropped section as the row it made', async () => {
 		const { engine, persister } = setup(['Image'])
