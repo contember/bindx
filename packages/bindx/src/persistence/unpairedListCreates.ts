@@ -3,7 +3,7 @@ import type { SnapshotStore } from '../store/SnapshotStore.js'
 import { entityIdentityKey, type PersistExecution } from './PersistExecution.js'
 
 /** What the persister reads about a row the server returned. */
-export type RowSchema = Pick<SchemaRegistry, 'getScalarFields' | 'getRelationType' | 'getRelationTarget'>
+export type RowSchema = Pick<SchemaRegistry, 'getScalarFields' | 'getRelationTarget' | 'isHasMany'>
 
 type Row = Readonly<Record<string, unknown>>
 
@@ -175,44 +175,12 @@ export function supersedeUnpairedCreates(
 	}
 	for (const change of changes.values()) {
 		const joined = store.supersedeHasManyCreates(change.parentType, change.parentId, change.fieldName, change)
-		for (const id of joined) {
-			const row = change.rows.get(id)
-			if (row) adoptRow(store, schema, change.entityType, row, input.confirmedIds)
-		}
+		const rows = joined.map(id => change.rows.get(id)).filter(row => row !== undefined)
+		if (schema) store.writeServerRead(change.entityType, rows, schema)
+		else for (const id of joined) store.refreshServerData(change.entityType, id, { id })
 	}
 	for (const key of input.superseded) {
 		const descriptor = execution.nestedCreates.find(item => entityIdentityKey(item.entityType, item.entityId) === key)
 		if (descriptor) store.removeEntity(descriptor.entityType, descriptor.entityId)
 	}
-}
-
-/** Stores a row the server returned as a persisted entity, with the has-one rows it carries. */
-function adoptRow(
-	store: SnapshotStore,
-	schema: RowSchema | undefined,
-	entityType: string,
-	row: Row,
-	confirmedIds: ReadonlySet<string>,
-): string | undefined {
-	const id = row['id']
-	if (typeof id !== 'string' || confirmedIds.has(id)) return undefined
-	const data = { id, ...schema ? rowColumns(schema, entityType, row) : {} }
-	if (store.getEntitySnapshot(entityType, id)) store.refreshServerData(entityType, id, data)
-	else store.setEntityData(entityType, id, data, true)
-	store.setExistsOnServer(entityType, id, true)
-	if (!schema) return id
-	for (const [field, value] of Object.entries(row)) {
-		const target = schema.getRelationType(entityType, field) === 'hasOne' ? schema.getRelationTarget(entityType, field) : undefined
-		if (target === undefined || !isRow(value)) continue
-		const targetId = adoptRow(store, schema, target, value, confirmedIds) ?? (typeof value['id'] === 'string' ? value['id'] : undefined)
-		if (targetId === undefined) continue
-		store.getOrCreateRelation(entityType, id, field, {
-			currentId: targetId, serverId: targetId, state: 'connected', serverState: 'connected', placeholderData: {},
-		})
-	}
-	return id
-}
-
-function isRow(value: unknown): value is Row {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

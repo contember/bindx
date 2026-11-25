@@ -5,10 +5,12 @@ import {
 	ContemberSchemaMutationAdapter,
 	ActionDispatcher,
 	BatchPersister,
+	SchemaRegistry,
 	type BackendAdapter,
 	type SchemaNames,
 } from '@contember/bindx'
 import { buildNodeSelectionFromMutationData } from '@contember/bindx-client'
+import { schemaNamesToDef } from '@contember/bindx-react'
 
 /**
  * Page → blocks (hasMany) → button (hasOne) → link (hasOne).
@@ -139,10 +141,9 @@ function createMockServer(options: ServerOptions = {}): MockServer {
 }
 
 function createPersister(store: SnapshotStore, adapter: BackendAdapter): BatchPersister {
-	const schemaAdapter = new ContemberSchemaMutationAdapter(schema)
 	return new BatchPersister(adapter, store, new ActionDispatcher(store), {
-		mutationCollector: new MutationCollector(store, schemaAdapter),
-		schema: schemaAdapter as never, // ContemberSchemaMutationAdapter satisfies MutationSchemaProvider
+		mutationCollector: new MutationCollector(store, new ContemberSchemaMutationAdapter(schema)),
+		schema: new SchemaRegistry(schemaNamesToDef(schema)),
 	})
 }
 
