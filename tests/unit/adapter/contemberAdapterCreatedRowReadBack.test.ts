@@ -52,7 +52,8 @@ interface Api {
 	schemaLoads: number
 }
 
-function createApi(): Api {
+/** `failingLoads` introspection calls fail before the schema loads. */
+function createApi(failingLoads = 0): Api {
 	const api: Api = {
 		mutations: [],
 		schemaLoads: 0,
@@ -68,6 +69,7 @@ function createApi(): Api {
 			{
 				execute: () => {
 					api.schemaLoads++
+					if (api.schemaLoads <= failingLoads) return Promise.reject(new Error('introspection unavailable'))
 					return new Response(JSON.stringify(introspection)).json()
 				},
 			},
@@ -99,6 +101,17 @@ describe('ContemberAdapter reads a created row back', () => {
 		await api.adapter.create('Tag', { name: 'B' })
 
 		expect(api.schemaLoads).toBe(1)
+		expect(selectedUnder(api.mutations[0]!, 'node')).toEqual(['id', 'name', 'color'])
+	})
+
+	test('a create fails without sending the mutation when the schema cannot load, and the next create loads it again', async () => {
+		const api = createApi(1)
+
+		await expect(api.adapter.create('Tag', { name: 'A' })).rejects.toThrow('introspection unavailable')
+		expect(api.mutations).toEqual([])
+
+		await api.adapter.create('Tag', { name: 'A' })
+		expect(api.schemaLoads).toBe(2)
 		expect(selectedUnder(api.mutations[0]!, 'node')).toEqual(['id', 'name', 'color'])
 	})
 

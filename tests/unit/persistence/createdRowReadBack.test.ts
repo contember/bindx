@@ -15,7 +15,9 @@ import { buildNodeSelectionFromMutationData, ContemberSchema, type RawContemberS
 // A created row's columns the client did not send hold what the database filled in
 // (a default, `now`); the create's response reads them back into the store.
 
-const NOW = '2026-11-24T10:00:00.000Z'
+/** The `now` the server stamps on its n-th inserted tag. */
+const insertedAt = (n: number): string => `2026-11-24T10:00:0${n}.000Z`
+const NOW = insertedAt(1)
 
 const schema: SchemaNames = {
 	entities: {
@@ -26,6 +28,7 @@ const schema: SchemaNames = {
 				id: { type: 'column' },
 				title: { type: 'column' },
 				tags: { type: 'many', entity: 'Tag', relationKind: 'manyHasMany' },
+				cover: { type: 'one', entity: 'Tag', nullable: true },
 			},
 		},
 		Tag: {
@@ -60,6 +63,10 @@ const roleSchema = ContemberSchema.fromRaw({
 				column('title'),
 				{
 					__typename: '_Relation', name: 'tags', type: 'ManyHasMany', nullable: null, side: 'owning', targetEntity: 'Tag',
+					inversedBy: null, onDelete: null, orderBy: null, orphanRemoval: null,
+				},
+				{
+					__typename: '_Relation', name: 'cover', type: 'ManyHasOne', nullable: true, side: 'owning', targetEntity: 'Tag',
 					inversedBy: null, onDelete: null, orderBy: null, orphanRemoval: null,
 				},
 			],
@@ -100,12 +107,15 @@ class Server {
 	gate: Promise<void> | undefined
 	/** How the server stores a sent `name`, the way a column may normalise a value. */
 	normaliseName: (value: unknown) => unknown = value => value
-	private nextId = 0
+	private nextTagId = 0
+	private nextArticleId = 0
 
 	readonly adapter: BackendAdapter = {
 		query: () => Promise.resolve([]),
 		delete: () => Promise.resolve({ ok: true }),
-		create: (entityType, data) => this.respond(entityType, data, true, () => this.insertTag(data)),
+		create: (entityType, data) => this.respond(entityType, data, true, () => (
+			entityType === 'Tag' ? this.insertTag(data) : this.insertArticle(data)
+		)),
 		persist: (entityType, id, changes) => this.respond(entityType, changes, false, () => this.updateArticle(id, changes)),
 	}
 
@@ -127,16 +137,25 @@ class Server {
 	}
 
 	private insertTag(data: Row): string {
-		const id = `server-${++this.nextId}`
+		const id = `server-${++this.nextTagId}`
 		this.rows.set(id, {
 			id,
 			color: 'gray',
-			createdAt: NOW,
+			createdAt: insertedAt(this.nextTagId),
 			secret: 'hidden',
 			...data,
 			name: this.normaliseName(data['name']),
 		})
 		return id
+	}
+
+	private insertArticle(data: Row): string {
+		const id = `article-server-${++this.nextArticleId}`
+		const cover = data['cover']
+		const coverId = isRecord(cover) && isRecord(cover['create']) ? this.insertTag(cover['create']) : null
+		this.rows.set(id, { id, title: data['title'] ?? null, cover: coverId })
+		this.articleTags.set(id, [])
+		return this.updateArticle(id, data)
 	}
 
 	private updateArticle(id: string, changes: Row): string {
@@ -158,6 +177,11 @@ class Server {
 			if (entityType === 'Tag' && field.name === 'secret') throw new Error('Field "secret" is not defined for this role')
 			if (entityType === 'Article' && field.name === 'tags') {
 				node['tags'] = (this.articleTags.get(id) ?? []).map(tagId => this.node('Tag', tagId, field.selectionSet ?? []))
+				continue
+			}
+			if (entityType === 'Article' && field.name === 'cover') {
+				const coverId = row['cover']
+				node['cover'] = typeof coverId === 'string' ? this.node('Tag', coverId, field.selectionSet ?? []) : null
 				continue
 			}
 			node[field.name] = row[field.name] ?? null
@@ -220,6 +244,41 @@ describe('A created row read back after the create', () => {
 		expect(server.sent).toStrictEqual([{ tags: [{ create: { name: 'New' }, alias: expect.any(String) }] }])
 		// A row the update did not create keeps the client's view.
 		expect(tagState(store, 'tag-1').data).not.toHaveProperty('createdAt')
+	})
+
+	test('a has-one create inside a top-level create reads its filled-in columns', async () => {
+		const store = new SnapshotStore()
+		const server = new Server()
+		const articleId = store.createEntity('Article', { title: 'Article' })
+		const coverId = store.createEntity('Tag', { name: 'Cover' })
+		store.getOrCreateRelation('Article', articleId, 'cover', {
+			currentId: coverId, serverId: null, state: 'connected', serverState: 'disconnected', placeholderData: {},
+		})
+
+		expect((await createPersister(store, server.adapter).persistAll()).success).toBe(true)
+
+		const cover = tagState(store, coverId)
+		expect(cover.serverData).toMatchObject({ name: 'Cover', color: 'gray', createdAt: NOW })
+		expect(cover.dirty).toEqual([])
+		expect(server.sent).toStrictEqual([{ title: 'Article', cover: { create: { name: 'Cover' } } }])
+	})
+
+	test('two creates in one list each read their own row', async () => {
+		const store = new SnapshotStore()
+		const server = new Server()
+		server.seedArticle('article-1', [])
+		store.setEntityData('Article', 'article-1', { id: 'article-1', title: 'Article' }, true)
+		store.setExistsOnServer('Article', 'article-1', true)
+		store.getOrCreateHasMany('Article', 'article-1', 'tags', [])
+		const first = store.createEntity('Tag', { name: 'First' })
+		store.addToHasMany('Article', 'article-1', 'tags', first)
+		const second = store.createEntity('Tag', { name: 'Second' })
+		store.addToHasMany('Article', 'article-1', 'tags', second)
+
+		expect((await createPersister(store, server.adapter).persistAll()).success).toBe(true)
+
+		expect(tagState(store, first).serverData).toMatchObject({ name: 'First', createdAt: insertedAt(1) })
+		expect(tagState(store, second).serverData).toMatchObject({ name: 'Second', createdAt: insertedAt(2) })
 	})
 
 	test('a column the role cannot read is not asked for', async () => {
