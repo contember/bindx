@@ -399,6 +399,7 @@ export class EntityHandle<T extends object = object, TSelected = T> extends Enti
 			nestedSelection,
 			[...this.entityPath, fieldName],
 			this.fieldAccess,
+			this.selection,
 		)
 		this.relationHandleCache.set(cacheKey, { raw: handle as unknown as RelationHandleRaw, proxy: handle })
 

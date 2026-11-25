@@ -1,8 +1,8 @@
 import React, { memo, type ReactElement, type ReactNode } from 'react'
 import type { HasManyProps, SelectionFieldMeta, SelectionMeta, SelectionProvider, AnyBrand } from '../types.js'
-import { FIELD_REF_META, BINDX_COMPONENT, SCOPE_REF } from '../types.js'
-import { mergeSelections } from '../SelectionMeta.js'
-import { SelectionScope, generateHasManyAlias, type HasManyAccessor } from '@contember/bindx'
+import { FIELD_REF_META, BINDX_COMPONENT } from '../types.js'
+import { collectionScopeOf } from '../collectorProxy.js'
+import { generateHasManyAlias, type HasManyAccessor, type HasManyParams } from '@contember/bindx'
 import { useHasMany } from '../../hooks/useHasMany.js'
 import { annotateElement } from '../devAnnotations.js'
 
@@ -36,9 +36,10 @@ function HasManyImpl<
 	TBrand extends AnyBrand = AnyBrand,
 	TEntityName extends string = string,
 	TSchema extends Record<string, object> = Record<string, object>,
->({ field, children }: HasManyProps<TEntity, TSelected, TBrand, TEntityName, TSchema>): ReactElement {
+>({ field, children, filter, orderBy, limit, offset }: HasManyProps<TEntity, TSelected, TBrand, TEntityName, TSchema>): ReactElement {
 	// useHasMany() subscribes to store and returns HasManyAccessor with .map()/.items/.length
-	const accessor = useHasMany(field)
+	// The parent may select this field under several param aliases; render the one these params select.
+	const accessor = useHasMany(field.withParams({ filter, orderBy, limit, offset }))
 	const targetType = field[FIELD_REF_META]?.targetType
 
 	const items = accessor.map((item, index) => {
@@ -62,49 +63,33 @@ const hasManyWithSelection = HasMany as typeof HasMany & SelectionProvider & { [
 hasManyWithSelection.getSelection = (
 	props: HasManyProps<unknown>,
 	collectNested: (children: ReactNode) => SelectionMeta,
-): SelectionFieldMeta => {
-	const meta = props.field[FIELD_REF_META]
-	// During collection, field is a collector proxy with all accessor properties
-	const fullField = props.field as unknown as HasManyAccessor<unknown>
-
-	// Use field's map function to get a properly configured collector with schema info
-	// The map() creates a collector that knows about entity types and relations
-	const result: { syntheticChildren: ReactNode; childScope: SelectionScope | null } = {
-		syntheticChildren: null,
-		childScope: null,
-	}
-
-	fullField.map((item, index) => {
-		// Get the scope from the collector entity (it has SCOPE_REF)
-		const scopeRef = (item as unknown as Record<symbol, unknown>)[SCOPE_REF]
-		if (scopeRef instanceof SelectionScope) {
-			result.childScope = scopeRef
-		}
-		result.syntheticChildren = props.children(item, index)
-		return null
-	})
-
-	// Also analyze the JSX structure
-	const jsxSelection = result.syntheticChildren ? collectNested(result.syntheticChildren) : { fields: new Map() }
-
-	// Convert scope to SelectionMeta and merge with JSX selection
-	const nestedSelection = result.childScope ? result.childScope.toSelectionMeta() : { fields: new Map() }
-	mergeSelections(nestedSelection, jsxSelection)
-
-	// Build hasManyParams object
-	const hasManyParams = {
+): SelectionFieldMeta | null => {
+	const hasManyParams: HasManyParams = {
 		filter: props.filter,
 		orderBy: props.orderBy,
 		limit: props.limit,
 		offset: props.offset,
 	}
+	// During collection, field is a collector proxy with all accessor properties
+	const relation = props.field.withParams(hasManyParams) as unknown as HasManyAccessor<unknown>
+	let nestedSelection: SelectionMeta = { fields: new Map() }
+	relation.map((item, index) => {
+		nestedSelection = collectNested(props.children(item, index))
+		return null
+	})
 
-	// Generate alias based on params if any are provided
-	const alias = generateHasManyAlias(meta.fieldName, hasManyParams)
+	// A collector ref's path is relative to its own entity: record into the relation's scope
+	// on that entity (under the alias of the params), not as a field of the selection root.
+	const relationScope = collectionScopeOf(relation)
+	if (relationScope !== null) {
+		relationScope.mergeFromSelectionMeta(nestedSelection)
+		return null
+	}
 
+	const meta = props.field[FIELD_REF_META]
 	return {
 		fieldName: meta.fieldName,
-		alias,
+		alias: generateHasManyAlias(meta.fieldName, hasManyParams),
 		path: meta.path,
 		isArray: true,
 		isRelation: true,

@@ -5,6 +5,8 @@ import type { SnapshotStore } from '../store/SnapshotStore.js'
 import type { HasManyRemovalType } from '../store/RelationStore.js'
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 import type { SelectionMeta } from '../selection/types.js'
+import type { HasManyParams } from '../selection/index.js'
+import { canHasManyParamsExcludeMembers, generateHasManyAlias } from '../utils/aliasGenerator.js'
 import {
 	connectToList,
 	addToList,
@@ -13,7 +15,7 @@ import {
 	addRelationError,
 	clearRelationErrors,
 } from '../core/actions.js'
-import { FIELD_REF_META, type HasManyAccessor, type FieldRefMeta, type EntityAccessor, type Unsubscribe } from './types.js'
+import { FIELD_REF_META, type HasManyAccessor, type HasManyRef, type FieldRefMeta, type EntityAccessor, type Unsubscribe } from './types.js'
 import { createClientError, type ErrorInput, type FieldError } from '../errors/types.js'
 import type {
 	EventListener,
@@ -66,6 +68,9 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 	 */
 	private readonly alias: string
 
+	/** Handles of the other param aliases of this field, see {@link withParams}. */
+	private readonly paramViews = new Map<string, HasManyAccessor<TEntity, TSelected>>()
+
 	private constructor(
 		parentEntityType: string,
 		parentEntityId: string,
@@ -81,6 +86,8 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		// a has-many restarts the chain, mirroring the collector proxy.
 		private readonly relationPath: readonly string[] = [fieldName],
 		private readonly fieldAccess: FieldAccessMode = 'checked',
+		// Selection of the parent entity: where the other param aliases of this field live.
+		private readonly parentSelection?: SelectionMeta,
 	) {
 		super(parentEntityType, parentEntityId, store, dispatcher)
 		this.__brands = brands
@@ -100,9 +107,10 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		selection?: SelectionMeta,
 		relationPath?: readonly string[],
 		fieldAccess?: FieldAccessMode,
+		parentSelection?: SelectionMeta,
 	): HasManyAccessor<TEntity, TSelected> {
 		return createAliasProxy<HasManyListHandle<TEntity, TSelected>, HasManyAccessor<TEntity, TSelected>>(
-			HasManyListHandle.createRaw<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath, fieldAccess),
+			HasManyListHandle.createRaw<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath, fieldAccess, parentSelection),
 		)
 	}
 
@@ -123,8 +131,52 @@ export class HasManyListHandle<TEntity extends object = object, TSelected = TEnt
 		selection?: SelectionMeta,
 		relationPath?: readonly string[],
 		fieldAccess?: FieldAccessMode,
+		parentSelection?: SelectionMeta,
 	): HasManyListHandle<TEntity, TSelected> {
-		return new HasManyListHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath, fieldAccess)
+		return new HasManyListHandle<TEntity, TSelected>(parentEntityType, parentEntityId, fieldName, itemType, store, dispatcher, schema, brands, alias, selection, relationPath, fieldAccess, parentSelection)
+	}
+
+	/**
+	 * The relation as selected with {@link params}. The parent may select this field under
+	 * several param aliases; this returns the handle of the alias the params generate, or this
+	 * handle when the parent selects no such alias.
+	 */
+	withParams(params: HasManyParams): HasManyRef<TEntity, TSelected> {
+		const alias = generateHasManyAlias(this.fieldName, params)
+		if (alias === this.alias) {
+			return this
+		}
+		const cached = this.paramViews.get(alias)
+		if (cached) {
+			return cached
+		}
+		const meta = this.parentSelection?.fields.get(alias)
+		if (!meta || !meta.isArray || meta.fieldName !== this.fieldName) {
+			return this
+		}
+		this.store.declareHasManyViewMembership(
+			this.entityType,
+			this.fieldName,
+			alias,
+			canHasManyParamsExcludeMembers(meta.hasManyParams) ? 'partial' : 'total',
+		)
+		const view = HasManyListHandle.create<TEntity, TSelected>(
+			this.entityType,
+			this.entityId,
+			this.fieldName,
+			this.itemType,
+			this.store,
+			this.dispatcher,
+			this.schema,
+			this.__brands,
+			alias,
+			meta.nested,
+			this.relationPath,
+			this.fieldAccess,
+			this.parentSelection,
+		)
+		this.paramViews.set(alias, view)
+		return view
 	}
 
 	/**

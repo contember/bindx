@@ -92,7 +92,7 @@ export const FIELD_REF_API_KEYS: ReadonlySet<string> = new Set([
 	'value', 'serverValue', 'isDirty', 'isTouched', 'touch', 'setValue', 'inputProps', 'errors', 'hasError',
 	'addError', 'clearErrors', 'onChange', 'onChanging', 'length', 'items', 'map', 'add', 'getById', 'remove',
 	'move', 'connect', 'disconnect', 'delete', 'reset', 'onItemConnected', 'onItemDisconnected',
-	'interceptItemConnecting', 'interceptItemDisconnecting', 'totalCount',
+	'interceptItemConnecting', 'interceptItemDisconnecting', 'withParams', 'totalCount',
 ])
 
 function isMetaKey(name: string): boolean {

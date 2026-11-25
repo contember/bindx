@@ -1,5 +1,5 @@
 import type { SchemaRegistry } from '@contember/bindx'
-import { SelectionScope, generatePlaceholderId } from '@contember/bindx'
+import { SelectionScope, generatePlaceholderId, type HasManyParams } from '@contember/bindx'
 import {
 	type EntityAccessor,
 	type EntityFields,
@@ -99,6 +99,7 @@ function createCollectorFieldRef(
 	entityName: string | null,
 	schemaRegistry: SchemaRegistry<Record<string, object>> | null,
 	parentPath: readonly string[] = [],
+	hasManyParams: HasManyParams | null = null,
 ): CollectorRef {
 	// Look up field type from schema if available
 	const fieldDef = entityName && schemaRegistry
@@ -112,19 +113,22 @@ function createCollectorFieldRef(
 		: null
 	const enumName = isEnum ? fieldDef.enumName : undefined
 
-	// Initially add as scalar (will be upgraded to relation if .fields/.entity/.map is accessed)
-	// Or immediately mark as relation if schema tells us it is one
-	if (isHasOneRelation || isHasManyRelation) {
-		parentScope.child(fieldName) // This upgrades to relation
-		if (isHasManyRelation) {
-			parentScope.markAsArray(fieldName)
+	// A ref from withParams() records into the relation selected under the alias of its params.
+	// A plain ref is initially added as scalar (upgraded to relation if .fields/.entity/.map is
+	// accessed). A relation known from the schema is claimed: selected (with its id) even if only
+	// the ref is passed on, until withParams() moves its use to a params alias.
+	let isClaimed = false
+	if (hasManyParams === null) {
+		isClaimed = isHasOneRelation || isHasManyRelation
+		if (isClaimed) {
+			parentScope.claimRelation(fieldName, isHasManyRelation)
+		} else {
+			parentScope.addScalar(fieldName)
 		}
-	} else {
-		parentScope.addScalar(fieldName)
 	}
 
 	// Lazy child scope - created only when relation access happens
-	let childScope: SelectionScope | null = null
+	let childScope: SelectionScope | null = hasManyParams === null ? null : parentScope.hasManyChild(fieldName, hasManyParams)
 
 	const getChildScope = (): SelectionScope => {
 		if (!childScope) {
@@ -132,6 +136,14 @@ function createCollectorFieldRef(
 			childScope = parentScope.child(fieldName)
 		}
 		return childScope
+	}
+
+	const withParams = (params: HasManyParams): CollectorRef => {
+		if (isClaimed) {
+			isClaimed = false
+			parentScope.releaseRelation(fieldName)
+		}
+		return createCollectorFieldRef(parentScope, fieldName, entityName, schemaRegistry, parentPath, params)
 	}
 
 	// Absolute path from the root collector to this field. `fieldName` / `path`
@@ -167,7 +179,9 @@ function createCollectorFieldRef(
 	const mapFn = <R>(fn: (item: EntityAccessor<unknown>, index: number) => R): R[] => {
 		// Get child scope and mark as array relation
 		const scope = getChildScope()
-		parentScope.markAsArray(fieldName)
+		if (hasManyParams === null) {
+			parentScope.markAsArray(fieldName)
+		}
 		// Call fn once with collector to gather nested selection, passing target entity info.
 		// Items of a has-many start a fresh path: dotted where/sort paths only
 		// make sense across has-one chains, not across collection items.
@@ -216,6 +230,7 @@ function createCollectorFieldRef(
 		onItemDisconnected: noop,
 		interceptItemConnecting: noop,
 		interceptItemDisconnecting: noop,
+		withParams,
 
 		// HasOneRef properties ($ prefix only - for collision safety)
 		$state: 'disconnected' as const,
@@ -275,6 +290,26 @@ function createCollectorFieldRef(
 	// - Has-one without schema: Same - direct field access proxies to $fields
 	// The hasOneFieldsProxy creates nested collector refs which properly track selection.
 	return wrapCollectorRefWithFieldAccessProxy(refObject, hasOneFieldsProxy, isHasOneRelation)
+}
+
+/**
+ * The scope a collection-phase value records into: an entity collector's own scope, or the
+ * plain relation scope of a relation ref. Null for a runtime value.
+ */
+export function collectionScopeOf(value: unknown): SelectionScope | null {
+	if (typeof value !== 'object' || value === null || !(SCOPE_REF in value)) {
+		return null
+	}
+	const scope = value[SCOPE_REF]
+	return scope instanceof SelectionScope ? scope : null
+}
+
+/**
+ * The scope a collection-phase has-many ref records into, selected under the alias of
+ * `params` on the ref's own entity. Null for a runtime ref.
+ */
+export function hasManyCollectionScope(ref: HasManyRef<unknown>, params: HasManyParams): SelectionScope | null {
+	return ref[FIELD_REF_META].entityId === '' ? collectionScopeOf(ref.withParams(params)) : null
 }
 
 /**

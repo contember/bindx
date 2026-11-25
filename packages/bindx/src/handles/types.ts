@@ -10,6 +10,7 @@
  */
 
 import type { IsPlainObject } from '@contember/bindx-client'
+import type { HasManyParams } from '../selection/index.js'
 import type { FieldHandle } from './FieldHandle.js'
 
 // ============================================================================
@@ -194,6 +195,11 @@ export interface HasManyRef<
 	onItemDisconnected(listener: EventListener<HasManyDisconnectedEvent>): UnsubscribeType
 	interceptItemConnecting(interceptor: Interceptor<HasManyConnectingEvent>): UnsubscribeType
 	interceptItemDisconnecting(interceptor: Interceptor<HasManyDisconnectingEvent>): UnsubscribeType
+	/**
+	 * The relation as selected with these params (filter, orderBy, limit, offset). A has-many can
+	 * be selected under several param aliases; this is the one the params select.
+	 */
+	withParams(params: HasManyParams): HasManyRef<TEntity, TSelected, TBrand, TEntityName, TSchema>
 }
 
 /**
