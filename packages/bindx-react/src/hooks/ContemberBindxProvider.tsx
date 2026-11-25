@@ -123,7 +123,7 @@ export const ContemberBindxProvider = memo(function ContemberBindxProvider({
 			notificationStore: new NotificationStore(),
 			debug,
 		}
-	}, [schema, customStore, undoManagerProp, undoConfig, defaultUpdateMode, debug])
+	}, [schema, graphQlClient, customStore, undoManagerProp, undoConfig, defaultUpdateMode, debug])
 
 	return (
 		<BindxContext.Provider value={bindxValue}>
