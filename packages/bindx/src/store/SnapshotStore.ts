@@ -710,6 +710,11 @@ export class SnapshotStore implements SnapshotVersionBumper, JournalTarget {
 		return result
 	}
 
+	/** Ids of the entities an entity's live relations point at. */
+	getLiveChildIds(entityType: string, id: string): string[] {
+		return this.relations.getLiveChildIds(`${this.getEntityKey(entityType, id)}:`)
+	}
+
 	/** Keys (`type:id`) of the entities with a live relation edge to {@link childId}. */
 	getParentKeysForChild(childId: string): Set<string> {
 		return this.relations.getParentKeysForChild(childId)

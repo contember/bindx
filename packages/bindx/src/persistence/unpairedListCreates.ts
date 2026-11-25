@@ -1,5 +1,6 @@
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
+import { isTempId } from '../store/entityId.js'
 import { entityIdentityKey, type PersistExecution } from './PersistExecution.js'
 
 /** What the persister reads about a row the server returned. */
@@ -56,13 +57,16 @@ interface CreateIndex {
  * unresolved, as before, when dropping them could lose something:
  * - a local edit landed while the persist was in flight, which may have changed them;
  * - an entity outside what this persist drops still references one of them, so the
- *   reference would point at nothing and the next save would create it through it.
+ *   reference would point at nothing and the next save would create it through it;
+ * - one of them holds a new entity this persist did not send (an interceptor vetoed it),
+ *   which would lose its link and later be sent on its own.
  * A create shared with a list that stays, stays as well.
  */
 export function settleableUnpairedCreates(store: SnapshotStore, execution: PersistExecution, input: SettleInput): SettleableCreates {
 	const { lists, unresolved } = input
 	if (input.editedInFlight) return { lists: [], superseded: new Set() }
 	const index = indexCreates(execution)
+	const sentIds = new Set([...execution.nestedCreates, ...execution.entities].map(entity => entity.entityId))
 	const candidates = lists.map(list => (
 		unresolvedSubtree(index, list.unpairedIds.map(id => entityIdentityKey(list.entityType, id)), unresolved)
 	))
@@ -77,7 +81,10 @@ export function settleableUnpairedCreates(store: SnapshotStore, execution: Persi
 		const allowed = allowedReferrers(execution, index, dropped)
 		candidates.forEach((keys, position) => {
 			if (blocked.has(position)) return
-			if (!keys.some(key => kept.has(key) || isReferencedFromOutside(store, index, key, allowed))) return
+			const isUnsafe = (key: string): boolean => (
+				kept.has(key) || isReferencedFromOutside(store, index, key, allowed) || holdsUnsentCreate(store, index, key, sentIds)
+			)
+			if (!keys.some(isUnsafe)) return
 			blocked.add(position)
 			changed = true
 		})
@@ -136,6 +143,12 @@ function isReferencedFromOutside(store: SnapshotStore, index: CreateIndex, key: 
 		if (!allowed.has(parent)) return true
 	}
 	return false
+}
+
+function holdsUnsentCreate(store: SnapshotStore, index: CreateIndex, key: string, sentIds: ReadonlySet<string>): boolean {
+	const descriptor = index.byKey.get(key)
+	if (!descriptor) return false
+	return store.getLiveChildIds(descriptor.entityType, descriptor.entityId).some(id => isTempId(id) && !sentIds.has(id))
 }
 
 interface SupersedeInput {

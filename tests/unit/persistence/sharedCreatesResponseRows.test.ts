@@ -49,9 +49,10 @@ describe('rows of a list response that no create of the list made', () => {
 		calls = []
 	})
 
-	const setup = (customPrimary: readonly string[] = []): { engine: MiniEngine; persister: BatchPersister } => {
+	const setup = (customPrimary: readonly string[] = []): { engine: MiniEngine; persister: BatchPersister; dispatcher: ActionDispatcher } => {
 		const engine = new MiniEngine(new Set(customPrimary))
-		const persister = new BatchPersister(withNormalizedEcho(createEngineAdapter(engine, calls, [])), store, new ActionDispatcher(store), {
+		const dispatcher = new ActionDispatcher(store)
+		const persister = new BatchPersister(withNormalizedEcho(createEngineAdapter(engine, calls, [])), store, dispatcher, {
 			mutationCollector: new MutationCollector(store, new ContemberSchemaMutationAdapter(schema)),
 			schema: new SchemaRegistry(schemaNamesToDef(schema)),
 		})
@@ -68,7 +69,7 @@ describe('rows of a list response that no create of the list made', () => {
 			store.getOrCreateHasMany('Article', id, 'tags', [])
 			store.getOrCreateHasMany('Article', id, 'gallery', [])
 		}
-		return { engine, persister }
+		return { engine, persister, dispatcher }
 	}
 
 	const connectOne = (entityType: string, entityId: string, fieldName: string, targetId: string): void => {
@@ -541,6 +542,22 @@ describe('rows of a list response that no create of the list made', () => {
 		expect(store.getEntitySnapshot('Section', first)).toBeUndefined()
 		expect(store.getHasManyOrderedIds('Website', 'website-2', 'sections')).toEqual([sectionIdNamed(engine, 'A'), sectionIdNamed(engine, 'B')])
 		expect(createdNamed(engine, 'A')).toBe(1)
+	})
+
+	test('should keep the creates of a list unresolved while one holds a create an interceptor vetoed', async () => {
+		const { persister, dispatcher } = setup()
+		dispatcher.getEventEmitter().intercept('entity:persisting', event => (
+			event.entityType === 'Image' ? { action: 'cancel' } : { action: 'continue' }
+		))
+		const [first] = addUnpairedSections()
+		const image = store.createEntity('Image', { url: 'cover.png' })
+		connectOne('Section', first, 'image', image)
+
+		const result = await persister.persistAll()
+
+		expect(result.success).toBe(false)
+		expect(store.getEntitySnapshot('Section', first)).toBeDefined()
+		expect(store.getRelation('Section', first, 'image')?.currentId).toBe(image)
 	})
 
 	test('should keep the creates of a list unresolved while a section outside the save references one', async () => {
