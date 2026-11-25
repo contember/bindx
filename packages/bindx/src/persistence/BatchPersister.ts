@@ -1771,13 +1771,19 @@ function pairCreateOpsByClientId(createOps: readonly NodeCreateOp[], rows: reado
 	})
 }
 
-/** Rows the paired creates made through a nested has-one; such a row can be in the list too (issue #169). */
+/** Rows the paired creates made through nested has-ones at any depth; such a row can be in the list too (issue #169). */
 function idsCreatedThroughHasOne(pairs: readonly NodeCreatePair[]): string[] {
-	return pairs.flatMap(({ op, nodeItem }) => Object.entries(op.createData).flatMap(([fieldName, value]) => {
-		const node = nodeItem[fieldName]
-		const id = isRecord(value) && 'create' in value && isRecord(node) ? getStringProperty(node, 'id') : undefined
-		return id === undefined ? [] : [id]
-	}))
+	const walk = (createData: Record<string, unknown>, node: Record<string, unknown>): string[] => (
+		Object.entries(createData).flatMap(([fieldName, value]) => {
+			const nestedCreate = isRecord(value) ? value['create'] : undefined
+			const nestedNode = node[fieldName]
+			if (!isRecord(nestedCreate) || !isRecord(nestedNode)) return []
+			const id = getStringProperty(nestedNode, 'id')
+			if (id === undefined) return []
+			return [id, ...walk(nestedCreate, nestedNode)]
+		})
+	)
+	return pairs.flatMap(({ op, nodeItem }) => walk(op.createData, nodeItem))
 }
 
 function withoutPairedOps(createOps: readonly NodeCreateOp[], pairs: readonly NodeCreatePair[]): NodeCreateOp[] {

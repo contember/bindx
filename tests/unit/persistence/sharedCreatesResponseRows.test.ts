@@ -152,6 +152,21 @@ describe('rows of a list response that no create of the list made', () => {
 		expect(createdNamed(engine, 'Mid')).toBe(1)
 	})
 
+	// P and G, which Leaf creates through a chain of has-ones, are in the list only through their own website.
+	test('should map a new section beside the rows its paired sibling created two has-ones deep', async () => {
+		const { engine, persister } = setup()
+		const leaf = addSection({ name: 'Leaf' }, 'website-1', newSection({ name: 'P' }, 'website-1', newSection({ name: 'G' }, 'website-1')))
+		const other = addSection({ name: 'Other', date: '2026-01-01' })
+
+		const result = await persister.persistAll()
+
+		expect(result.success).toBe(true)
+		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
+		expect(store.getPersistedId('Section', other)).toBe(sectionIdNamed(engine, 'Other'))
+		expect(await persistAgain(persister)).toEqual([])
+		expect(createdNamed(engine, 'G')).toBe(1)
+	})
+
 	// Websites persist in load order, which decides whether the parent's row is already in the list response.
 	for (const [carrierWebsite, listWebsite] of [['website-1', 'website-2'], ['website-2', 'website-1']] as const) {
 		test(`should map a new section with a normalized date when a parent created in ${carrierWebsite} joins the list of ${listWebsite}`, async () => {
@@ -257,7 +272,7 @@ describe('rows of a list response that no create of the list made', () => {
 	})
 
 	// Root is created two has-ones below Leaf, in the same mutation, and its row is in the list too.
-	test('should list the server rows of a new section whose grandparent, created inside it, belongs to the same list', async () => {
+	test('should map a new section whose grandparent, created inside it, belongs to the same list', async () => {
 		const { engine, persister } = setup()
 		const root = store.createEntity('Section', { name: 'Root', date: '2026-02-02' })
 		connectOne('Section', root, 'website', 'website-1')
@@ -269,16 +284,15 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expectServerRowsListed(engine, ['Leaf', 'Root'], [leaf, mid, root])
-		// The adopted row carries the has-one rows the response nested in it.
-		expect(store.getRelation('Section', sectionIdNamed(engine, 'Leaf'), 'parent')?.serverId).toBe(sectionIdNamed(engine, 'Mid'))
-		expect(store.getEntitySnapshot<Data>('Section', sectionIdNamed(engine, 'Mid'))?.serverData).toMatchObject({ name: 'Mid' })
+		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
+		expect(store.getPersistedId('Section', mid)).toBe(sectionIdNamed(engine, 'Mid'))
+		expect(store.getPersistedId('Section', root)).toBe(sectionIdNamed(engine, 'Root'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
 	})
 
-	test('should list the server rows of a new section whose folded grandparent joins the same list', async () => {
+	test('should map a new section whose folded grandparent joins the same list', async () => {
 		const { engine, persister } = setup()
 		const root = addSection({ name: 'Root', date: '2026-02-02' })
 		const mid = store.createEntity('Section', { name: 'Mid' })
@@ -289,13 +303,15 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expectServerRowsListed(engine, ['Leaf', 'Root'], [leaf, mid, root])
+		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
+		expect(store.getPersistedId('Section', mid)).toBe(sectionIdNamed(engine, 'Mid'))
+		expect(store.getPersistedId('Section', root)).toBe(sectionIdNamed(engine, 'Root'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
 	})
 
-	test('should list the server rows of a new section whose great-grandparent, created inside it, belongs to the same list', async () => {
+	test('should map a new section whose great-grandparent, created inside it, belongs to the same list', async () => {
 		const { engine, persister } = setup()
 		const root = store.createEntity('Section', { name: 'Root', date: '2026-02-02' })
 		connectOne('Section', root, 'website', 'website-1')
@@ -310,13 +326,16 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expectServerRowsListed(engine, ['Leaf', 'Root'], [leaf, mid, upper, root])
+		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
+		expect(store.getPersistedId('Section', mid)).toBe(sectionIdNamed(engine, 'Mid'))
+		expect(store.getPersistedId('Section', upper)).toBe(sectionIdNamed(engine, 'Upper'))
+		expect(store.getPersistedId('Section', root)).toBe(sectionIdNamed(engine, 'Root'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
 	})
 
-	test('should list the server rows of a new section with a normalized date whose grandparent, created inside it, belongs to the same list', async () => {
+	test('should map a new section with a normalized date whose grandparent, created inside it, belongs to the same list', async () => {
 		const { engine, persister } = setup()
 		const root = store.createEntity('Section', { name: 'Root' })
 		connectOne('Section', root, 'website', 'website-1')
@@ -328,7 +347,9 @@ describe('rows of a list response that no create of the list made', () => {
 		const result = await persister.persistAll()
 
 		expect(result.success).toBe(true)
-		expectServerRowsListed(engine, ['Leaf', 'Root'], [leaf, mid, root])
+		expect(store.getPersistedId('Section', leaf)).toBe(sectionIdNamed(engine, 'Leaf'))
+		expect(store.getPersistedId('Section', mid)).toBe(sectionIdNamed(engine, 'Mid'))
+		expect(store.getPersistedId('Section', root)).toBe(sectionIdNamed(engine, 'Root'))
 		expect(await persistAgain(persister)).toEqual([])
 		expect(createdNamed(engine, 'Root')).toBe(1)
 		expect(createdNamed(engine, 'Leaf')).toBe(1)
