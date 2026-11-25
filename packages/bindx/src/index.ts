@@ -169,7 +169,7 @@ export { createFragment, buildQueryFromSelection, SELECTION_META, createSelectio
 export type { HasManyParams, StaticFieldMap, StaticFieldNode, StaticSelectionSchema } from './selection/index.js'
 
 // Handles
-export { EntityHandle, HasOneHandle, HasManyListHandle, FieldHandle } from './handles/index.js'
+export { EntityHandle, HasOneHandle, HasManyListHandle, FieldHandle, HAS_MANY_ALIAS_RESOLVER, type HasManyAliasResolver } from './handles/index.js'
 
 // Handle symbols
 export { FIELD_REF_META } from './handles/index.js'

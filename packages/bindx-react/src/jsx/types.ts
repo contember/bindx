@@ -18,6 +18,7 @@ import type {
 	EntityRef,
 	EntityAccessor,
 	AnyBrand,
+	SelectionScope,
 } from '@contember/bindx'
 import { Condition } from './conditions.js'
 
@@ -56,6 +57,21 @@ export const BINDX_COMPONENT = Symbol('BINDX_COMPONENT')
  * Used when passing relation entities to nested createComponent components.
  */
 export const SCOPE_REF = Symbol('SCOPE_REF')
+
+/**
+ * Symbol for a has-many collector ref's params item collector: given has-many parameters,
+ * it returns a collector item over the parent scope's child for that params alias
+ * (`SelectionScope.hasManyChild`). `<HasMany filter … >` collects its children through it,
+ * so a parameterised list registers its fields only under its own alias and not also on
+ * the plain, unfiltered relation.
+ */
+export const HAS_MANY_PARAMS_COLLECTOR = Symbol('HAS_MANY_PARAMS_COLLECTOR')
+
+/** What a {@link HAS_MANY_PARAMS_COLLECTOR} function returns. */
+export interface HasManyParamsCollector {
+	readonly item: EntityAccessor<unknown>
+	readonly scope: SelectionScope
+}
 
 
 /**

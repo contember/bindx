@@ -33,9 +33,8 @@ export class BodyAnalyzer {
 		moduleScope: ModuleScope,
 		contracts: ContractLookup,
 		targetKinds: TargetKindLookup,
-		isSelectionRoot: boolean,
 	) {
-		this.jsx = new JsxAnalyzer(this, bindings, moduleScope, contracts, targetKinds, isSelectionRoot)
+		this.jsx = new JsxAnalyzer(this, bindings, moduleScope, contracts, targetKinds)
 	}
 
 	/** Public so JsxAnalyzer can register a hole it discovered. */
