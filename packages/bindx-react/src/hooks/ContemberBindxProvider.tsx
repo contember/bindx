@@ -45,6 +45,11 @@ export interface ContemberBindxProviderProps {
 	/** Children */
 	children: ReactNode
 
+	/**
+	 * GraphQL client for the Content API. Keep it stable for one identity: a new client instance
+	 * rebuilds all services and, without a custom `store`, starts from an empty store (unsaved edits
+	 * and undo history are dropped). A custom `store` keeps the previous client's data until refetched.
+	 */
 	client: BindxGraphQlClient
 
 	/** Enable undo/redo functionality. Pass true to auto-create an UndoManager, or pass an UndoManager instance. */
@@ -123,7 +128,7 @@ export const ContemberBindxProvider = memo(function ContemberBindxProvider({
 			notificationStore: new NotificationStore(),
 			debug,
 		}
-	}, [schema, customStore, undoManagerProp, undoConfig, defaultUpdateMode, debug])
+	}, [schema, graphQlClient, customStore, undoManagerProp, undoConfig, defaultUpdateMode, debug])
 
 	return (
 		<BindxContext.Provider value={bindxValue}>
