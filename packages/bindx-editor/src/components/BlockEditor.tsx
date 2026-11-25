@@ -22,7 +22,7 @@ import { EditorErrorBoundary } from './EditorErrorBoundary.js'
 import { ReferenceElementWrapper } from '../plugins/references/ReferenceElementWrapper.js'
 import { EditorGetReferencedEntityProvider, useEditorGetReferencedEntity } from '../contexts/EditorReferencesContext.js'
 import { EditorBlockElementProvider } from '../contexts/EditorBlockElementContext.js'
-import { BINDX_COMPONENT, fieldRefSelection, type FieldAccessor, type SelectionFieldMeta, type SelectionProvider, type SelectionMeta, createCollectorProxy, useField, useHasMany, useEntityBeforePersist } from '@contember/bindx-react'
+import { BINDX_COMPONENT, fieldRefSelection, hasManyCollectionScope, type FieldAccessor, type SelectionFieldMeta, type SelectionProvider, type SelectionMeta, createCollectorProxy, useField, useHasMany, useEntityBeforePersist } from '@contember/bindx-react'
 import { SelectionScope } from '@contember/bindx'
 
 export type { BlockEditorBaseProps, BlockEditorWithReferencesProps, BlockEditorProps }
@@ -334,6 +334,13 @@ blockEditorAny.getSelection = (
 				}
 
 				refScope.merge(blockScope)
+			}
+
+			// A collector ref's path is relative to its own entity: record into the relation's scope there.
+			const referencesScope = hasManyCollectionScope(refProps.references, {})
+			if (referencesScope !== null) {
+				referencesScope.merge(refScope)
+				return fieldSelection
 			}
 
 			const referencesSelection: SelectionFieldMeta = {

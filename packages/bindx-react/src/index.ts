@@ -397,6 +397,8 @@ export {
 	mergeSelections,
 	createEmptySelection,
 	createCollectorProxy,
+	collectionScopeOf,
+	hasManyCollectionScope,
 	analyzeJsx,
 	collectSelection,
 	convertToQuerySelection,

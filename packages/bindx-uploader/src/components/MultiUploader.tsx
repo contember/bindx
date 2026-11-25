@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, type ReactNode } from 'react'
 import type { EntityRef, HasManyRef, SelectionFieldMeta, SelectionMeta } from '@contember/bindx'
 import { FIELD_REF_META } from '@contember/bindx'
-import { BINDX_COMPONENT, type SelectionProvider, createEmptySelection, useHasMany } from '@contember/bindx-react'
+import { BINDX_COMPONENT, type SelectionProvider, createEmptySelection, hasManyCollectionScope, useHasMany } from '@contember/bindx-react'
 import type { FileType, UploaderEvents } from '../types.js'
 import {
 	MultiUploaderEntityToFileStateMapContext,
@@ -182,6 +182,15 @@ multiUploaderWithSelection.getSelection = (
 	const fieldNames = collectExtractorFieldNames(props.fileType)
 
 	if (fieldNames.length === 0) {
+		return null
+	}
+
+	// A collector ref's path is relative to its own entity: record into the relation's scope there.
+	const relationScope = hasManyCollectionScope(props.field, {})
+	if (relationScope !== null) {
+		for (const fieldName of fieldNames) {
+			relationScope.addScalar(fieldName)
+		}
 		return null
 	}
 
