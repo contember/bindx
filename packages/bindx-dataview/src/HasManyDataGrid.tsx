@@ -32,7 +32,7 @@ import {
 	buildQueryFromSelection,
 	EntityHandle,
 } from '@contember/bindx'
-import type { SchemaRegistry } from '@contember/bindx'
+import type { SchemaRegistry, SelectionMeta } from '@contember/bindx'
 import type { StateStorageOrName } from './stateStorage.js'
 import {
 	useBindxContext,
@@ -80,6 +80,8 @@ export interface HasManyDataGridProps<TEntity extends object = object> {
 interface ListState {
 	status: 'loading' | 'error' | 'ready'
 	items: Array<{ id: string; data: object }>
+	/** The selection the items were loaded with; their handles read through it (e.g. aliased columns). */
+	selection?: SelectionMeta
 	totalCount?: number
 	/** The relation (parent, field, selection) the items were loaded for. */
 	scopeKey?: string
@@ -212,7 +214,7 @@ function HasManyDataGridImpl<TEntity extends object>({
 				// Revalidation preserves local edits while advancing the server baselines.
 				store.writeServerRead(targetEntityType, relation.rows, schemaRegistry, { spec: buildQueryFromSelection(selection) })
 
-				setListState({ status: 'ready', items, totalCount: relation.totalCount, scopeKey, optionsKey, requestKey })
+				setListState({ status: 'ready', items, selection, totalCount: relation.totalCount, scopeKey, optionsKey, requestKey })
 			} catch (error) {
 				if (abortController.signal.aborted) return
 				setListState({ status: 'error', items: [], scopeKey })
@@ -239,6 +241,8 @@ function HasManyDataGridImpl<TEntity extends object>({
 				store,
 				dispatcher,
 				schemaRegistry as SchemaRegistry<Record<string, object>>,
+				undefined,
+				shownState.selection,
 			) as unknown as EntityAccessor<TEntity>,
 		)
 	}, [shownState, targetEntityType, store, dispatcher, schemaRegistry])

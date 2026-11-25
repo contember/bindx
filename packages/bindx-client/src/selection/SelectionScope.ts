@@ -25,20 +25,21 @@ interface RelationNode {
 /**
  * Tree-based selection scope for collecting field selections.
  *
- * Each scope holds the scalar fields and relations selected on one entity. Relations are
- * keyed by alias: a has-many selected with params (filter, orderBy, limit, offset) is its
- * own relation next to the plain one, under an alias generated from the params.
+ * Each scope holds the scalar fields and relations selected on one entity, keyed by alias:
+ * a field selected under an explicit alias (`title({ as: 'headline' })`) or a has-many selected
+ * with params (filter, orderBy, limit, offset) is its own entry next to the plain one.
  */
 export class SelectionScope {
 	private readonly relations: Map<string, RelationNode> = new Map()
-	private readonly scalarFields: Set<string> = new Set()
+	/** Field name of each selected scalar, keyed by alias. */
+	private readonly scalarFields: Map<string, string> = new Map()
 
 	/**
 	 * Create or get the scope of a relation field selected without params.
 	 * Removes the field from scalars if it was there. New relation scopes select 'id'.
 	 */
-	child(fieldName: string): SelectionScope {
-		return this.ensureRelation(fieldName, fieldName).scope
+	child(fieldName: string, alias: string = fieldName): SelectionScope {
+		return this.ensureRelation(fieldName, alias).scope
 	}
 
 	/**
@@ -46,31 +47,30 @@ export class SelectionScope {
 	 * The relation is keyed by the alias the params generate, so each distinct set of
 	 * params is its own relation; without params this is the plain {@link child}.
 	 */
-	hasManyChild(fieldName: string, params: HasManyParams): SelectionScope {
-		const alias = generateHasManyAlias(fieldName, params)
+	hasManyChild(fieldName: string, params: HasManyParams, alias: string = generateHasManyAlias(fieldName, params)): SelectionScope {
 		const node = this.ensureRelation(fieldName, alias)
 		node.isArray = true
-		if (alias !== fieldName || params.totalCount) {
+		if (generateHasManyAlias(fieldName, params) !== fieldName || params.totalCount) {
 			node.params = mergeHasManyParams(node.params, params)
 		}
 		return node.scope
 	}
 
 	/**
-	 * Add a scalar field to this scope.
+	 * Add a scalar field to this scope, under {@link alias}.
 	 * If the field is already a relation, this is a no-op.
 	 */
-	addScalar(fieldName: string): void {
+	addScalar(fieldName: string, alias: string = fieldName): void {
 		if (!this.isRelationField(fieldName)) {
-			this.scalarFields.add(fieldName)
+			this.scalarFields.set(alias, fieldName)
 		}
 	}
 
 	/**
-	 * Mark the plain relation of a field as array (hasMany).
+	 * Mark the relation selected under {@link alias} as array (hasMany); the plain relation of a field by default.
 	 */
-	markAsArray(fieldName: string): void {
-		const node = this.relations.get(fieldName)
+	markAsArray(alias: string): void {
+		const node = this.relations.get(alias)
 		if (node) {
 			node.isArray = true
 		}
@@ -88,8 +88,8 @@ export class SelectionScope {
 	 * Scalar fields are added, relations are recursively merged by alias.
 	 */
 	merge(other: SelectionScope): void {
-		for (const field of other.scalarFields) {
-			this.addScalar(field)
+		for (const [alias, fieldName] of other.scalarFields) {
+			this.addScalar(fieldName, alias)
 		}
 
 		for (const [alias, otherNode] of other.relations) {
@@ -113,14 +113,14 @@ export class SelectionScope {
 
 			if (field.isRelation && field.nested) {
 				const childScope = field.hasManyParams
-					? this.hasManyChild(field.fieldName, field.hasManyParams)
-					: this.child(field.fieldName)
+					? this.hasManyChild(field.fieldName, field.hasManyParams, field.alias)
+					: this.child(field.fieldName, field.alias)
 				if (field.isArray) {
-					this.markAsArray(field.fieldName)
+					this.markAsArray(field.alias)
 				}
 				childScope.mergeFromSelectionMeta(field.nested)
 			} else {
-				this.addScalar(field.fieldName)
+				this.addScalar(field.fieldName, field.alias)
 			}
 		}
 	}
@@ -132,10 +132,10 @@ export class SelectionScope {
 	toSelectionMeta(): SelectionMeta {
 		const fields = new Map<string, SelectionFieldMeta>()
 
-		for (const fieldName of this.scalarFields) {
-			fields.set(fieldName, {
+		for (const [alias, fieldName] of this.scalarFields) {
+			fields.set(alias, {
 				fieldName,
-				alias: fieldName,
+				alias,
 				path: [fieldName],
 				isRelation: false,
 				isArray: false,
@@ -177,7 +177,11 @@ export class SelectionScope {
 	}
 
 	private ensureRelation(fieldName: string, alias: string): RelationNode {
-		this.scalarFields.delete(fieldName)
+		for (const [scalarAlias, scalarFieldName] of this.scalarFields) {
+			if (scalarFieldName === fieldName) {
+				this.scalarFields.delete(scalarAlias)
+			}
+		}
 		const existing = this.relations.get(alias)
 		if (existing) {
 			return existing
