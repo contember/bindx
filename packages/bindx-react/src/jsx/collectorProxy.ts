@@ -113,10 +113,9 @@ function createCollectorFieldRef(
 		: null
 	const enumName = isEnum ? fieldDef.enumName : undefined
 
-	// A ref from withParams() records into the relation selected under the alias of its params.
-	// A plain ref is initially added as scalar (upgraded to relation if .fields/.entity/.map is
-	// accessed), or as a relation right away if the schema says so: a component that receives
-	// the ref may read it at runtime only, so it stays selected even next to a params alias.
+	// A withParams() ref records under its params alias. A plain ref is a scalar until used as a
+	// relation, or a relation at once if the schema says so: a component receiving it may read it
+	// only at runtime, so it stays selected even next to a params alias.
 	if (hasManyParams === null) {
 		if (isHasOneRelation || isHasManyRelation) {
 			parentScope.child(fieldName)

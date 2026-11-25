@@ -72,4 +72,19 @@ describe('SelectionScope', () => {
 
 		expect(describeSelection(scope.toSelectionMeta())).toEqual([`${LIMIT_TWO_ALIAS}:posts { id rank }`])
 	})
+
+	test('totalCount of one params alias survives merge in either order', () => {
+		const counted = new SelectionScope()
+		counted.hasManyChild('posts', { ...LIMIT_TWO, totalCount: true })
+		const uncounted = new SelectionScope()
+		uncounted.hasManyChild('posts', LIMIT_TWO)
+
+		const countedFirst = SelectionScope.fromSelectionMeta(counted.toSelectionMeta())
+		countedFirst.merge(uncounted)
+		uncounted.merge(counted)
+
+		for (const scope of [countedFirst, uncounted]) {
+			expect(scope.toSelectionMeta().fields.get(LIMIT_TWO_ALIAS)?.hasManyParams).toEqual({ ...LIMIT_TWO, totalCount: true })
+		}
+	})
 })
