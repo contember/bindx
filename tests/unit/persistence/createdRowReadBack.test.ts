@@ -410,6 +410,26 @@ describe('A list create no response row matches', () => {
 		expect((await persister.persistAll()).results).toEqual([])
 	})
 
+	test('stays unresolved, keeping an edit made while the save was in flight', async () => {
+		const store = new SnapshotStore()
+		const server = new Server()
+		server.normaliseName = value => typeof value === 'string' ? value.trim() : value
+		const { first } = articleWithTwoTrimmedCreates(server, store)
+		let release = (): void => {}
+		server.gate = new Promise(resolve => {
+			release = resolve
+		})
+
+		const persisting = createPersister(store, server.adapter).persistAll()
+		await Promise.resolve()
+		store.setFieldValue('Tag', first, ['color'], 'red')
+		release()
+
+		expect((await persisting).success).toBe(false)
+		expect(store.getEntitySnapshot<Row>('Tag', first)?.data).toMatchObject({ name: ' First ', color: 'red' })
+		expect(store.getHasManyOrderedIds('Article', 'article-1', 'tags')).toContain(first)
+	})
+
 	test('stays unresolved when the response does not list the relation at all', async () => {
 		const store = new SnapshotStore()
 		store.setEntityData('Article', 'article-1', { id: 'article-1', title: 'Article' }, true)

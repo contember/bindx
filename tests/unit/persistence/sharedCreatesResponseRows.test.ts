@@ -512,6 +512,23 @@ describe('rows of a list response that no create of the list made', () => {
 		expect(engine.sentCreates.filter(item => item.entity === 'Image')).toHaveLength(1)
 	})
 
+	// Shared resolves by its client id inside dropped A, but its own image create has no row to pair with.
+	test('should keep a create inside a kept client-id section unresolved instead of dropping it', async () => {
+		const { persister } = setup(['Section'])
+		const [first] = addUnpairedSections()
+		const shared = newSection({ name: 'Shared' }, 'website-2')
+		store.addToHasMany('Section', first, 'children', shared)
+		addSection({ name: 'Sibling' }, 'website-1', shared)
+		const image = store.createEntity('Image', { url: 'cover.png' })
+		connectOne('Section', shared, 'image', image)
+
+		await persister.persistAll()
+
+		expect(store.getEntitySnapshot('Section', shared)).toBeDefined()
+		expect(store.getEntitySnapshot<Data>('Image', image)?.data).toMatchObject({ url: 'cover.png' })
+		expect(store.getRelation('Section', shared, 'image')?.currentId).toBe(image)
+	})
+
 	test('should keep the creates of a list unresolved while a section outside the save references one', async () => {
 		const { engine, persister } = setup()
 		const [first, second] = addUnpairedSections()

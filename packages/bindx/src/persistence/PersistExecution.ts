@@ -29,10 +29,18 @@ export interface PersistExecution {
 	readonly nestedCreates: readonly CollectedNestedCreate[]
 	readonly nestedUpdates: readonly CollectedNestedUpdate[]
 	readonly suppressedRelationItems: ReadonlyMap<string, ReadonlySet<string>>
+	/** {@link editableWriteVersion} when the persist was sent: equal later, no local edit landed in between. */
+	readonly sentEditableWriteVersion: number
 }
 
 export function entityIdentityKey(entityType: string, entityId: string): string {
 	return `${entityType}:${entityId}`
+}
+
+/** Counts every local edit to the store; server writes and bookkeeping do not count. */
+export function editableWriteVersion(store: SnapshotStore): number {
+	const counters = store.getEditableWriteCounters()
+	return counters.entity + counters.relation + counters.hasMany
 }
 
 export function createPersistExecution(
@@ -167,6 +175,7 @@ export function createPersistExecution(
 		suppressedRelationItems: new Map(
 			[...suppressedRelationItems].map(([key, ids]) => [key, new Set(ids)]),
 		),
+		sentEditableWriteVersion: editableWriteVersion(store),
 	}
 }
 

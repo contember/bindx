@@ -1,6 +1,6 @@
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
-import { entityIdentityKey, type PersistExecution } from './PersistExecution.js'
+import { editableWriteVersion, entityIdentityKey, type PersistExecution } from './PersistExecution.js'
 
 /** What the persister reads about a row the server returned. */
 export type RowSchema = Pick<SchemaRegistry, 'getScalarFields' | 'getRelationTarget' | 'isHasMany'>
@@ -36,11 +36,20 @@ interface SettleableCreates {
 	readonly superseded: ReadonlySet<string>
 }
 
+type NestedCreate = PersistExecution['nestedCreates'][number]
+
+interface CreateIndex {
+	readonly byKey: ReadonlyMap<string, NestedCreate>
+	readonly childrenOf: ReadonlyMap<string, readonly string[]>
+}
+
 /**
- * The unpaired list creates that can leave the store. A list keeps its creates unresolved,
- * as before, when an entity outside what this persist drops still references one of them:
- * removing it would leave that reference pointing at nothing, and the next save would
- * create it again through the reference. A create shared with such a list stays as well.
+ * The unpaired list creates that can leave the store. Each list keeps its creates
+ * unresolved, as before, when dropping them could lose something:
+ * - a local edit landed while the persist was in flight, which may have changed them;
+ * - an entity outside what this persist drops still references one of them, so the
+ *   reference would point at nothing and the next save would create it through it.
+ * A create shared with a list that stays, stays as well.
  */
 export function settleableUnpairedCreates(
 	store: SnapshotStore,
@@ -48,52 +57,65 @@ export function settleableUnpairedCreates(
 	lists: readonly UnpairedListCreates[],
 	unresolved: ReadonlySet<string>,
 ): SettleableCreates {
-	const candidates = lists.map(list => {
-		const roots = list.unpairedIds.map(id => entityIdentityKey(list.entityType, id))
-		return [...withNestedCreates(execution, roots)].filter(key => unresolved.has(key))
-	})
+	if (editableWriteVersion(store) !== execution.sentEditableWriteVersion) return { lists: [], superseded: new Set() }
+	const index = indexCreates(execution)
+	const candidates = lists.map(list => (
+		unresolvedSubtree(index, list.unpairedIds.map(id => entityIdentityKey(list.entityType, id)), unresolved)
+	))
 	const blocked = new Set<number>()
 	const keysWhere = (isBlocked: boolean): Set<string> => (
-		new Set(candidates.filter((_, index) => blocked.has(index) === isBlocked).flat())
+		new Set(candidates.filter((_, position) => blocked.has(position) === isBlocked).flat())
 	)
 	for (let changed = true; changed;) {
 		changed = false
 		const kept = keysWhere(true)
-		const allowed = allowedReferrers(execution, keysWhere(false))
-		candidates.forEach((keys, index) => {
-			if (blocked.has(index)) return
-			if (!keys.some(key => kept.has(key) || isReferencedFromOutside(store, execution, key, allowed))) return
-			blocked.add(index)
+		const dropped = keysWhere(false)
+		const allowed = allowedReferrers(execution, index, dropped)
+		candidates.forEach((keys, position) => {
+			if (blocked.has(position)) return
+			if (!keys.some(key => kept.has(key) || isReferencedFromOutside(store, index, key, allowed))) return
+			blocked.add(position)
 			changed = true
 		})
 	}
-	return { lists: lists.filter((_, index) => !blocked.has(index)), superseded: keysWhere(false) }
+	return { lists: lists.filter((_, position) => !blocked.has(position)), superseded: keysWhere(false) }
 }
 
-/** Keys of the given entities and of every entity created inside them, at any depth. */
-function withNestedCreates(execution: PersistExecution, roots: Iterable<string>): Set<string> {
-	const keys = new Set(roots)
-	const queue = [...keys]
-	for (const parent of queue) {
-		for (const descriptor of execution.nestedCreates) {
-			if (entityIdentityKey(descriptor.parentEntityType, descriptor.parentEntityId) !== parent) continue
-			const key = entityIdentityKey(descriptor.entityType, descriptor.entityId)
-			if (keys.has(key)) continue
-			keys.add(key)
-			queue.push(key)
+function indexCreates(execution: PersistExecution): CreateIndex {
+	const byKey = new Map<string, NestedCreate>()
+	const childrenOf = new Map<string, string[]>()
+	for (const descriptor of execution.nestedCreates) {
+		const key = entityIdentityKey(descriptor.entityType, descriptor.entityId)
+		byKey.set(key, descriptor)
+		const parentKey = entityIdentityKey(descriptor.parentEntityType, descriptor.parentEntityId)
+		const siblings = childrenOf.get(parentKey)
+		if (siblings) siblings.push(key)
+		else childrenOf.set(parentKey, [key])
+	}
+	return { byKey, childrenOf }
+}
+
+/**
+ * The unresolved roots and the unresolved entities created inside them, at any depth. The
+ * walk stops at an entity that resolved: it stays in the store and keeps what it holds.
+ */
+function unresolvedSubtree(index: CreateIndex, roots: readonly string[], unresolved: ReadonlySet<string>): string[] {
+	const keys = new Set(roots.filter(key => unresolved.has(key)))
+	for (const parent of keys) {
+		for (const child of index.childrenOf.get(parent) ?? []) {
+			if (unresolved.has(child)) keys.add(child)
 		}
 	}
-	return keys
+	return [...keys]
 }
 
 /** The dropped entities and the owners of every list they leave: their references go away with them. */
-function allowedReferrers(execution: PersistExecution, dropped: ReadonlySet<string>): Set<string> {
+function allowedReferrers(execution: PersistExecution, index: CreateIndex, dropped: ReadonlySet<string>): Set<string> {
 	const allowed = new Set(dropped)
 	const droppedIds = new Set<string>()
-	for (const descriptor of execution.nestedCreates) {
-		if (!dropped.has(entityIdentityKey(descriptor.entityType, descriptor.entityId))) continue
-		droppedIds.add(descriptor.entityId)
-		allowed.add(entityIdentityKey(descriptor.parentEntityType, descriptor.parentEntityId))
+	for (const key of dropped) {
+		const descriptor = index.byKey.get(key)
+		if (descriptor) droppedIds.add(descriptor.entityId)
 	}
 	for (const change of execution.hasManyChanges) {
 		if (change.additions.some(addition => droppedIds.has(addition.itemId))) {
@@ -103,13 +125,8 @@ function allowedReferrers(execution: PersistExecution, dropped: ReadonlySet<stri
 	return allowed
 }
 
-function isReferencedFromOutside(
-	store: SnapshotStore,
-	execution: PersistExecution,
-	key: string,
-	allowed: ReadonlySet<string>,
-): boolean {
-	const descriptor = execution.nestedCreates.find(item => entityIdentityKey(item.entityType, item.entityId) === key)
+function isReferencedFromOutside(store: SnapshotStore, index: CreateIndex, key: string, allowed: ReadonlySet<string>): boolean {
+	const descriptor = index.byKey.get(key)
 	if (!descriptor) return false
 	for (const parent of store.getParentKeysForChild(descriptor.entityId)) {
 		if (!allowed.has(parent)) return true
@@ -165,11 +182,14 @@ export function supersedeUnpairedCreates(
 			change.adopted.push(id)
 		}
 	}
+	const supersededById = new Map<string, NestedCreate>()
+	for (const descriptor of execution.nestedCreates) {
+		if (input.superseded.has(entityIdentityKey(descriptor.entityType, descriptor.entityId))) supersededById.set(descriptor.entityId, descriptor)
+	}
 	for (const listChange of execution.hasManyChanges) {
 		for (const addition of listChange.additions) {
-			const descriptor = execution.nestedCreates.find(item => item.entityId === addition.itemId)
+			const descriptor = supersededById.get(addition.itemId)
 			if (addition.kind !== 'created' || !descriptor) continue
-			if (!input.superseded.has(entityIdentityKey(descriptor.entityType, descriptor.entityId))) continue
 			changeOf(listChange.entityType, listChange.entityId, listChange.fieldName, descriptor.entityType).dropped.add(addition.itemId)
 		}
 	}
@@ -179,8 +199,5 @@ export function supersedeUnpairedCreates(
 		if (schema) store.writeServerRead(change.entityType, rows, schema)
 		else for (const id of joined) store.refreshServerData(change.entityType, id, { id })
 	}
-	for (const key of input.superseded) {
-		const descriptor = execution.nestedCreates.find(item => entityIdentityKey(item.entityType, item.entityId) === key)
-		if (descriptor) store.removeEntity(descriptor.entityType, descriptor.entityId)
-	}
+	for (const descriptor of supersededById.values()) store.removeEntity(descriptor.entityType, descriptor.entityId)
 }
