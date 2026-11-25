@@ -26,6 +26,7 @@ import type { EntityPersistedEvent, EntityPersistFailedEvent, EntityPersistingEv
 import { deepEqual } from '../utils/deepEqual.js'
 import {
 	createPersistExecution,
+	editableWriteVersion,
 	entityIdentityKey,
 	type ExecutionEntity,
 	type PersistExecution,
@@ -937,6 +938,8 @@ export class BatchPersister {
 		const persistedSoFar = new Map<string, string>()
 		const supersededKeys = new Set<string>()
 		const unpairedLists: UnpairedListCreates[] = []
+		// Read before reconciling: a rollback below is a local write of the persister's own.
+		const editedInFlight = editableWriteVersion(this.store) !== execution.sentEditableWriteVersion
 		const idMappings: { readonly entity: ExecutionEntity; readonly persistedId: string | undefined; readonly nestedIds: ReadonlyMap<string, string> }[] = []
 		for (const mutation of execution.mutations) {
 			const mutationResult = transactionResult.results.find(entry => (
@@ -974,7 +977,7 @@ export class BatchPersister {
 				continue
 			}
 
-			const resolvedNested = this.resolveNestedResults(execution, mutation, mutationResult, persistedSoFar)
+			const resolvedNested = this.resolveNestedResults(execution, mutation, mutationResult, { persistedEarlier: persistedSoFar, editedInFlight })
 			const nestedUpdates = this.expectedNestedUpdates(execution, mutation)
 			const involved = [entity, ...resolvedNested.entities, ...nestedUpdates]
 			for (const [key, persistedId] of resolvedNested.persistedIds) {
@@ -1116,7 +1119,7 @@ export class BatchPersister {
 		execution: PersistExecution,
 		mutation: TransactionMutation,
 		result: ExecutedMutationResult,
-		persistedEarlier: ReadonlyMap<string, string>,
+		progress: { readonly persistedEarlier: ReadonlyMap<string, string>; readonly editedInFlight: boolean },
 	): {
 		readonly entities: readonly ExecutionEntity[]
 		readonly unresolved: readonly ExecutionEntity[]
@@ -1136,7 +1139,7 @@ export class BatchPersister {
 		if (supplied.length === 0 && result.nodeData) {
 			const inThisMutation = new Set(expected.map(entity => entityIdentityKey(entity.entityType, entity.entityId)))
 			supplied = this.extractNestedResultsFromNode(
-				{ execution, joiners: listJoinersOf(execution, inThisMutation, persistedEarlier), unpairedLists },
+				{ execution, joiners: listJoinersOf(execution, inThisMutation, progress.persistedEarlier), unpairedLists },
 				result.nodeData,
 				mutation.entityType,
 				mutation.entityId,
@@ -1178,12 +1181,11 @@ export class BatchPersister {
 			persistedIds.set(key, persistedId)
 			if (match?.data) createdRows.set(key, match.data)
 		}
-		const settleable = settleableUnpairedCreates(
-			this.store,
-			execution,
-			unpairedLists,
-			new Set(missing.map(entity => entityIdentityKey(entity.entityType, entity.entityId))),
-		)
+		const settleable = settleableUnpairedCreates(this.store, execution, {
+			lists: unpairedLists,
+			unresolved: new Set(missing.map(entity => entityIdentityKey(entity.entityType, entity.entityId))),
+			editedInFlight: progress.editedInFlight,
+		})
 		const superseded = missing.filter(entity => settleable.superseded.has(entityIdentityKey(entity.entityType, entity.entityId)))
 		unresolved.push(...missing.filter(entity => !superseded.includes(entity)))
 		const entities = expected.filter(entity => !unresolved.includes(entity) && !superseded.includes(entity))

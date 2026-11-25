@@ -246,9 +246,9 @@ export class UndoJournal {
 		this.onRekey?.(ctx)
 	}
 
-	/** Forwarded from the store on a full clear; drops all owner history and any open gesture. */
+	/** Forwarded from the store when it replaces what the history describes (a full clear, superseded creates); drops all owner history and any open gesture. */
 	clear(): void {
-		// A full store clear wipes the world these pre-images describe. Drop the open
+		// The store replaced the world these pre-images describe. Drop the open
 		// gesture's cells but keep `active` non-null so begin/commit depth stays paired.
 		// Null the baseline too: the wiped transaction can't be meaningfully guarded.
 		if (this.active !== null) this.active = new Map()

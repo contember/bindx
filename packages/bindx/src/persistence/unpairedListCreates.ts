@@ -1,6 +1,6 @@
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js'
 import type { SnapshotStore } from '../store/SnapshotStore.js'
-import { editableWriteVersion, entityIdentityKey, type PersistExecution } from './PersistExecution.js'
+import { entityIdentityKey, type PersistExecution } from './PersistExecution.js'
 
 /** What the persister reads about a row the server returned. */
 export type RowSchema = Pick<SchemaRegistry, 'getScalarFields' | 'getRelationTarget' | 'isHasMany'>
@@ -36,6 +36,14 @@ interface SettleableCreates {
 	readonly superseded: ReadonlySet<string>
 }
 
+interface SettleInput {
+	readonly lists: readonly UnpairedListCreates[]
+	/** Keys of this mutation's nested creates that no response row resolved. */
+	readonly unresolved: ReadonlySet<string>
+	/** Whether a local edit landed while the persist was in flight; see {@link PersistExecution.sentEditableWriteVersion}. */
+	readonly editedInFlight: boolean
+}
+
 type NestedCreate = PersistExecution['nestedCreates'][number]
 
 interface CreateIndex {
@@ -51,13 +59,9 @@ interface CreateIndex {
  *   reference would point at nothing and the next save would create it through it.
  * A create shared with a list that stays, stays as well.
  */
-export function settleableUnpairedCreates(
-	store: SnapshotStore,
-	execution: PersistExecution,
-	lists: readonly UnpairedListCreates[],
-	unresolved: ReadonlySet<string>,
-): SettleableCreates {
-	if (editableWriteVersion(store) !== execution.sentEditableWriteVersion) return { lists: [], superseded: new Set() }
+export function settleableUnpairedCreates(store: SnapshotStore, execution: PersistExecution, input: SettleInput): SettleableCreates {
+	const { lists, unresolved } = input
+	if (input.editedInFlight) return { lists: [], superseded: new Set() }
 	const index = indexCreates(execution)
 	const candidates = lists.map(list => (
 		unresolvedSubtree(index, list.unpairedIds.map(id => entityIdentityKey(list.entityType, id)), unresolved)

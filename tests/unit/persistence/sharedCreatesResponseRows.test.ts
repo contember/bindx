@@ -524,9 +524,23 @@ describe('rows of a list response that no create of the list made', () => {
 
 		await persister.persistAll()
 
+		expect(store.getEntitySnapshot('Section', first)).toBeUndefined()
 		expect(store.getEntitySnapshot('Section', shared)).toBeDefined()
 		expect(store.getEntitySnapshot<Data>('Image', image)?.data).toMatchObject({ url: 'cover.png' })
 		expect(store.getRelation('Section', shared, 'image')?.currentId).toBe(image)
+	})
+
+	test('should list the server rows when another mutation of the save fails and is rolled back', async () => {
+		const { engine, persister } = setup()
+		store.setFieldValue('Website', 'website-1', ['name'], 'BAD')
+		const first = addSection({ name: 'A', date: '2026-02-02' }, 'website-2')
+		addSection({ name: 'B', date: '2026-02-03' }, 'website-2')
+
+		await persister.persistAll({ rollbackOnError: true })
+
+		expect(store.getEntitySnapshot('Section', first)).toBeUndefined()
+		expect(store.getHasManyOrderedIds('Website', 'website-2', 'sections')).toEqual([sectionIdNamed(engine, 'A'), sectionIdNamed(engine, 'B')])
+		expect(createdNamed(engine, 'A')).toBe(1)
 	})
 
 	test('should keep the creates of a list unresolved while a section outside the save references one', async () => {

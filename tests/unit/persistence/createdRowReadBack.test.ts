@@ -6,6 +6,7 @@ import {
 	ActionDispatcher,
 	BatchPersister,
 	SchemaRegistry,
+	UndoManager,
 	type BackendAdapter,
 	type EntityPersistResult,
 	type SchemaNames,
@@ -337,11 +338,13 @@ function articleWithTwoTrimmedCreates(server: Server, store: SnapshotStore): { f
 	store.setEntityData('Tag', 'tag-1', { id: 'tag-1', name: 'Existing', color: 'blue' }, true)
 	store.setExistsOnServer('Tag', 'tag-1', true)
 	store.getOrCreateHasMany('Article', 'article-1', 'tags', ['tag-1'])
-	const first = store.createEntity('Tag', { name: ' First ' })
-	store.addToHasMany('Article', 'article-1', 'tags', first)
-	const second = store.createEntity('Tag', { name: ' Second ' })
-	store.addToHasMany('Article', 'article-1', 'tags', second)
-	return { first, second }
+	// Each add is one gesture, the way a list handle records it.
+	const add = (name: string): string => store.transaction(() => {
+		const id = store.createEntity('Tag', { name })
+		store.addToHasMany('Article', 'article-1', 'tags', id)
+		return id
+	})
+	return { first: add(' First '), second: add(' Second ') }
 }
 
 describe('A list create no response row matches', () => {
@@ -428,6 +431,30 @@ describe('A list create no response row matches', () => {
 		expect((await persisting).success).toBe(false)
 		expect(store.getEntitySnapshot<Row>('Tag', first)?.data).toMatchObject({ name: ' First ', color: 'red' })
 		expect(store.getHasManyOrderedIds('Article', 'article-1', 'tags')).toContain(first)
+	})
+
+	test('clears undo history, whose images still hold the dropped items', async () => {
+		const store = new SnapshotStore()
+		const server = new Server()
+		server.normaliseName = value => typeof value === 'string' ? value.trim() : value
+		const dispatcher = new ActionDispatcher(store)
+		const undo = new UndoManager(store, { debounceMs: 0 })
+		dispatcher.addMiddleware(undo.createMiddleware())
+		articleWithTwoTrimmedCreates(server, store)
+		expect(undo.getState().canUndo).toBe(true)
+		const persister = new BatchPersister(server.adapter, store, dispatcher, {
+			mutationCollector: new MutationCollector(store, new ContemberSchemaMutationAdapter(schema)),
+			schema: new SchemaRegistry(schemaNamesToDef(schema)),
+			undoManager: undo,
+		})
+
+		expect((await persister.persistAll()).success).toBe(true)
+		undo.undo()
+
+		expect(undo.getState().canUndo).toBe(false)
+		expect(store.getHasManyOrderedIds('Article', 'article-1', 'tags')).toEqual(['tag-1', 'server-1', 'server-2'])
+		expect((await persister.persistAll()).results).toEqual([])
+		expect(server.sent).toHaveLength(1)
 	})
 
 	test('stays unresolved when the response does not list the relation at all', async () => {
