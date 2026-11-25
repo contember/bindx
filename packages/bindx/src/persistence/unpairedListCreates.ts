@@ -66,7 +66,7 @@ export function settleableUnpairedCreates(store: SnapshotStore, execution: Persi
 	const { lists, unresolved } = input
 	if (input.editedInFlight) return { lists: [], superseded: new Set() }
 	const index = indexCreates(execution)
-	const sentIds = new Set([...execution.nestedCreates, ...execution.entities].map(entity => entity.entityId))
+	const sentIds = new Set(execution.nestedCreates.map(descriptor => descriptor.entityId))
 	const candidates = lists.map(list => (
 		unresolvedSubtree(index, list.unpairedIds.map(id => entityIdentityKey(list.entityType, id)), unresolved)
 	))

@@ -560,6 +560,20 @@ describe('rows of a list response that no create of the list made', () => {
 		expect(store.getRelation('Section', first, 'image')?.currentId).toBe(image)
 	})
 
+	test('should keep the creates of a list unresolved while one lists a child an interceptor vetoed', async () => {
+		const { persister, dispatcher } = setup()
+		const [first] = addUnpairedSections()
+		const child = newSection({ name: 'Vetoed' }, 'website-2')
+		store.addToHasMany('Section', first, 'children', child)
+		dispatcher.getEventEmitter().interceptEntity('entity:persisting', 'Section', child, () => ({ action: 'cancel' }))
+
+		const result = await persister.persistAll()
+
+		expect(result.success).toBe(false)
+		expect(store.getEntitySnapshot('Section', first)).toBeDefined()
+		expect(store.getHasManyOrderedIds('Section', first, 'children')).toEqual([child])
+	})
+
 	test('should keep the creates of a list unresolved while a section outside the save references one', async () => {
 		const { engine, persister } = setup()
 		const [first, second] = addUnpairedSections()
