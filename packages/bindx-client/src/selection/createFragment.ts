@@ -29,7 +29,7 @@ import type { AnyBrand } from '../brand/ComponentBrand.js'
  * ```
  */
 export function createFragment<TModel>() {
-	return function <TResult extends object, TSourceSelected extends object>(
+	return function <TResult extends object, TSourceSelected extends object = object>(
 		definer: (builder: SelectionBuilder<TModel>) => SelectionBuilder<TModel, TResult, object, TSourceSelected>,
 	): FluentFragment<TModel, TResult, AnyBrand, TSourceSelected> {
 		// Create initial builder

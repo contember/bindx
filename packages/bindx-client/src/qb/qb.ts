@@ -303,7 +303,11 @@ export function transaction<T>(
  * const article = qb.get(schema.Article, { by: { id } }, it => it.title().author(AuthorCard))
  * ```
  */
-export function fragment<TRoleMap extends Record<string, object>, TResult extends object, TSourceSelected extends object>(
+export function fragment<
+	TRoleMap extends Record<string, object>,
+	TResult extends object,
+	TSourceSelected extends object = object,
+>(
 	_entity: EntityDef<TRoleMap>,
 	definer: (
 		builder: SelectionBuilder<Entity<TRoleMap>>,

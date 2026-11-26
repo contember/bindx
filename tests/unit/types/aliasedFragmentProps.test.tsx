@@ -85,15 +85,24 @@ const ProjectTaskTitles = createComponent()
 	.entity('project', projectDef, e => e.tasks(taskTitle))
 	.render(() => null)
 
+const taskTitleDefiner: FluentDefiner<Task, { title: string }> = e => e.title()
+
+const ProjectTaskTitlesFromDefiner = createComponent()
+	.entity('project', projectDef, e => e.tasks(createFragment<Task>()(taskTitleDefiner)))
+	.render(() => null)
+
+/** A result type given explicitly, without the source. */
+const explicitResultFragment = createFragment<Task>()<{ title: string }>(e => e.title())
+
 /** Fragments named by their result type only, as helpers around fragments do. */
 const annotatedHeadline: FluentFragment<Task, { headline: string }> = createFragment<Task>()(e => e.title({ as: 'headline' }))
 const annotatedComponentFragment: FluentFragment<Task, { headline: string }> = TaskHeadline.$task
 
-function resultOf<TResult extends object>(fragment: FluentFragment<Task, TResult>): TResult | undefined {
-	return fragment.__meta.fields.size > 0 ? undefined : fragment.__resultType
+function resultOf<TResult extends object>(fragment: FluentFragment<Task, TResult>): TResult {
+	return fragment.__resultType
 }
 
-const resultOfComponentFragment: { headline: string } | undefined = resultOf(TaskHeadline.$task)
+const resultOfComponentFragment: { headline: string } = resultOf(TaskHeadline.$task)
 
 /** A hand-written entity whose only selected field is optional. */
 interface Draft {
@@ -113,6 +122,7 @@ type ProjectRelationsProp = ComponentProps<typeof ProjectRelations>['project']
 type ProjectTaskHeadlinesProp = ComponentProps<typeof ProjectTaskHeadlines>['project']
 type ProjectTitleFromDefinerProp = ComponentProps<typeof ProjectTitleFromDefiner>['project']
 type ProjectTaskTitlesProp = ComponentProps<typeof ProjectTaskTitles>['project']
+type ProjectTaskTitlesFromDefinerProp = ComponentProps<typeof ProjectTaskTitlesFromDefiner>['project']
 
 // ============================================================================
 // Accepted: accessors that have the source fields selected
@@ -217,12 +227,15 @@ describe('a createComponent fragment with aliases', () => {
 		assertFalse<IsAssignable<EntityRef<Project, { id: string }>, ProjectTitleFromDefinerProp>>()
 		assertTrue<IsAssignable<EntityRef<Project, { tasks: { title: string }[] }>, ProjectTaskTitlesProp>>()
 		assertFalse<IsAssignable<EntityRef<Project, { tasks: { id: string }[] }>, ProjectTaskTitlesProp>>()
+		assertTrue<IsAssignable<EntityRef<Project, { tasks: { title: string }[] }>, ProjectTaskTitlesFromDefinerProp>>()
+		assertFalse<IsAssignable<EntityRef<Project, { tasks: { id: string }[] }>, ProjectTaskTitlesFromDefinerProp>>()
 	})
 
 	test('can be named by its result type alone', () => {
 		expect(annotatedHeadline.__isFragment).toBe(true)
 		expect(annotatedComponentFragment.__isFragment).toBe(true)
-		expect(resultOfComponentFragment).toBeUndefined()
+		expect(resultOfComponentFragment).toBe(TaskHeadline.$task.__resultType)
+		expect(explicitResultFragment.__isFragment).toBe(true)
 	})
 
 	test('accepts an accessor when the source field is optional', () => {

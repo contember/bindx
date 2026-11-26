@@ -70,7 +70,7 @@ type ArrayItemType<T> = T extends readonly (infer U)[] ? U : never
  * @typeParam TResult - The selected fields result type
  * @typeParam TBrand - Component brand type for validation (defaults to AnyBrand)
  * @typeParam TSourceSelected - The selection keyed by source field names (see {@link SelectionBuilder});
- *   `unknown` when not known, see {@link FragmentSourceSelected}
+ *   `unknown` or `object` when not known, see {@link FragmentSourceSelected}
  */
 export interface FluentFragment<
 	TModel,
@@ -97,10 +97,10 @@ export interface FluentFragment<
 }
 
 /**
- * The source-keyed selection of a fragment. A fragment typed without one (`FluentFragment<T, R>`)
- * requires its result fields.
+ * The source-keyed selection of a fragment. A fragment typed without one (`FluentFragment<T, R>`,
+ * or built from an annotated FluentDefiner) requires its result fields.
  */
-export type FragmentSourceSelected<TResult, TSourceSelected> = unknown extends TSourceSelected ? TResult : TSourceSelected
+export type FragmentSourceSelected<TResult, TSourceSelected> = [keyof TSourceSelected] extends [never] ? TResult : TSourceSelected
 
 /**
  * Scalar method on selection builder - selects a scalar field
