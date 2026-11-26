@@ -1,5 +1,4 @@
 import type { SelectionMeta, FluentFragment, SelectionBuilder } from '../selection/types.js'
-import type { AnyBrand } from '../brand/ComponentBrand.js'
 import { createSelectionBuilder, SELECTION_META, buildQueryFromSelection } from '../selection/index.js'
 import type { QuerySpec } from '../selection/buildQuery.js'
 
@@ -8,7 +7,7 @@ import type { QuerySpec } from '../selection/buildQuery.js'
  */
 export type SelectionInput<TModel, TResult extends object> =
 	| FluentDefiner<TModel, TResult>
-	| FluentFragment<TModel, TResult, AnyBrand, object>
+	| FluentFragment<TModel, TResult>
 	| SelectionMeta
 
 /**
@@ -58,12 +57,12 @@ function isSelectionMeta(input: unknown): input is SelectionMeta {
  */
 function isFluentFragment<TModel, TResult extends object>(
 	input: unknown,
-): input is FluentFragment<TModel, TResult, AnyBrand, object> {
+): input is FluentFragment<TModel, TResult> {
 	return (
 		typeof input === 'object' &&
 		input !== null &&
 		'__isFragment' in input &&
-		(input as FluentFragment<TModel, TResult, AnyBrand, object>).__isFragment === true
+		(input as FluentFragment<TModel, TResult>).__isFragment === true
 	)
 }
 

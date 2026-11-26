@@ -85,7 +85,30 @@ const ProjectTaskTitles = createComponent()
 	.entity('project', projectDef, e => e.tasks(taskTitle))
 	.render(() => null)
 
+/** Fragments named by their result type only, as helpers around fragments do. */
+const annotatedHeadline: FluentFragment<Task, { headline: string }> = createFragment<Task>()(e => e.title({ as: 'headline' }))
+const annotatedComponentFragment: FluentFragment<Task, { headline: string }> = TaskHeadline.$task
+
+function resultOf<TResult extends object>(fragment: FluentFragment<Task, TResult>): TResult | undefined {
+	return fragment.__meta.fields.size > 0 ? undefined : fragment.__resultType
+}
+
+const resultOfComponentFragment: { headline: string } | undefined = resultOf(TaskHeadline.$task)
+
+/** A hand-written entity whose only selected field is optional. */
+interface Draft {
+	id: string
+	title?: string
+}
+
+const draftDef = entityDef<Draft>('Draft')
+
+const DraftHeadline = createComponent()
+	.entity('draft', draftDef, e => e.title({ as: 'headline' }))
+	.render(({ draft }) => <span>{draft.$data?.headline}</span>)
+
 type ProjectHeadlineProp = ComponentProps<typeof ProjectHeadline>['project']
+type DraftHeadlineProp = ComponentProps<typeof DraftHeadline>['draft']
 type ProjectRelationsProp = ComponentProps<typeof ProjectRelations>['project']
 type ProjectTaskHeadlinesProp = ComponentProps<typeof ProjectTaskHeadlines>['project']
 type ProjectTitleFromDefinerProp = ComponentProps<typeof ProjectTitleFromDefiner>['project']
@@ -194,6 +217,17 @@ describe('a createComponent fragment with aliases', () => {
 		assertFalse<IsAssignable<EntityRef<Project, { id: string }>, ProjectTitleFromDefinerProp>>()
 		assertTrue<IsAssignable<EntityRef<Project, { tasks: { title: string }[] }>, ProjectTaskTitlesProp>>()
 		assertFalse<IsAssignable<EntityRef<Project, { tasks: { id: string }[] }>, ProjectTaskTitlesProp>>()
+	})
+
+	test('can be named by its result type alone', () => {
+		expect(annotatedHeadline.__isFragment).toBe(true)
+		expect(annotatedComponentFragment.__isFragment).toBe(true)
+		expect(resultOfComponentFragment).toBeUndefined()
+	})
+
+	test('accepts an accessor when the source field is optional', () => {
+		// An optional field cannot be required by type, the same as for `e.title()` without an alias.
+		assertTrue<IsAssignable<EntityRef<Draft>, DraftHeadlineProp>>()
 	})
 
 	test('exposes the selection under its aliases in the fragment', () => {

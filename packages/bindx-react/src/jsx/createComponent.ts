@@ -5,7 +5,7 @@
  * This module re-exports builder utilities and provides helper functions.
  */
 
-import type { FluentFragment, AnyBrand } from '@contember/bindx'
+import type { FluentFragment, FragmentSourceSelected, AnyBrand } from '@contember/bindx'
 import { ComponentBrand } from '@contember/bindx'
 import { SelectionMetaCollector, mergeSelections } from './SelectionMeta.js'
 import { COMPONENT_BRAND } from './componentBuilder.js'
@@ -131,7 +131,7 @@ export function validateBrand(
  * )
  * ```
  */
-export function mergeFragments<T, R1 extends object, B1 extends AnyBrand, S1 extends object>(
+export function mergeFragments<T, R1 extends object, B1 extends AnyBrand, S1>(
 	fragment1: FluentFragment<T, R1, B1, S1>,
 ): FluentFragment<T, R1, B1, S1>
 export function mergeFragments<
@@ -140,12 +140,12 @@ export function mergeFragments<
 	R2 extends object,
 	B1 extends AnyBrand,
 	B2 extends AnyBrand,
-	S1 extends object,
-	S2 extends object,
+	S1,
+	S2,
 >(
 	fragment1: FluentFragment<T, R1, B1, S1>,
 	fragment2: FluentFragment<T, R2, B2, S2>,
-): FluentFragment<T, R1 & R2, B1 | B2, S1 & S2>
+): FluentFragment<T, R1 & R2, B1 | B2, FragmentSourceSelected<R1, S1> & FragmentSourceSelected<R2, S2>>
 export function mergeFragments<
 	T,
 	R1 extends object,
@@ -154,14 +154,19 @@ export function mergeFragments<
 	B1 extends AnyBrand,
 	B2 extends AnyBrand,
 	B3 extends AnyBrand,
-	S1 extends object,
-	S2 extends object,
-	S3 extends object,
+	S1,
+	S2,
+	S3,
 >(
 	fragment1: FluentFragment<T, R1, B1, S1>,
 	fragment2: FluentFragment<T, R2, B2, S2>,
 	fragment3: FluentFragment<T, R3, B3, S3>,
-): FluentFragment<T, R1 & R2 & R3, B1 | B2 | B3, S1 & S2 & S3>
+): FluentFragment<
+	T,
+	R1 & R2 & R3,
+	B1 | B2 | B3,
+	FragmentSourceSelected<R1, S1> & FragmentSourceSelected<R2, S2> & FragmentSourceSelected<R3, S3>
+>
 export function mergeFragments<T>(
 	...fragments: FluentFragment<T, object, AnyBrand>[]
 ): FluentFragment<T, object, AnyBrand> {

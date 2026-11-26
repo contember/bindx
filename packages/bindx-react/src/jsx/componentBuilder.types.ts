@@ -255,7 +255,7 @@ export type AddUseProps<
  */
 type FragmentEntityRef<TEntity, TSelected, TSourceSelected> =
 	// A selection typed without its source (e.g. an annotated FluentDefiner) arrives as `object`.
-	{} extends TSourceSelected
+	[keyof TSourceSelected] extends [never]
 		? EntityRef<TEntity, TSelected, AnyBrand, string>
 		: EntityRef<TEntity, TSourceSelected, AnyBrand, string> | EntityRef<TEntity, TSelected, AnyBrand, string>
 
