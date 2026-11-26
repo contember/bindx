@@ -68,6 +68,7 @@ export {
 	type SelectionMeta,
 	type SelectionFieldMeta,
 	type FluentFragment,
+	type FragmentSourceSelected,
 	type FluentDefiner,
 	type HasManyOptions,
 	type InferSelection,

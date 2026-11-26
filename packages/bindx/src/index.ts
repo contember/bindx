@@ -30,6 +30,7 @@ export type {
 	SelectionMeta,
 	SelectionFieldMeta,
 	FluentFragment,
+	FragmentSourceSelected,
 	FluentDefiner,
 	HasManyOptions,
 	InferSelection,

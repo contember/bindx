@@ -15,7 +15,7 @@ import {
 	scalar,
 } from '@contember/bindx-react'
 import { DataGridLayout, DataGridTextColumn, HasManyDataGrid, useDataViewContext } from '@contember/bindx-dataview'
-import type { EntityRef, Query, QueryOptions, QueryResult, QuerySpec } from '@contember/bindx'
+import type { Query, QueryOptions, QueryResult, QuerySpec } from '@contember/bindx'
 
 afterEach(cleanup)
 
@@ -65,12 +65,6 @@ function describeFields(spec: QuerySpec | undefined): string[] {
 	}).sort()
 }
 
-/** Passes a ref to a fragment that aliases `title` as `headline`. */
-function withHeadline<T>(ref: EntityRef<T>): EntityRef<T, T & { headline: string }> {
-	// Type gap T1296: a fragment's props expect its aliases among the passed ref's own fields.
-	return ref as EntityRef<T, T & { headline: string }>
-}
-
 const ProjectHeadline = createComponent()
 	.entity('project', projectDef, e => e.title({ as: 'headline' }))
 	.render(({ project }) => <span data-testid="headline">{project.$data?.headline}</span>)
@@ -97,7 +91,7 @@ describe('an aliased scalar selected by a createComponent fragment', () => {
 		const { container } = render(
 			<BindxProvider adapter={adapter} schema={schema}>
 				<Entity entity={projectDef} by={{ id: 'p1' }}>
-					{project => <ProjectHeadline project={withHeadline(project)} />}
+					{project => <ProjectHeadline project={project} />}
 				</Entity>
 			</BindxProvider>,
 		)
@@ -120,7 +114,7 @@ describe('an aliased scalar selected by a createComponent fragment', () => {
 									<DataGridLayout name="tiles" item={it}>
 										{(task: typeof it) => (
 											<>
-												<TaskHeadline task={withHeadline(task)} />
+												<TaskHeadline task={task} />
 												<span data-testid="title">{task.title.value}</span>
 											</>
 										)}

@@ -30,8 +30,8 @@ export function createSelectionBuilder<TEntity, TSelected extends object = objec
 				return initialMeta
 			}
 
-			// Type brand accessor
-			if (prop === '__selected') {
+			// Type brand accessors
+			if (prop === '__selected' || prop === '__sourceSelected') {
 				return undefined
 			}
 
