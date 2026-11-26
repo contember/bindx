@@ -37,28 +37,33 @@ export declare const COMPONENT_SELECTIONS: unique symbol
  * Configuration for a single entity prop.
  * Can be implicit (selection from JSX) or explicit (selection from selector).
  * Stores the entity type directly (not entity name).
+ *
+ * `TSelected` is the render-side data shape (keyed by aliases); `TSourceSelected` is the
+ * same selection keyed by source field names, which a passed ref must have selected.
  */
 export interface EntityPropConfig<
 	TEntity extends object = object,
 	TSelected extends object = object,
 	TIsImplicit extends boolean = boolean,
+	TSourceSelected extends object = object,
 > {
 	readonly __entity: TEntity
 	readonly isImplicit: TIsImplicit
 	readonly __selected: TSelected
+	readonly __sourceSelected: TSourceSelected
 }
 
 /**
  * Creates an implicit entity prop config type.
  */
 export type ImplicitEntityConfig<TEntity extends object> =
-	EntityPropConfig<TEntity, TEntity, true>
+	EntityPropConfig<TEntity, TEntity, true, TEntity>
 
 /**
  * Creates an explicit entity prop config type.
  */
-export type ExplicitEntityConfig<TEntity extends object, TSelected extends object> =
-	EntityPropConfig<TEntity, TSelected, false>
+export type ExplicitEntityConfig<TEntity extends object, TSelected extends object, TSourceSelected extends object> =
+	EntityPropConfig<TEntity, TSelected, false, TSourceSelected>
 
 // ============================================================================
 // Interface Entity Prop Configuration
@@ -145,9 +150,10 @@ export type AddExplicitEntity<
 	TPropName extends string,
 	TEntity extends object,
 	TSelected extends object,
+	TSourceSelected extends object,
 > = ComponentBuilderState<
 	TState['__entityProps'] & {
-		readonly [K in TPropName]: ExplicitEntityConfig<TEntity, TSelected>
+		readonly [K in TPropName]: ExplicitEntityConfig<TEntity, TSelected, TSourceSelected>
 	},
 	TState['__scalarProps'],
 	TState['__roles'],
@@ -244,7 +250,8 @@ export type AddUseProps<
 
 /**
  * Build public entity props — always EntityRef (stable pointer, no live data).
- * Used for the component's external React props.
+ * Used for the component's external React props. The ref is typed by the source-field
+ * selection, so a fragment's aliases do not have to be fields of the passed ref.
  */
 export type BuildEntityProps<
 	TEntityProps extends Record<string, AnyEntityPropConfig>,
@@ -252,10 +259,11 @@ export type BuildEntityProps<
 > = {
 	readonly [K in keyof TEntityProps]: TEntityProps[K] extends EntityPropConfig<
 		infer TEntity,
-		infer TSelected,
-		infer _TIsImplicit
+		infer _TSelected,
+		infer _TIsImplicit,
+		infer TSourceSelected
 	>
-		? EntityRef<TEntity, TSelected, AnyBrand, string>
+		? EntityRef<TEntity, TSourceSelected, AnyBrand, string>
 		: TEntityProps[K] extends InterfaceEntityPropConfig<infer TInterface, infer _TIsImplicit>
 			? EntityRef<TInterface, TInterface, AnyBrand, string>
 			: never
@@ -312,11 +320,12 @@ export type BuildFragmentProps<
 	readonly [K in keyof TEntityProps as `$${K & string}`]: TEntityProps[K] extends EntityPropConfig<
 		infer TEntity,
 		infer TSelected,
-		infer _TIsImplicit
+		infer _TIsImplicit,
+		infer TSourceSelected
 	>
-		? FluentFragment<TEntity, TSelected, AnyBrand>
+		? FluentFragment<TEntity, TSelected, AnyBrand, TSourceSelected>
 		: TEntityProps[K] extends InterfaceEntityPropConfig<infer TInterface, infer _TIsImplicit>
-			? FluentFragment<TInterface, TInterface, AnyBrand>
+			? FluentFragment<TInterface, TInterface, AnyBrand, TInterface>
 			: never
 }
 
@@ -395,11 +404,16 @@ export interface ComponentBuilder<
 		TPropName extends string,
 		TRoleMap extends Record<string, object>,
 		TSelected extends object,
+		TSourceSelected extends object,
 	>(
 		propName: TPropName,
 		entity: EntityDef<TRoleMap>,
-		selector: (e: SelectionBuilder<ResolveEntity<TRoleMap, TState['__roles'][number]>>) => SelectionBuilder<ResolveEntity<TRoleMap, TState['__roles'][number]>, TSelected, object>,
-	): ComponentBuilder<AddExplicitEntity<TState, TPropName, ResolveEntity<TRoleMap, TState['__roles'][number]>, TSelected>>
+		selector: (
+			e: SelectionBuilder<ResolveEntity<TRoleMap, TState['__roles'][number]>>,
+		) => SelectionBuilder<ResolveEntity<TRoleMap, TState['__roles'][number]>, TSelected, object, TSourceSelected>,
+	): ComponentBuilder<
+		AddExplicitEntity<TState, TPropName, ResolveEntity<TRoleMap, TState['__roles'][number]>, TSelected, TSourceSelected>
+	>
 
 	/**
 	 * Add interface-based entity props that accept any EntityRef with matching fields.

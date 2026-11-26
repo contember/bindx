@@ -3,7 +3,7 @@
  * These types were previously exported from createComponent.ts
  */
 
-import type { EntityRef, FluentFragment } from '@contember/bindx'
+import type { AnyBrand, EntityRef, FluentFragment } from '@contember/bindx'
 
 /**
  * Extract keys from props type where value is EntityRef<any, any>
@@ -26,5 +26,5 @@ export type SelectionFromProp<P, K extends keyof P> = P[K] extends EntityRef<inf
  * Fragment properties for implicit mode - $propName for each entity prop
  */
 export type ImplicitFragmentProperties<P> = {
-	[K in EntityPropKeys<P> as `$${K & string}`]: FluentFragment<EntityFromProp<P, K>, SelectionFromProp<P, K>>
+	[K in EntityPropKeys<P> as `$${K & string}`]: FluentFragment<EntityFromProp<P, K>, SelectionFromProp<P, K>, AnyBrand, SelectionFromProp<P, K>>
 }

@@ -1,5 +1,6 @@
 import { createSelectionBuilder } from './createSelectionBuilder.js'
 import { SELECTION_META, type FluentFragment, type SelectionBuilder } from './types.js'
+import type { AnyBrand } from '../brand/ComponentBrand.js'
 
 /**
  * Creates a reusable fragment using the fluent builder API.
@@ -28,9 +29,9 @@ import { SELECTION_META, type FluentFragment, type SelectionBuilder } from './ty
  * ```
  */
 export function createFragment<TModel>() {
-	return function <TResult extends object>(
-		definer: (builder: SelectionBuilder<TModel>) => SelectionBuilder<TModel, TResult, object>,
-	): FluentFragment<TModel, TResult> {
+	return function <TResult extends object, TSourceSelected extends object>(
+		definer: (builder: SelectionBuilder<TModel>) => SelectionBuilder<TModel, TResult, object, TSourceSelected>,
+	): FluentFragment<TModel, TResult, AnyBrand, TSourceSelected> {
 		// Create initial builder
 		const builder = createSelectionBuilder<TModel>()
 

@@ -15,7 +15,8 @@
  */
 
 import { type EntityDef, type CommonEntity } from '../schema/index.js'
-import type { FluentDefiner, FluentFragment } from '../selection/types.js'
+import type { FluentDefiner, FluentFragment, SelectionBuilder } from '../selection/types.js'
+import type { AnyBrand } from '../brand/ComponentBrand.js'
 import { createSelectionBuilder } from '../selection/createSelectionBuilder.js'
 import { SELECTION_META } from '../selection/types.js'
 import { buildQueryFromSelection } from '../selection/buildQuery.js'
@@ -302,10 +303,12 @@ export function transaction<T>(
  * const article = qb.get(schema.Article, { by: { id } }, it => it.title().author(AuthorCard))
  * ```
  */
-export function fragment<TRoleMap extends Record<string, object>, TResult extends object>(
+export function fragment<TRoleMap extends Record<string, object>, TResult extends object, TSourceSelected extends object>(
 	_entity: EntityDef<TRoleMap>,
-	definer: FluentDefiner<Entity<TRoleMap>, TResult>,
-): FluentFragment<Entity<TRoleMap>, TResult> {
+	definer: (
+		builder: SelectionBuilder<Entity<TRoleMap>>,
+	) => SelectionBuilder<Entity<TRoleMap>, TResult, object, TSourceSelected>,
+): FluentFragment<Entity<TRoleMap>, TResult, AnyBrand, TSourceSelected> {
 	const builder = createSelectionBuilder<Entity<TRoleMap>>()
 	const resultBuilder = definer(builder)
 	const meta = resultBuilder[SELECTION_META]
