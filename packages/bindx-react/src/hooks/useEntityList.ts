@@ -63,21 +63,21 @@ export type ErrorEntityListResult = EntityListResultBase & {
  * The accessor identity stays stable so the subtree does not unmount —
  * stale-while-revalidate semantics.
  */
-export type ReadyEntityListResult<T extends object> = EntityListResultBase & {
+export type ReadyEntityListResult<TEntity extends object, TSelected extends object = TEntity> = EntityListResultBase & {
 	readonly $status: 'ready'
 	readonly $isLoading: false
 	readonly $isRefetching: boolean
 	readonly $isError: false
 	readonly $error: null
 	readonly $isDirty: boolean
-	readonly items: Array<EntityAccessor<T>>
+	readonly items: Array<EntityAccessor<TEntity, TSelected>>
 	readonly length: number
 }
 
-export type UseEntityListResult<T extends object> =
+export type UseEntityListResult<TEntity extends object, TSelected extends object = TEntity> =
 	| LoadingEntityListResult
 	| ErrorEntityListResult
-	| ReadyEntityListResult<T>
+	| ReadyEntityListResult<TEntity, TSelected>
 
 // ============================================================================
 // Internal helpers
@@ -135,7 +135,7 @@ export function useEntityList<
 	entity: EntityDef<TRoleMap>,
 	options: UseEntityListOptions & { roles: readonly TRoles[] },
 	definer: SelectionInput<EntityForRoles<TRoleMap, TRoles>, TResult>,
-): UseEntityListResult<TResult>
+): UseEntityListResult<EntityForRoles<TRoleMap, TRoles>, TResult>
 
 /**
  * Hook to fetch and manage a list of entities with full type inference.
@@ -152,7 +152,7 @@ export function useEntityList<TRoleMap extends Record<string, object>, TResult e
 	entity: EntityDef<TRoleMap>,
 	options: UseEntityListOptions,
 	definer: SelectionInput<CommonEntity<TRoleMap>, TResult>,
-): UseEntityListResult<TResult>
+): UseEntityListResult<CommonEntity<TRoleMap>, TResult>
 
 /**
  * Hook to fetch and manage a list of entities with pre-resolved selection.

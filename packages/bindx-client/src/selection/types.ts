@@ -127,6 +127,14 @@ export interface ScalarMethod<
 }
 
 /**
+ * A has-one relation in TSourceSelected, under its field name. It keeps the field's own `null` / `undefined`
+ * and optionality, so the accessor of a nullable relation (`owner: Person | null`) still satisfies it.
+ */
+type HasOneSource<TEntity, K extends keyof TEntity, TNestedSource> = {
+	[P in K]: TNestedSource | Extract<TEntity[P], null | undefined>
+}
+
+/**
  * Has-one method on selection builder - selects a relation to single entity.
  * Every overload keeps the relation under its field name in TSourceSelected, also when aliased.
  */
@@ -145,7 +153,7 @@ export interface HasOneMethod<
 		TEntity,
 		TSelected & { [P in K & string]: TNestedSelected },
 		THasManyParams,
-		TSourceSelected & { [P in K & string]: TNestedSource }
+		TSourceSelected & HasOneSource<TEntity, K, TNestedSource>
 	>
 
 	/** Select with fragment */
@@ -155,7 +163,7 @@ export interface HasOneMethod<
 		TEntity,
 		TSelected & { [P in K & string]: TFragmentResult },
 		THasManyParams,
-		TSourceSelected & { [P in K & string]: FragmentSourceSelected<TFragmentResult, TFragmentSource> }
+		TSourceSelected & HasOneSource<TEntity, K, FragmentSourceSelected<TFragmentResult, TFragmentSource>>
 	>
 
 	/** Select with multiple fragments (merged) - result type is intersection of all fragment result types */
@@ -166,7 +174,7 @@ export interface HasOneMethod<
 		TEntity,
 		TSelected & { [P in K & string]: T1 & T2 },
 		THasManyParams,
-		TSourceSelected & { [P in K & string]: FragmentSourceSelected<T1, S1> & FragmentSourceSelected<T2, S2> }
+		TSourceSelected & HasOneSource<TEntity, K, FragmentSourceSelected<T1, S1> & FragmentSourceSelected<T2, S2>>
 	>
 
 	/** Select with three fragments (merged) */
@@ -178,7 +186,7 @@ export interface HasOneMethod<
 		TEntity,
 		TSelected & { [P in K & string]: T1 & T2 & T3 },
 		THasManyParams,
-		TSourceSelected & { [P in K & string]: FragmentSourceSelected<T1, S1> & FragmentSourceSelected<T2, S2> & FragmentSourceSelected<T3, S3> }
+		TSourceSelected & HasOneSource<TEntity, K, FragmentSourceSelected<T1, S1> & FragmentSourceSelected<T2, S2> & FragmentSourceSelected<T3, S3>>
 	>
 
 	/** Select with alias and callback */
@@ -189,7 +197,7 @@ export interface HasOneMethod<
 		TEntity,
 		TSelected & { [P in TAlias]: TNestedSelected },
 		THasManyParams,
-		TSourceSelected & { [P in K & string]: TNestedSource }
+		TSourceSelected & HasOneSource<TEntity, K, TNestedSource>
 	>
 
 	/** Select with alias and fragment */
@@ -200,7 +208,7 @@ export interface HasOneMethod<
 		TEntity,
 		TSelected & { [P in TAlias]: TFragmentResult },
 		THasManyParams,
-		TSourceSelected & { [P in K & string]: FragmentSourceSelected<TFragmentResult, TFragmentSource> }
+		TSourceSelected & HasOneSource<TEntity, K, FragmentSourceSelected<TFragmentResult, TFragmentSource>>
 	>
 
 	/** Select with alias and two fragments (merged) */
@@ -212,7 +220,7 @@ export interface HasOneMethod<
 		TEntity,
 		TSelected & { [P in TAlias]: T1 & T2 },
 		THasManyParams,
-		TSourceSelected & { [P in K & string]: FragmentSourceSelected<T1, S1> & FragmentSourceSelected<T2, S2> }
+		TSourceSelected & HasOneSource<TEntity, K, FragmentSourceSelected<T1, S1> & FragmentSourceSelected<T2, S2>>
 	>
 
 	/** Select with alias and three fragments (merged) */
@@ -233,7 +241,7 @@ export interface HasOneMethod<
 		TEntity,
 		TSelected & { [P in TAlias]: T1 & T2 & T3 },
 		THasManyParams,
-		TSourceSelected & { [P in K & string]: FragmentSourceSelected<T1, S1> & FragmentSourceSelected<T2, S2> & FragmentSourceSelected<T3, S3> }
+		TSourceSelected & HasOneSource<TEntity, K, FragmentSourceSelected<T1, S1> & FragmentSourceSelected<T2, S2> & FragmentSourceSelected<T3, S3>>
 	>
 }
 
@@ -245,6 +253,7 @@ type ResolveAlias<K, TOptions> = TOptions extends { as: infer A extends string }
 /**
  * Has-many method on selection builder - selects a relation to multiple entities.
  * Every overload keeps the relation under its field name in TSourceSelected, also when aliased.
+ * The options overloads constrain `as` by their own `TAlias`, which keeps a literal alias from widening to `string`.
  */
 export interface HasManyMethod<
 	in out TEntity, // see ScalarMethod
@@ -298,7 +307,7 @@ export interface HasManyMethod<
 	>
 
 	/** Select with options and callback */
-	<TOptions extends HasManyOptions<TItem>, TNestedSelected extends object, TNestedSource extends object>(
+	<TAlias extends string, TOptions extends HasManyOptions<TItem, TAlias>, TNestedSelected extends object, TNestedSource extends object>(
 		options: TOptions,
 		selector: (builder: SelectionBuilder<TItem>) => SelectionBuilder<TItem, TNestedSelected, object, TNestedSource>,
 	): SelectionBuilder<
@@ -309,7 +318,7 @@ export interface HasManyMethod<
 	>
 
 	/** Select with options and fragment */
-	<TOptions extends HasManyOptions<TItem>, TFragmentResult extends object, TFragmentSource>(
+	<TAlias extends string, TOptions extends HasManyOptions<TItem, TAlias>, TFragmentResult extends object, TFragmentSource>(
 		options: TOptions,
 		fragment: FluentFragment<TItem, TFragmentResult, AnyBrand, TFragmentSource>,
 	): SelectionBuilder<
@@ -320,7 +329,7 @@ export interface HasManyMethod<
 	>
 
 	/** Select with options and two fragments (merged) */
-	<TOptions extends HasManyOptions<TItem>, T1 extends object, T2 extends object, S1, S2>(
+	<TAlias extends string, TOptions extends HasManyOptions<TItem, TAlias>, T1 extends object, T2 extends object, S1, S2>(
 		options: TOptions,
 		fragment1: FluentFragment<TItem, T1, AnyBrand, S1>,
 		fragment2: FluentFragment<TItem, T2, AnyBrand, S2>,
@@ -333,7 +342,8 @@ export interface HasManyMethod<
 
 	/** Select with options and three fragments (merged) */
 	<
-		TOptions extends HasManyOptions<TItem>,
+		TAlias extends string,
+		TOptions extends HasManyOptions<TItem, TAlias>,
 		T1 extends object,
 		T2 extends object,
 		T3 extends object,
