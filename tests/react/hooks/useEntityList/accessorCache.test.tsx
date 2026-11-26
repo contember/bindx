@@ -59,9 +59,9 @@ function createMockData() {
 /** Renders nothing; hands the latest hook result back to the test. */
 function createListProbe(): {
 	Probe: (props: { filter?: Record<string, unknown>; withRank?: boolean }) => React.ReactElement | null
-	latest: () => UseEntityListResult<{ id: string; name: string }>
+	latest: () => UseEntityListResult<Author, { id: string; name: string }>
 } {
-	let current: UseEntityListResult<{ id: string; name: string }> | null = null
+	let current: UseEntityListResult<Author, { id: string; name: string }> | null = null
 
 	function Probe({ filter, withRank }: { filter?: Record<string, unknown>; withRank?: boolean }): React.ReactElement | null {
 		const result = useEntityList(
@@ -82,7 +82,7 @@ function createListProbe(): {
 	}
 }
 
-function readyItems(result: UseEntityListResult<{ id: string; name: string }>): Array<{ id: string }> {
+function readyItems(result: UseEntityListResult<Author, { id: string; name: string }>): Array<{ id: string }> {
 	if (result.$status !== 'ready') throw new Error(`Expected ready, got ${result.$status}`)
 	return result.items
 }
