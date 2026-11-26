@@ -69,13 +69,15 @@ type ArrayItemType<T> = T extends readonly (infer U)[] ? U : never
  * @typeParam TModel - The entity model type
  * @typeParam TResult - The selected fields result type
  * @typeParam TBrand - Component brand type for validation (defaults to AnyBrand)
- * @typeParam TSourceSelected - The selection keyed by source field names (see {@link SelectionBuilder})
+ * @typeParam TSourceSelected - The selection keyed by source field names (see {@link SelectionBuilder});
+ *   defaults to TResult, so a fragment typed without it still requires its own fields.
+ *   Parameters that accept any fragment pass `object`.
  */
 export interface FluentFragment<
 	TModel,
 	TResult,
 	TBrand extends AnyBrand = AnyBrand,
-	TSourceSelected = object,
+	TSourceSelected = TResult,
 > {
 	/** Runtime metadata */
 	readonly __meta: SelectionMeta

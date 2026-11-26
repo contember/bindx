@@ -38,7 +38,7 @@ import type { GraphQlFieldTypedArgs } from '@contember/graphql-builder'
 type Entity<TRoleMap extends Record<string, object>> = CommonEntity<TRoleMap>
 
 function resolveSelection<TRoleMap extends Record<string, object>, TResult extends object>(
-	definer: FluentDefiner<Entity<TRoleMap>, TResult> | FluentFragment<Entity<TRoleMap>, TResult>,
+	definer: FluentDefiner<Entity<TRoleMap>, TResult> | FluentFragment<Entity<TRoleMap>, TResult, AnyBrand, object>,
 ): { selectionSet: import('@contember/graphql-builder').GraphQlSelectionSet; fieldNames: Record<string, string> } {
 	let meta
 	if ('__isFragment' in definer && definer.__isFragment) {
@@ -68,7 +68,7 @@ function entityName<TRoleMap extends Record<string, object>>(entity: EntityDef<T
 export function get<TRoleMap extends Record<string, object>, TResult extends object>(
 	entity: EntityDef<TRoleMap>,
 	args: { readonly by: UniqueWhere<Entity<TRoleMap>>; readonly filter?: EntityWhere<Entity<TRoleMap>> },
-	definer: FluentDefiner<Entity<TRoleMap>, TResult> | FluentFragment<Entity<TRoleMap>, TResult>,
+	definer: FluentDefiner<Entity<TRoleMap>, TResult> | FluentFragment<Entity<TRoleMap>, TResult, AnyBrand, object>,
 ): ContentQuery<(TResult & { id: string }) | null> {
 	const name = entityName(entity)
 	const { selectionSet } = resolveSelection<TRoleMap, TResult>(definer)
@@ -94,7 +94,7 @@ export function list<TRoleMap extends Record<string, object>, TResult extends ob
 		readonly limit?: number
 		readonly offset?: number
 	},
-	definer: FluentDefiner<Entity<TRoleMap>, TResult> | FluentFragment<Entity<TRoleMap>, TResult>,
+	definer: FluentDefiner<Entity<TRoleMap>, TResult> | FluentFragment<Entity<TRoleMap>, TResult, AnyBrand, object>,
 ): ContentQuery<(TResult & { id: string })[]> {
 	const name = entityName(entity)
 	const { selectionSet } = resolveSelection<TRoleMap, TResult>(definer)
@@ -146,7 +146,7 @@ export function count<TRoleMap extends Record<string, object>>(
 export function create<TRoleMap extends Record<string, object>, TResult extends object = object>(
 	entity: EntityDef<TRoleMap>,
 	args: { readonly data: CreateDataInput<Entity<TRoleMap>> },
-	definer?: FluentDefiner<Entity<TRoleMap>, TResult> | FluentFragment<Entity<TRoleMap>, TResult>,
+	definer?: FluentDefiner<Entity<TRoleMap>, TResult> | FluentFragment<Entity<TRoleMap>, TResult, AnyBrand, object>,
 ): ContentMutation<MutationResult<TResult>> {
 	const name = entityName(entity)
 	const typedArgs = buildCreateArgs(name, args)
@@ -172,7 +172,7 @@ export function update<TRoleMap extends Record<string, object>, TResult extends 
 		readonly data: UpdateDataInput<Entity<TRoleMap>>
 		readonly filter?: EntityWhere<Entity<TRoleMap>>
 	},
-	definer?: FluentDefiner<Entity<TRoleMap>, TResult> | FluentFragment<Entity<TRoleMap>, TResult>,
+	definer?: FluentDefiner<Entity<TRoleMap>, TResult> | FluentFragment<Entity<TRoleMap>, TResult, AnyBrand, object>,
 ): ContentMutation<MutationResult<TResult>> {
 	const name = entityName(entity)
 	const typedArgs = buildUpdateArgs(name, args)
@@ -199,7 +199,7 @@ export function upsert<TRoleMap extends Record<string, object>, TResult extends 
 		readonly update: UpdateDataInput<Entity<TRoleMap>>
 		readonly filter?: EntityWhere<Entity<TRoleMap>>
 	},
-	definer?: FluentDefiner<Entity<TRoleMap>, TResult> | FluentFragment<Entity<TRoleMap>, TResult>,
+	definer?: FluentDefiner<Entity<TRoleMap>, TResult> | FluentFragment<Entity<TRoleMap>, TResult, AnyBrand, object>,
 ): ContentMutation<MutationResult<TResult>> {
 	const name = entityName(entity)
 	const typedArgs = buildUpsertArgs(name, args)

@@ -249,9 +249,19 @@ export type AddUseProps<
 // ============================================================================
 
 /**
+ * Public ref type of an explicit entity prop. Accepts a ref that has the fragment's fields
+ * selected by source name (an outer selection), or one built from the fragment's own aliased
+ * selection (`useEntity(def, by, X.$prop)`, items of `e.items(X.$item)`).
+ */
+type FragmentEntityRef<TEntity, TSelected, TSourceSelected> =
+	// A selection typed without its source (e.g. an annotated FluentDefiner) arrives as `object`.
+	{} extends TSourceSelected
+		? EntityRef<TEntity, TSelected, AnyBrand, string>
+		: EntityRef<TEntity, TSourceSelected, AnyBrand, string> | EntityRef<TEntity, TSelected, AnyBrand, string>
+
+/**
  * Build public entity props — always EntityRef (stable pointer, no live data).
- * Used for the component's external React props. The ref is typed by the source-field
- * selection, so a fragment's aliases do not have to be fields of the passed ref.
+ * Used for the component's external React props.
  */
 export type BuildEntityProps<
 	TEntityProps extends Record<string, AnyEntityPropConfig>,
@@ -259,11 +269,11 @@ export type BuildEntityProps<
 > = {
 	readonly [K in keyof TEntityProps]: TEntityProps[K] extends EntityPropConfig<
 		infer TEntity,
-		infer _TSelected,
+		infer TSelected,
 		infer _TIsImplicit,
 		infer TSourceSelected
 	>
-		? EntityRef<TEntity, TSourceSelected, AnyBrand, string>
+		? FragmentEntityRef<TEntity, TSelected, TSourceSelected>
 		: TEntityProps[K] extends InterfaceEntityPropConfig<infer TInterface, infer _TIsImplicit>
 			? EntityRef<TInterface, TInterface, AnyBrand, string>
 			: never

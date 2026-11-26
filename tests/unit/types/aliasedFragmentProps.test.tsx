@@ -1,7 +1,7 @@
 /**
  * Type-level tests: a createComponent fragment that selects fields under aliases
- * (`e.title({ as: 'headline' })`) types its public entity prop by the source field
- * names. The ref passed in must have `title` selected, not `headline`.
+ * (`e.title({ as: 'headline' })`) accepts a ref that has the source fields selected
+ * (`title`), or one built from the fragment's own aliased selection (`headline`).
  *
  * Positive cases pass the real accessors from `<Entity>` and a `HasManyDataGrid` row
  * in JSX, so they exercise the compiler's own check of the props. Negative cases use
@@ -11,8 +11,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { ComponentProps, ReactElement } from 'react'
-import type { EntityAccessor, EntityRef } from '@contember/bindx'
-import { createComponent, Entity, entityDef, mergeFragments } from '@contember/bindx-react'
+import type { EntityAccessor, EntityRef, FluentDefiner, FluentFragment } from '@contember/bindx'
+import { createComponent, createFragment, Entity, entityDef, mergeFragments, useEntity } from '@contember/bindx-react'
 import { DataGridLayout, HasManyDataGrid } from '@contember/bindx-dataview'
 
 type IsAssignable<TSource, TTarget> = [TSource] extends [TTarget] ? true : false
@@ -61,11 +61,35 @@ const ProjectRelations = createComponent()
 
 const ProjectTaskHeadlines = createComponent()
 	.entity('project', projectDef, e => e.tasks(mergeFragments(TaskHeadline.$task, TaskDone.$task)))
-	.render(({ project }) => <span>{project.$data?.tasks.map(task => task.headline).join()}</span>)
+	.render(({ project }) => project.tasks.map(task => (
+		<span key={task.id}>
+			<TaskHeadline task={task} />
+			<TaskDone task={task} />
+		</span>
+	)))
+
+/** Passes its own aliased selection on to a fragment with the same alias. */
+const ProjectHeadlineCard = createComponent()
+	.entity('project', projectDef, e => e.id().title({ as: 'headline' }))
+	.render(({ project }) => <ProjectHeadline project={project} />)
+
+/** Selections typed without their source fields. */
+const titleDefiner: FluentDefiner<Project, { title: string }> = e => e.title()
+const taskTitle: FluentFragment<Task, { title: string }> = createFragment<Task>()(e => e.title())
+
+const ProjectTitleFromDefiner = createComponent()
+	.entity('project', projectDef, titleDefiner)
+	.render(() => null)
+
+const ProjectTaskTitles = createComponent()
+	.entity('project', projectDef, e => e.tasks(taskTitle))
+	.render(() => null)
 
 type ProjectHeadlineProp = ComponentProps<typeof ProjectHeadline>['project']
 type ProjectRelationsProp = ComponentProps<typeof ProjectRelations>['project']
 type ProjectTaskHeadlinesProp = ComponentProps<typeof ProjectTaskHeadlines>['project']
+type ProjectTitleFromDefinerProp = ComponentProps<typeof ProjectTitleFromDefiner>['project']
+type ProjectTaskTitlesProp = ComponentProps<typeof ProjectTaskTitles>['project']
 
 // ============================================================================
 // Accepted: accessors that have the source fields selected
@@ -106,6 +130,12 @@ function fromHasManyDataGridRow(): ReactElement {
 	)
 }
 
+/** The usual way to fetch data for a component: its own fragment. */
+function FromUseEntity(): ReactElement | null {
+	const project = useEntity(projectDef, { by: { id: 'p1' } }, ProjectHeadline.$project)
+	return project.$status === 'ready' ? <ProjectHeadline project={project} /> : null
+}
+
 /** A ref selected by source names only, with no alias in it. */
 function fromExactSourceSelection(project: EntityRef<Project, { title: string }>): ReactElement {
 	return <ProjectHeadline project={project} />
@@ -122,9 +152,15 @@ describe('a createComponent fragment with aliases', () => {
 		expect(typeof fromExactSourceSelection).toBe('function')
 	})
 
+	test('accepts accessors built from its own aliased selection', () => {
+		expect(typeof FromUseEntity).toBe('function')
+		expect(ProjectHeadlineCard).toBeDefined()
+		expect(ProjectTaskHeadlines).toBeDefined()
+		assertTrue<IsAssignable<EntityRef<Project, { id: string; headline: string }>, ProjectHeadlineProp>>()
+	})
+
 	test('rejects a ref without the aliased source field selected', () => {
 		assertFalse<IsAssignable<EntityRef<Project, { id: string }>, ProjectHeadlineProp>>()
-		assertFalse<IsAssignable<EntityRef<Project, { id: string; headline: string }>, ProjectHeadlineProp>>()
 		assertTrue<IsAssignable<EntityRef<Project, { id: string; title: string }>, ProjectHeadlineProp>>()
 	})
 
@@ -151,6 +187,13 @@ describe('a createComponent fragment with aliases', () => {
 	test('requires the source fields of nested component fragments', () => {
 		assertTrue<IsAssignable<EntityRef<Project, { tasks: { title: string; done: boolean }[] }>, ProjectTaskHeadlinesProp>>()
 		assertFalse<IsAssignable<EntityRef<Project, { tasks: { title: string }[] }>, ProjectTaskHeadlinesProp>>()
+	})
+
+	test('falls back to the result type when a selection is typed without its source', () => {
+		assertTrue<IsAssignable<EntityRef<Project, { title: string }>, ProjectTitleFromDefinerProp>>()
+		assertFalse<IsAssignable<EntityRef<Project, { id: string }>, ProjectTitleFromDefinerProp>>()
+		assertTrue<IsAssignable<EntityRef<Project, { tasks: { title: string }[] }>, ProjectTaskTitlesProp>>()
+		assertFalse<IsAssignable<EntityRef<Project, { tasks: { id: string }[] }>, ProjectTaskTitlesProp>>()
 	})
 
 	test('exposes the selection under its aliases in the fragment', () => {
