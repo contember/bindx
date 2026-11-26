@@ -38,7 +38,8 @@ export interface EntityListProps<TRoleMap extends Record<string, object> = Recor
 /**
  * EntityList component - orchestrates the two-pass rendering approach for lists.
  *
- * Phase 1 (Collection): Renders children once with collector proxy to determine which fields are needed
+ * Phase 1 (Collection): Renders children with a collector proxy to determine which fields are needed —
+ *   again whenever the children function changes, growing the selection for the same entity and filter/order/page
  * Phase 2 (Loading): Fetches data based on collected selection
  * Phase 3 (Runtime): Renders children for each item with real data accessors
  *
@@ -79,6 +80,7 @@ function EntityListComponent<TRoleMap extends Record<string, object>>({
 	const { selection, queryKey: selectionQueryKey } = useSelectionCollection({
 		entityType,
 		depsKey: optionsKey,
+		source: children,
 		collect: collector => children(collector as unknown as EntityAccessor<CommonEntity<TRoleMap>>, 0),
 		queryKeyExtra: { filter, orderBy, limit, offset },
 	})

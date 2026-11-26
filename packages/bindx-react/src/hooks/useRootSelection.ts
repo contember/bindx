@@ -80,6 +80,10 @@ export function useRootSelection(params: UseRootSelectionParams): SelectionColle
 	const runtimeResult = useSelectionCollection({
 		entityType,
 		depsKey: isWalkSkipped ? `${depsKey}::compiled` : depsKey,
+		source: isWalkSkipped ? undefined : children,
+		// With a compiled selection the walk only feeds the validate-mode diff, which must
+		// compare against what these children read, not a union with earlier ones.
+		grow: compiledResult === null,
 		collect: collector => {
 			if (isWalkSkipped) {
 				return null
